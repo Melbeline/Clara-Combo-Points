@@ -562,6 +562,32 @@ end
 ns.DISPLAY_SIZE_CHANGED = ns.UI_SCALE_CHANGED
 
 ---------------------------------------------------------------------------
+-- Portrait right-click menu: "Reload UI" in Other Options, just above Edit Mode
+---------------------------------------------------------------------------
+local function ReloadInterface()
+  if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+end
+
+local function AddReloadEntry(_, root)
+  local editModeIndex
+  for index, description in root:EnumerateElementDescriptions() do
+    if HUD_EDIT_MODE_MENU and MenuUtil.GetElementText(description) == HUD_EDIT_MODE_MENU then
+      editModeIndex = index
+      break
+    end
+  end
+  if editModeIndex then
+    root:Insert(MenuUtil.CreateButton(L.RELOAD_UI, ReloadInterface), editModeIndex)
+  else
+    root:CreateButton(L.RELOAD_UI, ReloadInterface) -- no Edit Mode entry: at the end
+  end
+end
+
+if Menu and Menu.ModifyMenu and MenuUtil then
+  Menu.ModifyMenu("MENU_UNIT_SELF", AddReloadEntry)
+end
+
+---------------------------------------------------------------------------
 -- Slash commands: /clara, /cl
 ---------------------------------------------------------------------------
 SLASH_CLARACOMBOPOINTS1 = "/clara"

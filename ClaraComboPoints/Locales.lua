@@ -49,6 +49,7 @@ local strings = {
     WRONG_CLASS     = "The bar only shows on rogues and druids.",
     THEME_CLASSIC   = "Classic",
     THEME_MODERN    = "Modern",
+    RELOAD_UI       = "Reload UI",
   },
   frFR = {
     MOVER           = "Clara Combo Points - glisser pour déplacer  (/cl pour verrouiller)",
@@ -95,6 +96,7 @@ local strings = {
     WRONG_CLASS     = "La barre ne s'affiche que sur un voleur ou un druide.",
     THEME_CLASSIC   = "Classique",
     THEME_MODERN    = "Moderne",
+    RELOAD_UI       = "Recharger l'interface",
   },
   deDE = {
     MOVER           = "Clara Combo Points - zum Verschieben ziehen  (/cl zum Sperren)",
@@ -141,6 +143,7 @@ local strings = {
     WRONG_CLASS     = "Die Leiste erscheint nur bei Schurken und Druiden.",
     THEME_CLASSIC   = "Klassisch",
     THEME_MODERN    = "Modern",
+    RELOAD_UI       = "Interface neu laden",
   },
 }
 

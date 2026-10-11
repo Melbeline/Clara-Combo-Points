@@ -33,6 +33,8 @@ Réglages de chaque onglet :
 
 Commandes rapides : `/cl lock`, `/cl unlock`, `/cl scale 120`, `/cl reset`.
 
+**Reload UI** : clic droit sur le portrait de ton personnage, section « Other Options », juste au-dessus de « Edit Mode » : recharge l'interface (comme `/reload`). Fonctionne sur toutes les classes et tous les clients.
+
 À l'ouverture des options, la barre affiche les 5 points pour voir les couleurs. L'aperçu se coupe à la fermeture des options ou en entrant en combat.
 
 ## Fonctionnement
