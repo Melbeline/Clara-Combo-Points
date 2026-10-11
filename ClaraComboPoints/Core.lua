@@ -11,8 +11,9 @@
 
 local ADDON, ns = ...
 _G.ClaraComboPoints = ns
+local L = ns.L
 
-ns.VERSION = "1.1.0"
+ns.VERSION = "1.2.0"
 
 local NUM_POINTS    = 5
 local POWER_ENERGY  = Enum and Enum.PowerType and Enum.PowerType.Energy or 3
@@ -54,7 +55,9 @@ ns.fonts = {
   { name = "Share Tech Mono",   path = FONT_DIR .. "ShareTechMono-Regular.ttf" },
 }
 
--- Colours sampled from the reference screenshot.
+-- Settings of one profile. Rogues and druids each have their own profile (account-wide);
+-- colours sampled from the reference screenshot.
+ns.PROFILES = { "ROGUE", "DRUID" }
 local defaults = {
   locked   = true,
   x        = 0,      -- centre of the HUD, reference pixels from the screen centre
@@ -151,7 +154,7 @@ moverTex:SetColorTexture(.25, .6, 1, .35)
 local moverText = mover:CreateFontString(nil, "OVERLAY")
 moverText:SetFont(ns.fonts[1].path, 14, "OUTLINE")
 moverText:SetPoint("BOTTOM", mover, "TOP", 0, 4)
-moverText:SetText("Clara Combo Points - glisser pour déplacer  (/cl pour verrouiller)")
+moverText:SetText(L.MOVER)
 
 ---------------------------------------------------------------------------
 -- Live values
@@ -402,27 +405,67 @@ function ns:ResetColors()
   self:RefreshOptions()
 end
 
+-- Resets the profile in use (the options tab being edited, or this character's class).
 function ns:ResetAll()
-  wipe(ClaraComboPointsDB)
-  CopyDefaults(defaults, ClaraComboPointsDB)
+  wipe(self.db)
+  CopyDefaults(defaults, self.db)
   self:ApplyAll()
   self:RefreshOptions()
 end
 
+-- The HUD draws the profile of this character's class; while the options are open it draws
+-- the profile of the selected tab, so the other class can be set up and seen from here.
+function ns:SetActiveProfile(class)
+  local profile = self.sv.profiles[class]
+  if not profile or profile == self.db then return end
+  self.db = profile
+  self:ApplyAll()
+  self:RefreshOptions()
+end
+
+function ns:SetLanguage(code)
+  if not self:IsLanguage(code) then return end
+  self.sv.language = code
+  self.lang = code
+  moverText:SetText(L.MOVER)
+  self:RelabelOptions()
+end
+
 -- Options.lua replaces these
 function ns:RefreshOptions() end
+function ns:RelabelOptions() end
 function ns:ToggleOptions() end
 
-local function InitDB()
-  local db = type(ClaraComboPointsDB) == "table" and ClaraComboPointsDB or {}
+local function CleanProfile(db)
   CopyDefaults(defaults, db)
   if db.scale * 100 < ns.MIN_SCALE or db.scale * 100 > ns.MAX_SCALE then db.scale = defaults.scale end
   if db.alpha < 0 or db.alpha > 1 then db.alpha = defaults.alpha end
   if db.fontSize < 6 or db.fontSize > 64 then db.fontSize = defaults.fontSize end
   if db.outline ~= "NONE" and db.outline ~= "OUTLINE" and db.outline ~= "THICKOUTLINE" then db.outline = defaults.outline end
   if db.cpSource ~= "TARGET" and db.cpSource ~= "PLAYER" then db.cpSource = defaults.cpSource end
-  ClaraComboPointsDB = db
-  ns.db = db
+end
+
+local function InitDB()
+  local sv = type(ClaraComboPointsDB) == "table" and ClaraComboPointsDB or {}
+  if type(sv.profiles) ~= "table" then
+    -- 1.0 and 1.1 kept a single set of settings: it becomes the start of both profiles
+    local old = {}
+    for k, v in pairs(sv) do old[k], sv[k] = v, nil end
+    sv.profiles = {}
+    for _, class in ipairs(ns.PROFILES) do sv.profiles[class] = CopyDefaults(old, {}) end
+  end
+  for _, class in ipairs(ns.PROFILES) do
+    if type(sv.profiles[class]) ~= "table" then sv.profiles[class] = {} end
+    CleanProfile(sv.profiles[class])
+  end
+  -- account-wide: interface language (nil = follow the client) and options window theme
+  if not ns:IsLanguage(sv.language) then sv.language = nil end
+  if sv.language then ns.lang = sv.language end
+  if sv.skin ~= "CLASSIC" and sv.skin ~= "MODERN" then sv.skin = "CLASSIC" end
+  moverText:SetText(L.MOVER)
+  ClaraComboPointsDB = sv
+  ns.sv = sv
+  ns.db = sv.profiles.ROGUE
 end
 
 ---------------------------------------------------------------------------
@@ -445,6 +488,8 @@ function ns:PLAYER_LOGIN()
   self.isRogue = (class == "ROGUE")
   self.isDruid = (class == "DRUID")
   self.enabled = self.isRogue or self.isDruid
+  self.homeClass = self.isDruid and "DRUID" or "ROGUE"
+  self.db = self.sv.profiles[self.homeClass]
   self:ApplyAll()
   if not self.enabled then return end -- dormant on other classes: no events, no updates
 
@@ -526,18 +571,18 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
   local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
   if cmd == "lock" then
     ns:SetLocked(true)
-    Print("position verrouillée.")
+    Print(L.LOCKED)
   elseif cmd == "unlock" then
     ns:SetLocked(false)
-    Print("position déverrouillée, glisse la barre avec le clic gauche.")
+    Print(L.UNLOCKED)
   elseif cmd == "scale" and tonumber(arg) then
     ns:SetScalePercent(arg)
-    Print("échelle " .. ns:GetScalePercent() .. " %.")
+    Print(L.SCALE_SET:format(ns:GetScalePercent()))
   elseif cmd == "reset" then
     ns:ResetAll()
-    Print("réglages par défaut restaurés.")
+    Print(L.RESET_DONE)
   elseif cmd == "help" then
-    Print("/cl  options  ·  /cl lock  ·  /cl unlock  ·  /cl scale 120  ·  /cl reset")
+    Print(L.HELP)
   else
     ns:ToggleOptions()
   end

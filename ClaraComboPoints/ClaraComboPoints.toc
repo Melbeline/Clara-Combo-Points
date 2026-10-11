@@ -1,10 +1,12 @@
 ## Interface: 16001, 16002, 16003, 16005, 16010, 120100, 120105
 ## Title: Clara Combo Points
-## Notes: Points de combo + énergie pour voleur et druide en forme de félin (WoW Forever). /clara ou /cl
+## Notes: Combo points + energy for rogues and druids in Cat Form (WoW Forever). /clara or /cl
 ## Notes-frFR: Points de combo + énergie pour voleur et druide en forme de félin (WoW Forever). /clara ou /cl
+## Notes-deDE: Combopunkte + Energie für Schurken und Druiden in Katzengestalt (WoW Forever). /clara oder /cl
 ## Author: Melbeline
-## Version: 1.1.0
+## Version: 1.2.0
 ## SavedVariables: ClaraComboPointsDB
 
+Locales.lua
 Core.lua
 Options.lua

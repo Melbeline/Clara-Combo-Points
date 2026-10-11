@@ -13,7 +13,14 @@ Copier le dossier `ClaraComboPoints` dans le dossier `Interface\AddOns` de ton c
 
 ## Utilisation
 
-`/clara` ou `/cl` ouvre les options :
+`/clara` ou `/cl` ouvre les options.
+
+En haut de la fenêtre :
+- **Onglets Voleur / Druide** : chaque classe a son propre profil (position, échelle, couleurs, police…), commun à tous tes personnages de cette classe. La fenêtre s'ouvre sur l'onglet de ton personnage ; pendant qu'elle est ouverte, la barre affiche le profil de l'onglet choisi, pour régler l'autre classe et voir le résultat.
+- **Drapeaux FR / DE / GB** : langue de l'addon (français, allemand, anglais). Par défaut, celle du client (anglais pour les autres langues).
+- **Classique / Moderne** : apparence de la fenêtre d'options. Classique (par défaut) reprend l'interface de WoW Classic 1.15 : cadre de dialogue, boutons rouges, curseurs et cases à cocher d'origine. Moderne est sombre et plat. La barre de combo garde toujours l'apparence de la capture de référence.
+
+Réglages de chaque onglet :
 
 | Réglage | Détail |
 |---|---|
@@ -22,7 +29,7 @@ Copier le dossier `ClaraComboPoints` dans le dossier `Interface\AddOns` de ton c
 | Opacité globale | Opacité de tout l'addon |
 | Couleurs et opacité | Chaque case de combo, la barre d'énergie, le fond des cases vides et le texte : couleur via le sélecteur de couleur de Blizzard (roue, luminosité, opacité) + curseur d'opacité indépendant |
 | Police | 20 polices (Arial Narrow par défaut, Friz Quadrata, Morpheus, Skurri, Emily's Candy, Bangers, Luckiest Guy, Chewy, Permanent Marker, Creepster, Pirata One, MedievalSharp, Cinzel Decorative, Bebas Neue, Russo One, Black Ops One, Audiowide, Righteous, Press Start 2P, Share Tech Mono) + celles de LibSharedMedia si un autre addon les fournit ; taille ; contour |
-| Avancé | Source des points de combo (cible / joueur), druide : barre seulement en forme de félin (coché par défaut), aperçu 5 points, tout réinitialiser |
+| Avancé | Source des points de combo (cible / joueur), barre seulement en forme de félin (onglet Druide, coché par défaut), aperçu 5 points, réinitialiser l'onglet |
 
 Commandes rapides : `/cl lock`, `/cl unlock`, `/cl scale 120`, `/cl reset`.
 
@@ -34,7 +41,9 @@ Commandes rapides : `/cl lock`, `/cl unlock`, `/cl scale 120`, `/cl reset`.
 - **Énergie** : lue à chaque image affichée, donc chaque point régénéré s'affiche à l'image même où le client l'a. Si la valeur n'a pas changé, ça ne coûte qu'une comparaison.
 - **Valeurs secrètes** : Forever peut cacher ces nombres aux addons (« secret values »). L'addon ne les lit jamais : il les passe directement aux barres et au texte, qui les acceptent. L'affichage fonctionne donc dans les deux cas.
 - **Taille** : à 100 %, la barre fait 292 × 53 pixels sur un client 2560×1440 fenêtré (1359 px de haut), quelle que soit l'échelle d'interface du jeu. Elle suit la hauteur de la fenêtre.
-- **Druide** : la barre apparaît en forme de félin et disparaît dans les autres formes, comme la barre de combo de Blizzard (elle suit le passage de la ressource à l'énergie). Elle reste visible dans toutes les formes tant qu'elle est déverrouillée ou que les options sont ouvertes, pour pouvoir la placer et la régler. L'option « Druide : barre seulement en forme de félin » la laisse affichée en permanence si on la décoche.
+- **Druide** : la barre apparaît en forme de félin et disparaît dans les autres formes, comme la barre de combo de Blizzard (elle suit le passage de la ressource à l'énergie). Elle reste visible dans toutes les formes tant qu'elle est déverrouillée ou que les options sont ouvertes, pour pouvoir la placer et la régler. L'option « Afficher seulement en forme de félin » (onglet Druide) la laisse affichée en permanence si on la décoche.
+- **Langues** : l'addon ne dépend jamais de la langue du client (classes, ressources et événements sont lus par leurs identifiants internes), il marche donc sur tous les clients. Seuls les textes affichés changent avec le drapeau choisi.
+- **Mise à jour depuis 1.0 / 1.1** : tes anciens réglages sont gardés et copiés dans les deux profils.
 - **Léger** : aucune bibliothèque, aucune texture à charger. Tant que la barre est cachée (druide hors félin), l'addon ne lit plus rien : il se remet à jour d'un coup quand elle réapparaît. Sur une autre classe que voleur ou druide, l'addon reste inactif : aucun événement, aucune mise à jour.
 
 ## Licences des polices
