@@ -174,6 +174,7 @@ end
 
 local lastCombo
 local function UpdateCombo()
+  if not hud:IsShown() then return end -- re-read on show
   local v = ns.preview and NUM_POINTS or ReadComboPoints()
   if issecretvalue(v) then
     lastCombo = nil
@@ -187,6 +188,7 @@ end
 
 local lastEnergy
 local function UpdateEnergy()
+  if not hud:IsShown() then return end
   local v = UnitPower("player", POWER_ENERGY)
   if issecretvalue(v) then
     lastEnergy = nil
@@ -200,6 +202,7 @@ local function UpdateEnergy()
 end
 
 local function UpdateEnergyMax()
+  if not hud:IsShown() then return end
   local m = UnitPowerMax("player", POWER_ENERGY)
   if issecretvalue(m) or (type(m) == "number" and m > 0) then
     energy:SetMinMaxValues(0, m)
@@ -214,16 +217,17 @@ local function RefreshValues()
   UpdateCombo()
 end
 
--- Nothing runs while the HUD is hidden, so catch up on everything when it comes back.
+-- Updates are skipped while the HUD is hidden, so catch up on everything when it comes back.
 hud:SetScript("OnShow", RefreshValues)
 
 -- Rogues always see the HUD. Druids see it while their power is energy, i.e. in Cat Form
 -- (the test Blizzard's own druid combo bar uses), unless "Cat Form only" is off. While
--- unlocked or previewing it shows in any form, so it can be moved and coloured.
+-- unlocked or while the options are open it shows in any form, so it can be moved and
+-- coloured.
 local function ShouldShow()
   if ns.isRogue then return true end
   if not ns.isDruid then return false end
-  if not ns.db.druidCatOnly or not ns.db.locked or ns.preview then return true end
+  if not ns.db.druidCatOnly or not ns.db.locked or ns.optionsOpen then return true end
   local powerType = UnitPowerType("player")
   return issecretvalue(powerType) or powerType == POWER_ENERGY
 end
@@ -360,10 +364,14 @@ end)
 -- Preview: shows all five points (to judge colours) until turned off or combat starts.
 function ns:SetPreview(on)
   self.preview = on and true or false
-  self:UpdateVisibility()
   lastCombo = nil
   UpdateCombo()
   self:RefreshOptions()
+end
+
+function ns:SetOptionsOpen(open)
+  self.optionsOpen = open and true or false
+  self:UpdateVisibility()
 end
 
 function ns:SetDruidCatOnly(on)

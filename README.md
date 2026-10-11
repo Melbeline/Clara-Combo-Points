@@ -34,8 +34,8 @@ Commandes rapides : `/cl lock`, `/cl unlock`, `/cl scale 120`, `/cl reset`.
 - **Énergie** : lue à chaque image affichée, donc chaque point régénéré s'affiche à l'image même où le client l'a. Si la valeur n'a pas changé, ça ne coûte qu'une comparaison.
 - **Valeurs secrètes** : Forever peut cacher ces nombres aux addons (« secret values »). L'addon ne les lit jamais : il les passe directement aux barres et au texte, qui les acceptent. L'affichage fonctionne donc dans les deux cas.
 - **Taille** : à 100 %, la barre fait 292 × 53 pixels sur un client 2560×1440 fenêtré (1359 px de haut), quelle que soit l'échelle d'interface du jeu. Elle suit la hauteur de la fenêtre.
-- **Druide** : la barre apparaît en forme de félin et disparaît dans les autres formes, comme la barre de combo de Blizzard (elle suit le passage de la ressource à l'énergie). Elle reste visible dans toutes les formes quand elle est déverrouillée ou que les options sont ouvertes, pour pouvoir la placer et la régler. L'option « Druide : barre seulement en forme de félin » la laisse affichée en permanence si on la décoche.
-- **Léger** : aucune bibliothèque, aucune texture à charger. Rien ne tourne tant que la barre est cachée (druide hors félin). Sur une autre classe que voleur ou druide, l'addon reste inactif : aucun événement, aucune mise à jour.
+- **Druide** : la barre apparaît en forme de félin et disparaît dans les autres formes, comme la barre de combo de Blizzard (elle suit le passage de la ressource à l'énergie). Elle reste visible dans toutes les formes tant qu'elle est déverrouillée ou que les options sont ouvertes, pour pouvoir la placer et la régler. L'option « Druide : barre seulement en forme de félin » la laisse affichée en permanence si on la décoche.
+- **Léger** : aucune bibliothèque, aucune texture à charger. Tant que la barre est cachée (druide hors félin), l'addon ne lit plus rien : il se remet à jour d'un coup quand elle réapparaît. Sur une autre classe que voleur ou druide, l'addon reste inactif : aucun événement, aucune mise à jour.
 
 ## Licences des polices
 

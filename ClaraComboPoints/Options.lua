@@ -489,10 +489,12 @@ local function Build()
 
   -- Opening the options shows all five points so colour changes are visible straight away.
   panel:SetScript("OnShow", function(self)
+    ns:SetOptionsOpen(true)
     if InCombatLockdown() then self:Refresh() else ns:SetPreview(true) end
   end)
   panel:SetScript("OnHide", function()
     if ns.preview then ns:SetPreview(false) end
+    ns:SetOptionsOpen(false)
   end)
 end
 
