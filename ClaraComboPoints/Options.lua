@@ -1,43 +1,25 @@
 -- Clara Combo Points - options window (/clara or /cl)
 -- One tab per class profile (Rogue, Druid), a language picker (flags) and two themes:
--- Classic, the WoW Classic 1.15 look (default), and Modern, flat and dark.
--- Built from plain widgets (BackdropTemplate only for the classic frames), so it does not
--- depend on Blizzard templates that may differ between client builds. Colours use
--- Blizzard's own colour picker.
+--   Classic (default): Blizzard's own frame templates, the look of the game's windows
+--     (metal frame with portrait, insets, red buttons, top tabs, checkboxes, sliders).
+--   Modern: flat and dark, plain widgets only.
+-- Both themes share one layout; each is built the first time it is shown. If a Blizzard
+-- template is missing on this client, the Classic window cannot be built and Modern is used.
+-- Colours use Blizzard's own colour picker.
 
 local ADDON, ns = ...
 local L = ns.L
 
 local floor, ceil, min, max = math.floor, math.ceil, math.min, math.max
 
-local PANEL_W, PANEL_H = 720, 640
+local PANEL_W, PANEL_H = 720, 660
 local CONTENT_TOP = -38 -- settings start under the title, tab and language row
 local LEFT, RIGHT, COL_W = 20, 380, 320
 local FONT_ROW_H = 22
 local GOLD_R, GOLD_G, GOLD_B = 1, .82, 0
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local FLAG_DIR = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Flags\\"
-
--- Classic 1.15 art (all still used by the current client)
-local PANEL_BUTTON = "Interface\\Buttons\\UI-Panel-Button-"
-local BACKDROP_DIALOG = {
-  bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-  edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-  tile = true, tileEdge = true, tileSize = 32, edgeSize = 32,
-  insets = { left = 11, right = 12, top = 12, bottom = 11 },
-}
-local BACKDROP_SLIDER = {
-  bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
-  edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
-  tile = true, tileEdge = true, tileSize = 8, edgeSize = 8,
-  insets = { left = 3, right = 3, top = 6, bottom = 6 },
-}
-local BACKDROP_BOX = {
-  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  tile = true, tileEdge = true, tileSize = 16, edgeSize = 16,
-  insets = { left = 4, right = 4, top = 4, bottom = 4 },
-}
+local ICONS = { ROGUE = "Interface\\Icons\\Ability_Rogue_Eviscerate", DRUID = "Interface\\Icons\\Ability_Druid_CatForm" }
 
 local CLASS_TABS = { { class = "ROGUE", key = "TAB_ROGUE" }, { class = "DRUID", key = "TAB_DRUID" } }
 local COLOR_ROWS = { "cp1", "cp2", "cp3", "cp4", "cp5", "energy", "bg", "text" }
@@ -45,22 +27,28 @@ local COLOR_LABELS = { energy = "ENERGY_BAR", bg = "BACKGROUND", text = "ENERGY_
 local SCALE_PRESETS = { 50, 75, 100, 125, 150, 200, 300 }
 local OUTLINES = { { "NONE", "OUTLINE_NONE" }, { "OUTLINE", "OUTLINE_THIN" }, { "THICKOUTLINE", "OUTLINE_THICK" } }
 
-local panel
+local panels = {}     -- built windows, by theme
+local current         -- the window in use
 local editing         -- class profile shown in the window
-local skinned = {}    -- widgets with a :Skin() method
-local relabels = {}   -- functions that set text in the current language
+local keepTab         -- set while switching theme: the new window keeps the open tab
+local classicFailed   -- a Blizzard template was missing: no Classic window on this client
 
-local function IsClassic() return ns.sv.skin == "CLASSIC" end
+local kit             -- widget set of the window being built
+local relabels        -- text setters of the window being built (run again on language change)
+
 local function Tr(key) return function() return L[key] end end
-local function Skinned(w) skinned[#skinned + 1] = w; return w end
 local function OnRelabel(fn) relabels[#relabels + 1] = fn; fn() end
 
 local function ClickSound()
   if SOUNDKIT and PlaySound then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
 end
 
+local function SkinWanted()
+  return (ns.sv.skin == "CLASSIC" and not classicFailed) and "CLASSIC" or "MODERN"
+end
+
 ---------------------------------------------------------------------------
--- Widgets: each draws itself in both themes
+-- Shared pieces
 ---------------------------------------------------------------------------
 local function AddBorder(frame, r, g, b, a)
   local lines = {}
@@ -79,45 +67,24 @@ local function SetBorderColor(frame, r, g, b, a)
   for _, line in ipairs(frame.borderLines) do line:SetColorTexture(r, g, b, a) end
 end
 
-local function SetBorderShown(frame, shown)
-  for _, line in ipairs(frame.borderLines) do line:SetShown(shown) end
-end
-
--- Flat look for Modern, tooltip-style box for Classic (edit box, font list).
-local function SkinBox(frame)
-  frame.flat = frame:CreateTexture(nil, "BACKGROUND")
-  frame.flat:SetAllPoints()
-  frame.flat:SetColorTexture(0, 0, 0, .4)
-  AddBorder(frame, .35, .35, .4, 1)
-  Skinned(frame)
-  function frame:Skin()
-    local classic = IsClassic()
-    self.flat:SetShown(not classic)
-    SetBorderShown(self, not classic)
-    if classic then
-      self:SetBackdrop(BACKDROP_BOX)
-      self:SetBackdropColor(0, 0, 0, .85)
-      self:SetBackdropBorderColor(.65, .65, .65, 1)
-    else
-      self:SetBackdrop(nil)
-    end
-  end
-end
-
 -- s: plain string, or a function returning the text in the current language
-local function Text(parent, s, fontObject)
-  local fs = parent:CreateFontString(nil, "OVERLAY", fontObject or "GameFontHighlightSmall")
-  fs:SetJustifyH("LEFT")
+local function SetText(fs, s)
   if type(s) == "function" then
     OnRelabel(function() fs:SetText(s()) end)
   else
     fs:SetText(s)
   end
+end
+
+local function Text(parent, s, fontObject)
+  local fs = parent:CreateFontString(nil, "OVERLAY", fontObject or kit.labelFont)
+  fs:SetJustifyH("LEFT")
+  SetText(fs, s)
   return fs
 end
 
 local function Hint(parent, s)
-  local fs = Text(parent, s)
+  local fs = Text(parent, s, "GameFontHighlightSmall")
   fs:SetTextColor(.6, .6, .65)
   return fs
 end
@@ -133,214 +100,6 @@ local function Section(parent, key, x, y)
     fs:SetText(L[key])
     line:SetWidth(max(10, COL_W - fs:GetStringWidth() - 8))
   end)
-end
-
--- Classic: red panel button (grey when it is an option that is not selected).
--- Modern: flat, gold when selected.
-local function Button(parent, label, w, h, onClick, isToggle)
-  local b = CreateFrame("Button", nil, parent)
-  b:SetSize(w, h or 22)
-  b.isToggle = isToggle
-  b.flat = b:CreateTexture(nil, "BACKGROUND")
-  b.flat:SetAllPoints()
-  AddBorder(b, .32, .32, .38, 1)
-  b.left = b:CreateTexture(nil, "BACKGROUND")
-  b.left:SetPoint("TOPLEFT")
-  b.left:SetPoint("BOTTOMLEFT")
-  b.left:SetWidth(12)
-  b.right = b:CreateTexture(nil, "BACKGROUND")
-  b.right:SetPoint("TOPRIGHT")
-  b.right:SetPoint("BOTTOMRIGHT")
-  b.right:SetWidth(12)
-  b.middle = b:CreateTexture(nil, "BACKGROUND")
-  b.middle:SetPoint("TOPLEFT", b.left, "TOPRIGHT")
-  b.middle:SetPoint("BOTTOMRIGHT", b.right, "BOTTOMLEFT")
-  b.hl = b:CreateTexture(nil, "HIGHLIGHT")
-  b.hl:SetAllPoints()
-  b.text = Text(b, label)
-  b.text:SetPoint("CENTER")
-  b:SetScript("OnMouseDown", function(self) self.down = true; self:Skin() end)
-  b:SetScript("OnMouseUp", function(self) self.down = false; self:Skin() end)
-  b:SetScript("OnClick", function(self) ClickSound(); onClick(self) end)
-
-  function b:SetActive(on)
-    self.active = on and true or false
-    self:Skin()
-  end
-
-  function b:Skin()
-    local classic = IsClassic()
-    self.flat:SetShown(not classic)
-    SetBorderShown(self, not classic)
-    self.left:SetShown(classic)
-    self.middle:SetShown(classic)
-    self.right:SetShown(classic)
-    if classic then
-      local state = (self.isToggle and not self.active) and "Disabled" or (self.down and "Down" or "Up")
-      self.left:SetTexture(PANEL_BUTTON .. state)
-      self.left:SetTexCoord(0, .09375, 0, .6875)
-      self.middle:SetTexture(PANEL_BUTTON .. state)
-      self.middle:SetTexCoord(.09375, .53125, 0, .6875)
-      self.right:SetTexture(PANEL_BUTTON .. state)
-      self.right:SetTexCoord(.53125, .625, 0, .6875)
-      self.hl:SetTexture(PANEL_BUTTON .. "Highlight")
-      self.hl:SetTexCoord(0, .625, 0, .6875)
-      self.hl:SetBlendMode("ADD")
-      if self.isToggle and self.active then
-        self.text:SetTextColor(1, 1, 1)
-      else
-        self.text:SetTextColor(GOLD_R, GOLD_G, GOLD_B)
-      end
-    else
-      if self.active then
-        self.flat:SetColorTexture(.36, .27, .02, 1)
-        SetBorderColor(self, GOLD_R, GOLD_G, GOLD_B, 1)
-      else
-        self.flat:SetColorTexture(.14, .14, .17, 1)
-        SetBorderColor(self, .32, .32, .38, 1)
-      end
-      self.hl:SetColorTexture(1, 1, 1, .08)
-      self.hl:SetTexCoord(0, 1, 0, 1)
-      self.hl:SetBlendMode("BLEND")
-      self.text:SetTextColor(1, 1, 1)
-    end
-  end
-
-  Skinned(b)
-  return b
-end
-
-local function Slider(parent, w, minV, maxV, step, fmt, onChange)
-  local s = CreateFrame("Slider", nil, parent, "BackdropTemplate")
-  s:SetOrientation("HORIZONTAL")
-  s:SetWidth(w)
-  s:SetMinMaxValues(minV, maxV)
-  s:SetValueStep(step)
-  if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
-  s:SetHitRectInsets(0, 0, -6, -6)
-  s:EnableMouse(true)
-  s:EnableMouseWheel(true)
-  s.track = s:CreateTexture(nil, "BACKGROUND")
-  s.track:SetColorTexture(.22, .22, .26, 1)
-  s.track:SetPoint("LEFT")
-  s.track:SetPoint("RIGHT")
-  s.track:SetHeight(4)
-  s.value = Text(s, "")
-  s.value:SetPoint("LEFT", s, "RIGHT", 8, 0)
-  s:SetScript("OnValueChanged", function(self, v)
-    v = floor(v / step + .5) * step
-    self.value:SetText(fmt(v))
-    if not self.silent then onChange(v) end
-  end)
-  s:SetScript("OnMouseWheel", function(self, delta)
-    self:SetValue(min(maxV, max(minV, self:GetValue() + delta * step)))
-  end)
-
-  function s:Set(v)
-    self.silent = true
-    self:SetValue(v)
-    self.silent = false
-    self.value:SetText(fmt(v))
-  end
-
-  function s:Skin()
-    local classic = IsClassic()
-    self.track:SetShown(not classic)
-    if classic then
-      self:SetHeight(17)
-      self:SetBackdrop(BACKDROP_SLIDER)
-      self:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-      local thumb = self:GetThumbTexture()
-      thumb:SetSize(32, 32)
-      thumb:SetVertexColor(1, 1, 1, 1)
-    else
-      self:SetHeight(14)
-      self:SetBackdrop(nil)
-      self:SetThumbTexture(WHITE)
-      local thumb = self:GetThumbTexture()
-      thumb:SetSize(8, 14)
-      thumb:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
-    end
-  end
-
-  Skinned(s)
-  return s
-end
-
-local function Check(parent, label, onToggle)
-  local b = CreateFrame("Button", nil, parent)
-  b:SetSize(14, 14)
-  b.flat = b:CreateTexture(nil, "BACKGROUND")
-  b.flat:SetAllPoints()
-  b.flat:SetColorTexture(.1, .1, .12, 1)
-  AddBorder(b, .45, .45, .5, 1)
-  b.mark = b:CreateTexture(nil, "ARTWORK")
-  b.box = b:CreateTexture(nil, "BACKGROUND")
-  b.box:SetPoint("CENTER")
-  b.box:SetSize(24, 24)
-  b.box:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
-  b.hl = b:CreateTexture(nil, "HIGHLIGHT")
-  b.text = Text(b, label)
-  OnRelabel(function()
-    b:SetHitRectInsets(-5, -(b.text:GetStringWidth() + 12), -5, -5)
-  end)
-
-  function b:Set(on)
-    self.checked = on and true or false
-    self.mark:SetShown(self.checked)
-  end
-
-  function b:Skin()
-    local classic = IsClassic()
-    self.flat:SetShown(not classic)
-    SetBorderShown(self, not classic)
-    self.box:SetShown(classic)
-    self.mark:ClearAllPoints()
-    self.hl:ClearAllPoints()
-    self.text:ClearAllPoints()
-    if classic then
-      self.mark:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-      self.mark:SetTexCoord(0, 1, 0, 1)
-      self.mark:SetPoint("CENTER")
-      self.mark:SetSize(24, 24)
-      self.hl:SetTexture("Interface\\Buttons\\UI-CheckBox-Highlight")
-      self.hl:SetBlendMode("ADD")
-      self.hl:SetPoint("CENTER")
-      self.hl:SetSize(24, 24)
-      self.text:SetPoint("LEFT", self, "RIGHT", 10, 0)
-    else
-      self.mark:SetColorTexture(GOLD_R, GOLD_G, GOLD_B, 1)
-      self.mark:SetPoint("TOPLEFT", 3, -3)
-      self.mark:SetPoint("BOTTOMRIGHT", -3, 3)
-      self.hl:SetColorTexture(1, 1, 1, .08)
-      self.hl:SetBlendMode("BLEND")
-      self.hl:SetAllPoints()
-      self.text:SetPoint("LEFT", self, "RIGHT", 6, 0)
-    end
-  end
-
-  b:SetScript("OnClick", function(self)
-    ClickSound()
-    self:Set(not self.checked)
-    onToggle(self.checked)
-  end)
-  Skinned(b)
-  return b
-end
-
-local function NumberBox(parent, w, onEnter)
-  local e = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
-  e:SetSize(w, 22)
-  e:SetAutoFocus(false)
-  e:SetNumeric(true)
-  e:SetMaxLetters(3)
-  e:SetFontObject("GameFontHighlight")
-  e:SetJustifyH("CENTER")
-  e:SetTextInsets(6, 6, 0, 0)
-  SkinBox(e)
-  e:SetScript("OnEnterPressed", function(self) onEnter(self:GetText()); self:ClearFocus() end)
-  e:SetScript("OnEscapePressed", function(self) self:ClearFocus(); panel:Refresh() end)
-  return e
 end
 
 -- Flags: France and Germany are drawn with stripes, the Union Jack is a texture.
@@ -373,7 +132,6 @@ local function Flag(parent, lang, onClick)
     local t = art:CreateTexture(nil, "ARTWORK")
     t:SetAllPoints()
     t:SetTexture(FLAG_DIR .. "GB")
-    t:SetTexCoord(0, 1, 0, 1)
   end
   b.art = art
   b.lang = lang.code
@@ -394,6 +152,291 @@ local function Flag(parent, lang, onClick)
 end
 
 ---------------------------------------------------------------------------
+-- Modern kit: flat widgets
+---------------------------------------------------------------------------
+local Modern = { labelFont = "GameFontHighlightSmall" }
+
+function Modern.Window()
+  local w = CreateFrame("Frame", "ClaraComboPointsOptions", UIParent)
+  w:Hide()
+  local bg = w:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(.06, .06, .08, .98)
+  AddBorder(w, GOLD_R, GOLD_G, GOLD_B, .45)
+  local title = w:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  title:SetPoint("TOPLEFT", LEFT + 2, -18)
+  title:SetText("Clara Combo Points")
+  local version = w:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  version:SetPoint("LEFT", title, "RIGHT", 8, -1)
+  version:SetTextColor(.6, .6, .65)
+  version:SetText("v" .. ns.VERSION)
+  local close = Modern.Button(w, "X", 24, 22, function() w:Hide() end)
+  close:SetPoint("TOPRIGHT", -16, -14)
+  w.closeButton = close
+  w.SetIcon = function() end
+  return w
+end
+
+function Modern.Button(parent, label, w, h, onClick)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(w, h or 22)
+  b.flat = b:CreateTexture(nil, "BACKGROUND")
+  b.flat:SetAllPoints()
+  AddBorder(b, .32, .32, .38, 1)
+  local hl = b:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints()
+  hl:SetColorTexture(1, 1, 1, .08)
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.text:SetPoint("CENTER")
+  SetText(b.text, label)
+  b:SetScript("OnClick", function(self) ClickSound(); onClick(self) end)
+  function b:SetLabel(s) self.text:SetText(s) end
+  function b:SetActive(on)
+    if on then
+      self.flat:SetColorTexture(.36, .27, .02, 1)
+      SetBorderColor(self, GOLD_R, GOLD_G, GOLD_B, 1)
+    else
+      self.flat:SetColorTexture(.14, .14, .17, 1)
+      SetBorderColor(self, .32, .32, .38, 1)
+    end
+  end
+  b:SetActive(false)
+  return b
+end
+
+function Modern.Tab(parent, label, onClick)
+  return Modern.Button(parent, label, 110, 24, onClick)
+end
+
+function Modern.Check(parent, label, onToggle)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(14, 14)
+  local bg = b:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(.1, .1, .12, 1)
+  AddBorder(b, .45, .45, .5, 1)
+  b.mark = b:CreateTexture(nil, "ARTWORK")
+  b.mark:SetPoint("TOPLEFT", 3, -3)
+  b.mark:SetPoint("BOTTOMRIGHT", -3, 3)
+  b.mark:SetColorTexture(GOLD_R, GOLD_G, GOLD_B, 1)
+  local hl = b:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints()
+  hl:SetColorTexture(1, 1, 1, .08)
+  b.text = b:CreateFontString(nil, "OVERLAY", Modern.labelFont)
+  b.text:SetPoint("LEFT", b, "RIGHT", 6, 0)
+  SetText(b.text, label)
+  OnRelabel(function() b:SetHitRectInsets(0, -(b.text:GetStringWidth() + 6), 0, 0) end)
+  function b:Set(on)
+    self.checked = on and true or false
+    self.mark:SetShown(self.checked)
+  end
+  b:SetScript("OnClick", function(self)
+    ClickSound()
+    self:Set(not self.checked)
+    onToggle(self.checked)
+  end)
+  return b
+end
+
+function Modern.Slider(parent, w, minV, maxV, step, fmt, onChange)
+  local s = CreateFrame("Slider", nil, parent)
+  s:SetOrientation("HORIZONTAL")
+  s:SetSize(w, 14)
+  s:SetHitRectInsets(0, 0, -6, -6)
+  local track = s:CreateTexture(nil, "BACKGROUND")
+  track:SetColorTexture(.22, .22, .26, 1)
+  track:SetPoint("LEFT")
+  track:SetPoint("RIGHT")
+  track:SetHeight(4)
+  s:SetThumbTexture(WHITE)
+  local thumb = s:GetThumbTexture()
+  thumb:SetSize(8, 14)
+  thumb:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
+  return s
+end
+
+function Modern.NumberBox(parent, w)
+  local e = CreateFrame("EditBox", nil, parent)
+  e:SetSize(w, 22)
+  e:SetFontObject("GameFontHighlight")
+  e:SetTextInsets(6, 6, 0, 0)
+  local bg = e:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(0, 0, 0, .4)
+  AddBorder(e, .35, .35, .4, 1)
+  e.holder = e
+  return e
+end
+
+function Modern.Box(parent)
+  local f = CreateFrame("Frame", nil, parent)
+  local bg = f:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(0, 0, 0, .35)
+  AddBorder(f, .3, .3, .35, 1)
+  return f
+end
+
+function Modern.SelectRow(tex, on)
+  tex:SetColorTexture(.36, .27, .02, on and 1 or 0)
+end
+
+---------------------------------------------------------------------------
+-- Classic kit: Blizzard's own templates
+---------------------------------------------------------------------------
+local Classic = { labelFont = "GameFontNormalSmall" }
+
+function Classic.Window()
+  local w = CreateFrame("Frame", "ClaraComboPointsOptionsClassic", UIParent, "PortraitFrameTemplate")
+  w:Hide()
+  local title = (w.TitleContainer and w.TitleContainer.TitleText) or w.TitleText
+  if w.SetTitle then w:SetTitle("Clara Combo Points  v" .. ns.VERSION) else title:SetText("Clara Combo Points  v" .. ns.VERSION) end
+  local portrait = (w.PortraitContainer and w.PortraitContainer.portrait) or w.portrait
+  function w.SetIcon(path)
+    if portrait then portrait:SetTexture(path) end
+  end
+  -- dark insets behind the two columns, like the game's own windows
+  local left = CreateFrame("Frame", nil, w, "InsetFrameTemplate")
+  left:SetPoint("TOPLEFT", 12, -84)
+  left:SetPoint("BOTTOMRIGHT", w, "BOTTOMLEFT", 368, 40)
+  local right = CreateFrame("Frame", nil, w, "InsetFrameTemplate")
+  right:SetPoint("TOPLEFT", 372, -84)
+  right:SetPoint("BOTTOMRIGHT", -10, 40)
+  w.closeButton = w.CloseButton
+  return w
+end
+
+function Classic.Button(parent, label, w, h, onClick)
+  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  b:SetSize(w, h or 22)
+  b:SetNormalFontObject(GameFontNormalSmall)
+  b:SetHighlightFontObject(GameFontHighlightSmall)
+  if type(label) == "function" then
+    OnRelabel(function() b:SetText(label()) end)
+  else
+    b:SetText(label)
+  end
+  b:SetScript("OnClick", function(self) ClickSound(); onClick(self) end)
+  function b:SetLabel(s) self:SetText(s) end
+  -- a selected option keeps its highlight lit, with white text
+  function b:SetActive(on)
+    if on then
+      self:LockHighlight()
+      self:SetNormalFontObject(GameFontHighlightSmall)
+    else
+      self:UnlockHighlight()
+      self:SetNormalFontObject(GameFontNormalSmall)
+    end
+  end
+  return b
+end
+
+function Classic.Tab(parent, label, onClick)
+  local t = CreateFrame("Button", nil, parent, "PanelTopTabButtonTemplate")
+  OnRelabel(function()
+    t:SetText(label())
+    PanelTemplates_TabResize(t, 0)
+  end)
+  t:SetScript("OnClick", function(self) ClickSound(); onClick(self) end)
+  function t:SetActive(on)
+    if on then PanelTemplates_SelectTab(self) else PanelTemplates_DeselectTab(self) end
+  end
+  return t
+end
+
+-- 14x14 holder so both themes share the layout; the 24px Blizzard box is centred on it
+function Classic.Check(parent, label, onToggle)
+  local holder = CreateFrame("Frame", nil, parent)
+  holder:SetSize(14, 14)
+  local cb = CreateFrame("CheckButton", nil, holder, "UICheckButtonTemplate")
+  cb:SetSize(24, 24)
+  cb:SetPoint("CENTER")
+  local text = cb.Text or cb.text
+  text:ClearAllPoints()
+  text:SetPoint("LEFT", cb, "RIGHT", 1, 0)
+  SetText(text, label)
+  OnRelabel(function() cb:SetHitRectInsets(0, -(text:GetStringWidth() + 4), 0, 0) end)
+  cb:SetScript("OnClick", function(self)
+    ClickSound()
+    onToggle(self:GetChecked() and true or false)
+  end)
+  holder.check = cb
+  function holder:Set(on) self.check:SetChecked(on and true or false) end
+  return holder
+end
+
+function Classic.Slider(parent, w, minV, maxV, step, fmt, onChange)
+  local s = CreateFrame("Slider", nil, parent, "UISliderTemplate")
+  s:SetSize(w, 17)
+  return s
+end
+
+function Classic.NumberBox(parent, w)
+  local holder = CreateFrame("Frame", nil, parent)
+  holder:SetSize(w, 22)
+  local e = CreateFrame("EditBox", nil, holder, "InputBoxTemplate")
+  e:SetPoint("TOPLEFT", 6, -1)
+  e:SetPoint("BOTTOMRIGHT", 0, 1)
+  e:SetFontObject("ChatFontNormal")
+  e.holder = holder
+  return e
+end
+
+function Classic.Box(parent)
+  return CreateFrame("Frame", nil, parent, "InsetFrameTemplate")
+end
+
+function Classic.SelectRow(tex, on)
+  tex:SetColorTexture(1, 1, 1, 1)
+  if on and CreateColor and tex.SetGradient then
+    tex:SetGradient("HORIZONTAL", CreateColor(1, .82, 0, .45), CreateColor(1, .82, 0, .05))
+  else
+    tex:SetColorTexture(1, .82, 0, on and .35 or 0)
+  end
+end
+
+---------------------------------------------------------------------------
+-- Widgets built from the kit
+---------------------------------------------------------------------------
+local function Slider(parent, w, minV, maxV, step, fmt, onChange)
+  local s = kit.Slider(parent, w, minV, maxV, step, fmt, onChange)
+  s:SetOrientation("HORIZONTAL")
+  s:SetMinMaxValues(minV, maxV)
+  s:SetValueStep(step)
+  if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
+  s:EnableMouse(true)
+  s:EnableMouseWheel(true)
+  s.value = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  s.value:SetPoint("LEFT", s, "RIGHT", 8, 0)
+  s:SetScript("OnValueChanged", function(self, v)
+    v = floor(v / step + .5) * step
+    self.value:SetText(fmt(v))
+    if not self.silent then onChange(v) end
+  end)
+  s:SetScript("OnMouseWheel", function(self, delta)
+    self:SetValue(min(maxV, max(minV, self:GetValue() + delta * step)))
+  end)
+  function s:Set(v)
+    self.silent = true
+    self:SetValue(v)
+    self.silent = false
+    self.value:SetText(fmt(v))
+  end
+  return s
+end
+
+local function NumberBox(parent, w, onEnter)
+  local e = kit.NumberBox(parent, w)
+  e:SetAutoFocus(false)
+  e:SetNumeric(true)
+  e:SetMaxLetters(3)
+  e:SetJustifyH("CENTER")
+  e:SetScript("OnEnterPressed", function(self) onEnter(self:GetText()); self:ClearFocus() end)
+  e:SetScript("OnEscapePressed", function(self) self:ClearFocus(); current:Refresh() end)
+  return e
+end
+
+---------------------------------------------------------------------------
 -- Colour picker (Blizzard's: hue wheel, brightness bar, opacity slider)
 ---------------------------------------------------------------------------
 local function OpenColorPicker(key)
@@ -401,7 +444,7 @@ local function OpenColorPicker(key)
   local prev = { r = c.r, g = c.g, b = c.b, a = c.a }
   local function changed()
     ns:ApplyColors()
-    panel:Refresh()
+    ns:RefreshOptions()
   end
   local function apply()
     -- the picker fires this once while being set up, before it holds this colour's opacity
@@ -450,7 +493,7 @@ local function ColorRow(parent, i, key, y)
     ns:ApplyColors()
     swatch.color:SetColorTexture(c.r, c.g, c.b, c.a)
   end)
-  slider:SetPoint("TOPLEFT", LEFT + 168, y + 1)
+  slider:SetPoint("LEFT", parent, "TOPLEFT", LEFT + 168, y - 6)
 
   return function()
     local c = ns.db.colors[key]
@@ -460,13 +503,12 @@ local function ColorRow(parent, i, key, y)
 end
 
 ---------------------------------------------------------------------------
--- Font list: every font name is drawn in its own font
+-- Font list: every font name is drawn in its own font, shrunk if it would not fit
 ---------------------------------------------------------------------------
 local function FontList(parent, x, y, w, h)
-  local box = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+  local box = kit.Box(parent)
   box:SetPoint("TOPLEFT", x, y)
   box:SetSize(w, h)
-  SkinBox(box)
 
   local scroll = CreateFrame("ScrollFrame", nil, box)
   scroll:SetPoint("TOPLEFT", 4, -4)
@@ -483,8 +525,10 @@ local function FontList(parent, x, y, w, h)
   local hint = Hint(parent, Tr("MORE_FONTS"))
   hint:SetPoint("TOPRIGHT", box, "BOTTOMRIGHT", 0, -3)
 
+  local selectRow = kit.SelectRow
   local rows = {}
   local colW = (w - 8 - 8) / 2
+  local textW = colW - 10
   return function()
     local fonts = ns:GetFonts()
     for i, f in ipairs(fonts) do
@@ -507,18 +551,24 @@ local function FontList(parent, x, y, w, h)
           ClickSound()
           ns.db.font = self.fontName
           ns:ApplyFont()
-          panel:Refresh()
+          current:Refresh()
         end)
         rows[i] = row
       end
       if row.fontName ~= f.name then
         row.fontName = f.name
         local ok = row.text:SetFont(f.path, 13, "")
-        if ok == false or not row.text:GetFont() then row.text:SetFontObject("GameFontHighlightSmall") end
+        if ok == false or not row.text:GetFont() then row.text:SetFontObject(GameFontHighlightSmall) end
         row.text:SetText(f.name)
+        local measure = row.text.GetUnboundedStringWidth or row.text.GetStringWidth
+        local width = measure(row.text)
+        local path, size = row.text:GetFont()
+        if path and width > textW then
+          row.text:SetFont(path, max(7, floor(size * textW / width)), "")
+        end
       end
       local selected = (f.name == ns.db.font)
-      row.bg:SetColorTexture(selected and .36 or 0, selected and .27 or 0, selected and .02 or 0, selected and 1 or 0)
+      selectRow(row.bg, selected)
       row.text:SetTextColor(selected and GOLD_R or 1, selected and GOLD_G or 1, selected and GOLD_B or 1)
     end
     child:SetHeight(max(h - 8, 4 + ceil(#fonts / 2) * FONT_ROW_H))
@@ -527,10 +577,14 @@ local function FontList(parent, x, y, w, h)
 end
 
 ---------------------------------------------------------------------------
--- Panel
+-- Window
 ---------------------------------------------------------------------------
-local function Build()
-  panel = CreateFrame("Frame", "ClaraComboPointsOptions", UIParent, "BackdropTemplate")
+local function Build(skin)
+  kit = (skin == "CLASSIC") and Classic or Modern
+  relabels = {}
+  local panel = kit.Window()
+  panel.skin = skin
+  panel.relabels = relabels
   panel:SetSize(PANEL_W, PANEL_H)
   panel:SetPoint("CENTER")
   panel:SetFrameStrata("HIGH") -- under the colour picker
@@ -541,72 +595,61 @@ local function Build()
   panel:RegisterForDrag("LeftButton")
   panel:SetScript("OnDragStart", panel.StartMoving)
   panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
-  panel:Hide()
-  tinsert(UISpecialFrames, "ClaraComboPointsOptions") -- Esc closes it
-
-  panel.flat = panel:CreateTexture(nil, "BACKGROUND")
-  panel.flat:SetAllPoints()
-  panel.flat:SetColorTexture(.06, .06, .08, .98)
-  AddBorder(panel, GOLD_R, GOLD_G, GOLD_B, .45)
-  Skinned(panel)
-  function panel:Skin()
-    local classic = IsClassic()
-    self.flat:SetShown(not classic)
-    SetBorderShown(self, not classic)
-    self:SetBackdrop(classic and BACKDROP_DIALOG or nil)
-  end
+  tinsert(UISpecialFrames, panel:GetName()) -- Esc closes it
 
   local refreshers = {}
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
+  local resetAll
 
-  -- Title row: name, theme, close ------------------------------------------
-  local title = Text(panel, "Clara Combo Points", "GameFontNormalLarge")
-  title:SetPoint("TOPLEFT", LEFT + 2, -18)
-  local version = Hint(panel, "v" .. ns.VERSION)
-  version:SetPoint("LEFT", title, "RIGHT", 8, -1)
-
-  local close = Button(panel, "X", 24, 22, function() panel:Hide() end)
-  close:SetPoint("TOPRIGHT", -16, -14)
-  local themeModern = Button(panel, Tr("THEME_MODERN"), 84, 22, function() ns:SetSkin("MODERN") end, true)
-  themeModern:SetPoint("RIGHT", close, "LEFT", -12, 0)
-  local themeClassic = Button(panel, Tr("THEME_CLASSIC"), 84, 22, function() ns:SetSkin("CLASSIC") end, true)
+  -- Theme buttons, tabs, language flags ----------------------------------------
+  local themeModern = kit.Button(panel, Tr("THEME_MODERN"), 84, 22, function() ns:SetSkin("MODERN") end)
+  local themeClassic = kit.Button(panel, Tr("THEME_CLASSIC"), 84, 22, function() ns:SetSkin("CLASSIC") end)
+  if skin == "CLASSIC" then
+    themeModern:SetPoint("TOPRIGHT", -14, -56)
+  else
+    themeModern:SetPoint("RIGHT", panel.closeButton, "LEFT", -12, 0)
+  end
   themeClassic:SetPoint("RIGHT", themeModern, "LEFT", -4, 0)
   OnRefresh(function()
-    themeClassic:SetActive(IsClassic())
-    themeModern:SetActive(not IsClassic())
+    themeClassic:SetActive(skin == "CLASSIC")
+    themeModern:SetActive(skin == "MODERN")
   end)
 
-  -- Tabs, language flags, which profile this character uses -----------------
   local tabs = {}
   for i, tab in ipairs(CLASS_TABS) do
-    local b = Button(panel, Tr(tab.key), 110, 24, function()
+    local t = kit.Tab(panel, Tr(tab.key), function()
       editing = tab.class
+      resetAll.armed = nil
       ns:SetActiveProfile(tab.class)
       panel:Refresh()
-    end, true)
-    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 114, -46)
-    b.class = tab.class
-    tabs[i] = b
+    end)
+    if i > 1 then
+      t:SetPoint("LEFT", tabs[i - 1], "RIGHT", 4, 0)
+    elseif skin == "CLASSIC" then
+      t:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", 66, -86) -- standing on the insets, right of the portrait
+    else
+      t:SetPoint("TOPLEFT", LEFT, -46)
+    end
+    t.class = tab.class
+    tabs[i] = t
   end
   local flags = {}
   for i, lang in ipairs(ns.LANGUAGES) do
     local f = Flag(panel, lang, function(code) ns:SetLanguage(code) end)
-    f:SetPoint("LEFT", tabs[#CLASS_TABS], "RIGHT", 16 + (i - 1) * 30, 0)
+    f:SetPoint("LEFT", tabs[#tabs], "RIGHT", 16 + (i - 1) * 30, skin == "CLASSIC" and -4 or 0)
     flags[i] = f
   end
-  local whose = Hint(panel, function()
-    return L.THIS_CHARACTER:format(ns.isDruid and L.TAB_DRUID or L.TAB_ROGUE)
-  end)
-  whose:SetPoint("TOPRIGHT", -24, -52)
-  whose:SetShown(ns.enabled and true or false)
-  local tabLine = panel:CreateTexture(nil, "ARTWORK")
-  tabLine:SetColorTexture(GOLD_R, GOLD_G, GOLD_B, .3)
-  tabLine:SetHeight(1)
-  tabLine:SetPoint("TOPLEFT", LEFT, -74)
-  tabLine:SetPoint("TOPRIGHT", -LEFT, -74)
+  if skin == "MODERN" then
+    local tabLine = panel:CreateTexture(nil, "ARTWORK")
+    tabLine:SetColorTexture(GOLD_R, GOLD_G, GOLD_B, .3)
+    tabLine:SetHeight(1)
+    tabLine:SetPoint("TOPLEFT", LEFT, -74)
+    tabLine:SetPoint("TOPRIGHT", -LEFT, -74)
+  end
   OnRefresh(function()
-    for _, b in ipairs(tabs) do b:SetActive(b.class == editing) end
+    for _, t in ipairs(tabs) do t:SetActive(t.class == editing) end
     for _, f in ipairs(flags) do f:SetActive(f.lang == ns.lang) end
+    panel.SetIcon(ICONS[editing])
   end)
 
   -- Settings of the selected profile -----------------------------------------
@@ -616,12 +659,12 @@ local function Build()
 
   -- Position
   Section(content, "POSITION", LEFT, -56)
-  local lockBtn = Button(content, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
+  local lockBtn = kit.Button(content, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
   lockBtn:SetPoint("TOPLEFT", LEFT, -80)
-  local centerBtn = Button(content, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end)
+  local centerBtn = kit.Button(content, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end)
   centerBtn:SetPoint("TOPLEFT", LEFT + 160, -80)
   OnRefresh(function()
-    lockBtn.text:SetText(ns.db.locked and L.UNLOCK or L.LOCK)
+    lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
     lockBtn:SetActive(not ns.db.locked)
   end)
 
@@ -629,16 +672,16 @@ local function Build()
   Section(content, "SCALE", LEFT, -118)
   local presetButtons = {}
   for i, p in ipairs(SCALE_PRESETS) do
-    local b = Button(content, p .. "%", 40, 22, function() ns:SetScalePercent(p) end, true)
+    local b = kit.Button(content, p .. "%", 40, 22, function() ns:SetScalePercent(p) end)
     b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -142)
     b.percent = p
     presetButtons[i] = b
   end
   local scaleBox = NumberBox(content, 50, function(text) ns:SetScalePercent(text) end)
-  scaleBox:SetPoint("TOPLEFT", LEFT, -172)
+  scaleBox.holder:SetPoint("TOPLEFT", LEFT, -172)
   local pct = Text(content, "%")
-  pct:SetPoint("LEFT", scaleBox, "RIGHT", 4, 0)
-  local applyScale = Button(content, Tr("APPLY"), 90, 22, function()
+  pct:SetPoint("LEFT", scaleBox.holder, "RIGHT", 4, 0)
+  local applyScale = kit.Button(content, Tr("APPLY"), 90, 22, function()
     ns:SetScalePercent(scaleBox:GetText())
     scaleBox:ClearFocus()
   end)
@@ -646,9 +689,9 @@ local function Build()
   local scaleHint = Hint(content, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end)
   scaleHint:SetPoint("LEFT", applyScale, "RIGHT", 10, 0)
   OnRefresh(function()
-    local current = ns:GetScalePercent()
-    for _, b in ipairs(presetButtons) do b:SetActive(b.percent == current) end
-    if not scaleBox:HasFocus() then scaleBox:SetText(tostring(current)) end
+    local now = ns:GetScalePercent()
+    for _, b in ipairs(presetButtons) do b:SetActive(b.percent == now) end
+    if not scaleBox:HasFocus() then scaleBox:SetText(tostring(now)) end
   end)
 
   -- Global opacity
@@ -657,7 +700,7 @@ local function Build()
     ns.db.alpha = v / 100
     ns:ApplyAlpha()
   end)
-  alphaSlider:SetPoint("TOPLEFT", LEFT, -238)
+  alphaSlider:SetPoint("LEFT", content, "TOPLEFT", LEFT, -245)
   OnRefresh(function() alphaSlider:Set(floor(ns.db.alpha * 100 + .5)) end)
 
   -- Colours
@@ -666,7 +709,7 @@ local function Build()
   for i, key in ipairs(COLOR_ROWS) do
     OnRefresh(ColorRow(content, i, key, -314 - (i - 1) * 28))
   end
-  local resetColors = Button(content, Tr("DEFAULT_COLORS"), 150, 22, function() ns:ResetColors() end)
+  local resetColors = kit.Button(content, Tr("DEFAULT_COLORS"), 150, 22, function() ns:ResetColors() end)
   resetColors:SetPoint("TOPLEFT", LEFT, -540)
 
   -- Font
@@ -678,17 +721,17 @@ local function Build()
     ns.db.fontSize = v
     ns:ApplyFont()
   end)
-  sizeSlider:SetPoint("TOPLEFT", RIGHT + 70, -332)
+  sizeSlider:SetPoint("LEFT", content, "TOPLEFT", RIGHT + 70, -338)
   OnRefresh(function() sizeSlider:Set(ns.db.fontSize) end)
 
   Text(content, Tr("OUTLINE")):SetPoint("TOPLEFT", RIGHT, -362)
   local outlineButtons = {}
   for i, o in ipairs(OUTLINES) do
-    local b = Button(content, Tr(o[2]), 70, 22, function()
+    local b = kit.Button(content, Tr(o[2]), 70, 22, function()
       ns.db.outline = o[1]
       ns:ApplyFont()
       panel:Refresh()
-    end, true)
+    end)
     b:SetPoint("TOPLEFT", RIGHT + 70 + (i - 1) * 76, -356)
     b.value = o[1]
     outlineButtons[i] = b
@@ -697,7 +740,7 @@ local function Build()
     for _, b in ipairs(outlineButtons) do b:SetActive(b.value == ns.db.outline) end
   end)
 
-  local showText = Check(content, Tr("SHOW_TEXT"), function(on)
+  local showText = kit.Check(content, Tr("SHOW_TEXT"), function(on)
     ns.db.showText = on
     ns:ApplyFont()
   end)
@@ -707,29 +750,28 @@ local function Build()
   -- Advanced
   Section(content, "ADVANCED", RIGHT, -420)
   Text(content, Tr("SOURCE")):SetPoint("TOPLEFT", RIGHT, -450)
-  local srcTarget = Button(content, Tr("SOURCE_TARGET"), 124, 22, function() ns:SetComboSource("TARGET") end, true)
+  local srcTarget = kit.Button(content, Tr("SOURCE_TARGET"), 124, 22, function() ns:SetComboSource("TARGET") end)
   srcTarget:SetPoint("TOPLEFT", RIGHT + 90, -444)
-  local srcPlayer = Button(content, Tr("SOURCE_PLAYER"), 90, 22, function() ns:SetComboSource("PLAYER") end, true)
+  local srcPlayer = kit.Button(content, Tr("SOURCE_PLAYER"), 90, 22, function() ns:SetComboSource("PLAYER") end)
   srcPlayer:SetPoint("TOPLEFT", RIGHT + 220, -444)
   OnRefresh(function()
     srcTarget:SetActive(ns.db.cpSource == "TARGET")
     srcPlayer:SetActive(ns.db.cpSource == "PLAYER")
   end)
 
-  local catOnly = Check(content, Tr("CAT_ONLY"), function(on) ns:SetDruidCatOnly(on) end)
+  local catOnly = kit.Check(content, Tr("CAT_ONLY"), function(on) ns:SetDruidCatOnly(on) end)
   catOnly:SetPoint("TOPLEFT", RIGHT, -478)
   OnRefresh(function()
     catOnly:SetShown(editing == "DRUID")
     catOnly:Set(ns.db.druidCatOnly)
   end)
 
-  local previewBtn = Button(content, Tr("PREVIEW"), 150, 22, function() ns:SetPreview(not ns.preview) end, true)
+  local previewBtn = kit.Button(content, Tr("PREVIEW"), 150, 22, function() ns:SetPreview(not ns.preview) end)
   previewBtn:SetPoint("TOPLEFT", RIGHT, -504)
   Hint(content, Tr("PREVIEW_HINT")):SetPoint("LEFT", previewBtn, "RIGHT", 10, 0)
   OnRefresh(function() previewBtn:SetActive(ns.preview) end)
 
-  local resetAll
-  resetAll = Button(content, "", 150, 22, function()
+  resetAll = kit.Button(content, "", 150, 22, function()
     if resetAll.armed then
       resetAll.armed = nil
       ns:ResetAll()
@@ -743,12 +785,17 @@ local function Build()
     panel:Refresh()
   end)
   resetAll:SetPoint("TOPLEFT", RIGHT, -540)
-  OnRefresh(function() resetAll.text:SetText(resetAll.armed and L.CONFIRM or L.RESET_ALL) end)
+  OnRefresh(function() resetAll:SetLabel(resetAll.armed and L.CONFIRM or L.RESET_ALL) end)
 
-  Hint(content, "/cl lock  ·  /cl unlock  ·  /cl scale 120  ·  /cl reset"):SetPoint("BOTTOMLEFT", LEFT, 18)
-  if not ns.enabled then
-    local warn = Text(content, Tr("WRONG_CLASS"))
-    warn:SetPoint("BOTTOMRIGHT", -24, 18)
+  -- Footer: commands, and which profile this character uses
+  Hint(panel, "/cl lock  ·  /cl unlock  ·  /cl scale 120  ·  /cl reset"):SetPoint("BOTTOMLEFT", LEFT, 16)
+  if ns.enabled then
+    Hint(panel, function()
+      return L.THIS_CHARACTER:format(ns.isDruid and L.TAB_DRUID or L.TAB_ROGUE)
+    end):SetPoint("BOTTOMRIGHT", -LEFT, 16)
+  else
+    local warn = Text(panel, Tr("WRONG_CLASS"), "GameFontHighlightSmall")
+    warn:SetPoint("BOTTOMRIGHT", -LEFT, 16)
     warn:SetTextColor(1, .4, .3)
   end
 
@@ -759,44 +806,78 @@ local function Build()
   -- Opening the options shows this character's tab, with all five points lit so colour
   -- changes are visible straight away.
   panel:SetScript("OnShow", function(self)
-    editing = ns.homeClass or "ROGUE"
+    current = self
+    if not keepTab then editing = ns.homeClass or "ROGUE" end
+    resetAll.armed = nil
     ns:SetActiveProfile(editing)
     ns:SetOptionsOpen(true)
     if InCombatLockdown() then self:Refresh() else ns:SetPreview(true) end
   end)
   panel:SetScript("OnHide", function()
     if ns.preview then ns:SetPreview(false) end
-    ns:SetActiveProfile(ns.homeClass or "ROGUE")
+    local home = ns.homeClass or "ROGUE"
+    if not keepTab then
+      -- an unlock made on the other class's tab must not stay behind in that profile
+      for class, profile in pairs(ns.sv.profiles) do
+        if class ~= home then profile.locked = true end
+      end
+    end
+    ns:SetActiveProfile(home)
     ns:SetOptionsOpen(false)
   end)
+
+  return panel
 end
 
-local function ApplySkin()
-  for _, w in ipairs(skinned) do w:Skin() end
+local function GetPanel(skin)
+  if skin == "CLASSIC" and not panels.CLASSIC and not classicFailed then
+    local ok, result = pcall(Build, "CLASSIC")
+    if ok then
+      panels.CLASSIC = result
+    else
+      classicFailed = true
+      ns.Print(L.CLASSIC_UNAVAILABLE)
+    end
+  end
+  if skin == "CLASSIC" and panels.CLASSIC then return panels.CLASSIC end
+  if not panels.MODERN then panels.MODERN = Build("MODERN") end
+  return panels.MODERN
+end
+
+local function Open()
+  local panel = GetPanel(SkinWanted())
+  panel:Show()
 end
 
 function ns:SetSkin(skin)
   self.sv.skin = skin
-  if panel then
-    ApplySkin()
-    panel:Refresh()
+  if current and current:IsShown() and current.skin ~= SkinWanted() then
+    local point, _, relPoint, x, y = current:GetPoint(1)
+    keepTab = true
+    current:Hide()
+    local panel = GetPanel(SkinWanted())
+    panel:ClearAllPoints()
+    panel:SetPoint(point, UIParent, relPoint, x, y)
+    panel:Show()
+    keepTab = false
   end
 end
 
 function ns:RelabelOptions()
-  if not panel then return end
-  for _, fn in ipairs(relabels) do fn() end
-  panel:Refresh()
+  for _, panel in pairs(panels) do
+    for _, fn in ipairs(panel.relabels) do fn() end
+  end
+  self:RefreshOptions()
 end
 
 function ns:RefreshOptions()
-  if panel and panel:IsShown() then panel:Refresh() end
+  if current and current:IsShown() then current:Refresh() end
 end
 
 function ns:ToggleOptions()
-  if not panel then
-    Build()
-    ApplySkin()
+  if current and current:IsShown() then
+    current:Hide()
+  else
+    Open()
   end
-  panel:SetShown(not panel:IsShown())
 end

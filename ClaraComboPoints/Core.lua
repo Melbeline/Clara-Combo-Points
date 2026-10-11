@@ -13,7 +13,7 @@ local ADDON, ns = ...
 _G.ClaraComboPoints = ns
 local L = ns.L
 
-ns.VERSION = "1.2.0"
+ns.VERSION = "1.3.0"
 
 local NUM_POINTS    = 5
 local POWER_ENERGY  = Enum and Enum.PowerType and Enum.PowerType.Energy or 3
@@ -356,12 +356,17 @@ function ns:SetLocked(locked)
   self:RefreshOptions()
 end
 
+-- A drag belongs to the profile it started in (the options can switch profile mid-drag).
 hud:SetScript("OnDragStart", function(self)
-  if not ns.db.locked then self:StartMoving() end
+  if not ns.db.locked then
+    self.dragProfile = ns.db
+    self:StartMoving()
+  end
 end)
 hud:SetScript("OnDragStop", function(self)
   self:StopMovingOrSizing()
-  ns:SavePosition()
+  if self.dragProfile == ns.db then ns:SavePosition() else ns:ApplyPosition() end
+  self.dragProfile = nil
 end)
 
 -- Preview: shows all five points (to judge colours) until turned off or combat starts.
@@ -413,11 +418,19 @@ function ns:ResetAll()
   self:RefreshOptions()
 end
 
+function ns:GetProfileName()
+  return self.db == self.sv.profiles.DRUID and L.TAB_DRUID or L.TAB_ROGUE
+end
+
 -- The HUD draws the profile of this character's class; while the options are open it draws
 -- the profile of the selected tab, so the other class can be set up and seen from here.
 function ns:SetActiveProfile(class)
   local profile = self.sv.profiles[class]
   if not profile or profile == self.db then return end
+  if hud.dragProfile then
+    hud:StopMovingOrSizing()
+    hud.dragProfile = nil
+  end
   self.db = profile
   self:ApplyAll()
   self:RefreshOptions()
@@ -450,7 +463,7 @@ local function InitDB()
   if type(sv.profiles) ~= "table" then
     -- 1.0 and 1.1 kept a single set of settings: it becomes the start of both profiles
     local old = {}
-    for k, v in pairs(sv) do old[k], sv[k] = v, nil end
+    for k in pairs(defaults) do old[k], sv[k] = sv[k], nil end
     sv.profiles = {}
     for _, class in ipairs(ns.PROFILES) do sv.profiles[class] = CopyDefaults(old, {}) end
   end
@@ -606,7 +619,7 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
     Print(L.SCALE_SET:format(ns:GetScalePercent()))
   elseif cmd == "reset" then
     ns:ResetAll()
-    Print(L.RESET_DONE)
+    Print(L.RESET_DONE:format(ns:GetProfileName()))
   elseif cmd == "help" then
     Print(L.HELP)
   else

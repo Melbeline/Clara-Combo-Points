@@ -18,7 +18,7 @@ Copier le dossier `ClaraComboPoints` dans le dossier `Interface\AddOns` de ton c
 En haut de la fenêtre :
 - **Onglets Voleur / Druide** : chaque classe a son propre profil (position, échelle, couleurs, police…), commun à tous tes personnages de cette classe. La fenêtre s'ouvre sur l'onglet de ton personnage ; pendant qu'elle est ouverte, la barre affiche le profil de l'onglet choisi, pour régler l'autre classe et voir le résultat.
 - **Drapeaux FR / DE / GB** : langue de l'addon (français, allemand, anglais). Par défaut, celle du client (anglais pour les autres langues).
-- **Classique / Moderne** : apparence de la fenêtre d'options. Classique (par défaut) reprend l'interface de WoW Classic 1.15 : cadre de dialogue, boutons rouges, curseurs et cases à cocher d'origine. Moderne est sombre et plat. La barre de combo garde toujours l'apparence de la capture de référence.
+- **Classique / Moderne** : apparence de la fenêtre d'options. Classique (par défaut) utilise les modèles de fenêtres de Blizzard, comme le grimoire, la fiche de personnage ou le journal de quêtes : cadre métal avec portrait et croix rouge, encarts sombres, boutons rouges, onglets, cases à cocher et curseurs du jeu. Si un de ces modèles manquait sur le client, la fenêtre s'ouvre en Moderne (sombre et plat) et un message l'indique. La barre de combo garde toujours l'apparence de la capture de référence.
 
 Réglages de chaque onglet :
 
@@ -28,7 +28,7 @@ Réglages de chaque onglet :
 | Échelle | Boutons 50 → 300 % en un clic, ou n'importe quelle valeur de 10 à 500 % tapée dans la case (100 % par défaut) |
 | Opacité globale | Opacité de tout l'addon |
 | Couleurs et opacité | Chaque case de combo, la barre d'énergie, le fond des cases vides et le texte : couleur via le sélecteur de couleur de Blizzard (roue, luminosité, opacité) + curseur d'opacité indépendant |
-| Police | 20 polices (Arial Narrow par défaut, Friz Quadrata, Morpheus, Skurri, Emily's Candy, Bangers, Luckiest Guy, Chewy, Permanent Marker, Creepster, Pirata One, MedievalSharp, Cinzel Decorative, Bebas Neue, Russo One, Black Ops One, Audiowide, Righteous, Press Start 2P, Share Tech Mono) + celles de LibSharedMedia si un autre addon les fournit ; taille ; contour |
+| Police | 20 polices (Arial Narrow par défaut, Friz Quadrata, Morpheus, Skurri, Emily's Candy, Bangers, Luckiest Guy, Chewy, Permanent Marker, Creepster, Pirata One, MedievalSharp, Cinzel Decorative, Bebas Neue, Russo One, Black Ops One, Audiowide, Righteous, Press Start 2P, Share Tech Mono) + celles de LibSharedMedia si un autre addon les fournit ; chaque nom est écrit dans sa police, réduite si besoin pour tenir dans la liste ; taille ; contour |
 | Avancé | Source des points de combo (cible / joueur), barre seulement en forme de félin (onglet Druide, coché par défaut), aperçu 5 points, réinitialiser l'onglet |
 
 Commandes rapides : `/cl lock`, `/cl unlock`, `/cl scale 120`, `/cl reset`.
