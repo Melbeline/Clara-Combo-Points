@@ -1,5 +1,6 @@
 -- Clara Combo Points
--- Rogue HUD for WoW Forever: combo points on the top row, energy on the bottom bar.
+-- Rogue and druid (Cat Form) HUD for WoW Forever: combo points on the top row, energy on
+-- the bottom bar.
 --
 -- Combo points are never predicted from a spell table: the game is asked directly
 -- (GetComboPoints on the current target), so crits, talents and procs are always right
@@ -11,7 +12,7 @@
 local ADDON, ns = ...
 _G.ClaraComboPoints = ns
 
-ns.VERSION = "1.0.0"
+ns.VERSION = "1.1.0"
 
 local NUM_POINTS    = 5
 local POWER_ENERGY  = Enum and Enum.PowerType and Enum.PowerType.Energy or 3
@@ -64,6 +65,7 @@ local defaults = {
   fontSize = 17,
   outline  = "OUTLINE",
   showText = true,
+  druidCatOnly = true, -- druids: HUD only in Cat Form
   cpSource = "TARGET", -- TARGET: GetComboPoints(player, target) / PLAYER: UnitPower(player, combo)
   colors = {
     cp1    = { r = 1, g = 1,    b = 0,    a = 1 },
@@ -212,6 +214,24 @@ local function RefreshValues()
   UpdateCombo()
 end
 
+-- Nothing runs while the HUD is hidden, so catch up on everything when it comes back.
+hud:SetScript("OnShow", RefreshValues)
+
+-- Rogues always see the HUD. Druids see it while their power is energy, i.e. in Cat Form
+-- (the test Blizzard's own druid combo bar uses), unless "Cat Form only" is off. While
+-- unlocked or previewing it shows in any form, so it can be moved and coloured.
+local function ShouldShow()
+  if ns.isRogue then return true end
+  if not ns.isDruid then return false end
+  if not ns.db.druidCatOnly or not ns.db.locked or ns.preview then return true end
+  local powerType = UnitPowerType("player")
+  return issecretvalue(powerType) or powerType == POWER_ENERGY
+end
+
+function ns:UpdateVisibility()
+  hud:SetShown(ShouldShow())
+end
+
 -- Energy regenerates continuously, so it is read every frame: each point shows up on the
 -- very frame the client has it. Unchanged values cost a single comparison.
 local sinceCombo = 0
@@ -325,6 +345,7 @@ function ns:SetLocked(locked)
   self.db.locked = locked and true or false
   hud:EnableMouse(not self.db.locked)
   mover:SetShown(not self.db.locked)
+  self:UpdateVisibility()
   self:RefreshOptions()
 end
 
@@ -339,8 +360,15 @@ end)
 -- Preview: shows all five points (to judge colours) until turned off or combat starts.
 function ns:SetPreview(on)
   self.preview = on and true or false
+  self:UpdateVisibility()
   lastCombo = nil
   UpdateCombo()
+  self:RefreshOptions()
+end
+
+function ns:SetDruidCatOnly(on)
+  self.db.druidCatOnly = on and true or false
+  self:UpdateVisibility()
   self:RefreshOptions()
 end
 
@@ -407,8 +435,10 @@ function ns:PLAYER_LOGIN()
   events:UnregisterEvent("PLAYER_LOGIN")
   local _, class = UnitClass("player")
   self.isRogue = (class == "ROGUE")
+  self.isDruid = (class == "DRUID")
+  self.enabled = self.isRogue or self.isDruid
   self:ApplyAll()
-  if not self.isRogue then return end -- dormant on other classes: no events, no updates
+  if not self.enabled then return end -- dormant on other classes: no events, no updates
 
   events:RegisterEvent("PLAYER_ENTERING_WORLD")
   events:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -421,13 +451,25 @@ function ns:PLAYER_LOGIN()
   events:RegisterUnitEvent("UNIT_HEALTH", "target")
   events:RegisterUnitEvent("UNIT_FLAGS", "target")
   pcall(events.RegisterEvent, events, "UNIT_DIED") -- not in every client build
-  hud:Show()
+  if self.isDruid then
+    events:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player") -- power type changes with the form
+    events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+  end
+  self:UpdateVisibility()
 end
 
 function ns:PLAYER_ENTERING_WORLD()
   self:ApplyScale()
+  self:UpdateVisibility()
   RefreshValues()
 end
+
+function ns:UNIT_DISPLAYPOWER()
+  self:UpdateVisibility()
+  UpdateEnergyMax()
+  UpdateEnergy()
+end
+ns.UPDATE_SHAPESHIFT_FORM = ns.UNIT_DISPLAYPOWER
 
 function ns:PLAYER_TARGET_CHANGED()
   UpdateCombo()
