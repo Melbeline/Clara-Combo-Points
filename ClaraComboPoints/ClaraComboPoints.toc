@@ -1,0 +1,10 @@
+## Interface: 16001, 16002, 16003, 16005, 16010, 120100, 120105
+## Title: Clara Combo Points
+## Notes: Points de combo + énergie pour voleur (WoW Forever). /clara ou /cl
+## Notes-frFR: Points de combo + énergie pour voleur (WoW Forever). /clara ou /cl
+## Author: Melbeline
+## Version: 1.0.0
+## SavedVariables: ClaraComboPointsDB
+
+Core.lua
+Options.lua
