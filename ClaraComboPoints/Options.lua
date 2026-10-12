@@ -92,17 +92,30 @@ local function Hint(parent, s)
   return fs
 end
 
-local function Section(parent, key, x, y, width)
+-- A group of settings in a box like the character sheet's stat groups: rounded silver
+-- border, dark fill, gold title. The box sits on the page's back layer, under the widgets.
+-- bottom: lowest y of the group's content (or later, box:Fit(y)).
+local GROUP_BACKDROP = {
+  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  tile = true, tileSize = 16, edgeSize = 14,
+  insets = { left = 3, right = 3, top = 3, bottom = 3 },
+}
+local PAD = 9 -- box margin around its content
+
+local function Section(parent, key, x, y, width, bottom)
+  local box = CreateFrame("Frame", nil, parent.back, "BackdropTemplate")
+  box:SetPoint("TOPLEFT", parent, "TOPLEFT", x - PAD, y + PAD)
+  box:SetWidth((width or COL_W) + 2 * PAD)
+  box:SetBackdrop(GROUP_BACKDROP)
+  box:SetBackdropColor(0, 0, 0, .55)
+  box:SetBackdropBorderColor(.62, .62, .66, 1)
   local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   fs:SetPoint("TOPLEFT", x, y)
-  local line = parent:CreateTexture(nil, "ARTWORK")
-  line:SetColorTexture(GOLD_R, GOLD_G, GOLD_B, .25)
-  line:SetHeight(1)
-  line:SetPoint("LEFT", fs, "RIGHT", 8, 0)
-  OnRelabel(function()
-    fs:SetText(L[key])
-    line:SetWidth(max(10, (width or COL_W) - fs:GetStringWidth() - 8))
-  end)
+  OnRelabel(function() fs:SetText(L[key]) end)
+  function box:Fit(lowest) self:SetHeight(y - lowest + 2 * PAD) end
+  box:Fit(bottom or y - 40)
+  return box
 end
 
 -- A frame of fixed height holding one setting, so settings can be stacked per class.
@@ -112,8 +125,9 @@ local function Holder(parent, h)
   return f
 end
 
--- items: { frame, height, when }; shown ones are placed one under the other from y.
-local function Stack(parent, x, y, items)
+-- items: { frame, height, when }; shown ones are placed one under the other from y. The
+-- group box around them (if any) follows their height.
+local function Stack(parent, x, y, items, box)
   return function()
     local top = y
     for _, item in ipairs(items) do
@@ -125,6 +139,7 @@ local function Stack(parent, x, y, items)
         top = top - item.height
       end
     end
+    if box then box:Fit(top) end
   end
 end
 
@@ -713,16 +728,8 @@ local function Build()
   tinsert(UISpecialFrames, p:GetName()) -- Esc closes it
   p.relabels = relabels
 
-  -- dark insets behind the two columns (one wide inset on the icons page)
-  local insetLeft = Box(p)
-  insetLeft:SetPoint("TOPLEFT", 12, -84)
-  insetLeft:SetPoint("BOTTOMRIGHT", p, "BOTTOMLEFT", 368, 40)
-  local insetRight = Box(p)
-  insetRight:SetPoint("TOPLEFT", 372, -84)
-  insetRight:SetPoint("BOTTOMRIGHT", -10, 40)
-  local insetFull = Box(p)
-  insetFull:SetPoint("TOPLEFT", 12, -84)
-  insetFull:SetPoint("BOTTOMRIGHT", -10, 40)
+  -- the character sheet's palette: near-black background (settings groups in boxes, below)
+  if p.Bg then p.Bg:SetVertexColor(.32, .32, .34) end
 
   local refreshers = {}
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
@@ -752,6 +759,9 @@ local function Build()
     local content = CreateFrame("Frame", nil, p)
     content:SetPoint("TOPLEFT", 0, CONTENT_TOP)
     content:SetSize(PANEL_W, PANEL_H + CONTENT_TOP)
+    content.back = CreateFrame("Frame", nil, p) -- group boxes, under the page's widgets
+    content.back:SetAllPoints(content)
+    content:SetFrameLevel(content.back:GetFrameLevel() + 4)
     pages[i] = content
     local t = Tab(p, Tr(key), function()
       page = i
@@ -774,16 +784,16 @@ local function Build()
     if portrait then portrait:SetTexture(ICONS[editing]) end
   end)
   OnRefresh(function()
-    for i, content in ipairs(pages) do content:SetShown(i == page) end
+    for i, content in ipairs(pages) do
+      content:SetShown(i == page)
+      content.back:SetShown(i == page)
+    end
     for _, t in ipairs(pageTabs) do t:SetActive(t.page == page) end
-    insetFull:SetShown(page == 3)
-    insetLeft:SetShown(page ~= 3)
-    insetRight:SetShown(page ~= 3)
   end)
 
   -- Page 1: position, scale, opacity | colours -----------------------------------
   local bar = pages[1]
-  Section(bar, "POSITION", LEFT, -56)
+  Section(bar, "POSITION", LEFT, -56, nil, -102)
   local lockBtn = Button(bar, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
   lockBtn:SetPoint("TOPLEFT", LEFT, -80)
   local centerBtn = Button(bar, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end)
@@ -793,22 +803,22 @@ local function Build()
     lockBtn:SetActive(not ns.db.locked)
   end)
 
-  Section(bar, "SCALE", LEFT, -118)
+  Section(bar, "SCALE", LEFT, -130, nil, -206)
   local presetButtons = {}
   for i, pct in ipairs(SCALE_PRESETS) do
     local b = Button(bar, pct .. "%", 40, 22, function() ns:SetScalePercent(pct) end)
-    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -142)
+    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -154)
     b.percent = pct
     presetButtons[i] = b
   end
   local scaleBox = NumberBox(bar, 50, function(text) ns:SetScalePercent(text) end)
-  scaleBox.holder:SetPoint("TOPLEFT", LEFT, -172)
+  scaleBox.holder:SetPoint("TOPLEFT", LEFT, -184)
   Text(bar, "%"):SetPoint("LEFT", scaleBox.holder, "RIGHT", 4, 0)
   local applyScale = Button(bar, Tr("APPLY"), 90, 22, function()
     scaleBox:ClearFocus()
     ns:SetScalePercent(scaleBox:GetText())
   end)
-  applyScale:SetPoint("TOPLEFT", LEFT + 72, -172)
+  applyScale:SetPoint("TOPLEFT", LEFT + 72, -184)
   Hint(bar, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("LEFT", applyScale, "RIGHT", 10, 0)
   OnRefresh(function()
     local now = ns:GetScalePercent()
@@ -816,39 +826,39 @@ local function Build()
     if not scaleBox:HasFocus() then scaleBox:SetText(tostring(now)) end
   end)
 
-  Section(bar, "GLOBAL_OPACITY", LEFT, -212)
+  Section(bar, "GLOBAL_OPACITY", LEFT, -234, nil, -272)
   local alphaSlider = Slider(bar, 250, 0, 100, 1, Percent, function(v)
     ns.db.alpha = v / 100
     ns:ApplyAlpha()
   end)
-  alphaSlider:SetPoint("LEFT", bar, "TOPLEFT", LEFT, -245)
+  alphaSlider:SetPoint("LEFT", bar, "TOPLEFT", LEFT, -261)
   OnRefresh(function() alphaSlider:Set(floor(ns.db.alpha * 100 + .5)) end)
 
-  Section(bar, "OOC", LEFT, -272)
+  Section(bar, "OOC", LEFT, -298, nil, -392)
   local fade = Check(bar, Tr("FADE_OOC"), function(on)
     ns.db.fadeOOC = on
     ns:PreviewFade()
   end)
-  fade:SetPoint("TOPLEFT", LEFT, -298)
-  Text(bar, Tr("OOC_POWER")):SetPoint("TOPLEFT", LEFT, -326)
+  fade:SetPoint("TOPLEFT", LEFT, -324)
+  Text(bar, Tr("OOC_POWER")):SetPoint("TOPLEFT", LEFT, -350)
   local oocPower = Slider(bar, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocPower = v / 100
     ns:PreviewFade()
   end)
-  oocPower:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -332)
-  Text(bar, Tr("OOC_TOP")):SetPoint("TOPLEFT", LEFT, -354)
+  oocPower:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -356)
+  Text(bar, Tr("OOC_TOP")):SetPoint("TOPLEFT", LEFT, -376)
   local oocTop = Slider(bar, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocTop = v / 100
     ns:PreviewFade()
   end)
-  oocTop:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -360)
+  oocTop:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -382)
   OnRefresh(function()
     fade:Set(ns.db.fadeOOC)
     oocPower:Set(floor(ns.db.oocPower * 100 + .5))
     oocTop:Set(floor(ns.db.oocTop * 100 + .5))
   end)
 
-  Section(bar, "COLORS", RIGHT, -56)
+  local colorBox = Section(bar, "COLORS", RIGHT, -56)
   Hint(bar, Tr("COLORS_HINT")):SetPoint("TOPLEFT", RIGHT, -76)
   local colorItems = {}
   for _, key in ipairs(COLOR_KEYS) do
@@ -859,22 +869,22 @@ local function Build()
   local resetColors = Holder(bar, 30)
   Button(resetColors, Tr("DEFAULT_COLORS"), 150, 22, function() ns:ResetColors() end):SetPoint("TOPLEFT", 0, -6)
   colorItems[#colorItems + 1] = { frame = resetColors, height = 30 }
-  OnRefresh(Stack(bar, RIGHT, -98, colorItems))
+  OnRefresh(Stack(bar, RIGHT, -98, colorItems, colorBox))
 
   -- Page 2: font | advanced ----------------------------------------------------
   local text = pages[2]
-  Section(text, "FONT", LEFT, -56)
+  Section(text, "FONT", LEFT, -56, nil, -410)
   OnRefresh(FontList(text, LEFT, -80, COL_W, 230))
 
-  Text(text, Tr("SIZE")):SetPoint("TOPLEFT", LEFT, -332)
+  Text(text, Tr("SIZE")):SetPoint("TOPLEFT", LEFT, -340)
   local sizeSlider = Slider(text, 200, 6, 40, 1, tostring, function(v)
     ns.db.fontSize = v
     ns:ApplyFont()
   end)
-  sizeSlider:SetPoint("LEFT", text, "TOPLEFT", LEFT + 70, -338)
+  sizeSlider:SetPoint("LEFT", text, "TOPLEFT", LEFT + 70, -346)
   OnRefresh(function() sizeSlider:Set(ns.db.fontSize) end)
 
-  Text(text, Tr("OUTLINE")):SetPoint("TOPLEFT", LEFT, -362)
+  Text(text, Tr("OUTLINE")):SetPoint("TOPLEFT", LEFT, -370)
   local outlineButtons = {}
   for i, o in ipairs(OUTLINES) do
     local b = Button(text, Tr(o[2]), 70, 22, function()
@@ -882,7 +892,7 @@ local function Build()
       ns:ApplyFont()
       p:Refresh()
     end)
-    b:SetPoint("TOPLEFT", LEFT + 70 + (i - 1) * 76, -356)
+    b:SetPoint("TOPLEFT", LEFT + 70 + (i - 1) * 76, -364)
     b.value = o[1]
     outlineButtons[i] = b
   end
@@ -894,13 +904,13 @@ local function Build()
     ns.db.showText = on
     ns:ApplyFont()
   end)
-  showText:SetPoint("TOPLEFT", LEFT, -392)
+  showText:SetPoint("TOPLEFT", LEFT, -398)
   OnRefresh(function()
     showText:SetLabel(L["SHOW_" .. RESOURCE[editing]])
     showText:Set(ns.db.showText)
   end)
 
-  Section(text, "ADVANCED", RIGHT, -56)
+  local advancedBox = Section(text, "ADVANCED", RIGHT, -56)
   local source = Holder(text, 34)
   Text(source, Tr("SOURCE")):SetPoint("TOPLEFT", 0, -6)
   local srcTarget = Button(source, Tr("SOURCE_TARGET"), 124, 22, function() ns:SetComboSource("TARGET") end)
@@ -961,11 +971,11 @@ local function Build()
     { frame = predict, height = 46, when = function() return editing ~= "ROGUE" end },
     { frame = preview, height = 34 },
     { frame = reset,   height = 30 },
-  }))
+  }, advancedBox))
 
   -- Page 3: icon look, adding spells, the rows ------------------------------------
   local icons = pages[3]
-  Section(icons, "ICON_LOOK", LEFT, -56)
+  local lookBox = Section(icons, "ICON_LOOK", LEFT, -56)
   local square = Check(icons, Tr("SQUARE"), function(on)
     ns.db.icons.square = on
     ns:LayoutIcons()
@@ -996,6 +1006,7 @@ local function Build()
   bearFixed:SetPoint("TOPLEFT", LEFT, -210)
   OnRefresh(function()
     bearFixed:SetShown(editing == "DRUID")
+    lookBox:Fit(editing == "DRUID" and -222 or -198)
     bearFixed:Set(ns.db.bearIconsFixed)
     reverse:Set(ns.db.icons.reverse)
     square:Set(ns.db.icons.square)
@@ -1004,7 +1015,7 @@ local function Build()
     missing:Set(ns.db.icons.missing)
   end)
 
-  Section(icons, "ADD_SPELL", RIGHT, -56)
+  Section(icons, "ADD_SPELL", RIGHT, -56, nil, -176)
   Hint(icons, Tr("ADD_HINT")):SetPoint("TOPLEFT", RIGHT, -78)
   local input = InputBox(icons, 180)
   input:SetMaxLetters(80)
@@ -1029,10 +1040,10 @@ local function Build()
   defaultBtn:SetPoint("TOPLEFT", RIGHT + 160, -152)
   OnRefresh(function() addBtn:SetLabel(L.ADD .. " > " .. ns:RowName(selSide, selK)) end)
 
-  Section(icons, "ROWS", LEFT, -200, FULL_W)
-  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -220)
+  Section(icons, "ROWS", LEFT, -250, FULL_W, -520)
+  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -270)
   for i, def in ipairs(ROW_LINES) do
-    local y = -240 - (i - 1) * 30
+    local y = -290 - (i - 1) * 30
     if def then
       OnRefresh(IconLine(icons, def[1], def[2], y))
     else -- the bar, between the rows above and below it
@@ -1045,7 +1056,7 @@ local function Build()
       rule:SetPoint("RIGHT", icons, "TOPLEFT", LEFT + FULL_W, y - 14)
     end
   end
-  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -456)
+  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -506)
   ghost = DragGhost(p)
 
   -- Footer: commands, and which profile this character uses ------------------------
