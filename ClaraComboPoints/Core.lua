@@ -13,7 +13,7 @@ local ADDON, ns = ...
 _G.ClaraComboPoints = ns
 local L = ns.L
 
-ns.VERSION = "1.3.0"
+ns.VERSION = "1.3.1"
 
 local NUM_POINTS    = 5
 local POWER_ENERGY  = Enum and Enum.PowerType and Enum.PowerType.Energy or 3
@@ -379,6 +379,7 @@ end
 
 function ns:SetOptionsOpen(open)
   self.optionsOpen = open and true or false
+  self:WatchLogout(self.optionsOpen)
   self:UpdateVisibility()
 end
 
@@ -420,6 +421,15 @@ end
 
 function ns:GetProfileName()
   return self.db == self.sv.profiles.DRUID and L.TAB_DRUID or L.TAB_ROGUE
+end
+
+-- An unlock made on the other class's options tab must not stay behind in that profile:
+-- relocked when the options close, and on logout / reload in case they were still open.
+function ns:LockOtherProfiles()
+  local home = self.homeClass or "ROGUE"
+  for class, profile in pairs(self.sv.profiles) do
+    if class ~= home then profile.locked = true end
+  end
 end
 
 -- The HUD draws the profile of this character's class; while the options are open it draws
@@ -522,6 +532,15 @@ function ns:PLAYER_LOGIN()
     events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
   end
   self:UpdateVisibility()
+end
+
+-- A /reload or logout with the options still open saves without closing them first.
+function ns:WatchLogout(on)
+  if on then events:RegisterEvent("PLAYER_LOGOUT") else events:UnregisterEvent("PLAYER_LOGOUT") end
+end
+
+function ns:PLAYER_LOGOUT()
+  self:LockOtherProfiles()
 end
 
 function ns:PLAYER_ENTERING_WORLD()

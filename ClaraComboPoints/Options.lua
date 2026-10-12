@@ -368,6 +368,7 @@ end
 function Classic.Slider(parent, w, minV, maxV, step, fmt, onChange)
   local s = CreateFrame("Slider", nil, parent, "UISliderTemplate")
   s:SetSize(w, 17)
+  s:SetHitRectInsets(0, 0, -5, -5) -- the template's -10 would overlap the next colour row (28px apart)
   return s
 end
 
@@ -431,7 +432,11 @@ local function NumberBox(parent, w, onEnter)
   e:SetNumeric(true)
   e:SetMaxLetters(3)
   e:SetJustifyH("CENTER")
-  e:SetScript("OnEnterPressed", function(self) onEnter(self:GetText()); self:ClearFocus() end)
+  e:SetScript("OnEnterPressed", function(self)
+    local text = self:GetText()
+    self:ClearFocus() -- first, so the refresh can show the clamped value
+    onEnter(text)
+  end)
   e:SetScript("OnEscapePressed", function(self) self:ClearFocus(); current:Refresh() end)
   return e
 end
@@ -682,8 +687,8 @@ local function Build(skin)
   local pct = Text(content, "%")
   pct:SetPoint("LEFT", scaleBox.holder, "RIGHT", 4, 0)
   local applyScale = kit.Button(content, Tr("APPLY"), 90, 22, function()
-    ns:SetScalePercent(scaleBox:GetText())
     scaleBox:ClearFocus()
+    ns:SetScalePercent(scaleBox:GetText())
   end)
   applyScale:SetPoint("TOPLEFT", LEFT + 72, -172)
   local scaleHint = Hint(content, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end)
@@ -776,8 +781,10 @@ local function Build(skin)
       resetAll.armed = nil
       ns:ResetAll()
     else
-      resetAll.armed = true
+      local token = {} -- each confirmation has its own 3 s, untouched by an earlier one
+      resetAll.armed = token
       C_Timer.After(3, function()
+        if resetAll.armed ~= token then return end
         resetAll.armed = nil
         if panel:IsShown() then panel:Refresh() end
       end)
@@ -815,14 +822,8 @@ local function Build(skin)
   end)
   panel:SetScript("OnHide", function()
     if ns.preview then ns:SetPreview(false) end
-    local home = ns.homeClass or "ROGUE"
-    if not keepTab then
-      -- an unlock made on the other class's tab must not stay behind in that profile
-      for class, profile in pairs(ns.sv.profiles) do
-        if class ~= home then profile.locked = true end
-      end
-    end
-    ns:SetActiveProfile(home)
+    if not keepTab then ns:LockOtherProfiles() end
+    ns:SetActiveProfile(ns.homeClass or "ROGUE")
     ns:SetOptionsOpen(false)
   end)
 
