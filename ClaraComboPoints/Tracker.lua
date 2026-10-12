@@ -106,8 +106,9 @@ function ns:LayoutIcons()
   wipe(timed)
   for _, side in ipairs(self.SIDES) do
     -- each row sits on the previous one; empty rows take no room
+    -- (in Bear Form without combo points, the rows above sit on the rage bar: see Core.lua)
     local anchor = self.powerBar
-    if side == "above" and self.comboRow:IsShown() then anchor = self.comboRow end
+    if side == "above" and self.comboRow:IsShown() and not self.iconsOnBar then anchor = self.comboRow end
     for k = 1, self.MAX_ROWS do
       local spells = db.rows[side][k]
       local row = GetRow(side, k)
@@ -153,7 +154,7 @@ function ns:LayoutIcons()
     if side == "above" then self:AnchorMoverText(anchor) end
   end
   self:ColorIcons()
-  self:UpdateIcons()
+  self:MarkIconsDirty() -- states read on the next frame, once
 end
 
 function ns:ColorIcons()
@@ -326,13 +327,23 @@ function ns:RemoveIcon(side, k, i)
   self:RefreshOptions()
 end
 
-function ns:MoveIcon(side, k, i, delta)
-  local spells = self.db.rows[side][k]
-  local j = i + delta
-  if j < 1 or j > #spells then return end
-  spells[i], spells[j] = spells[j], spells[i]
+-- Moves icon i of one row to position j of the same or another row (drag and drop).
+function ns:MoveIconTo(fromSide, fromK, i, toSide, toK, j)
+  local from, to = self.db.rows[fromSide][fromK], self.db.rows[toSide][toK]
+  local spell = from[i]
+  if spell == nil then return false end
+  if from ~= to then
+    local name = self:SpellName(spell) or tostring(spell)
+    for _, other in ipairs(to) do
+      if other == spell or self:SpellName(other) == name then return false, L.DUPLICATE:format(name) end
+    end
+    if #to >= self.MAX_ICONS then return false, L.ROW_FULL:format(self.MAX_ICONS) end
+  end
+  table.remove(from, i)
+  table.insert(to, max(1, min(j, #to + 1)), spell)
   self:LayoutIcons()
   self:RefreshOptions()
+  return true
 end
 
 function ns:ClearRow(side, k)

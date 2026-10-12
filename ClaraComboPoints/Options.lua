@@ -1,8 +1,8 @@
 -- Clara Combo Points - options window (/clara or /cl)
 -- Built from Blizzard's own frame templates, the look of the game's windows: metal frame with
 -- portrait, insets, red buttons, tabs, checkboxes and sliders.
---   Top tabs: one profile per class (Rogue, Druid, Warrior), then the language flags.
---   Bottom tabs: three pages (bar, font & advanced, icons).
+--   Top row: one tab per class profile (Rogue, Druid, Warrior), the three pages (bar, font &
+--   advanced, icons), then the language flags.
 -- Colours use Blizzard's own colour picker.
 
 local ADDON, ns = ...
@@ -149,9 +149,8 @@ local function Button(parent, label, w, h, onClick)
   return b
 end
 
--- template: PanelTopTabButtonTemplate (class tabs) or PanelTabButtonTemplate (page tabs)
-local function Tab(parent, template, label, onClick)
-  local t = CreateFrame("Button", nil, parent, template)
+local function Tab(parent, label, onClick)
+  local t = CreateFrame("Button", nil, parent, "PanelTopTabButtonTemplate")
   OnRelabel(function()
     t:SetText(label())
     PanelTemplates_TabResize(t, 0)
@@ -460,8 +459,13 @@ end
 ---------------------------------------------------------------------------
 -- Icon rows editor: one line per row, icons in their order
 ---------------------------------------------------------------------------
+local ICON_X, ICON_STEP = 90, 24 -- first icon of a line, and spacing
+local lines = {}                 -- the six row lines: { side, k, frame, refresh }
+local drag                       -- icon being dragged: where from, the spell, where it would land
+local ghost                      -- the dragged icon, following the cursor
+
 local function IconTooltip(self)
-  if not GameTooltip then return end
+  if not GameTooltip or drag then return end
   GameTooltip:SetOwner(self, "ANCHOR_TOP")
   local named
   if type(self.spell) == "number" and GameTooltip.SetSpellByID then
@@ -471,6 +475,106 @@ local function IconTooltip(self)
   if type(self.spell) == "number" then GameTooltip:AddLine("ID " .. self.spell, .6, .6, .65) end
   GameTooltip:AddLine(L.ICON_TIP, .6, .6, .65, true)
   GameTooltip:Show()
+end
+
+-- Can the dragged icon go into this row? (a full row, or the same spell already there: no)
+local function Accepts(side, k)
+  if side == drag.side and k == drag.k then return true end
+  local spells = ns.db.rows[side][k]
+  if #spells >= ns.MAX_ICONS then return false end
+  local name = ns:SpellName(drag.spell)
+  for _, other in ipairs(spells) do
+    if other == drag.spell or (name and ns:SpellName(other) == name) then return false end
+  end
+  return true
+end
+
+-- What a line shows: its spells; while dragging, without the dragged icon, and with the
+-- dragged icon (faded) where it would land. Returns the list and that position.
+local function Shown(side, k)
+  local spells = ns.db.rows[side][k]
+  if not drag then return spells end
+  local list = {}
+  for i, spell in ipairs(spells) do
+    if not (side == drag.side and k == drag.k and i == drag.i) then list[#list + 1] = spell end
+  end
+  if drag.toSide == side and drag.toK == k then
+    local at = min(drag.toI, #list + 1)
+    table.insert(list, at, drag.spell)
+    return list, at
+  end
+  return list
+end
+
+local function CursorIn(frame)
+  local x, y = GetCursorPosition()
+  local scale = frame:GetEffectiveScale()
+  x, y = x / scale, y / scale
+  local left, right, top, bottom = frame:GetLeft(), frame:GetRight(), frame:GetTop(), frame:GetBottom()
+  if left and x >= left and x <= right and y >= bottom and y <= top then return x - left end
+end
+
+-- The landing place follows the cursor: the icon slot under it, in the line under it.
+local function TrackDrag()
+  local toSide, toK, toI
+  for _, line in ipairs(lines) do
+    local x = CursorIn(line.frame)
+    if x and Accepts(line.side, line.k) then
+      local n = #ns.db.rows[line.side][line.k]
+      if line.side == drag.side and line.k == drag.k then n = n - 1 end
+      toSide, toK = line.side, line.k
+      toI = max(1, min(n + 1, floor((x - ICON_X) / ICON_STEP) + 1))
+      break
+    end
+  end
+  if toSide ~= drag.toSide or toK ~= drag.toK or toI ~= drag.toI then
+    drag.toSide, drag.toK, drag.toI = toSide, toK, toI
+    for _, line in ipairs(lines) do line.refresh() end
+  end
+  local x, y = GetCursorPosition()
+  local scale = panel:GetEffectiveScale()
+  ghost:ClearAllPoints()
+  ghost:SetPoint("CENTER", panel, "BOTTOMLEFT", x / scale - panel:GetLeft(), y / scale - panel:GetBottom())
+end
+
+-- Released over a line: the icon moves there. Anywhere else: it goes back.
+local function EndDrag()
+  if not drag then return end
+  TrackDrag()
+  local d = drag
+  drag = nil
+  ghost:Hide()
+  if d.toSide then
+    selSide, selK = d.toSide, d.toK
+    ns:MoveIconTo(d.side, d.k, d.i, d.toSide, d.toK, d.toI)
+  end
+  panel:Refresh()
+end
+
+local function StartDrag(button, side, k)
+  if not button.spell then return end
+  if GameTooltip then GameTooltip:Hide() end
+  drag = { side = side, k = k, i = button.index, spell = button.spell }
+  ghost.tex:SetTexture(ns:SpellIcon(button.spell))
+  ghost:Show()
+  TrackDrag()
+end
+
+local function DragGhost(parent)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetSize(26, 26)
+  f:SetFrameStrata("TOOLTIP")
+  f.tex = f:CreateTexture(nil, "ARTWORK")
+  f.tex:SetAllPoints()
+  f.tex:SetTexCoord(.08, .92, .08, .92)
+  f:SetAlpha(.85)
+  f:Hide()
+  -- the drop also ends here if the button that started the drag went away meanwhile
+  f:SetScript("OnUpdate", function()
+    if not drag then return end
+    if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then EndDrag() else TrackDrag() end
+  end)
+  return f
 end
 
 local function IconLine(parent, side, k, y)
@@ -495,47 +599,52 @@ local function IconLine(parent, side, k, y)
   for i = 1, ns.MAX_ICONS do
     local b = CreateFrame("Button", nil, line)
     b:SetSize(22, 22)
-    b:SetPoint("LEFT", 90 + (i - 1) * 24, 0)
+    b:SetPoint("LEFT", ICON_X + (i - 1) * ICON_STEP, 0)
     b.tex = b:CreateTexture(nil, "ARTWORK")
     b.tex:SetAllPoints()
     b.tex:SetTexCoord(.08, .92, .08, .92)
     local hil = b:CreateTexture(nil, "HIGHLIGHT")
     hil:SetAllPoints()
     hil:SetColorTexture(1, 1, 1, .2)
-    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    b:SetScript("OnClick", function(self, button)
+    b.landing = b:CreateTexture(nil, "OVERLAY") -- where the dragged icon would land
+    b.landing:SetPoint("TOPLEFT", -2, 2)
+    b.landing:SetPoint("BOTTOMRIGHT", 2, -2)
+    b.landing:SetColorTexture(GOLD_R, GOLD_G, GOLD_B, .35)
+    b:RegisterForClicks("RightButtonUp")
+    b:RegisterForDrag("LeftButton")
+    b:SetScript("OnClick", function(self)
       ClickSound()
       selSide, selK = side, k
-      if button == "RightButton" then
-        ns:RemoveIcon(side, k, self.index)
-      elseif IsShiftKeyDown() then
-        ns:MoveIcon(side, k, self.index, 1)
-      else
-        ns:MoveIcon(side, k, self.index, -1)
-      end
+      ns:RemoveIcon(side, k, self.index)
       panel:Refresh()
       if GameTooltip and GameTooltip:IsOwned(self) then
         if self:IsShown() then IconTooltip(self) else GameTooltip:Hide() end
       end
     end)
+    b:SetScript("OnDragStart", function(self) StartDrag(self, side, k) end)
+    b:SetScript("OnDragStop", EndDrag)
     b:SetScript("OnEnter", IconTooltip)
     b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     icons[i] = b
   end
 
-  return function()
-    local spells = ns.db.rows[side][k]
+  local function refresh()
+    local spells, landing = Shown(side, k)
     for i, b in ipairs(icons) do
       local spell = spells[i]
       b:SetShown(spell ~= nil)
       if spell ~= nil then
         b.index, b.spell = i, spell
         b.tex:SetTexture(ns:SpellIcon(spell))
+        b.tex:SetAlpha(i == landing and .4 or 1)
+        b.landing:SetShown(i == landing)
       end
     end
-    count:SetText(#spells .. " / " .. ns.MAX_ICONS)
+    count:SetText(#ns.db.rows[side][k] .. " / " .. ns.MAX_ICONS)
     SelectRow(line.bg, selSide == side and selK == k)
   end
+  lines[#lines + 1] = { side = side, k = k, frame = line, refresh = refresh }
+  return refresh
 end
 
 ---------------------------------------------------------------------------
@@ -579,7 +688,7 @@ local function Build()
   -- Class tabs, language flags --------------------------------------------------
   local tabs = {}
   for i, class in ipairs(CLASS_TABS) do
-    local t = Tab(p, "PanelTopTabButtonTemplate", Tr("TAB_" .. class), function()
+    local t = Tab(p, Tr("TAB_" .. class), function()
       editing = class
       resetAll.armed = nil
       status:SetText("")
@@ -594,10 +703,26 @@ local function Build()
     t.class = class
     tabs[i] = t
   end
+  -- Pages and their tabs, after the class tabs ---------------------------------
+  local pages, pageTabs = {}, {}
+  for i, key in ipairs(PAGES) do
+    local content = CreateFrame("Frame", nil, p)
+    content:SetPoint("TOPLEFT", 0, CONTENT_TOP)
+    content:SetSize(PANEL_W, PANEL_H + CONTENT_TOP)
+    pages[i] = content
+    local t = Tab(p, Tr(key), function()
+      page = i
+      p:Refresh()
+    end)
+    t:SetPoint("LEFT", i == 1 and tabs[#tabs] or pageTabs[i - 1], "RIGHT", i == 1 and 14 or 4, 0)
+    t.page = i
+    pageTabs[i] = t
+  end
+
   local flags = {}
   for i, lang in ipairs(ns.LANGUAGES) do
     local f = Flag(p, lang, function(code) ns:SetLanguage(code) end)
-    f:SetPoint("LEFT", tabs[#tabs], "RIGHT", 16 + (i - 1) * 30, -4)
+    f:SetPoint("LEFT", pageTabs[#pageTabs], "RIGHT", 14 + (i - 1) * 30, -4)
     flags[i] = f
   end
   OnRefresh(function()
@@ -605,26 +730,6 @@ local function Build()
     for _, f in ipairs(flags) do f:SetActive(f.lang == ns.lang) end
     if portrait then portrait:SetTexture(ICONS[editing]) end
   end)
-
-  -- Pages and their tabs, hanging under the window ------------------------------
-  local pages, pageTabs = {}, {}
-  for i, key in ipairs(PAGES) do
-    local content = CreateFrame("Frame", nil, p)
-    content:SetPoint("TOPLEFT", 0, CONTENT_TOP)
-    content:SetSize(PANEL_W, PANEL_H + CONTENT_TOP)
-    pages[i] = content
-    local t = Tab(p, "PanelTabButtonTemplate", Tr(key), function()
-      page = i
-      p:Refresh()
-    end)
-    if i == 1 then
-      t:SetPoint("TOPLEFT", p, "BOTTOMLEFT", 12, 2)
-    else
-      t:SetPoint("TOPLEFT", pageTabs[i - 1], "TOPRIGHT", 3, 0)
-    end
-    t.page = i
-    pageTabs[i] = t
-  end
   OnRefresh(function()
     for i, content in ipairs(pages) do content:SetShown(i == page) end
     for _, t in ipairs(pageTabs) do t:SetActive(t.page == page) end
@@ -839,7 +944,11 @@ local function Build()
     ns:UpdateIcons()
   end)
   missing:SetPoint("TOPLEFT", LEFT, -162)
+  local bearFixed = Check(icons, Tr("BEAR_FIXED"), function(on) ns:SetBearIconsFixed(on) end)
+  bearFixed:SetPoint("TOPLEFT", LEFT, -186)
   OnRefresh(function()
+    bearFixed:SetShown(editing == "DRUID")
+    bearFixed:Set(ns.db.bearIconsFixed)
     square:Set(ns.db.icons.square)
     iconSize:Set(ns.db.icons.size)
     timers:Set(ns.db.icons.timers)
@@ -889,6 +998,7 @@ local function Build()
     end
   end
   Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -456)
+  ghost = DragGhost(p)
 
   -- Footer: commands, and which profile this character uses ------------------------
   Hint(p, "/cl lock  ·  /cl unlock  ·  /cl scale 120  ·  /cl reset"):SetPoint("BOTTOMLEFT", LEFT, 16)
@@ -915,6 +1025,8 @@ local function Build()
     if InCombatLockdown() then self:Refresh() else ns:SetPreview(true) end
   end)
   p:SetScript("OnHide", function()
+    drag = nil -- closed mid-drag: the icon stays where it was
+    ghost:Hide()
     if ns.preview then ns:SetPreview(false) end
     ns:LockOtherProfiles()
     ns:SetActiveProfile(ns.homeClass or "ROGUE")

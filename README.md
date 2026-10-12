@@ -16,11 +16,10 @@ Copier le dossier `ClaraComboPoints` dans le dossier `Interface\AddOns` de ton c
 
 `/clara` ou `/cl` ouvre les options. La fenêtre utilise les modèles de fenêtres de Blizzard, comme le grimoire ou la fiche de personnage : cadre métal avec portrait et croix rouge, encarts sombres, boutons rouges, onglets, cases à cocher et curseurs du jeu.
 
-En haut de la fenêtre :
+En haut de la fenêtre, sur une seule ligne :
 - **Onglets Voleur / Druide / Guerrier** : chaque classe a son propre profil (position, échelle, couleurs, police, icônes…), commun à tous tes personnages de cette classe. La fenêtre s'ouvre sur l'onglet de ton personnage ; pendant qu'elle est ouverte, la barre affiche le profil de l'onglet choisi, pour régler une autre classe et voir le résultat.
+- **Onglets Barre / Police et avancé / Icônes** : les trois pages de réglages.
 - **Drapeaux FR / DE / GB** : langue de l'addon (français, allemand, anglais). Par défaut, celle du client (anglais pour les autres langues).
-
-En bas, trois pages : **Barre**, **Police et avancé**, **Icônes**.
 
 | Réglage | Détail |
 |---|---|
@@ -41,10 +40,11 @@ Commandes rapides : `/cl lock`, `/cl unlock`, `/cl scale 120`, `/cl reset`.
 
 ## Icônes de buffs et debuffs
 
-Page **Icônes** : clique sur une ligne (Haut 1 à 3, Bas 1 à 3) pour la choisir, puis tape l'**ID** du sort (par exemple `7386`) ou son **nom** et valide. Les lignes du haut s'empilent vers le haut, celles du bas vers le bas ; une ligne vide ne prend pas de place. Sur une icône : clic gauche = vers la gauche, Maj+clic = vers la droite, clic droit = retirer. 20 icônes au maximum par ligne.
+Page **Icônes** : clique sur une ligne (Haut 1 à 3, Bas 1 à 3) pour la choisir, puis tape l'**ID** du sort (par exemple `7386`) ou son **nom** et valide. Les lignes du haut s'empilent vers le haut, celles du bas vers le bas ; une ligne vide ne prend pas de place. Pour réorganiser, **glisse-dépose** une icône : les autres se décalent en direct pour montrer où elle va tomber, dans sa ligne ou dans une autre (Haut 1 à 3, Bas 1 à 3) ; la barre se met à jour au lâcher. Lâchée hors des lignes, l'icône reste où elle était. Clic droit sur une icône = la retirer. 20 icônes au maximum par ligne.
 
 - **Guerrier** : par défaut, une ligne à la place des points de combo, dans l'ordre de la capture : Fracasser armure, Cri démoralisant, Brise-genou, Cri de guerre, Rage sanguinaire.
-- **Voleur et druide** : aucune icône par défaut ; leurs lignes se placent au-dessus des points de combo et sous la barre.
+- **Voleur et druide** : aucune icône par défaut ; leurs lignes se placent au-dessus des points de combo et sous la barre, jamais sur les points de combo.
+- **Druide en ours** : sans points de combo sur la cible, les lignes du haut descendent directement sur la barre de rage (la ligne de combo est vide) et remontent dès qu'il y a des points. L'option « Forme d'ours : icônes toujours au-dessus des points de combo » (page Icônes, onglet Druide) les garde à leur place.
 - Les auras sont cherchées **par nom de sort** : tous les rangs comptent, dans toutes les langues du client. D'abord tes buffs, puis les debuffs de ta cible (de n'importe qui : Fracasser armure d'un autre guerrier compte aussi), puis tes debuffs.
 - Une aura active s'allume avec la couleur de sa place dans la ligne (les couleurs des points de combo dans l'ordre, de jaune à rose ; étalées sur les lignes de plus de 5 icônes), avec ses charges (Fracasser armure ×5) et le temps restant. Une aura absente est grisée, ou cachée si tu décoches l'option (les autres gardent leur place).
 - L'**ID** marche quelle que soit la langue du client ; un **nom** doit être écrit comme dans ton jeu (dans sa langue). Un nom que ton personnage ne connaît pas est suivi tel quel : point d'interrogation comme icône jusqu'à ce que l'aura soit vue une première fois, puis sa vraie icône (retenue pour les sessions suivantes).

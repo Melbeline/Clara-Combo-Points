@@ -80,6 +80,7 @@ local defaults = {
   oocPower = .2,       -- energy / rage bar
   oocTop   = .2,       -- combo points and icons
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
+  bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
   icons = {
     square  = false,   -- keep the icons square instead of shaping them like the combo point cells
     size    = 25,      -- row height (and icon width when square), reference pixels
@@ -247,10 +248,21 @@ local function ReadComboPoints()
   return 0
 end
 
+local powerType = POWER_ENERGY -- what the bar shows: energy, or rage for warriors and bears
+
 local lastCombo
 local function UpdateCombo()
   if not hud:IsShown() or not comboRow:IsShown() then return end -- re-read on show
   local v = ns.preview and NUM_POINTS or ReadComboPoints()
+  -- Bear Form and no combo points on the target: nothing shows on the combo row, so the icon
+  -- rows above it come down onto the rage bar (unless the option keeps them in place). An
+  -- unreadable (secret) count keeps them in place.
+  local onBar = powerType == POWER_RAGE and ns.profileClass == "DRUID" and not ns.db.bearIconsFixed
+    and not issecretvalue(v) and v == 0
+  if onBar ~= ns.iconsOnBar then
+    ns.iconsOnBar = onBar
+    ns:LayoutIcons()
+  end
   if issecretvalue(v) then
     lastCombo = nil
   elseif v == lastCombo then
@@ -261,7 +273,6 @@ local function UpdateCombo()
   for i = 1, NUM_POINTS do cells[i]:SetValue(v) end
 end
 
-local powerType = POWER_ENERGY -- what the bar shows: energy, or rage for warriors and bears
 local maxPower, lastPower
 local function UpdatePower()
   if not hud:IsShown() then return end
@@ -674,6 +685,13 @@ end
 function ns:SetPredict(on)
   self.db.predict = on and true or false
   self:UpdatePowerMode()
+  self:RefreshOptions()
+end
+
+function ns:SetBearIconsFixed(on)
+  self.db.bearIconsFixed = on and true or false
+  lastCombo = nil
+  UpdateCombo()
   self:RefreshOptions()
 end
 
