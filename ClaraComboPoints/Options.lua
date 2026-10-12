@@ -36,6 +36,7 @@ local RESOURCE = { ROGUE = "ENERGY", DRUID = "BOTH", WARRIOR = "RAGE" }         
 local SCALE_PRESETS = { 50, 75, 100, 125, 150, 200, 300 }
 local OUTLINES = { { "NONE", "OUTLINE_NONE" }, { "OUTLINE", "OUTLINE_THIN" }, { "THICKOUTLINE", "OUTLINE_THICK" } }
 local ROW_LINES = { { "above", 3 }, { "above", 2 }, { "above", 1 }, false, { "below", 1 }, { "below", 2 }, { "below", 3 } }
+local SHAPES = { "FILL", "CELL", "SQUARE" } -- icons: the row fills the bar's width / combo point cells / squares
 
 local panel           -- the window, built the first time it opens
 local editing         -- class profile shown in the window
@@ -206,7 +207,11 @@ local function Check(parent, label, onToggle)
   return holder
 end
 
-local function Slider(parent, w, minV, maxV, step, fmt, onChange)
+local InputBox -- below
+
+-- A Blizzard slider with a box beside it to type the exact value (Enter applies it).
+-- unit: text after the box ("%" or "").
+local function Slider(parent, w, minV, maxV, step, unit, onChange)
   local s = CreateFrame("Slider", nil, parent, "UISliderTemplate")
   s:SetSize(w, 17)
   s:SetHitRectInsets(0, 0, -5, -5) -- the template's -10 would overlap the next colour row (28px apart)
@@ -216,28 +221,49 @@ local function Slider(parent, w, minV, maxV, step, fmt, onChange)
   if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
   s:EnableMouse(true)
   s:EnableMouseWheel(true)
-  s.value = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  s.value:SetPoint("LEFT", s, "RIGHT", 8, 0)
+  local box = InputBox(parent, 38)
+  box:SetNumeric(true)
+  box:SetMaxLetters(3)
+  box:SetJustifyH("CENTER")
+  box.holder:SetPoint("LEFT", s, "RIGHT", 6, 0)
+  s.box = box
+  if unit ~= "" then
+    s.unit = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    s.unit:SetPoint("LEFT", box.holder, "RIGHT", 3, 0)
+    s.unit:SetText(unit)
+  end
+  local function Show(v)
+    if not box:HasFocus() then box:SetText(tostring(v)) end
+  end
   s:SetScript("OnValueChanged", function(self, v)
     v = floor(v / step + .5) * step
-    self.value:SetText(fmt(v))
+    Show(v)
     if not self.silent then onChange(v) end
   end)
   s:SetScript("OnMouseWheel", function(self, delta)
     self:SetValue(min(maxV, max(minV, self:GetValue() + delta * step)))
   end)
+  local function Apply(self)
+    local v = tonumber(self:GetText())
+    self:ClearFocus()
+    if v then s:SetValue(min(maxV, max(minV, floor(v / step + .5) * step))) end
+    Show(floor(s:GetValue() / step + .5) * step) -- the value really applied
+  end
+  box:SetScript("OnEnterPressed", Apply)
+  box:SetScript("OnEditFocusLost", function(self) Show(floor(s:GetValue() / step + .5) * step) end)
+  box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   function s:Set(v)
     self.silent = true
     self:SetValue(v)
     self.silent = false
-    self.value:SetText(fmt(v))
+    Show(v)
   end
   return s
 end
 
-local function Percent(v) return v .. " %" end
+local Percent = "%"
 
-local function InputBox(parent, w)
+function InputBox(parent, w)
   local holder = CreateFrame("Frame", nil, parent)
   holder:SetSize(w, 22)
   local e = CreateFrame("EditBox", nil, holder, "InputBoxTemplate")
@@ -384,7 +410,7 @@ local function ColorRow(parent, key)
   AddBorder(swatch, .6, .6, .65, 1)
   swatch:SetScript("OnClick", function() ClickSound(); OpenColorPicker(key) end)
 
-  local slider = Slider(holder, 100, 0, 100, 1, Percent, function(v)
+  local slider = Slider(holder, 90, 0, 100, 1, Percent, function(v)
     local c = ns.db.colors[key]
     c.a = v / 100
     ns:ApplyColors()
@@ -481,18 +507,31 @@ end
 ---------------------------------------------------------------------------
 local ICON_X, ICON_STEP = 90, 24 -- first icon of a line, and spacing
 local lines = {}                 -- the six row lines: { side, k, frame, refresh }
-local drag                       -- icon being dragged: where from, the spell, where it would land
+local drag                       -- icon being dragged: where from (or a new one), where it would land
 local ghost                      -- the dragged icon, following the cursor
+local catalog                    -- the class spells panel, beside the window
+
+local function OnName(on) return L["ON_" .. on:upper()] end
 
 local function IconTooltip(self)
   if not GameTooltip or drag then return end
   GameTooltip:SetOwner(self, "ANCHOR_TOP")
+  local spell = self.spell
   local named
-  if type(self.spell) == "number" and GameTooltip.SetSpellByID then
-    named = pcall(GameTooltip.SetSpellByID, GameTooltip, self.spell)
+  if type(spell) == "number" and GameTooltip.SetSpellByID then
+    named = pcall(GameTooltip.SetSpellByID, GameTooltip, spell)
   end
-  if not named then GameTooltip:SetText(ns:SpellName(self.spell) or tostring(self.spell)) end
-  if type(self.spell) == "number" then GameTooltip:AddLine("ID " .. self.spell, .6, .6, .65) end
+  if not named then GameTooltip:SetText(ns:SpellName(spell) or tostring(spell)) end
+  if type(spell) == "number" then GameTooltip:AddLine("ID " .. spell, .6, .6, .65) end
+  local ranks = ns:SpellRanks(spell)
+  if ranks then
+    local which = L.ALL_RANKS
+    if type(self.entry) == "table" and self.entry.exact then
+      for _, r in ipairs(ranks) do if r[2] == spell then which = L.RANK:format(r[1]) end end
+    end
+    GameTooltip:AddLine(which, .6, .6, .65)
+  end
+  GameTooltip:AddLine(L.WATCHED_ON:format(OnName(ns:EntryOn(self.entry))), GOLD_R, GOLD_G, GOLD_B)
   GameTooltip:AddLine(L.ICON_TIP, .6, .6, .65, true)
   GameTooltip:Show()
 end
@@ -501,26 +540,21 @@ end
 local function Accepts(side, k)
   if side == drag.side and k == drag.k then return true end
   local spells = ns.db.rows[side][k]
-  if #spells >= ns.MAX_ICONS then return false end
-  local name = ns:SpellName(drag.spell)
-  for _, other in ipairs(spells) do
-    if other == drag.spell or (name and ns:SpellName(other) == name) then return false end
-  end
-  return true
+  return #spells < ns.MAX_ICONS and not ns:IsDuplicate(spells, drag.entry)
 end
 
--- What a line shows: its spells; while dragging, without the dragged icon, and with the
+-- What a line shows: its icons; while dragging, without the dragged icon, and with the
 -- dragged icon (faded) where it would land. Returns the list and that position.
 local function Shown(side, k)
   local spells = ns.db.rows[side][k]
   if not drag then return spells end
   local list = {}
-  for i, spell in ipairs(spells) do
-    if not (side == drag.side and k == drag.k and i == drag.i) then list[#list + 1] = spell end
+  for i, entry in ipairs(spells) do
+    if not (side == drag.side and k == drag.k and i == drag.i) then list[#list + 1] = entry end
   end
   if drag.toSide == side and drag.toK == k then
     local at = min(drag.toI, #list + 1)
-    table.insert(list, at, drag.spell)
+    table.insert(list, at, drag.entry)
     return list, at
   end
   return list
@@ -534,11 +568,12 @@ local function CursorIn(frame)
   if left and x >= left and x <= right and y >= bottom and y <= top then return x - left end
 end
 
--- The landing place follows the cursor: the icon slot under it, in the line under it.
+-- The landing place follows the cursor: the icon slot under it, in the line under it. An
+-- icon of a row taken out of the window (and of the spells panel) is removed when let go.
 local function TrackDrag()
   local toSide, toK, toI
   for _, line in ipairs(lines) do
-    local x = CursorIn(line.frame)
+    local x = line.frame:IsVisible() and CursorIn(line.frame)
     if x and Accepts(line.side, line.k) then
       local n = #ns.db.rows[line.side][line.k]
       if line.side == drag.side and line.k == drag.k then n = n - 1 end
@@ -547,9 +582,13 @@ local function TrackDrag()
       break
     end
   end
-  if toSide ~= drag.toSide or toK ~= drag.toK or toI ~= drag.toI then
-    drag.toSide, drag.toK, drag.toI = toSide, toK, toI
+  local out = drag.side ~= nil and not toSide and not CursorIn(panel)
+    and not (catalog and catalog:IsShown() and CursorIn(catalog))
+  if toSide ~= drag.toSide or toK ~= drag.toK or toI ~= drag.toI or out ~= drag.out then
+    drag.toSide, drag.toK, drag.toI, drag.out = toSide, toK, toI, out
     for _, line in ipairs(lines) do line.refresh() end
+    ghost.tex:SetVertexColor(1, out and .35 or 1, out and .35 or 1)
+    ghost.cross:SetShown(out)
   end
   local x, y = GetCursorPosition()
   local scale = panel:GetEffectiveScale()
@@ -589,7 +628,16 @@ local function DropSpell(line)
   return true
 end
 
--- Released over a line: the icon moves there. Anywhere else: it goes back.
+local function Remove(side, k, i)
+  local entry = ns.db.rows[side][k][i]
+  if entry == nil then return end
+  local spell = ns:EntrySpell(entry)
+  ns:RemoveIcon(side, k, i)
+  ShowStatus(true, L.REMOVED:format(ns:SpellName(spell) or tostring(spell), ns:RowName(side, k)))
+end
+
+-- Released over a line: the icon moves (or a new one is added) there. Out of the window: an
+-- icon of a row is removed. Anywhere else: it goes back.
 local function EndDrag()
   if not drag then return end
   TrackDrag()
@@ -598,16 +646,22 @@ local function EndDrag()
   ghost:Hide()
   if d.toSide then
     selSide, selK = d.toSide, d.toK
-    ns:MoveIconTo(d.side, d.k, d.i, d.toSide, d.toK, d.toI)
+    if d.side then
+      ns:MoveIconTo(d.side, d.k, d.i, d.toSide, d.toK, d.toI)
+    else
+      ShowStatus(ns:AddIcon(d.toSide, d.toK, d.entry, d.toI))
+    end
+  elseif d.out then
+    Remove(d.side, d.k, d.i)
   end
   panel:Refresh()
 end
 
-local function StartDrag(button, side, k)
-  if not button.spell then return end
+local function StartDrag(entry, from)
   if GameTooltip then GameTooltip:Hide() end
-  drag = { side = side, k = k, i = button.index, spell = button.spell }
-  ghost.tex:SetTexture(ns:SpellIcon(button.spell))
+  drag = { entry = entry }
+  if from then drag.side, drag.k, drag.i = from.side, from.k, from.i end
+  ghost.tex:SetTexture(ns:EntryIcon(ns:EntrySpell(entry)))
   ghost:Show()
   TrackDrag()
 end
@@ -619,6 +673,11 @@ local function DragGhost(parent)
   f.tex = f:CreateTexture(nil, "ARTWORK")
   f.tex:SetAllPoints()
   f.tex:SetTexCoord(.08, .92, .08, .92)
+  f.cross = f:CreateTexture(nil, "OVERLAY") -- let go here: removed
+  f.cross:SetSize(18, 18)
+  f.cross:SetPoint("BOTTOMRIGHT", 6, -6)
+  f.cross:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+  f.cross:Hide()
   f:SetAlpha(.85)
   f:Hide()
   -- the drop also ends here if the button that started the drag went away meanwhile
@@ -627,6 +686,47 @@ local function DragGhost(parent)
     if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then EndDrag() else TrackDrag() end
   end)
   return f
+end
+
+-- Click on an icon: where it is watched, its rank, remove (the game's menus).
+local function IconMenu(b, side, k)
+  local i, entry = b.index, b.entry
+  local function Current() return ns.db.rows[side][k][i] end
+  local function Change(spell, on, exact)
+    if Current() == nil then return end
+    local ok, msg = ns:SetIconEntry(side, k, i, spell, on, exact)
+    if not ok then ShowStatus(false, msg) end
+  end
+  if not (MenuUtil and MenuUtil.CreateContextMenu) then
+    -- no menus in this client: each click watches the next way
+    local now = ns:EntryOn(entry)
+    for n, on in ipairs(ns.CONDITIONS) do
+      if on == now then Change(nil, ns.CONDITIONS[n % #ns.CONDITIONS + 1]) break end
+    end
+    return
+  end
+  local spell = ns:EntrySpell(entry)
+  MenuUtil.CreateContextMenu(b, function(_, root)
+    root:CreateTitle(ns:SpellName(spell) or tostring(spell))
+    for _, on in ipairs(ns.CONDITIONS) do
+      root:CreateRadio(OnName(on), function() return ns:EntryOn(Current()) == on end, function() Change(nil, on) end)
+    end
+    local ranks = ns:SpellRanks(spell)
+    if ranks then
+      root:CreateDivider()
+      local function Exact() local e = Current(); return type(e) == "table" and e.exact end
+      root:CreateRadio(L.ALL_RANKS, function() return not Exact() end, function() Change(ranks[#ranks][2], nil, false) end)
+      for _, r in ipairs(ranks) do
+        root:CreateRadio(L.RANK:format(r[1]), function() return Exact() and ns:EntrySpell(Current()) == r[2] end,
+          function() Change(r[2], nil, true) end)
+      end
+    end
+    root:CreateDivider()
+    root:CreateButton(L.REMOVE, function()
+      if Current() ~= nil then Remove(side, k, i) end
+      panel:Refresh()
+    end)
+  end)
 end
 
 local function IconLine(parent, side, k, y)
@@ -670,15 +770,21 @@ local function IconLine(parent, side, k, y)
     b:SetScript("OnReceiveDrag", function() DropSpell(entry) end)
     b:SetScript("OnClick", function(self, button)
       ClickSound()
-      if DropSpell(entry) or button ~= "RightButton" then return end
+      if DropSpell(entry) then return end
       selSide, selK = side, k
-      ns:RemoveIcon(side, k, self.index)
+      if button == "RightButton" then
+        Remove(side, k, self.index)
+      else
+        IconMenu(self, side, k)
+      end
       panel:Refresh()
       if GameTooltip and GameTooltip:IsOwned(self) then
         if self:IsShown() then IconTooltip(self) else GameTooltip:Hide() end
       end
     end)
-    b:SetScript("OnDragStart", function(self) StartDrag(self, side, k) end)
+    b:SetScript("OnDragStart", function(self)
+      if self.entry ~= nil then StartDrag(self.entry, { side = side, k = k, i = self.index }) end
+    end)
     b:SetScript("OnDragStop", EndDrag)
     b:SetScript("OnEnter", IconTooltip)
     b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -686,13 +792,13 @@ local function IconLine(parent, side, k, y)
   end
 
   local function refresh()
-    local spells, landing = Shown(side, k)
+    local list, landing = Shown(side, k)
     for i, b in ipairs(icons) do
-      local spell = spells[i]
-      b:SetShown(spell ~= nil)
-      if spell ~= nil then
-        b.index, b.spell = i, spell
-        b.tex:SetTexture(ns:SpellIcon(spell))
+      local e = list[i]
+      b:SetShown(e ~= nil)
+      if e ~= nil then
+        b.index, b.entry, b.spell = i, e, ns:EntrySpell(e)
+        b.tex:SetTexture(ns:EntryIcon(b.spell))
         b.tex:SetAlpha(i == landing and .4 or 1)
         b.landing:SetShown(i == landing)
       end
@@ -703,6 +809,271 @@ local function IconLine(parent, side, k, y)
   entry.refresh = refresh
   lines[#lines + 1] = entry
   return refresh
+end
+
+---------------------------------------------------------------------------
+-- Class spells panel, beside the window on the icons page: every buff and debuff of each
+-- class, with its rank and where to watch it, to drag onto a row (or click: add it to the
+-- selected row).
+---------------------------------------------------------------------------
+local SIDE_W = 420
+local SIDE_ROW_H, SIDE_HEAD_H = 26, 24
+local CLASS_COLORS = {
+  PRIEST = { 1, 1, 1 }, MAGE = { .25, .78, .92 }, WARLOCK = { .53, .53, .93 }, ROGUE = { 1, .96, .41 },
+  DRUID = { 1, .49, .04 }, HUNTER = { .67, .83, .45 }, SHAMAN = { 0, .44, .87 }, PALADIN = { .96, .55, .73 },
+  WARRIOR = { .78, .61, .43 },
+}
+local KIND_ON = { BUFF = "self", DEBUFF = "enemy", SELFDEBUFF = "self" } -- where to watch by default
+local PICK_ON = { "self", "target", "enemy", "friend" }
+local PLUS, MINUS = "Interface\\Buttons\\UI-PlusButton-Up", "Interface\\Buttons\\UI-MinusButton-Up"
+
+-- A small dropdown: the value, and the game's menu of choices on click (without menus, each
+-- click shows the next choice). options(): { { value, text }, ... }
+local function Choice(parent, w, options, get, set)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(w, 20)
+  local bg = b:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(0, 0, 0, .5)
+  AddBorder(b, .4, .4, .45, 1)
+  local hl = b:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints()
+  hl:SetColorTexture(1, 1, 1, .1)
+  local arrow = b:CreateTexture(nil, "ARTWORK")
+  arrow:SetSize(18, 18)
+  arrow:SetPoint("RIGHT", 1, 0)
+  arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.text:SetPoint("LEFT", 5, 0)
+  b.text:SetPoint("RIGHT", arrow, "LEFT", 0, 0)
+  b.text:SetJustifyH("LEFT")
+  b.text:SetWordWrap(false)
+  function b:Refresh()
+    local now = get()
+    self.text:SetText("")
+    for _, o in ipairs(options()) do
+      if o[1] == now then self.text:SetText(o[2]) end
+    end
+  end
+  local function Pick(v)
+    set(v)
+    b:Refresh()
+  end
+  b:SetScript("OnClick", function(self)
+    ClickSound()
+    local list = options()
+    if MenuUtil and MenuUtil.CreateContextMenu then
+      MenuUtil.CreateContextMenu(self, function(_, root)
+        for _, o in ipairs(list) do
+          root:CreateRadio(o[2], function() return get() == o[1] end, function() Pick(o[1]) end)
+        end
+      end)
+    else
+      local now, n = get(), 1
+      for i, o in ipairs(list) do if o[1] == now then n = i % #list + 1 end end
+      Pick(list[n][1])
+    end
+  end)
+  return b
+end
+
+local function Catalog(p)
+  local f = CreateFrame("Frame", "ClaraComboPointsSpells", p, "DefaultPanelTemplate")
+  f:SetSize(SIDE_W, PANEL_H)
+  f:SetPoint("TOPLEFT", p, "TOPRIGHT", 0, 0)
+  f:EnableMouse(true)
+  f:Hide()
+  if f.Bg then f.Bg:SetVertexColor(.32, .32, .34) end
+  OnRelabel(function()
+    if f.SetTitle then f:SetTitle(L.CATALOG) else f.TitleContainer.TitleText:SetText(L.CATALOG) end
+  end)
+  local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", 1, 0)
+  close:SetScript("OnClick", function()
+    ClickSound()
+    f.closed = true
+    p:Refresh()
+  end)
+
+  local hint = Hint(f, Tr("CATALOG_HINT"))
+  hint:SetPoint("TOPLEFT", 16, -32)
+  hint:SetWidth(SIDE_W - 32)
+  hint:SetWordWrap(true)
+
+  local inset = Box(f)
+  inset:SetPoint("TOPLEFT", 10, -104)
+  inset:SetPoint("BOTTOMRIGHT", -10, 12)
+  local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsSpellsScroll", inset, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 4, -6)
+  scroll:SetPoint("BOTTOMRIGHT", -26, 6)
+  local CHILD_W = SIDE_W - 20 - 4 - 26
+  local child = CreateFrame("Frame", nil, scroll)
+  child:SetSize(CHILD_W, 10)
+  scroll:SetScrollChild(child)
+
+  -- column titles, over the list
+  local RANK_X, ON_X = 166, 252
+  Text(f, Tr("CATALOG_SPELL")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + 32, 14)
+  Text(f, Tr("CATALOG_RANK")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + RANK_X, 14)
+  Text(f, Tr("CATALOG_ON")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + ON_X, 14)
+
+  local groups, expanded, picks = {}, {}, {}
+  local Layout
+
+  -- what a spell of the list adds: its rank (all by default), watched where chosen
+  local function Entry(rec)
+    local pick = picks[rec]
+    local id = pick.rank > 0 and rec.ranks[pick.rank][2] or rec.ranks[#rec.ranks][2]
+    return { spell = id, on = pick.on, exact = pick.rank > 0 or nil }
+  end
+
+  local function SpellRow(rec)
+    local row = CreateFrame("Button", nil, child)
+    row:SetSize(CHILD_W, SIDE_ROW_H)
+    local hl = row:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, .06)
+    local icon = row:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(22, 22)
+    icon:SetPoint("LEFT", 4, 0)
+    icon:SetTexCoord(.08, .92, .08, .92)
+    icon:SetTexture(ns:EntryIcon(rec.ranks[#rec.ranks][2]))
+    local name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    name:SetPoint("LEFT", 32, 0)
+    name:SetWidth(RANK_X - 32 - 6)
+    name:SetJustifyH("LEFT")
+    name:SetWordWrap(false)
+    name:SetText(rec.name)
+    picks[rec] = { rank = 0, on = KIND_ON[rec.kind] or "self" }
+    if #rec.ranks > 1 then
+      row.rank = Choice(row, ON_X - RANK_X - 6, function()
+        local list = { { 0, L.ALL_RANKS } }
+        for i, r in ipairs(rec.ranks) do list[#list + 1] = { i, L.RANK:format(r[1]) } end
+        return list
+      end, function() return picks[rec].rank end, function(v) picks[rec].rank = v end)
+      row.rank:SetPoint("LEFT", RANK_X, 0)
+    end
+    row.on = Choice(row, CHILD_W - ON_X - 4, function()
+      local list = {}
+      for _, on in ipairs(PICK_ON) do list[#list + 1] = { on, OnName(on) } end
+      return list
+    end, function() return picks[rec].on end, function(v) picks[rec].on = v end)
+    row.on:SetPoint("LEFT", ON_X, 0)
+    row:RegisterForDrag("LeftButton")
+    row:SetScript("OnDragStart", function() StartDrag(Entry(rec)) end)
+    row:SetScript("OnDragStop", EndDrag)
+    row:SetScript("OnClick", function()
+      ClickSound()
+      ShowStatus(ns:AddIcon(selSide, selK, Entry(rec)))
+      p:Refresh()
+    end)
+    row:SetScript("OnEnter", function(self)
+      if not GameTooltip or drag then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      local id = Entry(rec).spell
+      if not (GameTooltip.SetSpellByID and pcall(GameTooltip.SetSpellByID, GameTooltip, id)) then GameTooltip:SetText(rec.name) end
+      GameTooltip:AddLine(L["KIND_" .. rec.kind] or "", .6, .6, .65)
+      GameTooltip:AddLine(L.CATALOG_ADD:format(ns:RowName(selSide, selK)), GOLD_R, GOLD_G, GOLD_B, true)
+      GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    function row:Refresh()
+      if self.rank then self.rank:Refresh() end
+      self.on:Refresh()
+    end
+    return row
+  end
+
+  for _, class in ipairs(ns.SPELL_CATALOG or {}) do
+    local recs, seen = {}, {}
+    for _, spell in ipairs(class.spells) do
+      for r = 2, #spell do
+        local rec = ns:CatalogRecord(spell[r]) -- spells this client does not know are left out
+        if rec then
+          if not seen[rec] then seen[rec] = true; recs[#recs + 1] = rec end
+          break
+        end
+      end
+    end
+    table.sort(recs, function(a, b) return a.name < b.name end)
+    if #recs > 0 then
+      local color = CLASS_COLORS[class.class] or { GOLD_R, GOLD_G, GOLD_B }
+      local head = CreateFrame("Button", nil, child)
+      head:SetSize(CHILD_W, SIDE_HEAD_H)
+      local bg = head:CreateTexture(nil, "BACKGROUND")
+      bg:SetAllPoints()
+      bg:SetColorTexture(color[1], color[2], color[3], .14)
+      local hl = head:CreateTexture(nil, "HIGHLIGHT")
+      hl:SetAllPoints()
+      hl:SetColorTexture(1, 1, 1, .08)
+      head.sign = head:CreateTexture(nil, "ARTWORK")
+      head.sign:SetSize(14, 14)
+      head.sign:SetPoint("LEFT", 5, 0)
+      local label = head:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      label:SetPoint("LEFT", 26, 0)
+      label:SetTextColor(color[1], color[2], color[3])
+      OnRelabel(function() label:SetText(L["CLASS_" .. class.class] or class.class) end)
+      Hint(head, tostring(#recs)):SetPoint("RIGHT", -8, 0)
+      local g = { class = class.class, head = head, recs = recs }
+      head:SetScript("OnClick", function()
+        ClickSound()
+        expanded[g.class] = not expanded[g.class]
+        Layout()
+      end)
+      groups[#groups + 1] = g
+    end
+  end
+
+  function Layout()
+    local y = 0
+    for _, g in ipairs(groups) do
+      g.head:ClearAllPoints()
+      g.head:SetPoint("TOPLEFT", 0, -y)
+      y = y + SIDE_HEAD_H + 2
+      local open = expanded[g.class]
+      g.head.sign:SetTexture(open and MINUS or PLUS)
+      if open and not g.rows then
+        g.rows = {}
+        for i, rec in ipairs(g.recs) do g.rows[i] = SpellRow(rec) end
+      end
+      for _, row in ipairs(g.rows or {}) do
+        row:SetShown(open)
+        if open then
+          row:ClearAllPoints()
+          row:SetPoint("TOPLEFT", 0, -y)
+          row:Refresh()
+          y = y + SIDE_ROW_H
+        end
+      end
+      if open then y = y + 4 end
+    end
+    child:SetHeight(max(y, 10))
+  end
+  OnRelabel(function() Layout() end)
+
+  -- Shown with the icons page, unless closed. Opens with the tab's class unfolded, and moves
+  -- the window left if the panel would go past the screen's edge.
+  function f:Sync(onPage)
+    local want = onPage and not self.closed
+    if want and not self:IsShown() then
+      if not self.unfolded then
+        expanded[editing] = true
+        self.unfolded = true
+      end
+      local right, screen = p:GetRight(), UIParent:GetRight()
+      if right and screen and right + SIDE_W > screen then
+        local left, top = p:GetLeft(), p:GetTop()
+        p:ClearAllPoints()
+        p:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", max(0, left - (right + SIDE_W - screen)), top)
+      end
+      self:Show()
+      Layout()
+    elseif not want then
+      self:Hide()
+    end
+  end
+  f.groups = groups
+  return f
 end
 
 ---------------------------------------------------------------------------
@@ -827,7 +1198,7 @@ local function Build()
   end)
 
   Section(bar, "GLOBAL_OPACITY", LEFT, -234, nil, -272)
-  local alphaSlider = Slider(bar, 250, 0, 100, 1, Percent, function(v)
+  local alphaSlider = Slider(bar, 230, 0, 100, 1, Percent, function(v)
     ns.db.alpha = v / 100
     ns:ApplyAlpha()
   end)
@@ -840,6 +1211,7 @@ local function Build()
     ns:PreviewFade()
   end)
   fade:SetPoint("TOPLEFT", LEFT, -324)
+  Button(bar, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", bar, "TOPLEFT", LEFT + COL_W, -318)
   Text(bar, Tr("OOC_POWER")):SetPoint("TOPLEFT", LEFT, -350)
   local oocPower = Slider(bar, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocPower = v / 100
@@ -877,7 +1249,7 @@ local function Build()
   OnRefresh(FontList(text, LEFT, -80, COL_W, 230))
 
   Text(text, Tr("SIZE")):SetPoint("TOPLEFT", LEFT, -340)
-  local sizeSlider = Slider(text, 200, 6, 40, 1, tostring, function(v)
+  local sizeSlider = Slider(text, 170, 6, 40, 1, "", function(v)
     ns.db.fontSize = v
     ns:ApplyFont()
   end)
@@ -976,40 +1348,55 @@ local function Build()
   -- Page 3: icon look, adding spells, the rows ------------------------------------
   local icons = pages[3]
   local lookBox = Section(icons, "ICON_LOOK", LEFT, -56)
-  local square = Check(icons, Tr("SQUARE"), function(on)
-    ns.db.icons.square = on
-    ns:LayoutIcons()
-  end)
-  square:SetPoint("TOPLEFT", LEFT, -84)
-  Text(icons, Tr("ICON_SIZE")):SetPoint("TOPLEFT", LEFT, -108)
-  local iconSize = Slider(icons, 160, 12, 64, 1, tostring, function(v)
+  Text(icons, Tr("SHAPE")):SetPoint("TOPLEFT", LEFT, -88)
+  local shapeButtons = {}
+  for i, shape in ipairs(SHAPES) do
+    local b = Button(icons, Tr("SHAPE_" .. shape), 80, 22, function()
+      ns.db.icons.shape = shape
+      ns:LayoutIcons()
+      p:Refresh()
+    end)
+    b:SetPoint("TOPLEFT", LEFT + 74 + (i - 1) * 82, -82)
+    b.shape = shape
+    shapeButtons[i] = b
+  end
+  Text(icons, Tr("ICON_SIZE")):SetPoint("TOPLEFT", LEFT, -116)
+  local iconSize = Slider(icons, 160, 12, 64, 1, "", function(v)
     ns.db.icons.size = v
     ns:LayoutIcons()
   end)
-  iconSize:SetPoint("LEFT", icons, "TOPLEFT", LEFT + 70, -114)
+  iconSize:SetPoint("LEFT", icons, "TOPLEFT", LEFT + 74, -122)
+  local cellSize = Hint(icons, "") -- combo point shape: the size of a combo point, whatever the slider
+  cellSize:SetPoint("TOPLEFT", LEFT + 74, -117)
   local timers = Check(icons, Tr("SHOW_TIMERS"), function(on)
     ns.db.icons.timers = on
     ns:UpdateIcons()
   end)
-  timers:SetPoint("TOPLEFT", LEFT, -138)
+  timers:SetPoint("TOPLEFT", LEFT, -148)
   local missing = Check(icons, Tr("SHOW_MISSING"), function(on)
     ns.db.icons.missing = on
     ns:UpdateIcons()
   end)
-  missing:SetPoint("TOPLEFT", LEFT, -162)
+  missing:SetPoint("TOPLEFT", LEFT, -172)
   local reverse = Check(icons, Tr("REVERSE"), function(on)
     ns.db.icons.reverse = on
     ns:UpdateIcons()
   end)
-  reverse:SetPoint("TOPLEFT", LEFT, -186)
+  reverse:SetPoint("TOPLEFT", LEFT, -196)
   local bearFixed = Check(icons, Tr("BEAR_FIXED"), function(on) ns:SetBearIconsFixed(on) end)
-  bearFixed:SetPoint("TOPLEFT", LEFT, -210)
+  bearFixed:SetPoint("TOPLEFT", LEFT, -220)
   OnRefresh(function()
+    local shape = ns.db.icons.shape
+    for _, b in ipairs(shapeButtons) do b:SetActive(b.shape == shape) end
+    local cell = shape == "CELL"
+    iconSize:SetShown(not cell)
+    iconSize.box.holder:SetShown(not cell)
+    cellSize:SetShown(cell)
+    cellSize:SetText(L.CELL_SIZE:format(floor((ns.WIDTH - 4 * ns.CP_GAP) / 5 + .5), ns.CP_HEIGHT))
     bearFixed:SetShown(editing == "DRUID")
-    lookBox:Fit(editing == "DRUID" and -222 or -198)
+    lookBox:Fit(editing == "DRUID" and -232 or -208)
     bearFixed:Set(ns.db.bearIconsFixed)
     reverse:Set(ns.db.icons.reverse)
-    square:Set(ns.db.icons.square)
     iconSize:Set(ns.db.icons.size)
     timers:Set(ns.db.icons.timers)
     missing:Set(ns.db.icons.missing)
@@ -1040,10 +1427,15 @@ local function Build()
   defaultBtn:SetPoint("TOPLEFT", RIGHT + 160, -152)
   OnRefresh(function() addBtn:SetLabel(L.ADD .. " > " .. ns:RowName(selSide, selK)) end)
 
-  Section(icons, "ROWS", LEFT, -250, FULL_W, -520)
-  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -270)
+  Section(icons, "ROWS", LEFT, -270, FULL_W, -536)
+  local catalogBtn = Button(icons, Tr("CATALOG_OPEN"), 150, 22, function()
+    catalog.closed = catalog:IsShown()
+    p:Refresh()
+  end)
+  catalogBtn:SetPoint("TOPRIGHT", icons, "TOPLEFT", LEFT + FULL_W, -265)
+  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -290)
   for i, def in ipairs(ROW_LINES) do
-    local y = -290 - (i - 1) * 30
+    local y = -306 - (i - 1) * 30
     if def then
       OnRefresh(IconLine(icons, def[1], def[2], y))
     else -- the bar, between the rows above and below it
@@ -1056,8 +1448,13 @@ local function Build()
       rule:SetPoint("RIGHT", icons, "TOPLEFT", LEFT + FULL_W, y - 14)
     end
   end
-  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -506)
+  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -522)
   ghost = DragGhost(p)
+  catalog = Catalog(p)
+  OnRefresh(function()
+    catalog:Sync(page == 3)
+    catalogBtn:SetActive(catalog:IsShown())
+  end)
 
   -- Footer: commands, and which profile this character uses ------------------------
   Hint(p, "/cl lock  ·  /cl unlock  ·  /cl scale 120  ·  /cl reset"):SetPoint("BOTTOMLEFT", LEFT, 16)

@@ -32,7 +32,7 @@ local UnitIsFeignDeath = UnitIsFeignDeath or function() return false end
 local REF_SCALE = 768 / 1359
 local WIDTH, CP_HEIGHT, CP_GAP, ROW_GAP, POWER_HEIGHT = 292, 25, 3, 4, 24
 local REFRESH = 0.1 -- safety refresh of the combo points and queued attacks (events do the real work)
-ns.WIDTH, ns.CP_GAP, ns.ROW_GAP = WIDTH, CP_GAP, ROW_GAP
+ns.WIDTH, ns.CP_HEIGHT, ns.CP_GAP, ns.ROW_GAP = WIDTH, CP_HEIGHT, CP_GAP, ROW_GAP
 
 ns.MIN_SCALE, ns.MAX_SCALE = 10, 500 -- percent
 ns.MAX_ICONS, ns.MAX_ROWS = 20, 3     -- icons per row, rows above and below the bar
@@ -82,7 +82,7 @@ local defaults = {
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
   bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
   icons = {
-    square  = false,   -- keep the icons square instead of shaping them like the combo point cells
+    shape   = "FILL",  -- FILL: the row shares the bar's width / CELL: combo point cell size / SQUARE
     size    = 25,      -- row height (and icon width when square), reference pixels
     timers  = true,    -- countdown numbers on the cooldown swipe (auras and spell cooldowns)
     missing = true,    -- missing auras stay in place, grayed out
@@ -710,6 +710,13 @@ function ns:ApplyAll()
   self:SetLocked(self.db.locked)
 end
 
+-- Out of combat section back to its defaults (fade on, 20 % / 20 %).
+function ns:ResetFade()
+  self.db.fadeOOC, self.db.oocPower, self.db.oocTop = defaults.fadeOOC, defaults.oocPower, defaults.oocTop
+  self:PreviewFade()
+  self:RefreshOptions()
+end
+
 function ns:ResetColors()
   self.db.colors = CopyDefaults(defaults.colors, {})
   self:ApplyColors()
@@ -785,6 +792,18 @@ function ns:LayoutIcons() end
 function ns:UpdateIcons() end
 function ns:UpdateIconsIfDirty() end
 
+local CONDITION = { auto = true, self = true, target = true, enemy = true, friend = true }
+local function ValidSpell(spell)
+  return (type(spell) == "number" and spell > 0 and spell == math.floor(spell))
+    or (type(spell) == "string" and spell ~= "" and #spell <= 80)
+end
+local function CleanEntry(entry)
+  if ValidSpell(entry) then return entry end
+  if type(entry) == "table" and ValidSpell(entry.spell) then
+    return { spell = entry.spell, on = CONDITION[entry.on] and entry.on or "auto", exact = entry.exact == true or nil }
+  end
+end
+
 local function CleanRows(db, class)
   local rows = db.rows
   for _, side in ipairs(ns.SIDES) do
@@ -792,11 +811,9 @@ local function CleanRows(db, class)
     local clean = {}
     for k = 1, ns.MAX_ROWS do
       local row = {}
-      for _, spell in ipairs(type(rows[side][k]) == "table" and rows[side][k] or {}) do
+      for _, entry in ipairs(type(rows[side][k]) == "table" and rows[side][k] or {}) do
         if #row >= ns.MAX_ICONS then break end
-        local valid = (type(spell) == "number" and spell > 0 and spell == math.floor(spell))
-          or (type(spell) == "string" and spell ~= "" and #spell <= 80)
-        if valid then row[#row + 1] = spell end
+        row[#row + 1] = CleanEntry(entry)
       end
       clean[k] = row
     end
@@ -805,7 +822,12 @@ local function CleanRows(db, class)
 end
 
 local function CleanProfile(db, class)
+  if type(db.icons) == "table" and db.icons.shape == nil and db.icons.square ~= nil then
+    db.icons.shape = db.icons.square and "SQUARE" or "FILL" -- 1.4 had a square on/off option
+  end
+  if type(db.icons) == "table" then db.icons.square = nil end
   FillProfile(db, class)
+  if db.icons.shape ~= "FILL" and db.icons.shape ~= "CELL" and db.icons.shape ~= "SQUARE" then db.icons.shape = "FILL" end
   if db.scale * 100 < ns.MIN_SCALE or db.scale * 100 > ns.MAX_SCALE then db.scale = defaults.scale end
   if db.alpha < 0 or db.alpha > 1 then db.alpha = defaults.alpha end
   if db.oocPower < 0 or db.oocPower > 1 then db.oocPower = defaults.oocPower end
@@ -904,10 +926,12 @@ function ns:PLAYER_LOGIN()
   end
   if self.isDruid or self.isWarrior then -- rage about to be spent
     events:RegisterEvent("CURRENT_SPELL_CAST_CHANGED")
-    for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "SUCCEEDED", "DELAYED" }) do
+    for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "DELAYED" }) do
       events:RegisterUnitEvent("UNIT_SPELLCAST_" .. e, "player")
     end
   end
+  -- your casts: rage prediction, and the icons follow the auras they put up (Tracker.lua)
+  events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
   self:UpdateVisibility()
 end
 
@@ -990,8 +1014,14 @@ function ns:UNIT_SPELLCAST_START()
   UpdateCast()
   UpdateCost()
 end
-for _, e in ipairs({ "STOP", "FAILED", "INTERRUPTED", "SUCCEEDED", "DELAYED" }) do
+for _, e in ipairs({ "STOP", "FAILED", "INTERRUPTED", "DELAYED" }) do
   ns["UNIT_SPELLCAST_" .. e] = ns.UNIT_SPELLCAST_START
+end
+
+function ns:UNIT_SPELLCAST_SUCCEEDED(_, _, spellID)
+  UpdateCast()
+  UpdateCost()
+  self:NoteCast(spellID)
 end
 
 function ns:PLAYER_REGEN_DISABLED()
@@ -1011,6 +1041,7 @@ end
 ns.DISPLAY_SIZE_CHANGED = ns.UI_SCALE_CHANGED
 
 function ns:MarkIconsDirty() end -- Tracker.lua
+function ns:NoteCast() end
 
 ---------------------------------------------------------------------------
 -- Portrait right-click menu: "Reload UI" in Other Options, just above Edit Mode

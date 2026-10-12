@@ -3,18 +3,19 @@
 -- 20 icons each. Warriors start with one row where the combo points would be: Sunder Armor,
 -- Demoralizing Shout, Hamstring, Battle Shout, Bloodrage.
 --
--- Spells are kept as IDs (or names) and looked up by spell name, so every rank matches, in
--- every client language. Each icon shows, in this order:
---   - the aura when it is up (your buffs first, then the target's debuffs, then your debuffs),
---     with its stacks and time left;
+-- Spells are kept as IDs (or names) and looked up by spell name, so every rank matches (unless
+-- one rank is picked), in every client language. Each icon watches where its entry says (auto:
+-- your buffs, then the target's debuffs, then your debuffs; or only you, or only the target,
+-- any / enemy / friendly) and shows, in this order:
+--   - the aura when it is up, with its stacks and time left;
 --   - else the spell's own cooldown (not the global cooldown) when it runs;
 --   - else the spell ready (spells with a cooldown) or the aura missing (grayed out).
--- Icons look like the action bar buttons: the game's button frame around them, its cooldown
--- swipe and countdown numbers ("2m" from two minutes up, then "1:59", then seconds), charges
--- and stacks bottom right.
+-- Icons look like the action bar buttons: the game's button frame around them, the art kept
+-- inside it by the button's mask, its cooldown swipe and countdown numbers ("2m" from two
+-- minutes up, then "1:59", then seconds), charges and stacks bottom right.
 --
--- By default the icons fill cells shaped like the combo points (cropped, not stretched); they
--- can be kept square instead, at the chosen size.
+-- Shapes: the row shares the bar's width (cells cropped, not stretched), or each icon is a
+-- combo point cell, or square at the chosen size.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -36,7 +37,27 @@ local CORNER = .22           -- share of the button frame (and of the icon's sho
 local MISSING_ALPHA = .45
 local GCD = 1.5              -- a cooldown this short is only the global cooldown
 local ABBREV = 120           -- countdown: "2m" from two minutes up, "1:59" below
-local LOOKUPS = { { "player", "HELPFUL" }, { "target", "HARMFUL" }, { "player", "HARMFUL" } }
+local MASK_ATLAS = "UI-HUD-ActionBar-IconFrame-Mask" -- keeps the icon art inside the frame
+local CAST_WINDOW = 1.5      -- an aura that appears this soon after your cast of the same spell is that spell's
+-- where each icon looks for its aura (on = the entry's condition; auto for plain entries)
+local LOOKUPS = {
+  auto   = { { "player", "HELPFUL" }, { "target", "HARMFUL" }, { "player", "HARMFUL" } },
+  self   = { { "player", "HELPFUL" }, { "player", "HARMFUL" } },
+  target = { { "target", "HELPFUL" }, { "target", "HARMFUL" } },
+  enemy  = { { "target", "HARMFUL" }, { "target", "HELPFUL" } },
+  friend = { { "target", "HELPFUL" }, { "target", "HARMFUL" } },
+}
+ns.CONDITIONS = { "auto", "self", "target", "enemy", "friend" }
+local GetUnitAuraInstanceIDs = C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs
+local GetAuraDuration = C_UnitAuras and C_UnitAuras.GetAuraDuration
+local GetAuraDataByIndex = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+local IsSpellHarmful = C_Spell and C_Spell.IsSpellHarmful
+local IsSpellHelpful = C_Spell and C_Spell.IsSpellHelpful
+
+-- A row entry: a spell ID or name, or { spell = ID or name, on = condition, exact = true }
+-- (exact: this rank only).
+function ns:EntrySpell(entry) if type(entry) == "table" then return entry.spell end return entry end
+function ns:EntryOn(entry) return type(entry) == "table" and entry.on or "auto" end
 
 local rows = { above = {}, below = {} }
 local dirty
@@ -51,6 +72,13 @@ function ns:SpellIcon(spell)
     if ok and icon and not issecretvalue(icon) then return icon end
   end
   return QUESTION_MARK
+end
+
+-- The icon of a row entry's spell (one tracked by name: its icon once seen).
+function ns:EntryIcon(spell)
+  local icon = self:SpellIcon(spell)
+  if icon == QUESTION_MARK and self:SpellName(spell) then return self:SeenIcon(self:SpellName(spell)) end
+  return icon
 end
 
 -- Icons of spells tracked by name (unknown to this character), learned when the aura is seen.
@@ -121,6 +149,13 @@ local function NewSlot(row)
   local slot = CreateFrame("Frame", nil, row)
   slot.icon = slot:CreateTexture(nil, "ARTWORK")
   slot.icon:SetAllPoints()
+  -- the button's own mask: the art stays inside the frame's rounded corners
+  if slot.CreateMaskTexture and slot.icon.AddMaskTexture then
+    slot.mask = slot:CreateMaskTexture()
+    slot.mask:SetAtlas(MASK_ATLAS)
+    slot.mask:SetAllPoints(slot.icon)
+    slot.icon:AddMaskTexture(slot.mask)
+  end
   -- swipe and countdown numbers, like an action button
   slot.cd = CreateFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
   slot.cd:SetDrawBling(false)
@@ -182,11 +217,24 @@ local function HasCooldown(slot)
   return false
 end
 
+-- Harmful (put on enemies) or helpful, when the game says.
+local function Yes(fn, spell)
+  if not fn then return nil end
+  local ok, v = pcall(fn, spell)
+  return ok and not issecretvalue(v) and v == true or nil
+end
+local function SpellNature(spell)
+  if type(spell) ~= "number" then return end
+  return Yes(IsSpellHarmful, spell), Yes(IsSpellHelpful, spell)
+end
+
 function ns:LayoutIcons()
   local db = self.db
   if not db then return end
   local look = db.icons
-  local size, square = look.size, look.square
+  local shape = look.shape
+  local size = shape == "CELL" and self.CP_HEIGHT or look.size
+  local cellW = (self.WIDTH - 4 * self.CP_GAP) / 5 -- a combo point cell
   for _, side in ipairs(self.SIDES) do
     -- each row sits on the previous one; empty rows take no room
     -- (in Bear Form without combo points, the rows above sit on the rage bar: see Core.lua)
@@ -201,9 +249,13 @@ function ns:LayoutIcons()
       if n == 0 then
         row:Hide()
       else
-        local w = square and size or (self.WIDTH - (n - 1) * self.CP_GAP) / n
+        -- FILL: the row shares the bar's width; CELL: each icon the size of a combo point
+        -- cell, however many there are; SQUARE: square icons. CELL and SQUARE rows are
+        -- centred on the bar.
+        local w = (shape == "SQUARE" and size) or (shape == "CELL" and cellW)
+          or (self.WIDTH - (n - 1) * self.CP_GAP) / n
         row:ClearAllPoints()
-        row:SetSize(square and (n * size + (n - 1) * self.CP_GAP) or self.WIDTH, size)
+        row:SetSize(shape == "FILL" and self.WIDTH or (n * w + (n - 1) * self.CP_GAP), size)
         if side == "above" then
           row:SetPoint("BOTTOM", anchor, "TOP", 0, self.ROW_GAP)
         else
@@ -223,9 +275,15 @@ function ns:LayoutIcons()
           slot.cd:SetPoint("TOPLEFT", inset, -inset)
           slot.cd:SetPoint("BOTTOMRIGHT", -inset, inset)
           SetSlotFonts(slot, w, size)
-          slot.spell = spells[i]
-          slot.name = self:SpellName(spells[i])
-          slot.spellIcon = self:SpellIcon(spells[i])
+          local spell = self:EntrySpell(spells[i])
+          if slot.spell ~= spell then slot.inst = nil end -- another spell in this place
+          slot.spell = spell
+          slot.on = self:EntryOn(spells[i])
+          slot.exact = type(spells[i]) == "table" and spells[i].exact and type(spell) == "number" and self:RankIDs(spell) or nil
+          slot.name = self:SpellName(spell)
+          slot.byName = type(spell) == "string"
+          slot.harmful, slot.helpful = SpellNature(spell)
+          slot.spellIcon = self:SpellIcon(spell)
           if slot.spellIcon == QUESTION_MARK and slot.name then slot.spellIcon = self:SeenIcon(slot.name) end
           slot.hasCooldown = HasCooldown(slot)
         end
@@ -240,12 +298,153 @@ end
 ---------------------------------------------------------------------------
 -- Live state
 ---------------------------------------------------------------------------
-local function FindAura(name)
-  for _, lookup in ipairs(LOOKUPS) do
+local function Bool(v) return not issecretvalue(v) and v == true end
+
+-- Is the target one this icon watches? (any target, or only an enemy / a friend)
+local function TargetFits(on)
+  if not UnitExists("target") then return false end
+  if on == "enemy" then return Bool(UnitCanAttack("player", "target")) end
+  if on == "friend" then return not Bool(UnitCanAttack("player", "target")) end
+  return true
+end
+
+local function TargetGUID()
+  local guid = UnitGUID and UnitGUID("target")
+  if not issecretvalue(guid) then return guid end
+end
+
+-- A spell typed by name and unknown to this character ("renew"): the unit's auras are read one
+-- by one, without minding upper / lower case.
+local function ScanAuras(unit, name, filter)
+  if not GetAuraDataByIndex then return end
+  local wanted = name:lower()
+  for i = 1, 255 do
+    local ok, aura = pcall(GetAuraDataByIndex, unit, i, filter)
+    if not ok or issecretvalue(aura) or type(aura) ~= "table" then return end
+    local auraName = aura.name
+    if not issecretvalue(auraName) and type(auraName) == "string" and auraName:lower() == wanted then return aura end
+  end
+end
+
+-- By name, where the icon's condition says. Only works while the game shows the aura to
+-- addons (out of combat; in combat the game hides most auras): see the instance tracking.
+-- Also says when the aura is there in another rank than the one watched.
+local function FindAura(slot)
+  local otherRank
+  for _, lookup in ipairs(LOOKUPS[slot.on] or LOOKUPS.auto) do
     local unit = lookup[1]
-    if unit ~= "target" or UnitExists("target") then
-      local aura = ns:FindAura(unit, name, lookup[2])
-      if aura then return aura, unit end
+    if unit ~= "target" or TargetFits(slot.on) then
+      local aura = ns:FindAura(unit, slot.name, lookup[2])
+      if not aura and slot.byName then aura = ScanAuras(unit, slot.name, lookup[2]) end
+      if aura then
+        if not slot.exact or issecretvalue(aura.spellId) or slot.exact[aura.spellId] then return aura, unit end
+        otherRank = true
+      end
+    end
+  end
+  return nil, nil, otherRank
+end
+
+---------------------------------------------------------------------------
+-- In combat the game hides aura details from addons, but still lists each unit's aura
+-- instances. An aura seen out of combat is followed by its instance; one that appears just
+-- after you cast the same spell is taken to be that spell's. Time left and stacks then come
+-- from the game's own duration object and stack text, which addons may display.
+---------------------------------------------------------------------------
+local present = { player = {}, target = {} }   -- aura instances on each unit now: HELPFUL / HARMFUL
+local fresh = { player = {}, target = {} }     -- instances that appeared lately: time
+local casts = {}                               -- spell name (lower case) -> { time, spell ID } of your last cast
+
+local function ListAuras(unit)
+  local set = {}
+  if not GetUnitAuraInstanceIDs or (unit == "target" and not UnitExists("target")) then return set end
+  for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
+    local ok, ids = pcall(GetUnitAuraInstanceIDs, unit, filter)
+    if ok and not issecretvalue(ids) and type(ids) == "table" then
+      for _, id in ipairs(ids) do
+        if Plain(id) then set[id] = filter end
+      end
+    end
+  end
+  return set
+end
+
+local lastTarget
+local function RefreshInstances()
+  local now = GetTime()
+  local guid = TargetGUID()
+  if guid ~= lastTarget then
+    wipe(fresh.target) -- another target: its auras are not new
+    present.target = {}
+    lastTarget = guid
+  end
+  for unit, old in pairs(present) do
+    local set = ListAuras(unit)
+    for id in pairs(set) do
+      if not old[id] then fresh[unit][id] = now end
+    end
+    for id, t in pairs(fresh[unit]) do
+      if not set[id] or now - t > CAST_WINDOW then fresh[unit][id] = nil end
+    end
+    present[unit] = set
+  end
+end
+
+-- Your cast of a spell (Core.lua forwards UNIT_SPELLCAST_SUCCEEDED for the player).
+function ns:NoteCast(spellID)
+  local name = Plain(spellID) and self:SpellName(spellID)
+  if name then
+    casts[name:lower()] = { GetTime(), spellID }
+    self:MarkIconsDirty()
+  end
+end
+
+local function Remember(slot, unit, aura)
+  local id = Plain(aura.auraInstanceID)
+  if not id then return end
+  local icon = aura.icon
+  slot.inst = { unit = unit, id = id, guid = unit == "target" and TargetGUID() or nil,
+    icon = (not issecretvalue(icon) and icon) or slot.spellIcon }
+end
+
+-- The aura this icon follows, if it is still there.
+local function Followed(slot)
+  local inst = slot.inst
+  if not inst then return end
+  if inst.unit == "target" and (inst.guid == nil or inst.guid ~= TargetGUID() or not TargetFits(slot.on)) then return end
+  if present[inst.unit][inst.id] then return inst end
+  slot.inst = nil -- gone
+end
+
+-- Where a cast of this icon's spell puts its aura. Without a condition: a harmful spell on
+-- the target, a helpful one on you or your target.
+local HARMFUL_CAST = { { "target", "HARMFUL" } }
+local HELPFUL_CAST = { { "player", "HELPFUL" }, { "target", "HELPFUL" } }
+local function CastLookups(slot)
+  if slot.on == "auto" then
+    if slot.harmful then return HARMFUL_CAST end
+    if slot.helpful then return HELPFUL_CAST end
+  end
+  return LOOKUPS[slot.on] or LOOKUPS.auto
+end
+
+-- An aura that appeared just after your cast of this icon's spell, where the icon looks.
+local function JustCast(slot)
+  local last = slot.name and casts[slot.name:lower()]
+  if not last or GetTime() - last[1] > CAST_WINDOW or (slot.exact and not slot.exact[last[2]]) then return end
+  local cast = last[1]
+  for _, lookup in ipairs(CastLookups(slot)) do
+    local unit = lookup[1]
+    if unit ~= "target" or TargetFits(slot.on) then
+      local newest, when
+      for id, t in pairs(fresh[unit]) do
+        if present[unit][id] == lookup[2] and t >= cast - .2 and (not when or t > when) then newest, when = id, t end
+      end
+      if newest then
+        fresh[unit][newest] = nil
+        slot.inst = { unit = unit, id = newest, guid = unit == "target" and TargetGUID() or nil, icon = slot.spellIcon }
+        return slot.inst
+      end
     end
   end
 end
@@ -299,7 +498,15 @@ local function SetSlot(slot, look)
     slot.cd:SetCooldown(GetTime() - 15, 45)
     return
   end
-  if slot.name then aura, unit = FindAura(slot.name) end
+  local inst, otherRank
+  if slot.name then aura, unit, otherRank = FindAura(slot) end
+  if aura then
+    Remember(slot, unit, aura)
+  elseif otherRank then
+    slot.inst = nil -- seen, in another rank: not this one
+  else
+    inst = Followed(slot) or JustCast(slot)
+  end
   if aura then
     local icon = aura.icon
     if issecretvalue(icon) or not icon then
@@ -310,9 +517,18 @@ local function SetSlot(slot, look)
     end
     slot.icon:SetTexture(icon)
     local ends, duration = Plain(aura.expirationTime), Plain(aura.duration)
-    if ends and duration and ends > 0 and duration > 0 then
-      slot.cd:SetReverse(look.reverse)
-      slot.cd:SetCooldown(ends - duration, duration)
+    if ends and duration then
+      if ends > 0 and duration > 0 then
+        slot.cd:SetReverse(look.reverse)
+        slot.cd:SetCooldown(ends - duration, duration)
+      end
+    elseif GetAuraDuration and slot.cd.SetCooldownFromDurationObject then
+      -- times hidden: the game's duration object (possibly secret, only handed to the swipe)
+      local ok, d = pcall(GetAuraDuration, unit, aura.auraInstanceID)
+      if ok and d then
+        slot.cd:SetReverse(look.reverse)
+        pcall(slot.cd.SetCooldownFromDurationObject, slot.cd, d, true)
+      end
     end
     local stacks = aura.applications
     if issecretvalue(stacks) then
@@ -323,15 +539,29 @@ local function SetSlot(slot, look)
     elseif type(stacks) == "number" and stacks > 1 then
       slot.count:SetText(stacks)
     end
+  elseif inst then
+    -- hidden details (in combat): the game's duration object and stack text
+    slot.icon:SetTexture(inst.icon or slot.spellIcon)
+    if GetAuraDuration then
+      local ok, d = pcall(GetAuraDuration, inst.unit, inst.id)
+      if ok and d and slot.cd.SetCooldownFromDurationObject then
+        slot.cd:SetReverse(look.reverse)
+        pcall(slot.cd.SetCooldownFromDurationObject, slot.cd, d, true)
+      end
+    end
+    if GetDisplayCount then
+      local ok, text = pcall(GetDisplayCount, inst.unit, inst.id, 2)
+      if ok then slot.count:SetText(text) end
+    end
   else
     slot.icon:SetTexture(slot.spellIcon)
     running = SpellCooldown(slot)
   end
-  if not (aura and Plain(aura.applications) and aura.applications > 1) then
+  if not inst and not (aura and Plain(aura.applications) and aura.applications > 1) then
     local charges = Charges(slot)
     if charges ~= nil then slot.count:SetText(charges) end
   end
-  local lit = aura or running or slot.hasCooldown
+  local lit = aura or inst or running or slot.hasCooldown
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
   slot:SetShown(lit or look.missing)
@@ -343,6 +573,7 @@ function ns:UpdateIcons()
     dirty = true -- catch up when shown
     return
   end
+  RefreshInstances()
   local look = self.db.icons
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
@@ -363,6 +594,24 @@ end
 ---------------------------------------------------------------------------
 -- Editing (options)
 ---------------------------------------------------------------------------
+-- A spell's ID from its name in the client's language: your spellbook first, then the class
+-- spell lists (spells of other classes), then the auras on you and your target, without
+-- minding upper / lower case.
+function ns:SpellByName(text)
+  if GetSpellInfo then
+    local ok, info = pcall(GetSpellInfo, text)
+    if ok and type(info) == "table" and Plain(info.spellID) then return info.spellID end
+  end
+  local rec = self:CatalogRecord(text)
+  if rec then return rec.ranks[#rec.ranks][2] end -- its highest rank
+  for _, unit in ipairs({ "player", "target" }) do
+    for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
+      local aura = UnitExists(unit) and ScanAuras(unit, text, filter)
+      if aura and Plain(aura.spellId) and self:SpellName(aura.spellId) then return aura.spellId end
+    end
+  end
+end
+
 -- "7386", a spell link, or a name. A known name is stored as its ID (so it follows the
 -- client language); an unknown one is tracked by the name as typed.
 function ns:ParseSpell(text)
@@ -374,24 +623,56 @@ function ns:ParseSpell(text)
     return nil, L.UNKNOWN_ID:format(text)
   end
   text = text:match("^%[(.+)%]$") or text
-  if GetSpellInfo then
-    local ok, info = pcall(GetSpellInfo, text)
-    if ok and type(info) == "table" and Plain(info.spellID) then return info.spellID end
-  end
+  local found = self:SpellByName(text)
+  if found then return found end
   return text, nil, true
 end
 
--- at: position in the row (default: last)
-function ns:AddIcon(side, k, text, at)
+-- Same spell watched the same way (the same spell may be watched on you and on the target,
+-- and one rank apart from all ranks).
+local function Exact(entry) return type(entry) == "table" and entry.exact or nil end
+local function Same(a, b)
+  if ns:EntryOn(a) ~= ns:EntryOn(b) then return false end
+  local sa, sb = ns:EntrySpell(a), ns:EntrySpell(b)
+  if sa == sb then return Exact(a) == Exact(b) end
+  if Exact(a) or Exact(b) then return false end
+  local na, nb = ns:SpellName(sa), ns:SpellName(sb)
+  return na ~= nil and nb ~= nil and na:lower() == nb:lower()
+end
+
+local function Duplicate(spells, entry, except)
+  for i, other in ipairs(spells) do
+    if i ~= except and Same(other, entry) then return true end
+  end
+end
+function ns:IsDuplicate(spells, entry, except) return Duplicate(spells, entry, except) == true end
+
+-- entry: text typed (ID, link or name), a spell ID, or { spell =, on =, exact = }.
+-- at: position in the row (default: last).
+function ns:AddIcon(side, k, entry, at)
   local spells = self.db.rows[side][k]
-  local spell, err, byName = self:ParseSpell(text)
+  local spell, err, byName
+  if type(entry) == "table" then
+    spell = entry.spell
+  else
+    spell, err, byName = self:ParseSpell(entry)
+    entry = spell
+  end
   if not spell then return false, err end
   local name = self:SpellName(spell) or tostring(spell)
-  for _, other in ipairs(spells) do
-    if other == spell or self:SpellName(other) == name then return false, L.DUPLICATE:format(name) end
+  if type(spell) == "number" then
+    for i, other in ipairs(spells) do
+      if type(self:EntrySpell(other)) == "string" and Same(other, entry) then
+        spells[i] = entry -- a name typed by hand ("renew"): from now on followed by its ID
+        self:LayoutIcons()
+        self:RefreshOptions()
+        return true, L.ADDED:format(name, RowName(side, k))
+      end
+    end
   end
+  if Duplicate(spells, entry) then return false, L.DUPLICATE:format(name) end
   if #spells >= self.MAX_ICONS then return false, L.ROW_FULL:format(self.MAX_ICONS) end
-  table.insert(spells, max(1, min(at or #spells + 1, #spells + 1)), spell)
+  table.insert(spells, max(1, min(at or #spells + 1, #spells + 1)), entry)
   self:LayoutIcons()
   self:RefreshOptions()
   return true, (byName and L.ADDED_BY_NAME or L.ADDED):format(name, RowName(side, k))
@@ -403,20 +684,93 @@ function ns:RemoveIcon(side, k, i)
   self:RefreshOptions()
 end
 
+-- Changes icon i: its spell (or rank), where it looks for its aura (auto, self, target, enemy
+-- target, friend target) and whether only that rank counts. nil keeps the current value.
+function ns:SetIconEntry(side, k, i, spell, on, exact)
+  local spells = self.db.rows[side][k]
+  local entry = spells[i]
+  if entry == nil then return false end
+  if spell == nil then spell = self:EntrySpell(entry) end
+  if on == nil then on = self:EntryOn(entry) end
+  if exact == nil then exact = Exact(entry) end
+  exact = exact and type(spell) == "number" or nil
+  local changed = (on == "auto" and not exact) and spell or { spell = spell, on = on, exact = exact }
+  if Duplicate(spells, changed, i) then return false, L.DUPLICATE:format(self:SpellName(spell) or tostring(spell)) end
+  spells[i] = changed
+  self:LayoutIcons()
+  self:RefreshOptions()
+  return true
+end
+
+function ns:SetIconCondition(side, k, i, on) return self:SetIconEntry(side, k, i, nil, on) end
+
+---------------------------------------------------------------------------
+-- Class spell lists (SpellCatalog.lua): { kind, rank 1 ID, rank 2 ID, ... } per spell
+---------------------------------------------------------------------------
+-- (alt: the same ranks under other IDs, as some spells have in Forever)
+local catalogIndex -- spell ID and lower-case name -> { kind =, class =, ranks = { { rank, ID, other ID } known here } }
+local function CatalogIndex()
+  if catalogIndex then return catalogIndex end
+  catalogIndex = {}
+  for _, class in ipairs(ns.SPELL_CATALOG or {}) do
+    for _, spell in ipairs(class.spells) do
+      local rec = { kind = spell[1], class = class.class, ranks = {} }
+      for r = 2, #spell do
+        local id, alt = spell[r], spell.alt and spell.alt[r - 1] or nil
+        if not ns:SpellName(id) then id, alt = alt, nil end
+        local name = id and ns:SpellName(id)
+        if name then
+          rec.name = rec.name or name
+          rec.ranks[#rec.ranks + 1] = { r - 1, id, alt or nil }
+          catalogIndex[id] = rec
+          if alt then catalogIndex[alt] = rec end
+        end
+      end
+      if rec.name and not catalogIndex[rec.name:lower()] then catalogIndex[rec.name:lower()] = rec end
+    end
+  end
+  return catalogIndex
+end
+
+-- The IDs of one rank (several when the game has the same rank twice), for "this rank only".
+function ns:RankIDs(spell)
+  local ids = { [spell] = true }
+  local rec = self:CatalogRecord(spell)
+  for _, r in ipairs(rec and rec.ranks or {}) do
+    if r[2] == spell or r[3] == spell then
+      ids[r[2]] = true
+      if r[3] then ids[r[3]] = true end
+    end
+  end
+  return ids
+end
+
+-- The class spell list entry of a spell (ID or name), if any.
+function ns:CatalogRecord(spell)
+  local index = CatalogIndex()
+  if type(spell) == "string" then return index[spell:lower()] end
+  return index[spell]
+end
+
+-- The ranks this client knows, { { rank, ID }, ... }, when there are more than one.
+function ns:SpellRanks(spell)
+  local rec = self:CatalogRecord(spell)
+  if rec and #rec.ranks > 1 then return rec.ranks end
+end
+
 -- Moves icon i of one row to position j of the same or another row (drag and drop).
 function ns:MoveIconTo(fromSide, fromK, i, toSide, toK, j)
   local from, to = self.db.rows[fromSide][fromK], self.db.rows[toSide][toK]
-  local spell = from[i]
-  if spell == nil then return false end
+  local entry = from[i]
+  if entry == nil then return false end
   if from ~= to then
-    local name = self:SpellName(spell) or tostring(spell)
-    for _, other in ipairs(to) do
-      if other == spell or self:SpellName(other) == name then return false, L.DUPLICATE:format(name) end
+    if Duplicate(to, entry) then
+      return false, L.DUPLICATE:format(self:SpellName(self:EntrySpell(entry)) or tostring(self:EntrySpell(entry)))
     end
     if #to >= self.MAX_ICONS then return false, L.ROW_FULL:format(self.MAX_ICONS) end
   end
   table.remove(from, i)
-  table.insert(to, max(1, min(j, #to + 1)), spell)
+  table.insert(to, max(1, min(j, #to + 1)), entry)
   self:LayoutIcons()
   self:RefreshOptions()
   return true
