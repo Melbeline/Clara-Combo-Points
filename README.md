@@ -46,8 +46,8 @@ Page **Icônes** : clique sur une ligne (Haut 1 à 3, Bas 1 à 3) pour la choisi
 - **Guerrier** : par défaut, une ligne à la place des points de combo, dans l'ordre de la capture : Fracasser armure, Cri démoralisant, Brise-genou, Cri de guerre, Rage sanguinaire.
 - **Voleur et druide** : aucune icône par défaut ; leurs lignes se placent au-dessus des points de combo et sous la barre.
 - Les auras sont cherchées **par nom de sort** : tous les rangs comptent, dans toutes les langues du client. D'abord tes buffs, puis les debuffs de ta cible (de n'importe qui : Fracasser armure d'un autre guerrier compte aussi), puis tes debuffs.
-- Une aura active s'allume avec la couleur de sa place dans la ligne (jaune → rose, les couleurs des points de combo), avec ses charges (Fracasser armure ×5) et le temps restant. Une aura absente est grisée, ou cachée si tu décoches l'option (les autres gardent leur place).
-- Un nom tapé que ton personnage ne connaît pas est suivi par son nom tel quel (point d'interrogation comme icône tant que l'aura n'a pas été vue).
+- Une aura active s'allume avec la couleur de sa place dans la ligne (les couleurs des points de combo dans l'ordre, de jaune à rose ; étalées sur les lignes de plus de 5 icônes), avec ses charges (Fracasser armure ×5) et le temps restant. Une aura absente est grisée, ou cachée si tu décoches l'option (les autres gardent leur place).
+- L'**ID** marche quelle que soit la langue du client ; un **nom** doit être écrit comme dans ton jeu (dans sa langue). Un nom que ton personnage ne connaît pas est suivi tel quel : point d'interrogation comme icône jusqu'à ce que l'aura soit vue une première fois, puis sa vraie icône (retenue pour les sessions suivantes).
 
 ## Rage qui va être consommée
 
@@ -68,7 +68,7 @@ Les techniques instantanées dépensent leur rage tout de suite : rien à prévo
 - **Guerrier** : pas de points de combo, la barre de rage seule, avec la ligne d'icônes posée dessus.
 - **Langues** : l'addon ne dépend jamais de la langue du client (classes, ressources, événements et sorts sont lus par leurs identifiants internes), il marche donc sur tous les clients. Seuls les textes affichés changent avec le drapeau choisi.
 - **Mise à jour** : tes anciens réglages sont gardés (depuis 1.0 / 1.1, ils sont copiés dans les profils voleur et druide). Le profil guerrier démarre avec les réglages par défaut.
-- **Léger** : aucune bibliothèque, aucune texture à charger. Tant que la barre est cachée (druide hors félin et ours), l'addon ne lit plus rien : il se remet à jour d'un coup quand elle réapparaît. Les icônes ne sont relues que quand une aura change (une fois par image au plus). Sur une autre classe que voleur, druide ou guerrier, l'addon reste inactif : aucun événement, aucune mise à jour.
+- **Léger** : aucune bibliothèque, aucune texture à charger. Tant que la barre est cachée (druide hors félin et ours), l'addon ne lit plus rien : il se remet à jour d'un coup quand elle réapparaît. Les icônes ne sont relues que quand une aura ou la cible change, une fois par image au plus. Sur une autre classe que voleur, druide ou guerrier, l'addon reste inactif : aucun événement, aucune mise à jour.
 
 ## Licences des polices
 

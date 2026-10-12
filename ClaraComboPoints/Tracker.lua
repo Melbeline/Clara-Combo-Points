@@ -41,6 +41,18 @@ function ns:SpellIcon(spell)
   return QUESTION_MARK
 end
 
+-- Icons of spells tracked by name (unknown to this character), learned when the aura is seen.
+function ns:SeenIcon(name)
+  local seen = self.sv and self.sv.seenIcons
+  return seen and seen[name] or QUESTION_MARK
+end
+
+function ns:RememberIcon(name, icon)
+  if self.sv and name and (type(icon) == "number" or type(icon) == "string") then
+    self.sv.seenIcons[name] = icon
+  end
+end
+
 local function RowName(side, k)
   return (side == "above" and L.ROW_ABOVE or L.ROW_BELOW):format(k)
 end
@@ -127,7 +139,10 @@ function ns:LayoutIcons()
           slot.spell = spells[i]
           slot.name = self:SpellName(spells[i])
           slot.spellIcon = self:SpellIcon(spells[i])
-          slot.colorKey = "cp" .. ceil(i * 5 / n) -- yellow to pink along the row
+          if slot.spellIcon == QUESTION_MARK and slot.name then slot.spellIcon = self:SeenIcon(slot.name) end
+          -- yellow to pink along the row: the combo point colours in order, spread over
+          -- longer rows
+          slot.colorKey = "cp" .. (n <= 5 and i or ceil(i * 5 / n))
           self:SetFont(slot.timer, max(8, floor(min(w, size) * .5)), flags)
           self:SetFont(slot.count, max(7, floor(size * .38)), flags)
           slot.on = nil
@@ -135,6 +150,7 @@ function ns:LayoutIcons()
         row:Show()
       end
     end
+    if side == "above" then self:AnchorMoverText(anchor) end
   end
   self:ColorIcons()
   self:UpdateIcons()
@@ -201,13 +217,18 @@ local function SetSlot(slot, aura, unit, look, colors)
     return
   end
   local icon = aura.icon
-  if issecretvalue(icon) or not icon then icon = slot.spellIcon end
+  if issecretvalue(icon) or not icon then
+    icon = slot.spellIcon
+  elseif slot.spellIcon == QUESTION_MARK then
+    slot.spellIcon = icon -- a spell tracked by name: its icon is known from now on
+    ns:RememberIcon(slot.name, icon)
+  end
   slot.icon:SetTexture(icon)
   local stacks = aura.applications
   if issecretvalue(stacks) then
     if GetDisplayCount then
       local ok, text = pcall(GetDisplayCount, unit, aura.auraInstanceID, 2)
-      if ok and text then slot.count:SetText(text) end
+      if ok then slot.count:SetText(text) end -- possibly secret: only handed to SetText
     end
   elseif type(stacks) == "number" and stacks > 1 then
     slot.count:SetText(stacks)

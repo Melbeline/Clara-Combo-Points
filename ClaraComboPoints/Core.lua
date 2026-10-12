@@ -222,6 +222,12 @@ moverText:SetFont(ns.fonts[1].path, 14, "OUTLINE")
 moverText:SetPoint("BOTTOM", mover, "TOP", 0, 4)
 moverText:SetText(L.MOVER)
 
+-- the label goes above the highest icon row (Tracker.lua)
+function ns:AnchorMoverText(top)
+  moverText:ClearAllPoints()
+  moverText:SetPoint("BOTTOM", top or mover, "TOP", 0, 4)
+end
+
 ---------------------------------------------------------------------------
 -- Live values
 ---------------------------------------------------------------------------
@@ -259,7 +265,8 @@ local powerType = POWER_ENERGY -- what the bar shows: energy, or rage for warrio
 local maxPower, lastPower
 local function UpdatePower()
   if not hud:IsShown() then return end
-  local v = UnitPower("player", powerType)
+  -- the preview fills the rage bar (rage is usually 0 out of combat), so its colours show
+  local v = (ns.preview and powerType == POWER_RAGE) and (maxPower or 100) or UnitPower("player", powerType)
   if issecretvalue(v) then
     lastPower = nil
   elseif v == lastPower then
@@ -408,7 +415,7 @@ local function RefreshValues()
   UpdatePower()
   UpdateCombo()
   RefreshCost()
-  ns:UpdateIcons()
+  ns:MarkIconsDirty() -- read on the next frame, once
 end
 
 -- Updates are skipped while the HUD is hidden, so catch up on everything when it comes back.
@@ -514,14 +521,17 @@ end
 -- Rage for warriors and for druids in Bear Form, energy otherwise. In Bear Form the empty
 -- combo cells are not drawn: the row only shows points the target actually has, and is back
 -- in full the moment the druid shifts to Cat Form.
-function ns:UpdatePowerMode()
-  local wanted = POWER_ENERGY
-  if self.profileClass == "WARRIOR" then
-    wanted = POWER_RAGE
-  elseif self.profileClass == "DRUID" and self.isDruid then
+local function WantedPowerType()
+  if ns.profileClass == "WARRIOR" then return POWER_RAGE end
+  if ns.profileClass == "DRUID" and ns.isDruid then
     local pt = UnitPowerType("player")
-    if not issecretvalue(pt) and pt == POWER_RAGE then wanted = POWER_RAGE end
+    if not issecretvalue(pt) and pt == POWER_RAGE then return POWER_RAGE end
   end
+  return POWER_ENERGY
+end
+
+function ns:UpdatePowerMode()
+  local wanted = WantedPowerType()
   powerType = wanted
   local bear = self.profileClass == "DRUID" and wanted == POWER_RAGE
   for i = 1, NUM_POINTS do cells[i].bg:SetShown(not bear) end
@@ -639,8 +649,9 @@ end)
 -- or combat starts.
 function ns:SetPreview(on)
   self.preview = on and true or false
-  lastCombo = nil
+  lastCombo, lastPower = nil, nil
   UpdateCombo()
+  UpdatePower()
   costShown = nil
   UpdateCost()
   self:UpdateIcons()
@@ -808,6 +819,11 @@ local function InitDB()
   if not ns:IsLanguage(sv.language) then sv.language = nil end
   if sv.language then ns.lang = sv.language end
   sv.skin = nil -- 1.3 had a second options theme
+  -- icons of spells tracked by name, learned when their aura is first seen
+  if type(sv.seenIcons) ~= "table" then sv.seenIcons = {} end
+  for name, icon in pairs(sv.seenIcons) do
+    if type(name) ~= "string" or (type(icon) ~= "number" and type(icon) ~= "string") then sv.seenIcons[name] = nil end
+  end
   moverText:SetText(L.MOVER)
   ClaraComboPointsDB = sv
   ns.sv = sv
@@ -888,9 +904,15 @@ function ns:PLAYER_ENTERING_WORLD()
   self:UpdatePowerMode()
 end
 
+-- A shift only redraws the bar when it changes what the bar shows (energy / rage).
 function ns:UNIT_DISPLAYPOWER()
   self:UpdateVisibility()
-  self:UpdatePowerMode()
+  if WantedPowerType() ~= powerType then
+    self:UpdatePowerMode()
+  else
+    UpdatePowerMax()
+    UpdatePower()
+  end
 end
 ns.UPDATE_SHAPESHIFT_FORM = ns.UNIT_DISPLAYPOWER
 
