@@ -84,8 +84,9 @@ local defaults = {
   icons = {
     square  = false,   -- keep the icons square instead of shaping them like the combo point cells
     size    = 25,      -- row height (and icon width when square), reference pixels
-    timers  = true,    -- time left on the active auras
+    timers  = true,    -- countdown numbers on the cooldown swipe (auras and spell cooldowns)
     missing = true,    -- missing auras stay in place, grayed out
+    reverse = false,   -- buffs / debuffs: reversed swipe (lit when fresh), like Blizzard's aura icons
   },
   colors = {
     cp1    = { r = 1, g = 1,    b = 0,    a = 1 },
@@ -465,7 +466,6 @@ hud:SetScript("OnUpdate", function(_, elapsed)
       UpdateQueued()
       UpdateCost()
     end
-    ns:UpdateIconTimers()
   end
 end)
 
@@ -526,7 +526,6 @@ function ns:ApplyColors()
   power.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a)
   costTex:SetColorTexture(c.cost.r, c.cost.g, c.cost.b, c.cost.a)
   powerText:SetTextColor(c.text.r, c.text.g, c.text.b, c.text.a)
-  self:ColorIcons()
 end
 
 -- Rage for warriors and for druids in Bear Form, energy otherwise. In Bear Form the empty
@@ -783,10 +782,8 @@ function ns:RefreshOptions() end
 function ns:RelabelOptions() end
 function ns:ToggleOptions() end
 function ns:LayoutIcons() end
-function ns:ColorIcons() end
 function ns:UpdateIcons() end
 function ns:UpdateIconsIfDirty() end
-function ns:UpdateIconTimers() end
 
 local function CleanRows(db, class)
   local rows = db.rows
@@ -842,6 +839,11 @@ local function InitDB()
   for name, icon in pairs(sv.seenIcons) do
     if type(name) ~= "string" or (type(icon) ~= "number" and type(icon) ~= "string") then sv.seenIcons[name] = nil end
   end
+  -- spells seen with a cooldown of their own: their icon stays lit when they are ready
+  if type(sv.cooldownSpells) ~= "table" then sv.cooldownSpells = {} end
+  for name, on in pairs(sv.cooldownSpells) do
+    if type(name) ~= "string" or on ~= true then sv.cooldownSpells[name] = nil end
+  end
   moverText:SetText(L.MOVER)
   ClaraComboPointsDB = sv
   ns.sv = sv
@@ -889,6 +891,8 @@ function ns:PLAYER_LOGIN()
   events:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
   events:RegisterUnitEvent("UNIT_MAXPOWER", "player")
   events:RegisterUnitEvent("UNIT_AURA", "player", "target")
+  events:RegisterEvent("SPELL_UPDATE_COOLDOWN") -- spell cooldowns and charges on the icons
+  events:RegisterEvent("SPELL_UPDATE_CHARGES")
   if not self.isWarrior then -- combo points
     events:RegisterUnitEvent("UNIT_HEALTH", "target")
     events:RegisterUnitEvent("UNIT_FLAGS", "target")
@@ -972,6 +976,11 @@ function ns:UNIT_AURA(unit)
   self:MarkIconsDirty()
 end
 
+function ns:SPELL_UPDATE_COOLDOWN()
+  self:MarkIconsDirty()
+end
+ns.SPELL_UPDATE_CHARGES = ns.SPELL_UPDATE_COOLDOWN
+
 function ns:CURRENT_SPELL_CAST_CHANGED()
   UpdateQueued()
   UpdateCost()
@@ -1030,10 +1039,12 @@ if Menu and Menu.ModifyMenu and MenuUtil then
 end
 
 ---------------------------------------------------------------------------
--- Slash commands: /clara, /cl
+-- Slash commands: /clara, /cl, /ccp, /cp
 ---------------------------------------------------------------------------
 SLASH_CLARACOMBOPOINTS1 = "/clara"
 SLASH_CLARACOMBOPOINTS2 = "/cl"
+SLASH_CLARACOMBOPOINTS3 = "/ccp"
+SLASH_CLARACOMBOPOINTS4 = "/cp"
 SlashCmdList.CLARACOMBOPOINTS = function(msg)
   if not ns.db then return end
   local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")

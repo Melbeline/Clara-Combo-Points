@@ -1,8 +1,8 @@
 ## Interface: 16001, 16002, 16003, 16005, 16010, 120100, 120105
 ## Title: Clara Combo Points
-## Notes: Combo points + energy (rogue, druid), rage (druid in Bear Form, warrior) and buff/debuff icons (WoW Forever). /clara or /cl
-## Notes-frFR: Points de combo + énergie (voleur, druide), rage (druide en ours, guerrier) et icônes de buffs/debuffs (WoW Forever). /clara ou /cl
-## Notes-deDE: Combopunkte + Energie (Schurke, Druide), Wut (Druide in Bärengestalt, Krieger) und Buff-/Debuff-Symbole (WoW Forever). /clara oder /cl
+## Notes: Combo points + energy (rogue, druid), rage (druid in Bear Form, warrior) and buff/debuff icons (WoW Forever). /clara, /cl, /ccp or /cp
+## Notes-frFR: Points de combo + énergie (voleur, druide), rage (druide en ours, guerrier) et icônes de buffs/debuffs (WoW Forever). /clara, /cl, /ccp ou /cp
+## Notes-deDE: Combopunkte + Energie (Schurke, Druide), Wut (Druide in Bärengestalt, Krieger) und Buff-/Debuff-Symbole (WoW Forever). /clara, /cl, /ccp oder /cp
 ## Author: Melbeline
 ## Version: 1.4.0
 ## SavedVariables: ClaraComboPointsDB

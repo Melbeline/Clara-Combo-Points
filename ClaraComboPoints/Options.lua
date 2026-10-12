@@ -27,7 +27,11 @@ local CLASS_TABS = { "ROGUE", "DRUID", "WARRIOR" }
 local PAGES = { "PAGE_BAR", "PAGE_TEXT", "PAGE_ICONS" }
 local COLOR_KEYS = { "cp1", "cp2", "cp3", "cp4", "cp5", "energy", "rage", "cost", "bg", "text" }
 local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", cost = "COST_COLOR", bg = "BACKGROUND" }
-local NO_COLOR = { ROGUE = { rage = true, cost = true }, WARRIOR = { energy = true } } -- colours a class never uses
+-- colours a class never uses (warriors have no combo points: their icons wear the button frame)
+local NO_COLOR = {
+  ROGUE = { rage = true, cost = true },
+  WARRIOR = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true },
+}
 local RESOURCE = { ROGUE = "ENERGY", DRUID = "BOTH", WARRIOR = "RAGE" }           -- energy, rage or both
 local SCALE_PRESETS = { 50, 75, 100, 125, 150, 200, 300 }
 local OUTLINES = { { "NONE", "OUTLINE_NONE" }, { "OUTLINE", "OUTLINE_THIN" }, { "THICKOUTLINE", "OUTLINE_THICK" } }
@@ -335,8 +339,9 @@ end
 
 local function ColorLabel(key)
   local i = key:match("^cp(%d)$")
-  if i then return (editing == "WARRIOR" and L.ICON_COLOR or L.CP):format(tonumber(i)) end
+  if i then return L.CP:format(tonumber(i)) end
   if key == "text" then return L["VALUE_" .. RESOURCE[editing]] end
+  if key == "bg" and editing == "WARRIOR" then return L.BAR_BG end
   return L[COLOR_LABELS[key]]
 end
 
@@ -537,6 +542,38 @@ local function TrackDrag()
   ghost:SetPoint("CENTER", panel, "BOTTOMLEFT", x / scale - panel:GetLeft(), y / scale - panel:GetBottom())
 end
 
+-- A spell held on the cursor, picked up in the spellbook (or an action bar).
+local function CursorSpell()
+  if not GetCursorInfo then return end
+  local kind, _, _, spellID = GetCursorInfo()
+  if kind == "spell" and type(spellID) == "number" and spellID > 0 then return spellID end
+end
+
+-- Position under the cursor in a line (first free slot past the last icon).
+local function SlotUnderCursor(line, n)
+  local x = CursorIn(line.frame)
+  if not x then return n + 1 end
+  return max(1, min(n + 1, floor((x - ICON_X) / ICON_STEP) + 1))
+end
+
+local status -- the icon page's message line
+local function ShowStatus(ok, msg)
+  status:SetText(msg or "")
+  if ok then status:SetTextColor(.4, 1, .4) else status:SetTextColor(1, .45, .35) end
+end
+
+-- A spell dropped from the spellbook onto a row: added where it was dropped.
+local function DropSpell(line)
+  local spellID = CursorSpell()
+  if not spellID then return false end
+  selSide, selK = line.side, line.k
+  local ok, msg = ns:AddIcon(line.side, line.k, spellID, SlotUnderCursor(line, #ns.db.rows[line.side][line.k]))
+  if ok and ClearCursor then ClearCursor() end
+  ShowStatus(ok, msg)
+  panel:Refresh()
+  return true
+end
+
 -- Released over a line: the icon moves there. Anywhere else: it goes back.
 local function EndDrag()
   if not drag then return end
@@ -589,11 +626,14 @@ local function IconLine(parent, side, k, y)
   Text(line, function() return ns:RowName(side, k) end):SetPoint("LEFT", 8, 0)
   local count = Hint(line, "")
   count:SetPoint("RIGHT", -8, 0)
+  local entry = { side = side, k = k, frame = line }
   line:SetScript("OnClick", function()
     ClickSound()
+    if DropSpell(entry) then return end
     selSide, selK = side, k
     panel:Refresh()
   end)
+  line:SetScript("OnReceiveDrag", function() DropSpell(entry) end)
 
   local icons = {}
   for i = 1, ns.MAX_ICONS do
@@ -610,10 +650,12 @@ local function IconLine(parent, side, k, y)
     b.landing:SetPoint("TOPLEFT", -2, 2)
     b.landing:SetPoint("BOTTOMRIGHT", 2, -2)
     b.landing:SetColorTexture(GOLD_R, GOLD_G, GOLD_B, .35)
-    b:RegisterForClicks("RightButtonUp")
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     b:RegisterForDrag("LeftButton")
-    b:SetScript("OnClick", function(self)
+    b:SetScript("OnReceiveDrag", function() DropSpell(entry) end)
+    b:SetScript("OnClick", function(self, button)
       ClickSound()
+      if DropSpell(entry) or button ~= "RightButton" then return end
       selSide, selK = side, k
       ns:RemoveIcon(side, k, self.index)
       panel:Refresh()
@@ -643,7 +685,8 @@ local function IconLine(parent, side, k, y)
     count:SetText(#ns.db.rows[side][k] .. " / " .. ns.MAX_ICONS)
     SelectRow(line.bg, selSide == side and selK == k)
   end
-  lines[#lines + 1] = { side = side, k = k, frame = line, refresh = refresh }
+  entry.refresh = refresh
+  lines[#lines + 1] = entry
   return refresh
 end
 
@@ -683,7 +726,7 @@ local function Build()
 
   local refreshers = {}
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
-  local resetAll, status
+  local resetAll
 
   -- Class tabs, language flags --------------------------------------------------
   local tabs = {}
@@ -944,11 +987,17 @@ local function Build()
     ns:UpdateIcons()
   end)
   missing:SetPoint("TOPLEFT", LEFT, -162)
+  local reverse = Check(icons, Tr("REVERSE"), function(on)
+    ns.db.icons.reverse = on
+    ns:UpdateIcons()
+  end)
+  reverse:SetPoint("TOPLEFT", LEFT, -186)
   local bearFixed = Check(icons, Tr("BEAR_FIXED"), function(on) ns:SetBearIconsFixed(on) end)
-  bearFixed:SetPoint("TOPLEFT", LEFT, -186)
+  bearFixed:SetPoint("TOPLEFT", LEFT, -210)
   OnRefresh(function()
     bearFixed:SetShown(editing == "DRUID")
     bearFixed:Set(ns.db.bearIconsFixed)
+    reverse:Set(ns.db.icons.reverse)
     square:Set(ns.db.icons.square)
     iconSize:Set(ns.db.icons.size)
     timers:Set(ns.db.icons.timers)
@@ -960,7 +1009,7 @@ local function Build()
   local input = InputBox(icons, 180)
   input:SetMaxLetters(80)
   input.holder:SetPoint("TOPLEFT", RIGHT, -94)
-  status = Text(icons, "", "GameFontHighlightSmall")
+  status = Text(icons, "", "GameFontHighlightSmall") -- (upvalue shared with the drop handlers)
   status:SetPoint("TOPLEFT", RIGHT, -124)
   status:SetWidth(COL_W)
   OnRelabel(function() status:SetText("") end) -- a message in the old language would stay behind
@@ -968,8 +1017,7 @@ local function Build()
     local ok, msg = ns:AddIcon(selSide, selK, input:GetText())
     input:ClearFocus()
     if ok then input:SetText("") end
-    status:SetText(msg or "")
-    if ok then status:SetTextColor(.4, 1, .4) else status:SetTextColor(1, .45, .35) end
+    ShowStatus(ok, msg)
   end
   input:SetScript("OnEnterPressed", Add)
   input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)

@@ -14,7 +14,7 @@ Copier le dossier `ClaraComboPoints` dans le dossier `Interface\AddOns` de ton c
 
 ## Utilisation
 
-`/clara` ou `/cl` ouvre les options. La fenêtre utilise les modèles de fenêtres de Blizzard, comme le grimoire ou la fiche de personnage : cadre métal avec portrait et croix rouge, encarts sombres, boutons rouges, onglets, cases à cocher et curseurs du jeu.
+`/clara`, `/cl`, `/ccp` ou `/cp` ouvre les options. La fenêtre utilise les modèles de fenêtres de Blizzard, comme le grimoire ou la fiche de personnage : cadre métal avec portrait et croix rouge, encarts sombres, boutons rouges, onglets, cases à cocher et curseurs du jeu.
 
 En haut de la fenêtre, sur une seule ligne :
 - **Onglets Voleur / Druide / Guerrier** : chaque classe a son propre profil (position, échelle, couleurs, police, icônes…), commun à tous tes personnages de cette classe. La fenêtre s'ouvre sur l'onglet de ton personnage ; pendant qu'elle est ouverte, la barre affiche le profil de l'onglet choisi, pour régler une autre classe et voir le résultat.
