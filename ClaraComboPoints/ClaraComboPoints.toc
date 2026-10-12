@@ -9,5 +9,6 @@
 
 Locales.lua
 Core.lua
+SpellCatalog.lua
 Tracker.lua
 Options.lua
