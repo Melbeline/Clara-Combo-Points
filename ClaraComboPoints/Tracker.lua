@@ -38,6 +38,7 @@ local MISSING_ALPHA = .45
 local GCD = 1.5              -- a cooldown this short is only the global cooldown
 local ABBREV = 120           -- countdown: "2m" from two minutes up, "1:59" below
 local MASK_ATLAS = "UI-HUD-ActionBar-IconFrame-Mask" -- keeps the icon art inside the frame
+local MASK_SCALE = 64 / 45
 local CAST_WINDOW = 1.5      -- an aura that appears this soon after your cast of the same spell is that spell's
 -- where each icon looks for its aura (on = the entry's condition; auto for plain entries)
 local LOOKUPS = {
@@ -65,6 +66,12 @@ local dirty
 local function Plain(v)
   if not issecretvalue(v) and type(v) == "number" then return v end
 end
+
+-- Lower case, accented capitals included (string.lower leaves "É" or "Ü" as they are).
+local function Fold(s)
+  return (s:lower():gsub("\195([\128-\158])", function(c) return "\195" .. string.char(c:byte() + 32) end))
+end
+ns.Fold = function(_, s) return Fold(s) end
 
 function ns:SpellIcon(spell)
   if GetSpellTexture then
@@ -150,10 +157,11 @@ local function NewSlot(row)
   slot.icon = slot:CreateTexture(nil, "ARTWORK")
   slot.icon:SetAllPoints()
   -- the button's own mask: the art stays inside the frame's rounded corners
+  -- (drawn 64/45 of the icon's size, as the game's buttons do: its opaque part is 45/64 of it)
   if slot.CreateMaskTexture and slot.icon.AddMaskTexture then
     slot.mask = slot:CreateMaskTexture()
     slot.mask:SetAtlas(MASK_ATLAS)
-    slot.mask:SetAllPoints(slot.icon)
+    slot.mask:SetPoint("CENTER", slot.icon)
     slot.icon:AddMaskTexture(slot.mask)
   end
   -- swipe and countdown numbers, like an action button
@@ -269,16 +277,19 @@ function ns:LayoutIcons()
           slot:SetSize(w, size)
           slot:SetPoint("TOPLEFT", (i - 1) * (w + self.CP_GAP), 0)
           Crop(slot.icon, w, size)
+          if slot.mask then slot.mask:SetSize(w * MASK_SCALE, size * MASK_SCALE) end
           LayoutFrame(slot, w, size)
           local inset = min(w, size) * 3 / 45
           slot.cd:ClearAllPoints()
           slot.cd:SetPoint("TOPLEFT", inset, -inset)
           slot.cd:SetPoint("BOTTOMRIGHT", -inset, inset)
           SetSlotFonts(slot, w, size)
-          local spell = self:EntrySpell(spells[i])
-          if slot.spell ~= spell then slot.inst = nil end -- another spell in this place
-          slot.spell = spell
-          slot.on = self:EntryOn(spells[i])
+          local spell, on = self:EntrySpell(spells[i]), self:EntryOn(spells[i])
+          local exactFlag = type(spells[i]) == "table" and spells[i].exact or nil
+          if slot.spell ~= spell or slot.on ~= on or slot.exactFlag ~= exactFlag then
+            slot.inst = nil -- another spell, or another place or rank to watch
+          end
+          slot.spell, slot.on, slot.exactFlag = spell, on, exactFlag
           slot.exact = type(spells[i]) == "table" and spells[i].exact and type(spell) == "number" and self:RankIDs(spell) or nil
           slot.name = self:SpellName(spell)
           slot.byName = type(spell) == "string"
@@ -317,12 +328,12 @@ end
 -- by one, without minding upper / lower case.
 local function ScanAuras(unit, name, filter)
   if not GetAuraDataByIndex then return end
-  local wanted = name:lower()
+  local wanted = Fold(name)
   for i = 1, 255 do
     local ok, aura = pcall(GetAuraDataByIndex, unit, i, filter)
     if not ok or issecretvalue(aura) or type(aura) ~= "table" then return end
     local auraName = aura.name
-    if not issecretvalue(auraName) and type(auraName) == "string" and auraName:lower() == wanted then return aura end
+    if not issecretvalue(auraName) and type(auraName) == "string" and Fold(auraName) == wanted then return aura end
   end
 end
 
@@ -369,14 +380,19 @@ local function ListAuras(unit)
   return set
 end
 
-local lastTarget
+-- Target changes, counted (the target's GUID may be hidden from addons).
+local targetEpoch, seenEpoch = 0, 0
+function ns:TargetChanged()
+  targetEpoch = targetEpoch + 1
+  self:MarkIconsDirty()
+end
+
 local function RefreshInstances()
   local now = GetTime()
-  local guid = TargetGUID()
-  if guid ~= lastTarget then
-    wipe(fresh.target) -- another target: its auras are not new
-    present.target = {}
-    lastTarget = guid
+  if targetEpoch ~= seenEpoch then
+    seenEpoch = targetEpoch
+    wipe(fresh.target)
+    present.target = ListAuras("target") -- another target: the auras it has are not new
   end
   for unit, old in pairs(present) do
     local set = ListAuras(unit)
@@ -394,7 +410,7 @@ end
 function ns:NoteCast(spellID)
   local name = Plain(spellID) and self:SpellName(spellID)
   if name then
-    casts[name:lower()] = { GetTime(), spellID }
+    casts[Fold(name)] = { GetTime(), spellID, targetEpoch }
     self:MarkIconsDirty()
   end
 end
@@ -403,15 +419,23 @@ local function Remember(slot, unit, aura)
   local id = Plain(aura.auraInstanceID)
   if not id then return end
   local icon = aura.icon
-  slot.inst = { unit = unit, id = id, guid = unit == "target" and TargetGUID() or nil,
+  slot.inst = { unit = unit, id = id, guid = unit == "target" and TargetGUID() or nil, epoch = targetEpoch,
     icon = (not issecretvalue(icon) and icon) or slot.spellIcon }
 end
 
--- The aura this icon follows, if it is still there.
+-- The aura this icon follows, if it is still there. One on a target counts while that target
+-- stays targeted, or again when it is targeted back (if its GUID can be read).
 local function Followed(slot)
   local inst = slot.inst
   if not inst then return end
-  if inst.unit == "target" and (inst.guid == nil or inst.guid ~= TargetGUID() or not TargetFits(slot.on)) then return end
+  if inst.unit == "target" then
+    if not TargetFits(slot.on) then return end
+    if inst.epoch ~= targetEpoch then
+      local guid = TargetGUID()
+      if not (guid and inst.guid == guid) then return end
+      inst.epoch = targetEpoch
+    end
+  end
   if present[inst.unit][inst.id] then return inst end
   slot.inst = nil -- gone
 end
@@ -430,19 +454,19 @@ end
 
 -- An aura that appeared just after your cast of this icon's spell, where the icon looks.
 local function JustCast(slot)
-  local last = slot.name and casts[slot.name:lower()]
+  local last = slot.name and casts[Fold(slot.name)]
   if not last or GetTime() - last[1] > CAST_WINDOW or (slot.exact and not slot.exact[last[2]]) then return end
   local cast = last[1]
   for _, lookup in ipairs(CastLookups(slot)) do
     local unit = lookup[1]
-    if unit ~= "target" or TargetFits(slot.on) then
+    if unit ~= "target" or (TargetFits(slot.on) and last[3] == targetEpoch) then -- still the target cast on
       local newest, when
       for id, t in pairs(fresh[unit]) do
         if present[unit][id] == lookup[2] and t >= cast - .2 and (not when or t > when) then newest, when = id, t end
       end
       if newest then
         fresh[unit][newest] = nil
-        slot.inst = { unit = unit, id = newest, guid = unit == "target" and TargetGUID() or nil, icon = slot.spellIcon }
+        slot.inst = { unit = unit, id = newest, guid = unit == "target" and TargetGUID() or nil, epoch = targetEpoch, icon = slot.spellIcon }
         return slot.inst
       end
     end
@@ -483,12 +507,28 @@ local function Charges(slot)
   end
 end
 
-local function SetSlot(slot, look)
+-- The aura an icon shows: found by name, else followed or just cast. Runs while the bar is
+-- hidden too (a druid out of Cat and Bear Form), so the buffs cast meanwhile are followed.
+local function Track(slot)
+  if not slot.name then return end
+  local aura, unit, otherRank = FindAura(slot)
+  if aura then
+    Remember(slot, unit, aura)
+    return aura, unit
+  end
+  if otherRank then
+    slot.inst = nil -- seen, in another rank: not this one
+    return
+  end
+  return nil, nil, Followed(slot) or JustCast(slot)
+end
+
+local function SetSlot(slot, look, aura, unit, inst)
   slot.cd:Clear()
   slot.cd:SetReverse(false)
   if slot.cd.SetHideCountdownNumbers then slot.cd:SetHideCountdownNumbers(not look.timers) end
   slot.count:SetText("")
-  local aura, unit, running
+  local running
   if ns.preview then
     -- a sample: lit, with a cooldown under way
     slot.icon:SetTexture(slot.spellIcon)
@@ -497,15 +537,6 @@ local function SetSlot(slot, look)
     slot:Show()
     slot.cd:SetCooldown(GetTime() - 15, 45)
     return
-  end
-  local inst, otherRank
-  if slot.name then aura, unit, otherRank = FindAura(slot) end
-  if aura then
-    Remember(slot, unit, aura)
-  elseif otherRank then
-    slot.inst = nil -- seen, in another rank: not this one
-  else
-    inst = Followed(slot) or JustCast(slot)
   end
   if aura then
     local icon = aura.icon
@@ -569,22 +600,32 @@ end
 
 function ns:UpdateIcons()
   dirty = false
-  if not self.db or not self.hud:IsShown() then
-    dirty = true -- catch up when shown
-    return
-  end
+  if not self.db then return end
   RefreshInstances()
-  local look = self.db.icons
+  local shown, look = self.hud:IsShown(), self.db.icons
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
-      for i = 1, #(row.spells or {}) do SetSlot(row.slots[i], look) end
+      for i = 1, #(row.spells or {}) do
+        local slot = row.slots[i]
+        local aura, unit, inst = Track(slot)
+        if shown then SetSlot(slot, look, aura, unit, inst) end -- (drawn when the bar shows again)
+      end
     end
   end
 end
 
+-- While the bar is hidden its OnUpdate does not run: this frame catches up instead.
+local catchUp = CreateFrame("Frame")
+catchUp:Hide()
+catchUp:SetScript("OnUpdate", function(self)
+  self:Hide()
+  ns:UpdateIconsIfDirty()
+end)
+
 -- Aura and cooldown events can come in bursts: the icons are refreshed once, on the next frame.
 function ns:MarkIconsDirty()
   dirty = true
+  if self.hud and not self.hud:IsShown() then catchUp:Show() end
 end
 
 function ns:UpdateIconsIfDirty()
@@ -637,7 +678,7 @@ local function Same(a, b)
   if sa == sb then return Exact(a) == Exact(b) end
   if Exact(a) or Exact(b) then return false end
   local na, nb = ns:SpellName(sa), ns:SpellName(sb)
-  return na ~= nil and nb ~= nil and na:lower() == nb:lower()
+  return na ~= nil and nb ~= nil and Fold(na) == Fold(nb)
 end
 
 local function Duplicate(spells, entry, except)
@@ -726,7 +767,7 @@ local function CatalogIndex()
           if alt then catalogIndex[alt] = rec end
         end
       end
-      if rec.name and not catalogIndex[rec.name:lower()] then catalogIndex[rec.name:lower()] = rec end
+      if rec.name and not catalogIndex[Fold(rec.name)] then catalogIndex[Fold(rec.name)] = rec end
     end
   end
   return catalogIndex
@@ -748,7 +789,7 @@ end
 -- The class spell list entry of a spell (ID or name), if any.
 function ns:CatalogRecord(spell)
   local index = CatalogIndex()
-  if type(spell) == "string" then return index[spell:lower()] end
+  if type(spell) == "string" then return index[Fold(spell)] end
   return index[spell]
 end
 

@@ -964,7 +964,7 @@ ns.UPDATE_SHAPESHIFT_FORM = ns.UNIT_DISPLAYPOWER
 
 function ns:PLAYER_TARGET_CHANGED()
   UpdateCombo()
-  self:MarkIconsDirty()
+  self:TargetChanged() -- Tracker.lua: the icons look again
 end
 
 function ns:UNIT_POWER_FREQUENT(_, token)
@@ -1033,6 +1033,7 @@ end
 function ns:PLAYER_REGEN_ENABLED()
   inCombat = false
   self:ApplyFade()
+  self:MarkIconsDirty() -- the auras can be read again
 end
 
 function ns:UI_SCALE_CHANGED()
@@ -1042,6 +1043,7 @@ ns.DISPLAY_SIZE_CHANGED = ns.UI_SCALE_CHANGED
 
 function ns:MarkIconsDirty() end -- Tracker.lua
 function ns:NoteCast() end
+function ns:TargetChanged() end
 
 ---------------------------------------------------------------------------
 -- Portrait right-click menu: "Reload UI" in Other Options, just above Edit Mode

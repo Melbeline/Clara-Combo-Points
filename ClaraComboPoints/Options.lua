@@ -827,6 +827,23 @@ local KIND_ON = { BUFF = "self", DEBUFF = "enemy", SELFDEBUFF = "self" } -- wher
 local PICK_ON = { "self", "target", "enemy", "friend" }
 local PLUS, MINUS = "Interface\\Buttons\\UI-PlusButton-Up", "Interface\\Buttons\\UI-MinusButton-Up"
 
+-- Alphabetical order for names in any language: accented letters sorted with their plain
+-- letter (É with E), case aside.
+local ACCENTS = {}
+for plain, letters in pairs({ a = "àáâãäåÀÁÂÃÄÅ", c = "çÇ", e = "èéêëÈÉÊË", i = "ìíîïÌÍÎÏ", n = "ñÑ", o = "òóôõöøÒÓÔÕÖØ",
+  u = "ùúûüÙÚÛÜ", y = "ýÿÝ", ss = "ß" }) do
+  for ch in letters:gmatch("[\192-\223][\128-\191]") do ACCENTS[ch] = plain end
+end
+local sortKeys = {}
+local function SortKey(name)
+  local key = sortKeys[name]
+  if not key then
+    key = name:gsub("[\192-\223][\128-\191]", ACCENTS):lower()
+    sortKeys[name] = key
+  end
+  return key
+end
+
 -- A small dropdown: the value, and the game's menu of choices on click (without menus, each
 -- click shows the next choice). options(): { { value, text }, ... }
 local function Choice(parent, w, options, get, set)
@@ -912,7 +929,7 @@ local function Catalog(p)
   scroll:SetScrollChild(child)
 
   -- column titles, over the list
-  local RANK_X, ON_X = 166, 252
+  local RANK_X, ON_X = 150, 256
   Text(f, Tr("CATALOG_SPELL")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + 32, 14)
   Text(f, Tr("CATALOG_RANK")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + RANK_X, 14)
   Text(f, Tr("CATALOG_ON")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + ON_X, 14)
@@ -940,9 +957,10 @@ local function Catalog(p)
     icon:SetTexture(ns:EntryIcon(rec.ranks[#rec.ranks][2]))
     local name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     name:SetPoint("LEFT", 32, 0)
-    name:SetWidth(RANK_X - 32 - 6)
+    name:SetWidth((#rec.ranks > 1 and RANK_X or ON_X) - 32 - 6) -- one rank: the rank column is free
     name:SetJustifyH("LEFT")
-    name:SetWordWrap(false)
+    name:SetWordWrap(true)
+    if name.SetMaxLines then name:SetMaxLines(2) end
     name:SetText(rec.name)
     picks[rec] = { rank = 0, on = KIND_ON[rec.kind] or "self" }
     if #rec.ranks > 1 then
@@ -995,7 +1013,7 @@ local function Catalog(p)
         end
       end
     end
-    table.sort(recs, function(a, b) return a.name < b.name end)
+    table.sort(recs, function(a, b) return SortKey(a.name) < SortKey(b.name) end)
     if #recs > 0 then
       local color = CLASS_COLORS[class.class] or { GOLD_R, GOLD_G, GOLD_B }
       local head = CreateFrame("Button", nil, child)
@@ -1055,21 +1073,28 @@ local function Catalog(p)
   -- the window left if the panel would go past the screen's edge.
   function f:Sync(onPage)
     local want = onPage and not self.closed
+    if want and self.unfolded ~= editing then
+      expanded[editing] = true
+      self.unfolded = editing
+      if self:IsShown() then Layout() end
+    end
     if want and not self:IsShown() then
-      if not self.unfolded then
-        expanded[editing] = true
-        self.unfolded = true
-      end
+      -- (positions in the window's own units: it may be scaled down on narrow screens)
       local right, screen = p:GetRight(), UIParent:GetRight()
-      if right and screen and right + SIDE_W > screen then
-        local left, top = p:GetLeft(), p:GetTop()
-        p:ClearAllPoints()
-        p:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", max(0, left - (right + SIDE_W - screen)), top)
+      if right and screen then
+        screen = screen / p:GetScale()
+        if right + SIDE_W > screen then
+          local left, top = p:GetLeft(), p:GetTop()
+          p:ClearAllPoints()
+          p:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", max(0, left - (right + SIDE_W - screen)), top)
+        end
       end
+      if p.SetClampRectInsets then p:SetClampRectInsets(0, SIDE_W, 0, 0) end -- dragged, it stays on screen
       self:Show()
       Layout()
-    elseif not want then
+    elseif not want and self:IsShown() then
       self:Hide()
+      if p.SetClampRectInsets then p:SetClampRectInsets(0, 0, 0, 0) end
     end
   end
   f.groups = groups
@@ -1348,43 +1373,43 @@ local function Build()
   -- Page 3: icon look, adding spells, the rows ------------------------------------
   local icons = pages[3]
   local lookBox = Section(icons, "ICON_LOOK", LEFT, -56)
-  Text(icons, Tr("SHAPE")):SetPoint("TOPLEFT", LEFT, -88)
+  Text(icons, Tr("SHAPE")):SetPoint("TOPLEFT", LEFT, -80)
   local shapeButtons = {}
   for i, shape in ipairs(SHAPES) do
-    local b = Button(icons, Tr("SHAPE_" .. shape), 80, 22, function()
+    local b = Button(icons, Tr("SHAPE_" .. shape), 104, 22, function()
       ns.db.icons.shape = shape
       ns:LayoutIcons()
       p:Refresh()
     end)
-    b:SetPoint("TOPLEFT", LEFT + 74 + (i - 1) * 82, -82)
+    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 108, -94)
     b.shape = shape
     shapeButtons[i] = b
   end
-  Text(icons, Tr("ICON_SIZE")):SetPoint("TOPLEFT", LEFT, -116)
+  Text(icons, Tr("ICON_SIZE")):SetPoint("TOPLEFT", LEFT, -130)
   local iconSize = Slider(icons, 160, 12, 64, 1, "", function(v)
     ns.db.icons.size = v
     ns:LayoutIcons()
   end)
-  iconSize:SetPoint("LEFT", icons, "TOPLEFT", LEFT + 74, -122)
+  iconSize:SetPoint("LEFT", icons, "TOPLEFT", LEFT + 74, -136)
   local cellSize = Hint(icons, "") -- combo point shape: the size of a combo point, whatever the slider
-  cellSize:SetPoint("TOPLEFT", LEFT + 74, -117)
+  cellSize:SetPoint("TOPLEFT", LEFT + 74, -131)
   local timers = Check(icons, Tr("SHOW_TIMERS"), function(on)
     ns.db.icons.timers = on
     ns:UpdateIcons()
   end)
-  timers:SetPoint("TOPLEFT", LEFT, -148)
+  timers:SetPoint("TOPLEFT", LEFT, -160)
   local missing = Check(icons, Tr("SHOW_MISSING"), function(on)
     ns.db.icons.missing = on
     ns:UpdateIcons()
   end)
-  missing:SetPoint("TOPLEFT", LEFT, -172)
+  missing:SetPoint("TOPLEFT", LEFT, -184)
   local reverse = Check(icons, Tr("REVERSE"), function(on)
     ns.db.icons.reverse = on
     ns:UpdateIcons()
   end)
-  reverse:SetPoint("TOPLEFT", LEFT, -196)
+  reverse:SetPoint("TOPLEFT", LEFT, -208)
   local bearFixed = Check(icons, Tr("BEAR_FIXED"), function(on) ns:SetBearIconsFixed(on) end)
-  bearFixed:SetPoint("TOPLEFT", LEFT, -220)
+  bearFixed:SetPoint("TOPLEFT", LEFT, -232)
   OnRefresh(function()
     local shape = ns.db.icons.shape
     for _, b in ipairs(shapeButtons) do b:SetActive(b.shape == shape) end
@@ -1394,7 +1419,7 @@ local function Build()
     cellSize:SetShown(cell)
     cellSize:SetText(L.CELL_SIZE:format(floor((ns.WIDTH - 4 * ns.CP_GAP) / 5 + .5), ns.CP_HEIGHT))
     bearFixed:SetShown(editing == "DRUID")
-    lookBox:Fit(editing == "DRUID" and -232 or -208)
+    lookBox:Fit(editing == "DRUID" and -244 or -220)
     bearFixed:Set(ns.db.bearIconsFixed)
     reverse:Set(ns.db.icons.reverse)
     iconSize:Set(ns.db.icons.size)
@@ -1427,15 +1452,15 @@ local function Build()
   defaultBtn:SetPoint("TOPLEFT", RIGHT + 160, -152)
   OnRefresh(function() addBtn:SetLabel(L.ADD .. " > " .. ns:RowName(selSide, selK)) end)
 
-  Section(icons, "ROWS", LEFT, -270, FULL_W, -536)
+  Section(icons, "ROWS", LEFT, -280, FULL_W, -546)
   local catalogBtn = Button(icons, Tr("CATALOG_OPEN"), 150, 22, function()
     catalog.closed = catalog:IsShown()
     p:Refresh()
   end)
-  catalogBtn:SetPoint("TOPRIGHT", icons, "TOPLEFT", LEFT + FULL_W, -265)
-  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -290)
+  catalogBtn:SetPoint("TOPRIGHT", icons, "TOPLEFT", LEFT + FULL_W, -275)
+  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -300)
   for i, def in ipairs(ROW_LINES) do
-    local y = -306 - (i - 1) * 30
+    local y = -316 - (i - 1) * 30
     if def then
       OnRefresh(IconLine(icons, def[1], def[2], y))
     else -- the bar, between the rows above and below it
@@ -1448,7 +1473,7 @@ local function Build()
       rule:SetPoint("RIGHT", icons, "TOPLEFT", LEFT + FULL_W, y - 14)
     end
   end
-  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -522)
+  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -532)
   ghost = DragGhost(p)
   catalog = Catalog(p)
   OnRefresh(function()
@@ -1473,6 +1498,8 @@ local function Build()
   -- Opening the options shows this character's tab, with everything lit so colour changes
   -- are visible straight away.
   p:SetScript("OnShow", function(self)
+    local width = UIParent:GetWidth()
+    if width and width > 0 then self:SetScale(min(1, width / (PANEL_W + SIDE_W))) end
     editing = ns.homeClass or "ROGUE"
     resetAll.armed = nil
     status:SetText("")
