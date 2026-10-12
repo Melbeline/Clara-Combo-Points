@@ -1,6 +1,7 @@
 -- Clara Combo Points
--- Rogue and druid (Cat Form) HUD for WoW Forever: combo points on the top row, energy on
--- the bottom bar.
+-- Rogue, druid and warrior HUD for WoW Forever: combo points on the top row (tracked buffs and
+-- debuffs for warriors), energy or rage on the bottom bar, and up to three rows of icons above
+-- and below.
 --
 -- Combo points are never predicted from a spell table: the game is asked directly
 -- (GetComboPoints on the current target), so crits, talents and procs are always right
@@ -13,11 +14,13 @@ local ADDON, ns = ...
 _G.ClaraComboPoints = ns
 local L = ns.L
 
-ns.VERSION = "1.3.1"
+ns.VERSION = "1.4.0"
 
 local NUM_POINTS    = 5
-local POWER_ENERGY  = Enum and Enum.PowerType and Enum.PowerType.Energy or 3
-local POWER_COMBO   = Enum and Enum.PowerType and Enum.PowerType.ComboPoints or 4
+local POWER         = Enum and Enum.PowerType or {}
+local POWER_RAGE    = POWER.Rage or 1
+local POWER_ENERGY  = POWER.Energy or 3
+local POWER_COMBO   = POWER.ComboPoints or 4
 local WHITE         = "Interface\\Buttons\\WHITE8X8"
 local FONT_DIR      = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Fonts\\"
 local issecretvalue = issecretvalue or function() return false end
@@ -27,11 +30,14 @@ local UnitIsFeignDeath = UnitIsFeignDeath or function() return false end
 -- HUD was designed on (1359 px tall render area). The HUD keeps that size relative to the
 -- window height whatever the in-game UI scale is; the Scale option multiplies it.
 local REF_SCALE = 768 / 1359
-local WIDTH, CP_HEIGHT, CP_GAP, ROW_GAP, ENERGY_HEIGHT = 292, 25, 3, 4, 24
-local COMBO_REFRESH = 0.1 -- safety refresh of the combo points (events do the real work)
+local WIDTH, CP_HEIGHT, CP_GAP, ROW_GAP, POWER_HEIGHT = 292, 25, 3, 4, 24
+local REFRESH = 0.1 -- safety refresh of the combo points and queued attacks (events do the real work)
+ns.WIDTH, ns.CP_GAP, ns.ROW_GAP = WIDTH, CP_GAP, ROW_GAP
 
 ns.MIN_SCALE, ns.MAX_SCALE = 10, 500 -- percent
+ns.MAX_ICONS, ns.MAX_ROWS = 20, 3     -- icons per row, rows above and below the bar
 
+-- preview: size of the name in the options' font list, for fonts drawn much bigger than the rest
 ns.fonts = {
   { name = "Arial Narrow",      path = "Fonts\\ARIALN.TTF" },
   { name = "Friz Quadrata",     path = "Fonts\\FRIZQT__.TTF" },
@@ -45,19 +51,19 @@ ns.fonts = {
   { name = "Creepster",         path = FONT_DIR .. "Creepster-Regular.ttf" },
   { name = "Pirata One",        path = FONT_DIR .. "PirataOne-Regular.ttf" },
   { name = "MedievalSharp",     path = FONT_DIR .. "MedievalSharp.ttf" },
-  { name = "Cinzel Decorative", path = FONT_DIR .. "CinzelDecorative-Bold.ttf" },
+  { name = "Cinzel Decorative", path = FONT_DIR .. "CinzelDecorative-Bold.ttf", preview = 9 },
   { name = "Bebas Neue",        path = FONT_DIR .. "BebasNeue-Regular.ttf" },
   { name = "Russo One",         path = FONT_DIR .. "RussoOne-Regular.ttf" },
   { name = "Black Ops One",     path = FONT_DIR .. "BlackOpsOne-Regular.ttf" },
   { name = "Audiowide",         path = FONT_DIR .. "Audiowide-Regular.ttf" },
   { name = "Righteous",         path = FONT_DIR .. "Righteous-Regular.ttf" },
-  { name = "Press Start 2P",    path = FONT_DIR .. "PressStart2P-Regular.ttf" },
+  { name = "Press Start 2P",    path = FONT_DIR .. "PressStart2P-Regular.ttf", preview = 9 },
   { name = "Share Tech Mono",   path = FONT_DIR .. "ShareTechMono-Regular.ttf" },
 }
 
--- Settings of one profile. Rogues and druids each have their own profile (account-wide);
--- colours sampled from the reference screenshot.
-ns.PROFILES = { "ROGUE", "DRUID" }
+-- Settings of one profile. Rogues, druids and warriors each have their own profile
+-- (account-wide); colours sampled from the reference screenshots.
+ns.PROFILES = { "ROGUE", "DRUID", "WARRIOR" }
 local defaults = {
   locked   = true,
   x        = 0,      -- centre of the HUD, reference pixels from the screen centre
@@ -68,8 +74,18 @@ local defaults = {
   fontSize = 17,
   outline  = "OUTLINE",
   showText = true,
-  druidCatOnly = true, -- druids: HUD only in Cat Form
+  druidCatOnly = true, -- druids: HUD only in Cat and Bear Form
   cpSource = "TARGET", -- TARGET: GetComboPoints(player, target) / PLAYER: UnitPower(player, combo)
+  fadeOOC  = true,     -- out of combat the HUD fades to the two opacities below
+  oocPower = .2,       -- energy / rage bar
+  oocTop   = .2,       -- combo points and icons
+  predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
+  icons = {
+    square  = false,   -- keep the icons square instead of shaping them like the combo point cells
+    size    = 25,      -- row height (and icon width when square), reference pixels
+    timers  = true,    -- time left on the active auras
+    missing = true,    -- missing auras stay in place, grayed out
+  },
   colors = {
     cp1    = { r = 1, g = 1,    b = 0,    a = 1 },
     cp2    = { r = 1, g = .808, b = 0,    a = 1 },
@@ -77,11 +93,32 @@ local defaults = {
     cp4    = { r = 1, g = .427, b = 0,    a = 1 },
     cp5    = { r = 1, g = 0,    b = .455, a = 1 },
     energy = { r = 1, g = 1,    b = 0,    a = 1 },
+    rage   = { r = .663, g = 0, b = 0,    a = 1 },
+    cost   = { r = 1, g = 1,    b = 1,    a = .45 },
     bg     = { r = 0, g = 0,    b = 0,    a = .6 },
     text   = { r = 1, g = 1,    b = 1,    a = 1 },
   },
 }
 ns.defaults = defaults
+
+-- Warriors have no combo row: their bar sits where the rogue's energy bar is.
+local CLASS_DEFAULTS = {
+  WARRIOR = { y = -218 },
+}
+
+-- Icon rows hold spell IDs (any rank: auras are matched by name) or spell names. Warriors
+-- start with one row where the combo points would be.
+local DEFAULT_ICONS = {
+  WARRIOR = { 7386, 1160, 1715, 6673, 2687 }, -- Sunder Armor, Demoralizing Shout, Hamstring, Battle Shout, Bloodrage
+}
+ns.SIDES = { "above", "below" }
+
+function ns:DefaultRows(class)
+  local rows = { above = {}, below = {} }
+  for k = 1, self.MAX_ROWS do rows.above[k], rows.below[k] = {}, {} end
+  for i, spell in ipairs(DEFAULT_ICONS[class] or {}) do rows.above[1][i] = spell end
+  return rows
+end
 
 local function CopyDefaults(src, dst)
   for k, v in pairs(src) do
@@ -101,10 +138,10 @@ end
 ns.Print = Print
 
 ---------------------------------------------------------------------------
--- HUD
+-- HUD: combo row on top (not for warriors), power bar at the bottom
 ---------------------------------------------------------------------------
 local hud = CreateFrame("Frame", "ClaraComboPointsHUD", UIParent)
-hud:SetSize(WIDTH, CP_HEIGHT + ROW_GAP + ENERGY_HEIGHT)
+hud:SetSize(WIDTH, CP_HEIGHT + ROW_GAP + POWER_HEIGHT)
 hud:SetClampedToScreen(true)
 hud:SetMovable(true)
 hud:EnableMouse(false)
@@ -113,8 +150,8 @@ if hud.SetDontSavePosition then hud:SetDontSavePosition(true) end
 hud:Hide()
 ns.hud = hud
 
-local function CreateBar(minValue, maxValue)
-  local bar = CreateFrame("StatusBar", nil, hud)
+local function CreateBar(parent, minValue, maxValue)
+  local bar = CreateFrame("StatusBar", nil, parent)
   bar:SetStatusBarTexture(WHITE)
   bar:SetMinMaxValues(minValue, maxValue)
   bar:SetValue(0)
@@ -123,25 +160,54 @@ local function CreateBar(minValue, maxValue)
   return bar
 end
 
+local comboRow = CreateFrame("Frame", nil, hud)
+comboRow:SetPoint("TOPLEFT")
+comboRow:SetPoint("TOPRIGHT")
+comboRow:SetHeight(CP_HEIGHT)
+ns.comboRow = comboRow
+
 -- One status bar per combo point, spanning [i-1, i]: feeding every bar the same combo
 -- count fills the first N of them, without ever having to read the number.
 local cells = {}
 local cellWidth = (WIDTH - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS
 for i = 1, NUM_POINTS do
-  local bar = CreateBar(i - 1, i)
+  local bar = CreateBar(comboRow, i - 1, i)
   bar:SetPoint("TOPLEFT", (i - 1) * (cellWidth + CP_GAP), 0)
   bar:SetSize(cellWidth, CP_HEIGHT)
   cells[i] = bar
 end
 
-local energy = CreateBar(0, 100)
-energy:SetPoint("BOTTOMLEFT")
-energy:SetPoint("BOTTOMRIGHT")
-energy:SetHeight(ENERGY_HEIGHT)
+local power = CreateBar(hud, 0, 100)
+power:SetPoint("BOTTOMLEFT")
+power:SetPoint("BOTTOMRIGHT")
+power:SetHeight(POWER_HEIGHT)
+ns.powerBar = power
 
-local energyText = energy:CreateFontString(nil, "OVERLAY")
-energyText:SetPoint("CENTER")
-energyText:SetFont(ns.fonts[1].path, defaults.fontSize, defaults.outline)
+-- Rage about to be spent, drawn over the end of the bar going back from the current value.
+-- It hangs off the bar's fill, so the (possibly secret) rage is never read, and the clip frame
+-- cuts whatever would go past the start of the bar.
+local costClip = CreateFrame("Frame", nil, power)
+costClip:SetAllPoints()
+costClip:SetClipsChildren(true)
+costClip:Hide()
+local costHolder = CreateFrame("Frame", nil, costClip)
+costHolder:SetAllPoints()
+local costTex = costHolder:CreateTexture(nil, "ARTWORK")
+costTex:SetPoint("TOPRIGHT", power:GetStatusBarTexture(), "TOPRIGHT")
+costTex:SetPoint("BOTTOMRIGHT", power:GetStatusBarTexture(), "BOTTOMRIGHT")
+costTex:SetWidth(1)
+
+local textHolder = CreateFrame("Frame", nil, power) -- above the cost marker
+textHolder:SetAllPoints()
+textHolder:SetFrameLevel(power:GetFrameLevel() + 3)
+local powerText = textHolder:CreateFontString(nil, "OVERLAY")
+powerText:SetPoint("CENTER")
+powerText:SetFont(ns.fonts[1].path, defaults.fontSize, defaults.outline)
+
+-- Icon rows live here (Tracker.lua), so they fade together with the combo row.
+local iconLayer = CreateFrame("Frame", nil, hud)
+iconLayer:SetAllPoints()
+ns.iconLayer = iconLayer
 
 -- Shown while unlocked
 local mover = CreateFrame("Frame", nil, hud)
@@ -177,7 +243,7 @@ end
 
 local lastCombo
 local function UpdateCombo()
-  if not hud:IsShown() then return end -- re-read on show
+  if not hud:IsShown() or not comboRow:IsShown() then return end -- re-read on show
   local v = ns.preview and NUM_POINTS or ReadComboPoints()
   if issecretvalue(v) then
     lastCombo = nil
@@ -189,65 +255,199 @@ local function UpdateCombo()
   for i = 1, NUM_POINTS do cells[i]:SetValue(v) end
 end
 
-local lastEnergy
-local function UpdateEnergy()
+local powerType = POWER_ENERGY -- what the bar shows: energy, or rage for warriors and bears
+local maxPower, lastPower
+local function UpdatePower()
   if not hud:IsShown() then return end
-  local v = UnitPower("player", POWER_ENERGY)
+  local v = UnitPower("player", powerType)
   if issecretvalue(v) then
-    lastEnergy = nil
-  elseif v == lastEnergy then
+    lastPower = nil
+  elseif v == lastPower then
     return
   else
-    lastEnergy = v
+    lastPower = v
   end
-  energy:SetValue(v)
-  energyText:SetText(v)
+  power:SetValue(v)
+  powerText:SetText(v)
 end
 
-local function UpdateEnergyMax()
+local function UpdatePowerMax()
   if not hud:IsShown() then return end
-  local m = UnitPowerMax("player", POWER_ENERGY)
+  local m = UnitPowerMax("player", powerType)
   if issecretvalue(m) or (type(m) == "number" and m > 0) then
-    energy:SetMinMaxValues(0, m)
+    power:SetMinMaxValues(0, m)
+    maxPower = m
   end
-  lastEnergy = nil
+  lastPower = nil
+end
+
+---------------------------------------------------------------------------
+-- Rage about to be spent: an attack waiting for the next swing (Heroic Strike, Cleave, Maul),
+-- a cast in progress (Slam) and Frenzied Regeneration (up to 10 rage a second). Instant
+-- attacks spend their rage at once, so there is nothing to show for them.
+---------------------------------------------------------------------------
+local NEXT_SWING = {
+  78, 284, 285, 1608, 11564, 11565, 11566, 11567, 25286, -- Heroic Strike
+  845, 7369, 11608, 11609, 20569,                        -- Cleave
+  6807, 6808, 6809, 8972, 9745, 9880, 9881,              -- Maul
+}
+local FRENZIED_REGENERATION = 22842
+local REGEN_PER_SECOND = 10
+ns.PREDICTED_SPELLS = { WARRIOR = { 78, 845, 1464 }, DRUID = { 6807, FRENZIED_REGENERATION } }
+
+local IsCurrentSpell = (C_Spell and C_Spell.IsCurrentSpell) or IsCurrentSpell
+local GetSpellPowerCost = (C_Spell and C_Spell.GetSpellPowerCost) or GetSpellPowerCost
+local GetSpellName = (C_Spell and C_Spell.GetSpellName) or function(spell) return (GetSpellInfo(spell)) end
+local GetAuraDataBySpellName = C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName
+
+-- Localized name of a spell ID, or nil if this client does not know it.
+function ns:SpellName(spell)
+  if type(spell) ~= "number" then return spell end
+  local ok, name = pcall(GetSpellName, spell)
+  if ok and type(name) == "string" and not issecretvalue(name) and name ~= "" then return name end
+end
+
+-- Aura data by spell name (every rank), or nil if absent or hidden from addons.
+function ns:FindAura(unit, name, filter)
+  if not GetAuraDataBySpellName or not name then return end
+  local ok, aura = pcall(GetAuraDataBySpellName, unit, name, filter)
+  if ok and not issecretvalue(aura) and type(aura) == "table" then return aura end
+end
+
+local function Plain(v) -- a readable number, or nil
+  if not issecretvalue(v) and type(v) == "number" then return v end
+end
+
+local function RageCost(spell)
+  if not GetSpellPowerCost then return 0 end
+  local ok, costs = pcall(GetSpellPowerCost, spell)
+  if not ok or issecretvalue(costs) or type(costs) ~= "table" then return 0 end
+  for _, info in ipairs(costs) do
+    if type(info) == "table" and Plain(info.type) == POWER_RAGE then return Plain(info.cost) or 0 end
+  end
+  return 0
+end
+
+local swingSpells = {} -- names first (whatever rank is known), then every rank by ID
+local regenName
+function ns:ResolveSpells()
+  wipe(swingSpells)
+  for _, id in ipairs({ 78, 845, 6807 }) do
+    local name = self:SpellName(id)
+    if name then swingSpells[#swingSpells + 1] = name end
+  end
+  for _, id in ipairs(NEXT_SWING) do swingSpells[#swingSpells + 1] = id end
+  regenName = self.isDruid and self:SpellName(FRENZIED_REGENERATION) or nil
+end
+
+local predicting                   -- rage on the bar and prediction wanted
+local queuedCost, castCost = 0, 0  -- next-swing attack, cast in progress
+local regenEnds, regenDirty        -- Frenzied Regeneration expiration time, aura changed
+local costShown                    -- rage currently marked
+
+local function UpdateQueued()
+  queuedCost = 0
+  if not predicting or not IsCurrentSpell then return end
+  for _, spell in ipairs(swingSpells) do
+    local ok, current = pcall(IsCurrentSpell, spell)
+    if ok and current == true then
+      queuedCost = RageCost(spell)
+      return
+    end
+  end
+end
+
+local function UpdateCast()
+  castCost = 0
+  if not predicting or not UnitCastingInfo then return end
+  local ok, name, _, _, _, _, _, _, _, spellID = pcall(UnitCastingInfo, "player")
+  if ok and not issecretvalue(name) and name and Plain(spellID) then castCost = RageCost(spellID) end
+end
+
+local function UpdateRegen()
+  regenEnds, regenDirty = nil, false
+  if not predicting or not regenName then return end
+  local aura = ns:FindAura("player", regenName, "HELPFUL")
+  local ends = aura and Plain(aura.expirationTime)
+  if ends and ends > 0 then regenEnds = ends end
+end
+
+local function UpdateCost()
+  local rage = 0
+  if predicting then
+    rage = queuedCost + castCost
+    if regenEnds then
+      local left = regenEnds - GetTime()
+      if left > 0 then rage = rage + REGEN_PER_SECOND * math.ceil(left) else regenEnds = nil end
+    end
+    if ns.preview and rage == 0 then rage = 15 end -- a sample, to see the color
+  end
+  if rage == costShown then return end
+  costShown = rage
+  if rage > 0 then
+    local max = Plain(maxPower)
+    if not max or max <= 0 then max = 100 end
+    costTex:SetWidth(math.min(WIDTH, rage / max * WIDTH))
+    costClip:Show()
+  else
+    costClip:Hide()
+  end
+end
+
+local function RefreshCost()
+  UpdateQueued()
+  UpdateCast()
+  UpdateRegen()
+  costShown = nil
+  UpdateCost()
 end
 
 local function RefreshValues()
-  lastCombo, lastEnergy = nil, nil
-  UpdateEnergyMax()
-  UpdateEnergy()
+  lastCombo, lastPower = nil, nil
+  UpdatePowerMax()
+  UpdatePower()
   UpdateCombo()
+  RefreshCost()
+  ns:UpdateIcons()
 end
 
 -- Updates are skipped while the HUD is hidden, so catch up on everything when it comes back.
 hud:SetScript("OnShow", RefreshValues)
 
--- Rogues always see the HUD. Druids see it while their power is energy, i.e. in Cat Form
--- (the test Blizzard's own druid combo bar uses), unless "Cat Form only" is off. While
--- unlocked or while the options are open it shows in any form, so it can be moved and
--- coloured.
+-- Rogues and warriors always see the HUD. Druids see it in Cat Form (energy) and Bear Form
+-- (rage), unless "Cat and Bear Form only" is off. While unlocked or while the options are
+-- open it shows in any form, so it can be moved and coloured.
 local function ShouldShow()
-  if ns.isRogue then return true end
+  if ns.isRogue or ns.isWarrior then return true end
   if not ns.isDruid then return false end
   if not ns.db.druidCatOnly or not ns.db.locked or ns.optionsOpen then return true end
-  local powerType = UnitPowerType("player")
-  return issecretvalue(powerType) or powerType == POWER_ENERGY
+  local pt = UnitPowerType("player")
+  return issecretvalue(pt) or pt == POWER_ENERGY or pt == POWER_RAGE
 end
 
 function ns:UpdateVisibility()
   hud:SetShown(ShouldShow())
 end
 
--- Energy regenerates continuously, so it is read every frame: each point shows up on the
--- very frame the client has it. Unchanged values cost a single comparison.
-local sinceCombo = 0
+-- Energy regenerates continuously, so the bar is read every frame: each point shows up on
+-- the very frame the client has it. Unchanged values cost a single comparison.
+local sinceRefresh = 0
 hud:SetScript("OnUpdate", function(_, elapsed)
-  UpdateEnergy()
-  sinceCombo = sinceCombo + elapsed
-  if sinceCombo >= COMBO_REFRESH then
-    sinceCombo = 0
+  UpdatePower()
+  ns:UpdateIconsIfDirty()
+  if regenDirty then
+    UpdateRegen()
+    UpdateCost()
+  end
+  sinceRefresh = sinceRefresh + elapsed
+  if sinceRefresh >= REFRESH then
+    sinceRefresh = 0
     UpdateCombo()
+    if predicting then
+      UpdateQueued()
+      UpdateCost()
+    end
+    ns:UpdateIconTimers()
   end
 end)
 
@@ -279,14 +479,20 @@ function ns:GetFontPath(name)
   return fontPaths[name] or fontPaths[defaults.font]
 end
 
+-- Sets a font, falling back to the default one if this client cannot load it.
+function ns:SetFont(fs, size, flags)
+  local ok = fs:SetFont(self:GetFontPath(self.db.font), size, flags)
+  if ok == false or not fs:GetFont() then fs:SetFont(fontPaths[defaults.font], size, flags) end
+end
+
+function ns:GetOutline()
+  return self.db.outline ~= "NONE" and self.db.outline or ""
+end
+
 function ns:ApplyFont()
-  local db = self.db
-  local flags = db.outline ~= "NONE" and db.outline or ""
-  local ok = energyText:SetFont(self:GetFontPath(db.font), db.fontSize, flags)
-  if ok == false or not energyText:GetFont() then
-    energyText:SetFont(fontPaths[defaults.font], db.fontSize, flags)
-  end
-  energyText:SetShown(db.showText)
+  self:SetFont(powerText, self.db.fontSize, self:GetOutline())
+  powerText:SetShown(self.db.showText)
+  self:LayoutIcons()
 end
 
 function ns:ApplyColors()
@@ -297,13 +503,63 @@ function ns:ApplyColors()
     cells[i]:SetStatusBarColor(k.r, k.g, k.b, k.a)
     cells[i].bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a)
   end
-  energy:SetStatusBarColor(c.energy.r, c.energy.g, c.energy.b, c.energy.a)
-  energy.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a)
-  energyText:SetTextColor(c.text.r, c.text.g, c.text.b, c.text.a)
+  local bar = c[powerType == POWER_RAGE and "rage" or "energy"]
+  power:SetStatusBarColor(bar.r, bar.g, bar.b, bar.a)
+  power.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a)
+  costTex:SetColorTexture(c.cost.r, c.cost.g, c.cost.b, c.cost.a)
+  powerText:SetTextColor(c.text.r, c.text.g, c.text.b, c.text.a)
+  self:ColorIcons()
+end
+
+-- Rage for warriors and for druids in Bear Form, energy otherwise. In Bear Form the empty
+-- combo cells are not drawn: the row only shows points the target actually has, and is back
+-- in full the moment the druid shifts to Cat Form.
+function ns:UpdatePowerMode()
+  local wanted = POWER_ENERGY
+  if self.profileClass == "WARRIOR" then
+    wanted = POWER_RAGE
+  elseif self.profileClass == "DRUID" and self.isDruid then
+    local pt = UnitPowerType("player")
+    if not issecretvalue(pt) and pt == POWER_RAGE then wanted = POWER_RAGE end
+  end
+  powerType = wanted
+  local bear = self.profileClass == "DRUID" and wanted == POWER_RAGE
+  for i = 1, NUM_POINTS do cells[i].bg:SetShown(not bear) end
+  predicting = wanted == POWER_RAGE and self.db.predict
+  self:ApplyColors()
+  RefreshValues()
+end
+
+function ns:GetPowerType()
+  return powerType
 end
 
 function ns:ApplyAlpha()
   hud:SetAlpha(self.db.alpha)
+end
+
+-- Out of combat the bar and the combo points / icons fade to their own opacity. Not while
+-- unlocked or while the options are open (so colours can be judged), except for a moment
+-- after an out-of-combat setting changes, to show the result.
+local inCombat = false
+function ns:ApplyFade()
+  local db = self.db
+  local fade = db.fadeOOC and not inCombat and db.locked and (not self.optionsOpen or self.fadePreview ~= nil)
+  local top = fade and db.oocTop or 1
+  comboRow:SetAlpha(top)
+  iconLayer:SetAlpha(top)
+  power:SetAlpha(fade and db.oocPower or 1)
+end
+
+function ns:PreviewFade()
+  local token = {}
+  self.fadePreview = token
+  self:ApplyFade()
+  C_Timer.After(2, function()
+    if self.fadePreview ~= token then return end
+    self.fadePreview = nil
+    self:ApplyFade()
+  end)
 end
 
 function ns:ApplyPosition()
@@ -316,6 +572,14 @@ end
 function ns:ApplyScale()
   hud:SetScale(REF_SCALE * self.db.scale / UIParent:GetEffectiveScale())
   self:ApplyPosition()
+end
+
+-- Warriors have no combo row: the HUD is the bar alone and the first icon row sits on it.
+function ns:ApplyLayout()
+  local hasCombo = self.profileClass ~= "WARRIOR"
+  comboRow:SetShown(hasCombo)
+  hud:SetHeight(hasCombo and (CP_HEIGHT + ROW_GAP + POWER_HEIGHT) or POWER_HEIGHT)
+  self:LayoutIcons()
 end
 
 function ns:SetScalePercent(percent)
@@ -344,7 +608,8 @@ function ns:SavePosition()
 end
 
 function ns:ResetPosition()
-  self.db.x, self.db.y = defaults.x, defaults.y
+  local class = CLASS_DEFAULTS[self.profileClass] or {}
+  self.db.x, self.db.y = class.x or defaults.x, class.y or defaults.y
   self:ApplyPosition()
 end
 
@@ -353,6 +618,7 @@ function ns:SetLocked(locked)
   hud:EnableMouse(not self.db.locked)
   mover:SetShown(not self.db.locked)
   self:UpdateVisibility()
+  self:ApplyFade()
   self:RefreshOptions()
 end
 
@@ -369,11 +635,15 @@ hud:SetScript("OnDragStop", function(self)
   self.dragProfile = nil
 end)
 
--- Preview: shows all five points (to judge colours) until turned off or combat starts.
+-- Preview: everything lit (all five points, every icon) to judge colours, until turned off
+-- or combat starts.
 function ns:SetPreview(on)
   self.preview = on and true or false
   lastCombo = nil
   UpdateCombo()
+  costShown = nil
+  UpdateCost()
+  self:UpdateIcons()
   self:RefreshOptions()
 end
 
@@ -381,11 +651,18 @@ function ns:SetOptionsOpen(open)
   self.optionsOpen = open and true or false
   self:WatchLogout(self.optionsOpen)
   self:UpdateVisibility()
+  self:ApplyFade()
 end
 
 function ns:SetDruidCatOnly(on)
   self.db.druidCatOnly = on and true or false
   self:UpdateVisibility()
+  self:RefreshOptions()
+end
+
+function ns:SetPredict(on)
+  self.db.predict = on and true or false
+  self:UpdatePowerMode()
   self:RefreshOptions()
 end
 
@@ -398,11 +675,11 @@ end
 
 function ns:ApplyAll()
   self:ApplyScale()
-  self:ApplyColors()
+  self:ApplyLayout()
   self:ApplyFont()
+  self:UpdatePowerMode() -- colours and values too
   self:ApplyAlpha()
   self:SetLocked(self.db.locked)
-  RefreshValues()
 end
 
 function ns:ResetColors()
@@ -411,19 +688,36 @@ function ns:ResetColors()
   self:RefreshOptions()
 end
 
+-- Fills a profile with the defaults for its class. Icon rows are lists the player edits:
+-- they are only set when missing, never merged with the defaults.
+local function FillProfile(db, class)
+  for k, v in pairs(CLASS_DEFAULTS[class] or {}) do
+    if db[k] == nil then db[k] = v end
+  end
+  CopyDefaults(defaults, db)
+  if type(db.rows) ~= "table" then db.rows = ns:DefaultRows(class) end
+  return db
+end
+
 -- Resets the profile in use (the options tab being edited, or this character's class).
 function ns:ResetAll()
   wipe(self.db)
-  CopyDefaults(defaults, self.db)
+  FillProfile(self.db, self.profileClass)
   self:ApplyAll()
   self:RefreshOptions()
 end
 
-function ns:GetProfileName()
-  return self.db == self.sv.profiles.DRUID and L.TAB_DRUID or L.TAB_ROGUE
+function ns:ResetIcons()
+  self.db.rows = self:DefaultRows(self.profileClass)
+  self:LayoutIcons()
+  self:RefreshOptions()
 end
 
--- An unlock made on the other class's options tab must not stay behind in that profile:
+function ns:GetProfileName()
+  return L["TAB_" .. (self.profileClass or "ROGUE")]
+end
+
+-- An unlock made on another class's options tab must not stay behind in that profile:
 -- relocked when the options close, and on logout / reload in case they were still open.
 function ns:LockOtherProfiles()
   local home = self.homeClass or "ROGUE"
@@ -433,7 +727,7 @@ function ns:LockOtherProfiles()
 end
 
 -- The HUD draws the profile of this character's class; while the options are open it draws
--- the profile of the selected tab, so the other class can be set up and seen from here.
+-- the profile of the selected tab, so another class can be set up and seen from here.
 function ns:SetActiveProfile(class)
   local profile = self.sv.profiles[class]
   if not profile or profile == self.db then return end
@@ -442,6 +736,7 @@ function ns:SetActiveProfile(class)
     hud.dragProfile = nil
   end
   self.db = profile
+  self.profileClass = class
   self:ApplyAll()
   self:RefreshOptions()
 end
@@ -454,41 +749,70 @@ function ns:SetLanguage(code)
   self:RelabelOptions()
 end
 
--- Options.lua replaces these
+-- Options.lua and Tracker.lua replace these
 function ns:RefreshOptions() end
 function ns:RelabelOptions() end
 function ns:ToggleOptions() end
+function ns:LayoutIcons() end
+function ns:ColorIcons() end
+function ns:UpdateIcons() end
+function ns:UpdateIconsIfDirty() end
+function ns:UpdateIconTimers() end
 
-local function CleanProfile(db)
-  CopyDefaults(defaults, db)
+local function CleanRows(db, class)
+  local rows = db.rows
+  for _, side in ipairs(ns.SIDES) do
+    if type(rows[side]) ~= "table" then rows[side] = {} end
+    local clean = {}
+    for k = 1, ns.MAX_ROWS do
+      local row = {}
+      for _, spell in ipairs(type(rows[side][k]) == "table" and rows[side][k] or {}) do
+        if #row >= ns.MAX_ICONS then break end
+        local valid = (type(spell) == "number" and spell > 0 and spell == math.floor(spell))
+          or (type(spell) == "string" and spell ~= "" and #spell <= 80)
+        if valid then row[#row + 1] = spell end
+      end
+      clean[k] = row
+    end
+    rows[side] = clean
+  end
+end
+
+local function CleanProfile(db, class)
+  FillProfile(db, class)
   if db.scale * 100 < ns.MIN_SCALE or db.scale * 100 > ns.MAX_SCALE then db.scale = defaults.scale end
   if db.alpha < 0 or db.alpha > 1 then db.alpha = defaults.alpha end
+  if db.oocPower < 0 or db.oocPower > 1 then db.oocPower = defaults.oocPower end
+  if db.oocTop < 0 or db.oocTop > 1 then db.oocTop = defaults.oocTop end
   if db.fontSize < 6 or db.fontSize > 64 then db.fontSize = defaults.fontSize end
+  if db.icons.size < 12 or db.icons.size > 64 then db.icons.size = defaults.icons.size end
   if db.outline ~= "NONE" and db.outline ~= "OUTLINE" and db.outline ~= "THICKOUTLINE" then db.outline = defaults.outline end
   if db.cpSource ~= "TARGET" and db.cpSource ~= "PLAYER" then db.cpSource = defaults.cpSource end
+  CleanRows(db, class)
 end
 
 local function InitDB()
   local sv = type(ClaraComboPointsDB) == "table" and ClaraComboPointsDB or {}
   if type(sv.profiles) ~= "table" then
-    -- 1.0 and 1.1 kept a single set of settings: it becomes the start of both profiles
+    -- 1.0 and 1.1 kept a single set of settings: it becomes the start of the rogue and druid
+    -- profiles (warriors came later)
     local old = {}
     for k in pairs(defaults) do old[k], sv[k] = sv[k], nil end
-    sv.profiles = {}
-    for _, class in ipairs(ns.PROFILES) do sv.profiles[class] = CopyDefaults(old, {}) end
+    sv.profiles = { ROGUE = CopyDefaults(old, {}), DRUID = CopyDefaults(old, {}) }
   end
   for _, class in ipairs(ns.PROFILES) do
     if type(sv.profiles[class]) ~= "table" then sv.profiles[class] = {} end
-    CleanProfile(sv.profiles[class])
+    CleanProfile(sv.profiles[class], class)
   end
-  -- account-wide: interface language (nil = follow the client) and options window theme
+  -- account-wide: interface language (nil = follow the client)
   if not ns:IsLanguage(sv.language) then sv.language = nil end
   if sv.language then ns.lang = sv.language end
-  if sv.skin ~= "CLASSIC" and sv.skin ~= "MODERN" then sv.skin = "CLASSIC" end
+  sv.skin = nil -- 1.3 had a second options theme
   moverText:SetText(L.MOVER)
   ClaraComboPointsDB = sv
   ns.sv = sv
   ns.db = sv.profiles.ROGUE
+  ns.profileClass = "ROGUE"
 end
 
 ---------------------------------------------------------------------------
@@ -510,26 +834,41 @@ function ns:PLAYER_LOGIN()
   local _, class = UnitClass("player")
   self.isRogue = (class == "ROGUE")
   self.isDruid = (class == "DRUID")
-  self.enabled = self.isRogue or self.isDruid
-  self.homeClass = self.isDruid and "DRUID" or "ROGUE"
+  self.isWarrior = (class == "WARRIOR")
+  self.enabled = self.isRogue or self.isDruid or self.isWarrior
+  self.homeClass = self.isDruid and "DRUID" or self.isWarrior and "WARRIOR" or "ROGUE"
+  self.profileClass = self.homeClass
   self.db = self.sv.profiles[self.homeClass]
+  local fighting = UnitAffectingCombat and UnitAffectingCombat("player")
+  inCombat = (not issecretvalue(fighting) and fighting) and true or false
+  self:ResolveSpells()
   self:ApplyAll()
   if not self.enabled then return end -- dormant on other classes: no events, no updates
 
   events:RegisterEvent("PLAYER_ENTERING_WORLD")
   events:RegisterEvent("PLAYER_TARGET_CHANGED")
   events:RegisterEvent("PLAYER_REGEN_DISABLED")
+  events:RegisterEvent("PLAYER_REGEN_ENABLED")
   events:RegisterEvent("UI_SCALE_CHANGED")
   events:RegisterEvent("DISPLAY_SIZE_CHANGED")
   events:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
   events:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
   events:RegisterUnitEvent("UNIT_MAXPOWER", "player")
-  events:RegisterUnitEvent("UNIT_HEALTH", "target")
-  events:RegisterUnitEvent("UNIT_FLAGS", "target")
-  pcall(events.RegisterEvent, events, "UNIT_DIED") -- not in every client build
+  events:RegisterUnitEvent("UNIT_AURA", "player", "target")
+  if not self.isWarrior then -- combo points
+    events:RegisterUnitEvent("UNIT_HEALTH", "target")
+    events:RegisterUnitEvent("UNIT_FLAGS", "target")
+    pcall(events.RegisterEvent, events, "UNIT_DIED") -- not in every client build
+  end
   if self.isDruid then
     events:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player") -- power type changes with the form
     events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+  end
+  if self.isDruid or self.isWarrior then -- rage about to be spent
+    events:RegisterEvent("CURRENT_SPELL_CAST_CHANGED")
+    for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "SUCCEEDED", "DELAYED" }) do
+      events:RegisterUnitEvent("UNIT_SPELLCAST_" .. e, "player")
+    end
   end
   self:UpdateVisibility()
 end
@@ -546,35 +885,37 @@ end
 function ns:PLAYER_ENTERING_WORLD()
   self:ApplyScale()
   self:UpdateVisibility()
-  RefreshValues()
+  self:UpdatePowerMode()
 end
 
 function ns:UNIT_DISPLAYPOWER()
   self:UpdateVisibility()
-  UpdateEnergyMax()
-  UpdateEnergy()
+  self:UpdatePowerMode()
 end
 ns.UPDATE_SHAPESHIFT_FORM = ns.UNIT_DISPLAYPOWER
 
 function ns:PLAYER_TARGET_CHANGED()
   UpdateCombo()
+  self:MarkIconsDirty()
 end
 
-function ns:UNIT_POWER_FREQUENT(_, powerType)
-  if issecretvalue(powerType) then
-    UpdateEnergy()
+function ns:UNIT_POWER_FREQUENT(_, token)
+  if issecretvalue(token) then
+    UpdatePower()
     UpdateCombo()
-  elseif powerType == "COMBO_POINTS" then
+  elseif token == "COMBO_POINTS" then
     UpdateCombo()
-  elseif powerType == "ENERGY" then
-    UpdateEnergy()
+  elseif token == "ENERGY" or token == "RAGE" then
+    UpdatePower()
   end
 end
 ns.UNIT_POWER_UPDATE = ns.UNIT_POWER_FREQUENT
 
 function ns:UNIT_MAXPOWER()
-  UpdateEnergyMax()
-  UpdateEnergy()
+  UpdatePowerMax()
+  UpdatePower()
+  costShown = nil
+  UpdateCost()
 end
 
 -- Target death: UNIT_HEALTH arrives with the killing blow, UNIT_FLAGS / UNIT_DIED as backup.
@@ -584,14 +925,43 @@ end
 ns.UNIT_FLAGS = ns.UNIT_HEALTH
 ns.UNIT_DIED = ns.UNIT_HEALTH
 
+-- Aura events can come in bursts: the icons and Frenzied Regeneration are read again once,
+-- on the next frame.
+function ns:UNIT_AURA(unit)
+  if unit == "player" and predicting and regenName then regenDirty = true end
+  self:MarkIconsDirty()
+end
+
+function ns:CURRENT_SPELL_CAST_CHANGED()
+  UpdateQueued()
+  UpdateCost()
+end
+
+function ns:UNIT_SPELLCAST_START()
+  UpdateCast()
+  UpdateCost()
+end
+for _, e in ipairs({ "STOP", "FAILED", "INTERRUPTED", "SUCCEEDED", "DELAYED" }) do
+  ns["UNIT_SPELLCAST_" .. e] = ns.UNIT_SPELLCAST_START
+end
+
 function ns:PLAYER_REGEN_DISABLED()
+  inCombat = true
   if self.preview then self:SetPreview(false) end
+  self:ApplyFade()
+end
+
+function ns:PLAYER_REGEN_ENABLED()
+  inCombat = false
+  self:ApplyFade()
 end
 
 function ns:UI_SCALE_CHANGED()
   self:ApplyScale()
 end
 ns.DISPLAY_SIZE_CHANGED = ns.UI_SCALE_CHANGED
+
+function ns:MarkIconsDirty() end -- Tracker.lua
 
 ---------------------------------------------------------------------------
 -- Portrait right-click menu: "Reload UI" in Other Options, just above Edit Mode
