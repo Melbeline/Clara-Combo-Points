@@ -4,11 +4,13 @@
 ## Notes-frFR: Points de combo + énergie (voleur, druide), rage (druide en ours, guerrier) et icônes de buffs/debuffs (WoW Forever). /clara, /cl, /ccp ou /cp
 ## Notes-deDE: Combopunkte + Energie (Schurke, Druide), Wut (Druide in Bärengestalt, Krieger) und Buff-/Debuff-Symbole (WoW Forever). /clara, /cl, /ccp oder /cp
 ## Author: Melbeline
-## Version: 1.4.0
+## Version: 1.5.0
 ## SavedVariables: ClaraComboPointsDB
 
 Locales.lua
 Core.lua
+Profiles.lua
 SpellCatalog.lua
 Tracker.lua
 Options.lua
+SettingsPage.lua

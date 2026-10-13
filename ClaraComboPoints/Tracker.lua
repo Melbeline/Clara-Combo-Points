@@ -197,9 +197,11 @@ local function Crop(tex, w, h)
   end
 end
 
--- Stacks and countdown numbers sized for the icon.
+-- Stacks and countdown numbers sized for the icon (the countdown at the size chosen in the
+-- options, a percentage of that).
 local function SetCountFonts(count, cd, w, h)
   local s = min(w, h)
+  local timerSize = ns.db and ns.db.icons.timerSize or 100
   local countFont = NumberFontNormal and NumberFontNormal.GetFont and NumberFontNormal:GetFont() or FONT
   count:SetFont(countFont, max(8, floor(s * .4)), "OUTLINE")
   count:ClearAllPoints()
@@ -207,7 +209,7 @@ local function SetCountFonts(count, cd, w, h)
   local fs = cd.GetCountdownFontString and cd:GetCountdownFontString()
   if fs then
     local path = fs:GetFont()
-    fs:SetFont(path or FONT, max(9, floor(s * .48)), "OUTLINE")
+    fs:SetFont(path or FONT, max(6, floor(max(9, s * .48) * timerSize / 100)), "OUTLINE")
   end
 end
 
@@ -572,8 +574,9 @@ local function AuraButton(slot, unit, filter)
 end
 
 function StyleAuraButton(rec, w, h, look)
-  if rec.w == w and rec.h == h and rec.reverse == look.reverse and rec.timers == look.timers then return end
-  rec.w, rec.h, rec.reverse, rec.timers = w, h, look.reverse, look.timers
+  if rec.w == w and rec.h == h and rec.reverse == look.reverse and rec.timers == look.timers
+    and rec.timerSize == look.timerSize then return end
+  rec.w, rec.h, rec.reverse, rec.timers, rec.timerSize = w, h, look.reverse, look.timers, look.timerSize
   Crop(rec.icon, w, h)
   LayoutFrame(rec.over, rec.frame, w, h)
   local inset = min(w, h) * 3 / 45

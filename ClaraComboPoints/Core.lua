@@ -14,7 +14,7 @@ local ADDON, ns = ...
 _G.ClaraComboPoints = ns
 local L = ns.L
 
-ns.VERSION = "1.4.0"
+ns.VERSION = "1.5.0"
 
 local NUM_POINTS    = 5
 local POWER         = Enum and Enum.PowerType or {}
@@ -35,6 +35,7 @@ local REFRESH = 0.1 -- safety refresh of the combo points and queued attacks (ev
 ns.WIDTH, ns.CP_HEIGHT, ns.CP_GAP, ns.ROW_GAP = WIDTH, CP_HEIGHT, CP_GAP, ROW_GAP
 
 ns.MIN_SCALE, ns.MAX_SCALE = 10, 500 -- percent
+ns.MIN_TIMER, ns.MAX_TIMER = 50, 200 -- countdown numbers on the icons, percent
 ns.MAX_ICONS, ns.MAX_ROWS = 20, 3     -- icons per row, rows above and below the bar
 
 -- preview: size of the name in the options' font list, for fonts drawn much bigger than the rest
@@ -87,6 +88,7 @@ local defaults = {
     timers  = true,    -- countdown numbers on the cooldown swipe (auras and spell cooldowns)
     missing = true,    -- missing auras stay in place, grayed out
     reverse = false,   -- buffs / debuffs: reversed swipe (lit when fresh), like Blizzard's aura icons
+    timerSize = 100,   -- countdown numbers, percent of the size that fits the icon
   },
   colors = {
     cp1    = { r = 1, g = 1,    b = 0,    a = 1 },
@@ -654,6 +656,7 @@ function ns:SetLocked(locked)
   self:UpdateVisibility()
   self:ApplyFade()
   self:RefreshOptions()
+  self:RefreshSettingsPage()
 end
 
 -- A drag belongs to the profile it started in (the options can switch profile mid-drag).
@@ -762,6 +765,41 @@ function ns:ResetIcons()
   self:RefreshOptions()
 end
 
+-- Every class's bar locked (the one shown, and the others for when they are shown).
+function ns:LockAll()
+  for _, profile in pairs(self.sv.profiles) do profile.locked = true end
+  self:SetLocked(true)
+end
+
+function ns:AllLocked()
+  for _, profile in pairs(self.sv.profiles) do
+    if not profile.locked then return false end
+  end
+  return true
+end
+
+-- Everything back to the defaults: the three class tabs (bar, colours, font, icons) and the
+-- options window. The saved profiles, the interface language and what the addon learned
+-- about auras stay.
+function ns:ResetAddon()
+  if hud.dragProfile then
+    hud:StopMovingOrSizing()
+    hud.dragProfile = nil
+  end
+  for _, class in ipairs(self.PROFILES) do
+    local profile = self.sv.profiles[class]
+    wipe(profile)
+    FillProfile(profile, class)
+  end
+  wipe(self.sv.window)
+  self.sv.window.alpha = 1 -- centred, at the scale that fits the screen, opaque
+  wipe(self.sv.active)
+  self:ApplyAll()
+  self:ResetOptionsWindow() -- Options.lua
+  self:RefreshOptions()
+  self:RefreshSettingsPage()
+end
+
 function ns:GetProfileName()
   return L["TAB_" .. (self.profileClass or "ROGUE")]
 end
@@ -796,19 +834,24 @@ function ns:SetLanguage(code)
   self.lang = code
   moverText:SetText(L.MOVER)
   self:RelabelOptions()
+  self:RefreshSettingsPage()
 end
 
 -- Options.lua and Tracker.lua replace these
 function ns:RefreshOptions() end
 function ns:RelabelOptions() end
 function ns:ToggleOptions() end
+function ns:ShowOptions() end
+function ns:ResetOptionsWindow() end
+function ns:ResetWindowPosition() end
+function ns:RefreshSettingsPage() end -- SettingsPage.lua
 function ns:LayoutIcons() end
 function ns:UpdateIcons() end
 function ns:UpdateIconsIfDirty() end
 
 local CONDITION = { auto = true, self = true, target = true, enemy = true, friend = true }
 local function ValidSpell(spell)
-  return (type(spell) == "number" and spell > 0 and spell == math.floor(spell))
+  return (type(spell) == "number" and spell > 0 and spell < 2 ^ 31 and spell == math.floor(spell))
     or (type(spell) == "string" and spell ~= "" and #spell <= 80)
 end
 local function CleanEntry(entry)
@@ -848,9 +891,78 @@ local function CleanProfile(db, class)
   if db.oocTop < 0 or db.oocTop > 1 then db.oocTop = defaults.oocTop end
   if db.fontSize < 6 or db.fontSize > 64 then db.fontSize = defaults.fontSize end
   if db.icons.size < 12 or db.icons.size > 64 then db.icons.size = defaults.icons.size end
+  if not (db.icons.timerSize >= ns.MIN_TIMER and db.icons.timerSize <= ns.MAX_TIMER) then db.icons.timerSize = defaults.icons.timerSize end
+  if not (math.abs(db.x) <= 4000 and math.abs(db.y) <= 4000) then db.x, db.y = defaults.x, defaults.y end
+  for key, c in pairs(db.colors) do
+    local default = defaults.colors[key]
+    if default then
+      for _, ch in ipairs({ "r", "g", "b", "a" }) do
+        if not (c[ch] >= 0 and c[ch] <= 1) then c[ch] = default[ch] end
+      end
+    else
+      db.colors[key] = nil
+    end
+  end
   if db.outline ~= "NONE" and db.outline ~= "OUTLINE" and db.outline ~= "THICKOUTLINE" then db.outline = defaults.outline end
   if db.cpSource ~= "TARGET" and db.cpSource ~= "PLAYER" then db.cpSource = defaults.cpSource end
   CleanRows(db, class)
+end
+
+-- A profile from outside (saved, or imported from another account): only the settings this
+-- addon knows, of the right kind, checked like the saved variables, without the lock (not
+-- part of a profile). Returns a new table, or fills `into` (which may be data itself).
+local function Finite(v) return type(v) == "number" and v == v and v > -math.huge and v < math.huge end
+local function CopyKnown(src, model, dst)
+  for k, v in pairs(model) do
+    local value = src[k]
+    if type(v) == "table" then
+      dst[k] = CopyKnown(type(value) == "table" and value or {}, v, {})
+    elseif type(value) == type(v) and (type(v) ~= "number" or Finite(value)) and (type(v) ~= "string" or #value <= 64) then
+      dst[k] = value
+    end
+  end
+  return dst
+end
+local function CopyRows(rows)
+  local copy = {}
+  for _, side in ipairs(ns.SIDES) do
+    copy[side] = {}
+    for k = 1, ns.MAX_ROWS do
+      local row = type(rows) == "table" and type(rows[side]) == "table" and rows[side][k]
+      copy[side][k] = {}
+      for i, entry in ipairs(type(row) == "table" and row or {}) do
+        if i > ns.MAX_ICONS then break end
+        local clean = CleanEntry(entry)
+        if clean ~= nil then table.insert(copy[side][k], clean) end
+      end
+    end
+  end
+  return copy
+end
+function ns:CleanProfileData(data, class, into)
+  local clean = CopyKnown(data, defaults, {})
+  clean.rows = CopyRows(data.rows)
+  CleanProfile(clean, class)
+  clean.locked = nil
+  if not into then return clean end
+  wipe(into)
+  for k, v in pairs(clean) do into[k] = v end
+  return into
+end
+
+-- Options window (account-wide): where it is (top left corner, UIParent units; nil = centred),
+-- its scale (nil = as large as fits the screen, up to 100 %) and opacity.
+ns.MIN_WINDOW_SCALE, ns.MAX_WINDOW_SCALE = .4, 2
+ns.MIN_WINDOW_ALPHA = .2
+local function CleanWindow(sv)
+  local w = type(sv.window) == "table" and sv.window or {}
+  sv.window = w
+  if not (Finite(w.left) and Finite(w.top)) then w.left, w.top = nil, nil end
+  if not (Finite(w.scale) and w.scale >= ns.MIN_WINDOW_SCALE and w.scale <= ns.MAX_WINDOW_SCALE) then w.scale = nil end
+  if not (Finite(w.alpha) and w.alpha >= ns.MIN_WINDOW_ALPHA and w.alpha <= 1) then w.alpha = 1 end
+  for k in pairs(w) do
+    if k ~= "left" and k ~= "top" and k ~= "scale" and k ~= "alpha" then w[k] = nil end
+  end
 end
 
 local function InitDB()
@@ -891,6 +1003,8 @@ local function InitDB()
       end
     end
   end
+  CleanWindow(sv)
+  ns:InitProfiles(sv) -- Profiles.lua: the profiles saved on each class tab
   moverText:SetText(L.MOVER)
   ClaraComboPointsDB = sv
   ns.sv = sv
@@ -1083,6 +1197,46 @@ function ns:SyncAuraButtons() end
 function ns:DebugIcons() return {} end
 
 ---------------------------------------------------------------------------
+-- Questions in the game's own dialog box: ns:Ask(text, alert, { label, fn }, ...), up to three
+-- buttons from left to right (the last one usually Cancel, without fn). Escape closes it
+-- without an answer.
+---------------------------------------------------------------------------
+local ASK = "CLARACOMBOPOINTS_ASK"
+
+local function Answer(buttons, i)
+  local fn = buttons and buttons[i] and buttons[i][2]
+  if fn then fn() end
+end
+
+function ns:Ask(text, alert, ...)
+  if not (StaticPopupDialogs and StaticPopup_Show) then return false end
+  local buttons = { ... }
+  local info = StaticPopupDialogs[ASK] or {
+    text = "%s", -- the question comes whole, as the first argument
+    timeout = 0, whileDead = true, hideOnEscape = true, noCancelOnEscape = true,
+    selectCallbackByIndex = true, -- each button its own answer, Escape none of them
+    OnButton1 = function(_, data) Answer(data, 1) end,
+    OnButton2 = function(_, data) Answer(data, 2) end,
+    OnButton3 = function(_, data) Answer(data, 3) end,
+    OnEscape = function() end,
+  }
+  info.button1 = buttons[1] and buttons[1][1]
+  info.button2 = buttons[2] and buttons[2][1]
+  info.button3 = buttons[3] and buttons[3][1]
+  info.showAlert = alert and true or nil
+  StaticPopupDialogs[ASK] = info
+  return StaticPopup_Show(ASK, text, nil, buttons) ~= nil
+end
+
+-- /cl reset, and the game's AddOns options: everything back to the defaults, once confirmed.
+function ns:AskResetAddon()
+  self:Ask(L.RESET_ADDON_ASK, true, { L.RESET_ADDON, function()
+    self:ResetAddon()
+    Print(L.RESET_ADDON_DONE)
+  end }, { L.CANCEL })
+end
+
+---------------------------------------------------------------------------
 -- Portrait right-click menu: "Reload UI" in Other Options, just above Edit Mode
 ---------------------------------------------------------------------------
 local function ReloadInterface()
@@ -1127,9 +1281,11 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
   elseif cmd == "scale" and tonumber(arg) then
     ns:SetScalePercent(arg)
     Print(L.SCALE_SET:format(ns:GetScalePercent()))
+  elseif cmd == "reset" and (arg == "pos" or arg == "position") then
+    ns:ResetWindowPosition()
+    Print(L.WINDOW_POS_RESET)
   elseif cmd == "reset" then
-    ns:ResetAll()
-    Print(L.RESET_DONE:format(ns:GetProfileName()))
+    ns:AskResetAddon()
   elseif cmd == "help" then
     Print(L.HELP)
   elseif cmd == "debug" then
