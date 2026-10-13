@@ -312,6 +312,7 @@ local NEXT_SWING = {
 }
 local FRENZIED_REGENERATION = 22842
 local REGEN_PER_SECOND = 10
+local REGEN_DURATION = 10 -- seconds
 ns.PREDICTED_SPELLS = { WARRIOR = { 78, 845, 1464 }, DRUID = { 6807, FRENZIED_REGENERATION } }
 
 local IsCurrentSpell = (C_Spell and C_Spell.IsCurrentSpell) or IsCurrentSpell
@@ -362,6 +363,7 @@ end
 local predicting                   -- rage on the bar and prediction wanted
 local queuedCost, castCost = 0, 0  -- next-swing attack, cast in progress
 local regenEnds, regenDirty        -- Frenzied Regeneration expiration time, aura changed
+local regenCast                    -- when you last cast it (its aura is hidden from addons in combat)
 local costShown                    -- rage currently marked
 
 local function UpdateQueued()
@@ -383,12 +385,24 @@ local function UpdateCast()
   if ok and not issecretvalue(name) and name and Plain(spellID) then castCost = RageCost(spellID) end
 end
 
+local function AurasSecret()
+  if C_Secrets and C_Secrets.ShouldAurasBeSecret then
+    local ok, secret = pcall(C_Secrets.ShouldAurasBeSecret)
+    if ok and secret == true then return true end
+  end
+  return InCombatLockdown() == true
+end
+
 local function UpdateRegen()
   regenEnds, regenDirty = nil, false
   if not predicting or not regenName then return end
   local aura = ns:FindAura("player", regenName, "HELPFUL")
   local ends = aura and Plain(aura.expirationTime)
-  if ends and ends > 0 then regenEnds = ends end
+  if ends and ends > 0 then
+    regenEnds = ends
+  elseif not aura and regenCast and AurasSecret() and GetTime() < regenCast + REGEN_DURATION then
+    regenEnds = regenCast + REGEN_DURATION -- hidden in combat: counted from your cast
+  end
 end
 
 local function UpdateCost()
@@ -866,6 +880,17 @@ local function InitDB()
   for name, on in pairs(sv.cooldownSpells) do
     if type(name) ~= "string" or on ~= true then sv.cooldownSpells[name] = nil end
   end
+  -- spell IDs each aura was seen under, by spell name (the game's aura buttons match IDs)
+  if type(sv.auraIDs) ~= "table" then sv.auraIDs = {} end
+  for name, ids in pairs(sv.auraIDs) do
+    if type(name) ~= "string" or type(ids) ~= "table" then
+      sv.auraIDs[name] = nil
+    else
+      for id, on in pairs(ids) do
+        if type(id) ~= "number" or on ~= true then ids[id] = nil end
+      end
+    end
+  end
   moverText:SetText(L.MOVER)
   ClaraComboPointsDB = sv
   ns.sv = sv
@@ -926,12 +951,10 @@ function ns:PLAYER_LOGIN()
   end
   if self.isDruid or self.isWarrior then -- rage about to be spent
     events:RegisterEvent("CURRENT_SPELL_CAST_CHANGED")
-    for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "DELAYED" }) do
+    for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "DELAYED", "SUCCEEDED" }) do
       events:RegisterUnitEvent("UNIT_SPELLCAST_" .. e, "player")
     end
   end
-  -- your casts: rage prediction, and the icons follow the auras they put up (Tracker.lua)
-  events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
   self:UpdateVisibility()
 end
 
@@ -996,7 +1019,8 @@ ns.UNIT_DIED = ns.UNIT_HEALTH
 -- Aura events can come in bursts: the icons and Frenzied Regeneration are read again once,
 -- on the next frame.
 function ns:UNIT_AURA(unit)
-  if unit == "player" and predicting and regenName then regenDirty = true end
+  -- (in combat the event's unit can be a secret value: never compared then)
+  if predicting and regenName and not issecretvalue(unit) and unit == "player" then regenDirty = true end
   self:MarkIconsDirty()
 end
 
@@ -1019,9 +1043,12 @@ for _, e in ipairs({ "STOP", "FAILED", "INTERRUPTED", "DELAYED" }) do
 end
 
 function ns:UNIT_SPELLCAST_SUCCEEDED(_, _, spellID)
+  if regenName and Plain(spellID) and self:SpellName(spellID) == regenName then
+    regenCast = GetTime()
+    regenDirty = true
+  end
   UpdateCast()
   UpdateCost()
-  self:NoteCast(spellID)
 end
 
 function ns:PLAYER_REGEN_DISABLED()
@@ -1033,7 +1060,7 @@ end
 function ns:PLAYER_REGEN_ENABLED()
   inCombat = false
   self:ApplyFade()
-  self:MarkIconsDirty() -- the auras can be read again
+  self:AurasReadable() -- Tracker.lua: the auras can be read again
 end
 
 function ns:UI_SCALE_CHANGED()
@@ -1042,8 +1069,10 @@ end
 ns.DISPLAY_SIZE_CHANGED = ns.UI_SCALE_CHANGED
 
 function ns:MarkIconsDirty() end -- Tracker.lua
-function ns:NoteCast() end
 function ns:TargetChanged() end
+function ns:AurasReadable() end
+function ns:SyncAuraButtons() end
+function ns:DebugIcons() return {} end
 
 ---------------------------------------------------------------------------
 -- Portrait right-click menu: "Reload UI" in Other Options, just above Edit Mode
@@ -1095,6 +1124,8 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
     Print(L.RESET_DONE:format(ns:GetProfileName()))
   elseif cmd == "help" then
     Print(L.HELP)
+  elseif cmd == "debug" then
+    for _, line in ipairs(ns:DebugIcons()) do Print(line) end
   else
     ns:ToggleOptions()
   end

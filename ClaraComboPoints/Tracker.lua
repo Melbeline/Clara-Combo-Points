@@ -10,9 +10,11 @@
 --   - the aura when it is up, with its stacks and time left;
 --   - else the spell's own cooldown (not the global cooldown) when it runs;
 --   - else the spell ready (spells with a cooldown) or the aura missing (grayed out).
+-- In combat the game hides auras from addons; one of the game's own aura buttons, given the
+-- spell's IDs, shows the aura over the icon instead (see the end of this file's live state).
 -- Icons look like the action bar buttons: the game's button frame around them, the art kept
--- inside it by the button's mask, its cooldown swipe and countdown numbers ("2m" from two
--- minutes up, then "1:59", then seconds), charges and stacks bottom right.
+-- inside it by a mask, the cooldown swipe and countdown numbers ("2m" from two minutes up,
+-- then "1:59", then seconds), charges and stacks bottom right.
 --
 -- Shapes: the row shares the bar's width (cells cropped, not stretched), or each icon is a
 -- combo point cell, or square at the chosen size.
@@ -37,9 +39,7 @@ local CORNER = .22           -- share of the button frame (and of the icon's sho
 local MISSING_ALPHA = .45
 local GCD = 1.5              -- a cooldown this short is only the global cooldown
 local ABBREV = 120           -- countdown: "2m" from two minutes up, "1:59" below
-local MASK_ATLAS = "UI-HUD-ActionBar-IconFrame-Mask" -- keeps the icon art inside the frame
-local MASK_SCALE = 64 / 45
-local CAST_WINDOW = 1.5      -- an aura that appears this soon after your cast of the same spell is that spell's
+local MASK_ATLAS = "UI-HUD-CoolDownManager-Mask" -- keeps the icon art inside the frame (fills the icon)
 -- where each icon looks for its aura (on = the entry's condition; auto for plain entries)
 local LOOKUPS = {
   auto   = { { "player", "HELPFUL" }, { "target", "HARMFUL" }, { "player", "HARMFUL" } },
@@ -49,11 +49,8 @@ local LOOKUPS = {
   friend = { { "target", "HELPFUL" }, { "target", "HARMFUL" } },
 }
 ns.CONDITIONS = { "auto", "self", "target", "enemy", "friend" }
-local GetUnitAuraInstanceIDs = C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs
 local GetAuraDuration = C_UnitAuras and C_UnitAuras.GetAuraDuration
 local GetAuraDataByIndex = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
-local IsSpellHarmful = C_Spell and C_Spell.IsSpellHarmful
-local IsSpellHelpful = C_Spell and C_Spell.IsSpellHelpful
 
 -- A row entry: a spell ID or name, or { spell = ID or name, on = condition, exact = true }
 -- (exact: this rank only).
@@ -156,12 +153,11 @@ local function NewSlot(row)
   local slot = CreateFrame("Frame", nil, row)
   slot.icon = slot:CreateTexture(nil, "ARTWORK")
   slot.icon:SetAllPoints()
-  -- the button's own mask: the art stays inside the frame's rounded corners
-  -- (drawn 64/45 of the icon's size, as the game's buttons do: its opaque part is 45/64 of it)
+  -- a mask: the art stays inside the button frame's rounded corners
   if slot.CreateMaskTexture and slot.icon.AddMaskTexture then
     slot.mask = slot:CreateMaskTexture()
     slot.mask:SetAtlas(MASK_ATLAS)
-    slot.mask:SetPoint("CENTER", slot.icon)
+    slot.mask:SetAllPoints(slot.icon)
     slot.icon:AddMaskTexture(slot.mask)
   end
   -- swipe and countdown numbers, like an action button
@@ -169,10 +165,10 @@ local function NewSlot(row)
   slot.cd:SetDrawBling(false)
   slot.cd:SetDrawEdge(false)
   if slot.cd.SetCountdownAbbrevThreshold then slot.cd:SetCountdownAbbrevThreshold(ABBREV) end
-  -- button frame and count above the swipe
+  -- button frame and count above the swipe, and above the game's aura button (see below)
   slot.over = CreateFrame("Frame", nil, slot)
   slot.over:SetAllPoints()
-  slot.over:SetFrameLevel(slot:GetFrameLevel() + 3)
+  slot.over:SetFrameLevel(slot:GetFrameLevel() + 6)
   slot.frame = {}
   for i = 1, FrameArt() and #PIECES or 1 do slot.frame[i] = slot.over:CreateTexture(nil, "OVERLAY") end
   slot.count = slot.over:CreateFontString(nil, "OVERLAY")
@@ -201,13 +197,14 @@ local function Crop(tex, w, h)
   end
 end
 
-local function SetSlotFonts(slot, w, h)
+-- Stacks and countdown numbers sized for the icon.
+local function SetCountFonts(count, cd, w, h)
   local s = min(w, h)
   local countFont = NumberFontNormal and NumberFontNormal.GetFont and NumberFontNormal:GetFont() or FONT
-  slot.count:SetFont(countFont, max(8, floor(s * .4)), "OUTLINE")
-  slot.count:ClearAllPoints()
-  slot.count:SetPoint("BOTTOMRIGHT", -max(1, s * 5 / 45), max(1, s * 5 / 45))
-  local fs = slot.cd.GetCountdownFontString and slot.cd:GetCountdownFontString()
+  count:SetFont(countFont, max(8, floor(s * .4)), "OUTLINE")
+  count:ClearAllPoints()
+  count:SetPoint("BOTTOMRIGHT", -max(1, s * 5 / 45), max(1, s * 5 / 45))
+  local fs = cd.GetCountdownFontString and cd:GetCountdownFontString()
   if fs then
     local path = fs:GetFont()
     fs:SetFont(path or FONT, max(9, floor(s * .48)), "OUTLINE")
@@ -223,17 +220,6 @@ local function HasCooldown(slot)
     if ok and Plain(ms) and ms > GCD * 1000 then return true end
   end
   return false
-end
-
--- Harmful (put on enemies) or helpful, when the game says.
-local function Yes(fn, spell)
-  if not fn then return nil end
-  local ok, v = pcall(fn, spell)
-  return ok and not issecretvalue(v) and v == true or nil
-end
-local function SpellNature(spell)
-  if type(spell) ~= "number" then return end
-  return Yes(IsSpellHarmful, spell), Yes(IsSpellHelpful, spell)
 end
 
 function ns:LayoutIcons()
@@ -276,24 +262,19 @@ function ns:LayoutIcons()
           slot:ClearAllPoints()
           slot:SetSize(w, size)
           slot:SetPoint("TOPLEFT", (i - 1) * (w + self.CP_GAP), 0)
+          slot.w, slot.h = w, size
           Crop(slot.icon, w, size)
-          if slot.mask then slot.mask:SetSize(w * MASK_SCALE, size * MASK_SCALE) end
           LayoutFrame(slot, w, size)
           local inset = min(w, size) * 3 / 45
           slot.cd:ClearAllPoints()
           slot.cd:SetPoint("TOPLEFT", inset, -inset)
           slot.cd:SetPoint("BOTTOMRIGHT", -inset, inset)
-          SetSlotFonts(slot, w, size)
-          local spell, on = self:EntrySpell(spells[i]), self:EntryOn(spells[i])
-          local exactFlag = type(spells[i]) == "table" and spells[i].exact or nil
-          if slot.spell ~= spell or slot.on ~= on or slot.exactFlag ~= exactFlag then
-            slot.inst = nil -- another spell, or another place or rank to watch
-          end
-          slot.spell, slot.on, slot.exactFlag = spell, on, exactFlag
+          SetCountFonts(slot.count, slot.cd, w, size)
+          local spell = self:EntrySpell(spells[i])
+          slot.spell, slot.on = spell, self:EntryOn(spells[i])
           slot.exact = type(spells[i]) == "table" and spells[i].exact and type(spell) == "number" and self:RankIDs(spell) or nil
           slot.name = self:SpellName(spell)
           slot.byName = type(spell) == "string"
-          slot.harmful, slot.helpful = SpellNature(spell)
           slot.spellIcon = self:SpellIcon(spell)
           if slot.spellIcon == QUESTION_MARK and slot.name then slot.spellIcon = self:SeenIcon(slot.name) end
           slot.hasCooldown = HasCooldown(slot)
@@ -303,11 +284,13 @@ function ns:LayoutIcons()
     end
     if side == "above" then self:AnchorMoverText(anchor) end
   end
+  self:SyncAuraButtons()
   self:MarkIconsDirty() -- states read on the next frame, once
 end
 
 ---------------------------------------------------------------------------
--- Live state
+-- Live state, read by the addon: auras the game lets addons see (out of combat, and in combat
+-- the few spells it marks as never secret), spell cooldowns and charges.
 ---------------------------------------------------------------------------
 local function Bool(v) return not issecretvalue(v) and v == true end
 
@@ -317,11 +300,6 @@ local function TargetFits(on)
   if on == "enemy" then return Bool(UnitCanAttack("player", "target")) end
   if on == "friend" then return not Bool(UnitCanAttack("player", "target")) end
   return true
-end
-
-local function TargetGUID()
-  local guid = UnitGUID and UnitGUID("target")
-  if not issecretvalue(guid) then return guid end
 end
 
 -- A spell typed by name and unknown to this character ("renew"): the unit's auras are read one
@@ -337,9 +315,8 @@ local function ScanAuras(unit, name, filter)
   end
 end
 
--- By name, where the icon's condition says. Only works while the game shows the aura to
--- addons (out of combat; in combat the game hides most auras): see the instance tracking.
--- Also says when the aura is there in another rank than the one watched.
+-- By name, where the icon's condition says. Also says when the aura is there in another rank
+-- than the one watched.
 local function FindAura(slot)
   local otherRank
   for _, lookup in ipairs(LOOKUPS[slot.on] or LOOKUPS.auto) do
@@ -354,123 +331,6 @@ local function FindAura(slot)
     end
   end
   return nil, nil, otherRank
-end
-
----------------------------------------------------------------------------
--- In combat the game hides aura details from addons, but still lists each unit's aura
--- instances. An aura seen out of combat is followed by its instance; one that appears just
--- after you cast the same spell is taken to be that spell's. Time left and stacks then come
--- from the game's own duration object and stack text, which addons may display.
----------------------------------------------------------------------------
-local present = { player = {}, target = {} }   -- aura instances on each unit now: HELPFUL / HARMFUL
-local fresh = { player = {}, target = {} }     -- instances that appeared lately: time
-local casts = {}                               -- spell name (lower case) -> { time, spell ID } of your last cast
-
-local function ListAuras(unit)
-  local set = {}
-  if not GetUnitAuraInstanceIDs or (unit == "target" and not UnitExists("target")) then return set end
-  for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
-    local ok, ids = pcall(GetUnitAuraInstanceIDs, unit, filter)
-    if ok and not issecretvalue(ids) and type(ids) == "table" then
-      for _, id in ipairs(ids) do
-        if Plain(id) then set[id] = filter end
-      end
-    end
-  end
-  return set
-end
-
--- Target changes, counted (the target's GUID may be hidden from addons).
-local targetEpoch, seenEpoch = 0, 0
-function ns:TargetChanged()
-  targetEpoch = targetEpoch + 1
-  self:MarkIconsDirty()
-end
-
-local function RefreshInstances()
-  local now = GetTime()
-  if targetEpoch ~= seenEpoch then
-    seenEpoch = targetEpoch
-    wipe(fresh.target)
-    present.target = ListAuras("target") -- another target: the auras it has are not new
-  end
-  for unit, old in pairs(present) do
-    local set = ListAuras(unit)
-    for id in pairs(set) do
-      if not old[id] then fresh[unit][id] = now end
-    end
-    for id, t in pairs(fresh[unit]) do
-      if not set[id] or now - t > CAST_WINDOW then fresh[unit][id] = nil end
-    end
-    present[unit] = set
-  end
-end
-
--- Your cast of a spell (Core.lua forwards UNIT_SPELLCAST_SUCCEEDED for the player).
-function ns:NoteCast(spellID)
-  local name = Plain(spellID) and self:SpellName(spellID)
-  if name then
-    casts[Fold(name)] = { GetTime(), spellID, targetEpoch }
-    self:MarkIconsDirty()
-  end
-end
-
-local function Remember(slot, unit, aura)
-  local id = Plain(aura.auraInstanceID)
-  if not id then return end
-  local icon = aura.icon
-  slot.inst = { unit = unit, id = id, guid = unit == "target" and TargetGUID() or nil, epoch = targetEpoch,
-    icon = (not issecretvalue(icon) and icon) or slot.spellIcon }
-end
-
--- The aura this icon follows, if it is still there. One on a target counts while that target
--- stays targeted, or again when it is targeted back (if its GUID can be read).
-local function Followed(slot)
-  local inst = slot.inst
-  if not inst then return end
-  if inst.unit == "target" then
-    if not TargetFits(slot.on) then return end
-    if inst.epoch ~= targetEpoch then
-      local guid = TargetGUID()
-      if not (guid and inst.guid == guid) then return end
-      inst.epoch = targetEpoch
-    end
-  end
-  if present[inst.unit][inst.id] then return inst end
-  slot.inst = nil -- gone
-end
-
--- Where a cast of this icon's spell puts its aura. Without a condition: a harmful spell on
--- the target, a helpful one on you or your target.
-local HARMFUL_CAST = { { "target", "HARMFUL" } }
-local HELPFUL_CAST = { { "player", "HELPFUL" }, { "target", "HELPFUL" } }
-local function CastLookups(slot)
-  if slot.on == "auto" then
-    if slot.harmful then return HARMFUL_CAST end
-    if slot.helpful then return HELPFUL_CAST end
-  end
-  return LOOKUPS[slot.on] or LOOKUPS.auto
-end
-
--- An aura that appeared just after your cast of this icon's spell, where the icon looks.
-local function JustCast(slot)
-  local last = slot.name and casts[Fold(slot.name)]
-  if not last or GetTime() - last[1] > CAST_WINDOW or (slot.exact and not slot.exact[last[2]]) then return end
-  local cast = last[1]
-  for _, lookup in ipairs(CastLookups(slot)) do
-    local unit = lookup[1]
-    if unit ~= "target" or (TargetFits(slot.on) and last[3] == targetEpoch) then -- still the target cast on
-      local newest, when
-      for id, t in pairs(fresh[unit]) do
-        if present[unit][id] == lookup[2] and t >= cast - .2 and (not when or t > when) then newest, when = id, t end
-      end
-      if newest then
-        fresh[unit][newest] = nil
-        slot.inst = { unit = unit, id = newest, guid = unit == "target" and TargetGUID() or nil, epoch = targetEpoch, icon = slot.spellIcon }
-        return slot.inst
-      end
-    end
-  end
 end
 
 -- The spell's own cooldown, global cooldown left out: put on the swipe, true while it runs.
@@ -507,23 +367,20 @@ local function Charges(slot)
   end
 end
 
--- The aura an icon shows: found by name, else followed or just cast. Runs while the bar is
--- hidden too (a druid out of Cat and Bear Form), so the buffs cast meanwhile are followed.
-local function Track(slot)
-  if not slot.name then return end
-  local aura, unit, otherRank = FindAura(slot)
-  if aura then
-    Remember(slot, unit, aura)
-    return aura, unit
-  end
-  if otherRank then
-    slot.inst = nil -- seen, in another rank: not this one
-    return
-  end
-  return nil, nil, Followed(slot) or JustCast(slot)
+-- The spell IDs an aura was seen under, by spell name: the game's aura buttons (below) match
+-- auras by ID, and some spells exist under several IDs (ranks, Forever's second IDs).
+local function LearnAuraID(slot, aura)
+  local id = Plain(aura.spellId)
+  local learned = ns.sv and ns.sv.auraIDs
+  if not id or not learned or slot.exact or not slot.name then return end
+  local key = Fold(slot.name)
+  if learned[key] and learned[key][id] then return end
+  learned[key] = learned[key] or {}
+  learned[key][id] = true
+  ns:SyncAuraButtons()
 end
 
-local function SetSlot(slot, look, aura, unit, inst)
+local function SetSlot(slot, look, aura, unit)
   slot.cd:Clear()
   slot.cd:SetReverse(false)
   if slot.cd.SetHideCountdownNumbers then slot.cd:SetHideCountdownNumbers(not look.timers) end
@@ -539,6 +396,7 @@ local function SetSlot(slot, look, aura, unit, inst)
     return
   end
   if aura then
+    LearnAuraID(slot, aura)
     local icon = aura.icon
     if issecretvalue(icon) or not icon then
       icon = slot.spellIcon
@@ -570,29 +428,15 @@ local function SetSlot(slot, look, aura, unit, inst)
     elseif type(stacks) == "number" and stacks > 1 then
       slot.count:SetText(stacks)
     end
-  elseif inst then
-    -- hidden details (in combat): the game's duration object and stack text
-    slot.icon:SetTexture(inst.icon or slot.spellIcon)
-    if GetAuraDuration then
-      local ok, d = pcall(GetAuraDuration, inst.unit, inst.id)
-      if ok and d and slot.cd.SetCooldownFromDurationObject then
-        slot.cd:SetReverse(look.reverse)
-        pcall(slot.cd.SetCooldownFromDurationObject, slot.cd, d, true)
-      end
-    end
-    if GetDisplayCount then
-      local ok, text = pcall(GetDisplayCount, inst.unit, inst.id, 2)
-      if ok then slot.count:SetText(text) end
-    end
   else
     slot.icon:SetTexture(slot.spellIcon)
     running = SpellCooldown(slot)
   end
-  if not inst and not (aura and Plain(aura.applications) and aura.applications > 1) then
+  if not (aura and Plain(aura.applications) and aura.applications > 1) then
     local charges = Charges(slot)
     if charges ~= nil then slot.count:SetText(charges) end
   end
-  local lit = aura or inst or running or slot.hasCooldown
+  local lit = aura or running or slot.hasCooldown
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
   slot:SetShown(lit or look.missing)
@@ -600,36 +444,244 @@ end
 
 function ns:UpdateIcons()
   dirty = false
-  if not self.db then return end
-  RefreshInstances()
-  local shown, look = self.hud:IsShown(), self.db.icons
+  if not self.db or not self.hud:IsShown() then
+    dirty = true -- catch up when shown
+    return
+  end
+  local look = self.db.icons
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
       for i = 1, #(row.spells or {}) do
         local slot = row.slots[i]
-        local aura, unit, inst = Track(slot)
-        if shown then SetSlot(slot, look, aura, unit, inst) end -- (drawn when the bar shows again)
+        local aura, unit, otherRank
+        if slot.name then aura, unit, otherRank = FindAura(slot) end
+        SetSlot(slot, look, aura, unit)
       end
     end
   end
 end
 
--- While the bar is hidden its OnUpdate does not run: this frame catches up instead.
-local catchUp = CreateFrame("Frame")
-catchUp:Hide()
-catchUp:SetScript("OnUpdate", function(self)
-  self:Hide()
-  ns:UpdateIconsIfDirty()
-end)
-
 -- Aura and cooldown events can come in bursts: the icons are refreshed once, on the next frame.
 function ns:MarkIconsDirty()
   dirty = true
-  if self.hud and not self.hud:IsShown() then catchUp:Show() end
 end
 
 function ns:UpdateIconsIfDirty()
   if dirty then self:UpdateIcons() end
+end
+
+---------------------------------------------------------------------------
+-- In combat the game hides most auras from addons. It still shows them itself, in its "aura
+-- containers": each icon gets one of the game's aura buttons, given the spell IDs to show, on
+-- you or on your target. The game fills it, in and out of combat, with the aura's icon, time
+-- left and stacks; it sits over the icon (grayed out when the aura is missing) while the aura
+-- is up. The game matches spell IDs for buffs on you and on friendly units, and for debuffs on
+-- enemies.
+---------------------------------------------------------------------------
+local CONTAINER_TEMPLATE = "CustomAuraContainerTemplate"
+-- what an icon's aura buttons watch, for each condition: unit, aura filter
+local SECURE = {
+  auto   = { { "player", "HELPFUL" }, { "target", "HARMFUL" } },
+  self   = { { "player", "HELPFUL" } },
+  target = { { "target", "HELPFUL" }, { "target", "HARMFUL" } },
+  enemy  = { { "target", "HARMFUL" } },
+  friend = { { "target", "HELPFUL" } },
+}
+
+-- While auras are secret (combat, and some instances), the game's aura buttons cannot be set
+-- up by addons: changes wait until it is over.
+local function AurasSecret()
+  if C_Secrets and C_Secrets.ShouldAurasBeSecret then
+    local ok, secret = pcall(C_Secrets.ShouldAurasBeSecret)
+    if ok and secret == true then return true end
+  end
+  return InCombatLockdown() == true
+end
+
+local containers = {} -- unit -> the game's aura container (false: none in this client)
+ns.auraContainers = containers
+
+local function Container(unit)
+  if containers[unit] == nil then
+    containers[unit] = false
+    local ok, c = pcall(CreateFrame, "AuraContainer", nil, ns.iconLayer, CONTAINER_TEMPLATE)
+    if ok and c and c.AddAuraSlot then
+      c:SetPoint("TOPLEFT", ns.iconLayer, "TOPLEFT")
+      c:SetSize(1, 1)
+      c:SetFrameLevel(ns.iconLayer:GetFrameLevel() + 4) -- over the icons, under their button frame
+      if c.SetEditModePreviewEnabled then c:SetEditModePreviewEnabled(false) end
+      c:SetUnit(unit)
+      containers[unit] = c
+    end
+  end
+  return containers[unit] or nil
+end
+
+local slotCount = 0
+
+-- One of the game's aura buttons over an icon, dressed like it: masked art, swipe and
+-- countdown, stacks bottom right (all its own children, which the game updates).
+local function AuraButton(slot, unit, filter)
+  local key = unit .. "|" .. filter
+  slot.secure = slot.secure or {}
+  if slot.secure[key] ~= nil then return slot.secure[key] or nil end
+  local container = Container(unit)
+  if not container then
+    slot.secure[key] = false
+    return
+  end
+  slotCount = slotCount + 1
+  local rec = { container = container, key = "ClaraComboPoints" .. slotCount, enabled = true }
+  local ok = pcall(container.AddAuraSlot, container, rec.key, filter, {
+    candidateFilters = { includeSpellIDs = {} },
+    initializeFrame = function(button)
+      button:SetAllPoints(slot)
+      if button.EnableMouse then button:EnableMouse(false) end
+      local icon = button:CreateTexture(nil, "ARTWORK")
+      icon:SetAllPoints()
+      if button.CreateMaskTexture and icon.AddMaskTexture then
+        local mask = button:CreateMaskTexture()
+        mask:SetAtlas(MASK_ATLAS)
+        mask:SetAllPoints(icon)
+        icon:AddMaskTexture(mask)
+      end
+      local cd = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+      cd:SetDrawBling(false)
+      cd:SetDrawEdge(false)
+      if cd.SetCountdownAbbrevThreshold then cd:SetCountdownAbbrevThreshold(ABBREV) end
+      local over = CreateFrame("Frame", nil, button) -- stacks above the icon's button frame
+      over:SetAllPoints()
+      over:SetFrameLevel(slot.over:GetFrameLevel() + 1)
+      local count = over:CreateFontString(nil, "OVERLAY")
+      count:SetFont(FONT, 10, "OUTLINE")
+      button:SetIcon(icon)
+      button:SetDurationCooldown(cd)
+      button:SetApplicationCount(count)
+      rec.icon, rec.cd, rec.count = icon, cd, count
+    end,
+  })
+  slot.secure[key] = ok and rec.icon and rec or false
+  return slot.secure[key] or nil
+end
+
+local function StyleAuraButton(rec, w, h, look)
+  if rec.w == w and rec.h == h and rec.reverse == look.reverse and rec.timers == look.timers then return end
+  rec.w, rec.h, rec.reverse, rec.timers = w, h, look.reverse, look.timers
+  Crop(rec.icon, w, h)
+  local inset = min(w, h) * 3 / 45
+  rec.cd:ClearAllPoints()
+  rec.cd:SetPoint("TOPLEFT", inset, -inset)
+  rec.cd:SetPoint("BOTTOMRIGHT", -inset, inset)
+  rec.cd:SetReverse(look.reverse)
+  if rec.cd.SetHideCountdownNumbers then rec.cd:SetHideCountdownNumbers(not look.timers) end
+  SetCountFonts(rec.count, rec.cd, w, h)
+end
+
+-- The spell IDs an icon's aura buttons show: every rank this client knows (with the second IDs
+-- Forever gives some spells) and the IDs its aura was seen under; or one rank only.
+local function SecureIDs(slot)
+  local ids, any = {}, false
+  local function Add(id) if id then ids[id] = true; any = true end end
+  if slot.exact then
+    for id in pairs(slot.exact) do Add(id) end
+    return any and ids or nil
+  end
+  if type(slot.spell) == "number" then Add(slot.spell) end
+  local rec = ns:CatalogRecord(slot.spell)
+  for _, r in ipairs(rec and rec.ranks or {}) do Add(r[2]); Add(r[3]) end
+  local learned = slot.name and ns.sv and ns.sv.auraIDs and ns.sv.auraIDs[Fold(slot.name)]
+  for id in pairs(learned or {}) do Add(id) end
+  return any and ids or nil
+end
+
+local function IDKey(ids)
+  local list = {}
+  for id in pairs(ids) do list[#list + 1] = id end
+  table.sort(list)
+  return table.concat(list, ",")
+end
+
+local secureDirty -- aura buttons to set up once auras are no longer secret
+
+-- Gives every icon its aura buttons (by condition), with the spell IDs to show; turns off the
+-- ones not needed. Run after each layout, and when an aura is seen under a new ID.
+function ns:SyncAuraButtons()
+  if not self.db then return end
+  if AurasSecret() then
+    secureDirty = true
+    return
+  end
+  secureDirty = false
+  local look = self.db.icons
+  for _, side in ipairs(self.SIDES) do
+    for _, row in pairs(rows[side]) do
+      local n = row:IsShown() and #(row.spells or {}) or 0
+      for i, slot in ipairs(row.slots) do
+        local ids = i <= n and SecureIDs(slot)
+        local wanted = {}
+        if ids then
+          for _, watch in ipairs(SECURE[slot.on] or SECURE.auto) do
+            local rec = AuraButton(slot, watch[1], watch[2])
+            if rec then wanted[rec] = true end
+          end
+        end
+        for _, rec in pairs(slot.secure or {}) do
+          if rec then
+            local on = wanted[rec] == true
+            pcall(function()
+              if on then
+                local idKey = IDKey(ids)
+                if rec.idKey ~= idKey then
+                  rec.container:SetAuraSlotCandidateFilters(rec.key, { includeSpellIDs = ids })
+                  rec.idKey = idKey
+                end
+                StyleAuraButton(rec, slot.w, slot.h, look)
+              end
+              if rec.enabled ~= on then
+                rec.container:SetAuraSlotEnabled(rec.key, on)
+                rec.enabled = on
+              end
+            end)
+          end
+        end
+      end
+    end
+  end
+end
+
+-- The game's target container shows the new target's auras.
+function ns:TargetChanged()
+  local c = containers.target
+  if c then pcall(c.UpdateAllAuras, c) end
+  self:MarkIconsDirty()
+end
+
+-- Combat over: set up what waited.
+function ns:AurasReadable()
+  if secureDirty then self:SyncAuraButtons() end
+  self:MarkIconsDirty()
+end
+
+-- /cl debug: what the icons watch, for a report.
+function ns:DebugIcons()
+  local out = {}
+  local function Add(text) out[#out + 1] = text end
+  Add(("auras secret: %s, aura containers: player %s, target %s"):format(tostring(AurasSecret()),
+    tostring(containers.player and true or containers.player), tostring(containers.target and true or containers.target)))
+  for _, side in ipairs(self.SIDES) do
+    for k, row in pairs(rows[side]) do
+      for i = 1, #(row.spells or {}) do
+        local slot = row.slots[i]
+        local ids = SecureIDs(slot)
+        local buttons = {}
+        for key, rec in pairs(slot.secure or {}) do buttons[#buttons + 1] = key .. (rec and (rec.enabled and "+" or "-") or "x") end
+        table.sort(buttons)
+        Add(("%s %d: %s (%s) on %s, IDs %s, buttons %s"):format(RowName(side, k), i, tostring(slot.name), tostring(slot.spell),
+          tostring(slot.on), ids and IDKey(ids) or "none", #buttons > 0 and table.concat(buttons, " ") or "none"))
+      end
+    end
+  end
+  return out
 end
 
 ---------------------------------------------------------------------------
