@@ -932,6 +932,7 @@ function ns:PLAYER_LOGIN()
   events:RegisterEvent("PLAYER_TARGET_CHANGED")
   events:RegisterEvent("PLAYER_REGEN_DISABLED")
   events:RegisterEvent("PLAYER_REGEN_ENABLED")
+  pcall(events.RegisterEvent, events, "ADDON_RESTRICTION_STATE_CHANGED") -- auras secret beyond combat (encounters, PvP)
   events:RegisterEvent("UI_SCALE_CHANGED")
   events:RegisterEvent("DISPLAY_SIZE_CHANGED")
   events:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
@@ -971,6 +972,7 @@ function ns:PLAYER_ENTERING_WORLD()
   self:ApplyScale()
   self:UpdateVisibility()
   self:UpdatePowerMode()
+  self:AurasReadable()
 end
 
 -- A shift only redraws the bar when it changes what the bar shows (energy / rage).
@@ -1061,6 +1063,12 @@ function ns:PLAYER_REGEN_ENABLED()
   inCombat = false
   self:ApplyFade()
   self:AurasReadable() -- Tracker.lua: the auras can be read again
+end
+
+-- An addon restriction lifted (combat, encounter, PvP match): the auras may be readable again.
+function ns:ADDON_RESTRICTION_STATE_CHANGED(_, state)
+  local inactive = Enum.AddOnRestrictionState and Enum.AddOnRestrictionState.Inactive or 0
+  if not issecretvalue(state) and state == inactive then self:AurasReadable() end
 end
 
 function ns:UI_SCALE_CHANGED()

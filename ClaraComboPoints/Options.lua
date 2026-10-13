@@ -1395,6 +1395,7 @@ local function Build()
   cellSize:SetPoint("TOPLEFT", LEFT + 74, -131)
   local timers = Check(icons, Tr("SHOW_TIMERS"), function(on)
     ns.db.icons.timers = on
+    ns:SyncAuraButtons() -- the game's aura buttons too
     ns:UpdateIcons()
   end)
   timers:SetPoint("TOPLEFT", LEFT, -160)
@@ -1405,6 +1406,7 @@ local function Build()
   missing:SetPoint("TOPLEFT", LEFT, -184)
   local reverse = Check(icons, Tr("REVERSE"), function(on)
     ns.db.icons.reverse = on
+    ns:SyncAuraButtons() -- the game's aura buttons too
     ns:UpdateIcons()
   end)
   reverse:SetPoint("TOPLEFT", LEFT, -208)

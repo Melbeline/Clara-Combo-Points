@@ -125,11 +125,11 @@ local PIECES = { -- column, row (1 = left/top, 2 = middle, 3 = right/bottom)
   { 1, 1 }, { 2, 1 }, { 3, 1 }, { 1, 2 }, { 3, 2 }, { 1, 3 }, { 2, 3 }, { 3, 3 },
 }
 
-local function LayoutFrame(slot, w, h)
+local function LayoutFrame(owner, pieces, w, h)
   local art = FrameArt()
   if not art then
-    slot.frame[1]:SetAllPoints()
-    slot.frame[1]:SetAtlas(FRAME_ATLAS)
+    pieces[1]:SetAllPoints()
+    pieces[1]:SetAtlas(FRAME_ATLAS)
     return
   end
   local c = min(w, h) * CORNER
@@ -140,11 +140,11 @@ local function LayoutFrame(slot, w, h)
   local xs = { 0, c, w - c, w }
   local ys = { 0, c, h - c, h }
   for i, piece in ipairs(PIECES) do
-    local tex, col, row = slot.frame[i], piece[1], piece[2]
+    local tex, col, row = pieces[i], piece[1], piece[2]
     tex:SetTexture(art.file)
     tex:SetTexCoord(us[col], us[col + 1], vs[row], vs[row + 1])
     tex:ClearAllPoints()
-    tex:SetPoint("TOPLEFT", slot, "TOPLEFT", xs[col], -ys[row])
+    tex:SetPoint("TOPLEFT", owner, "TOPLEFT", xs[col], -ys[row])
     tex:SetSize(xs[col + 1] - xs[col], ys[row + 1] - ys[row])
   end
 end
@@ -264,7 +264,7 @@ function ns:LayoutIcons()
           slot:SetPoint("TOPLEFT", (i - 1) * (w + self.CP_GAP), 0)
           slot.w, slot.h = w, size
           Crop(slot.icon, w, size)
-          LayoutFrame(slot, w, size)
+          LayoutFrame(slot, slot.frame, w, size)
           local inset = min(w, size) * 3 / 45
           slot.cd:ClearAllPoints()
           slot.cd:SetPoint("TOPLEFT", inset, -inset)
@@ -518,6 +518,7 @@ local function Container(unit)
 end
 
 local slotCount = 0
+local StyleAuraButton -- below
 
 -- One of the game's aura buttons over an icon, dressed like it: masked art, swipe and
 -- countdown, stacks bottom right (all its own children, which the game updates).
@@ -549,25 +550,32 @@ local function AuraButton(slot, unit, filter)
       cd:SetDrawBling(false)
       cd:SetDrawEdge(false)
       if cd.SetCountdownAbbrevThreshold then cd:SetCountdownAbbrevThreshold(ABBREV) end
-      local over = CreateFrame("Frame", nil, button) -- stacks above the icon's button frame
+      -- its own button frame and stacks, over the icon's (which is faded while the addon
+      -- cannot read the aura)
+      local over = CreateFrame("Frame", nil, button)
       over:SetAllPoints()
       over:SetFrameLevel(slot.over:GetFrameLevel() + 1)
+      local frame = {}
+      for i = 1, FrameArt() and #PIECES or 1 do frame[i] = over:CreateTexture(nil, "OVERLAY") end
       local count = over:CreateFontString(nil, "OVERLAY")
       count:SetFont(FONT, 10, "OUTLINE")
       button:SetIcon(icon)
       button:SetDurationCooldown(cd)
       button:SetApplicationCount(count)
-      rec.icon, rec.cd, rec.count = icon, cd, count
+      rec.icon, rec.cd, rec.count, rec.over, rec.frame = icon, cd, count, over, frame
+      -- dressed now: the game restricts its buttons only after this
+      StyleAuraButton(rec, slot.w, slot.h, ns.db.icons)
     end,
   })
   slot.secure[key] = ok and rec.icon and rec or false
   return slot.secure[key] or nil
 end
 
-local function StyleAuraButton(rec, w, h, look)
+function StyleAuraButton(rec, w, h, look)
   if rec.w == w and rec.h == h and rec.reverse == look.reverse and rec.timers == look.timers then return end
   rec.w, rec.h, rec.reverse, rec.timers = w, h, look.reverse, look.timers
   Crop(rec.icon, w, h)
+  LayoutFrame(rec.over, rec.frame, w, h)
   local inset = min(w, h) * 3 / 45
   rec.cd:ClearAllPoints()
   rec.cd:SetPoint("TOPLEFT", inset, -inset)
@@ -587,8 +595,9 @@ local function SecureIDs(slot)
     return any and ids or nil
   end
   if type(slot.spell) == "number" then Add(slot.spell) end
-  local rec = ns:CatalogRecord(slot.spell)
-  for _, r in ipairs(rec and rec.ranks or {}) do Add(r[2]); Add(r[3]) end
+  for _, rec in ipairs(ns:CatalogRecords(slot.spell, slot.name)) do
+    for _, r in ipairs(rec.ranks) do Add(r[2]); Add(r[3]) end
+  end
   local learned = slot.name and ns.sv and ns.sv.auraIDs and ns.sv.auraIDs[Fold(slot.name)]
   for id in pairs(learned or {}) do Add(id) end
   return any and ids or nil
@@ -601,17 +610,16 @@ local function IDKey(ids)
   return table.concat(list, ",")
 end
 
-local secureDirty -- aura buttons to set up once auras are no longer secret
+local secureDirty -- aura buttons to restyle once auras are no longer secret
 
 -- Gives every icon its aura buttons (by condition), with the spell IDs to show; turns off the
--- ones not needed. Run after each layout, and when an aura is seen under a new ID.
+-- ones not needed. Run after each layout, when an aura is seen under a new ID, and when the
+-- icon look changes. The containers take these changes at any time, in combat too; the
+-- buttons themselves are closed to addons while auras are secret, so their look waits.
 function ns:SyncAuraButtons()
   if not self.db then return end
-  if AurasSecret() then
-    secureDirty = true
-    return
-  end
-  secureDirty = false
+  local secret = AurasSecret()
+  secureDirty = secret
   local look = self.db.icons
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
@@ -635,7 +643,7 @@ function ns:SyncAuraButtons()
                   rec.container:SetAuraSlotCandidateFilters(rec.key, { includeSpellIDs = ids })
                   rec.idKey = idKey
                 end
-                StyleAuraButton(rec, slot.w, slot.h, look)
+                if not secret then StyleAuraButton(rec, slot.w, slot.h, look) end
               end
               if rec.enabled ~= on then
                 rec.container:SetAuraSlotEnabled(rec.key, on)
@@ -802,9 +810,10 @@ function ns:SetIconCondition(side, k, i, on) return self:SetIconEntry(side, k, i
 ---------------------------------------------------------------------------
 -- (alt: the same ranks under other IDs, as some spells have in Forever)
 local catalogIndex -- spell ID and lower-case name -> { kind =, class =, ranks = { { rank, ID, other ID } known here } }
+local catalogByName -- lower-case name -> every record of that name (several classes, a cast and its aura)
 local function CatalogIndex()
   if catalogIndex then return catalogIndex end
-  catalogIndex = {}
+  catalogIndex, catalogByName = {}, {}
   for _, class in ipairs(ns.SPELL_CATALOG or {}) do
     for _, spell in ipairs(class.spells) do
       local rec = { kind = spell[1], class = class.class, ranks = {} }
@@ -819,7 +828,12 @@ local function CatalogIndex()
           if alt then catalogIndex[alt] = rec end
         end
       end
-      if rec.name and not catalogIndex[Fold(rec.name)] then catalogIndex[Fold(rec.name)] = rec end
+      if rec.name then
+        local key = Fold(rec.name)
+        if not catalogIndex[key] then catalogIndex[key] = rec end
+        catalogByName[key] = catalogByName[key] or {}
+        table.insert(catalogByName[key], rec)
+      end
     end
   end
   return catalogIndex
@@ -843,6 +857,16 @@ function ns:CatalogRecord(spell)
   local index = CatalogIndex()
   if type(spell) == "string" then return index[Fold(spell)] end
   return index[spell]
+end
+
+-- The class spell list entries of a spell: its own and every other one of the same name.
+function ns:CatalogRecords(spell, name)
+  CatalogIndex()
+  local list, seen = {}, {}
+  local function Add(rec) if rec and not seen[rec] then seen[rec] = true; list[#list + 1] = rec end end
+  Add(self:CatalogRecord(spell))
+  for _, rec in ipairs(name and catalogByName[Fold(name)] or {}) do Add(rec) end
+  return list
 end
 
 -- The ranks this client knows, { { rank, ID }, ... }, when there are more than one.
