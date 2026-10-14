@@ -89,6 +89,9 @@ local defaults = {
   bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
   healthClassColor = false, -- health bar in the class colour rather than its own
   hidden   = false,    -- the whole HUD hidden by hand (portrait menu, options, /cl hide)
+  -- parts turned off in the colour list: not drawn at all and taking no room (the mana and
+  -- health bars, the rage about to be spent and the value have settings of their own)
+  disabled = { cp1 = false, cp2 = false, cp3 = false, cp4 = false, cp5 = false, energy = false, rage = false, bg = false },
   -- hidden when the player is in one of these situations (ns.HIDE_WHEN)
   hideWhen = { solo = false, party = false, raid = false, dungeon = false, raid10 = false, raid20 = false, raid40 = false },
   -- The bars, top to bottom in this order, each at its own size and scale. Mana: druids only,
@@ -232,6 +235,10 @@ local manaBar, healthBar = ValueBar(), ValueBar()
 ns.manaBar, ns.healthBar = manaBar, healthBar
 local elements = { combo = comboRow, power = power, mana = manaBar, health = healthBar }
 ns.barFrames = elements
+-- where the icon rows sit when every bar is turned off: a line at the top of the HUD
+local noBar = CreateFrame("Frame", nil, hud)
+noBar:SetPoint("TOP")
+noBar:SetSize(WIDTH, 1)
 
 -- Icon rows live here (Tracker.lua), so they fade together with the combo row.
 local iconLayer = CreateFrame("Frame", nil, hud)
@@ -520,6 +527,16 @@ end
 -- Updates are skipped while the HUD is hidden, so catch up on everything when it comes back.
 hud:SetScript("OnShow", RefreshValues)
 
+-- Rage for warriors and for druids in Bear Form, energy otherwise.
+local function WantedPowerType()
+  if ns.profileClass == "WARRIOR" then return POWER_RAGE end
+  if ns.profileClass == "DRUID" and ns.isDruid then
+    local pt = UnitPowerType("player")
+    if not issecretvalue(pt) and pt == POWER_RAGE then return POWER_RAGE end
+  end
+  return POWER_ENERGY
+end
+
 -- Combo points, energy / rage and the icons: druids see them in Cat Form (energy) and Bear
 -- Form (rage), unless "Cat and Bear Form only" is off; while unlocked or while the options
 -- are open, in any form, so they can be moved and coloured. Rogues and warriors always.
@@ -530,10 +547,21 @@ local function FormShown()
   return issecretvalue(pt) or pt == POWER_ENERGY or pt == POWER_RAGE
 end
 
--- The bars of the class shown: the mana bar (druids) and the health bar when turned on.
+-- The combo cells turned on, in order.
+local function CellsOn()
+  local on = {}
+  for i = 1, NUM_POINTS do
+    if not ns.db.disabled["cp" .. i] then on[#on + 1] = i end
+  end
+  return on
+end
+
+-- The bars of the class shown, unless turned off: the combo row (some cell on), the bar of the
+-- resource it shows now (energy or rage), the mana bar (druids), the health bar. A bar turned
+-- off takes no room: the others close up.
 local function BarUsed(key)
-  if key == "combo" then return ns.profileClass ~= "WARRIOR" end
-  if key == "power" then return true end
+  if key == "combo" then return ns.profileClass ~= "WARRIOR" and #CellsOn() > 0 end
+  if key == "power" then return not ns.db.disabled[WantedPowerType() == POWER_RAGE and "rage" or "energy"] end
   if key == "mana" then return ns.profileClass == "DRUID" and ns.db.bars.mana.show end
   return ns.db.bars.health.show
 end
@@ -590,10 +618,22 @@ function ns:HiddenNow()
   return false
 end
 
+-- Every bar turned off: the icon rows still show, if they have spells (or are being edited).
+local function IconsAlone()
+  if not FormShown() then return false end
+  if not ns.db.iconsLocked then return true end
+  for _, side in ipairs(ns.SIDES) do
+    for _, row in pairs(ns.db.rows[side]) do
+      if #row > 0 then return true end
+    end
+  end
+  return false
+end
+
 local function ShouldShow()
   if not (ns.isRogue or ns.isWarrior or ns.isDruid) then return false end
   if ns:HiddenNow() then return false end
-  return ShownKey():find("1") ~= nil
+  return ShownKey():find("1") ~= nil or IconsAlone()
 end
 
 local shownKey -- the bars laid out (ApplyLayout)
@@ -684,6 +724,7 @@ end
 function ns:ApplyColors()
   local c = self.db.colors
   local bg = c.bg
+  if self.db.disabled.bg then bg = { r = 0, g = 0, b = 0, a = 0 } end -- turned off: nothing drawn
   for i = 1, NUM_POINTS do
     local k = c["cp" .. i]
     cells[i]:SetStatusBarColor(k.r, k.g, k.b, k.a)
@@ -719,18 +760,8 @@ function ns:ClassColor(class)
   return c[1], c[2], c[3]
 end
 
--- Rage for warriors and for druids in Bear Form, energy otherwise. In Bear Form the empty
--- combo cells are not drawn: the row only shows points the target actually has, and is back
--- in full the moment the druid shifts to Cat Form.
-local function WantedPowerType()
-  if ns.profileClass == "WARRIOR" then return POWER_RAGE end
-  if ns.profileClass == "DRUID" and ns.isDruid then
-    local pt = UnitPowerType("player")
-    if not issecretvalue(pt) and pt == POWER_RAGE then return POWER_RAGE end
-  end
-  return POWER_ENERGY
-end
-
+-- In Bear Form the empty combo cells are not drawn: the row only shows points the target
+-- actually has, and is back in full the moment the druid shifts to Cat Form.
 function ns:UpdatePowerMode()
   local wanted = WantedPowerType()
   powerType = wanted
@@ -828,14 +859,20 @@ function ns:ApplyLayout()
     end
   end
   hud:SetSize(wide, math.max(1, y - ROW_GAP))
+  noBar:SetWidth(bars.power.width * bars.power.scale)
   shownKey = ShownKey()
-  -- the combo cells share the row's width
+  -- the combo cells turned on share the row's width (a cell keeps its point: cell 3 lights up
+  -- at 3 points, wherever it sits)
   local cb = bars.combo
-  local cellWidth = (cb.width - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS
-  for i = 1, NUM_POINTS do
+  local on = CellsOn()
+  local n = math.max(1, #on)
+  local cellWidth = (cb.width - (n - 1) * CP_GAP) / n
+  for i = 1, NUM_POINTS do cells[i]:Hide() end
+  for place, i in ipairs(on) do
     cells[i]:ClearAllPoints()
-    cells[i]:SetPoint("TOPLEFT", (i - 1) * (cellWidth + CP_GAP), 0)
+    cells[i]:SetPoint("TOPLEFT", (place - 1) * (cellWidth + CP_GAP), 0)
     cells[i]:SetSize(cellWidth, cb.height)
+    cells[i]:Show()
   end
   ValueFonts()
   self:LayoutIcons()
@@ -846,12 +883,13 @@ end
 -- shape take them).
 function ns:ComboCellSize()
   local cb = self.db.bars.combo
-  return (cb.width - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS * cb.scale, cb.height * cb.scale, CP_GAP * cb.scale
+  local n = math.max(1, #CellsOn())
+  return (cb.width - (n - 1) * CP_GAP) / n * cb.scale, cb.height * cb.scale, CP_GAP * cb.scale
 end
 
 -- The bars the icon rows sit on, with their widths on the HUD: the top one for the rows
 -- above, the bottom one for the rows below. (In Bear Form without combo points the empty
--- combo row is passed over.)
+-- combo row is passed over; with every bar turned off, the rows meet at the top of the HUD.)
 function ns:IconAnchors()
   local bars = self.db.bars
   local top, bottom = "power", "power"
@@ -861,6 +899,10 @@ function ns:IconAnchors()
       if not found then top, found = key, true end
       bottom = key
     end
+  end
+  if not found then
+    local w = bars.power.width * bars.power.scale
+    return noBar, noBar, w, w
   end
   return elements[top], elements[bottom], bars[top].width * bars[top].scale, bars[bottom].width * bars[bottom].scale
 end
@@ -941,6 +983,36 @@ end
 
 function ns:SetDruidCatOnly(on)
   self.db.druidCatOnly = on and true or false
+  self:UpdateVisibility()
+  self:RefreshOptions()
+end
+
+-- Each line of the colour list turned on or off. Mana and health are the bars' Show boxes
+-- (Layout page), the rage about to be spent and the value have their own options; the others
+-- (combo cells, energy bar, rage bar, background) are switched here only.
+function ns:ElementOn(key)
+  local db = self.db
+  if key == "mana" or key == "health" then return db.bars[key].show end
+  if key == "cost" then return db.predict end
+  if key == "text" then return db.showText end
+  return not db.disabled[key]
+end
+
+function ns:SetElementOn(key, on)
+  on = on and true or false
+  local db = self.db
+  if key == "mana" or key == "health" then
+    db.bars[key].show = on
+  elseif key == "cost" then
+    db.predict = on
+  elseif key == "text" then
+    db.showText = on
+  elseif db.disabled[key] ~= nil then
+    db.disabled[key] = not on
+  else
+    return
+  end
+  self:ApplyAll()
   self:UpdateVisibility()
   self:RefreshOptions()
 end
@@ -1183,8 +1255,10 @@ local function CleanProfile(db, class)
   end
   if db.outline ~= "NONE" and db.outline ~= "OUTLINE" and db.outline ~= "THICKOUTLINE" then db.outline = defaults.outline end
   if db.cpSource ~= "TARGET" and db.cpSource ~= "PLAYER" then db.cpSource = defaults.cpSource end
-  for key in pairs(db.hideWhen) do
-    if defaults.hideWhen[key] == nil then db.hideWhen[key] = nil end
+  for _, group in ipairs({ "hideWhen", "disabled" }) do
+    for key in pairs(db[group]) do
+      if defaults[group][key] == nil then db[group][key] = nil end
+    end
   end
   CleanRows(db, class)
 end

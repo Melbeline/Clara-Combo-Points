@@ -396,14 +396,18 @@ end
 -- One colour: label, swatch (opens the picker), opacity slider. Returns its holder and refresh.
 local function ColorRow(parent, key)
   local holder = Holder(parent, 28)
+  -- turned off: the part is not drawn and takes no room (ns:SetElementOn)
+  local on = Check(holder, nil, function(v) ns:SetElementOn(key, v) end)
+  on:SetPoint("TOPLEFT", 2, 1)
   local label = Text(holder, "")
-  label:SetPoint("TOPLEFT")
-  label:SetWidth(118)
-  label:SetWordWrap(false)
+  label:SetPoint("TOPLEFT", 20, 0)
+  label:SetWidth(114)
+  label:SetWordWrap(true)
+  label:SetMaxLines(2)
 
   local swatch = CreateFrame("Button", nil, holder)
   swatch:SetSize(34, 16)
-  swatch:SetPoint("TOPLEFT", 122, 2)
+  swatch:SetPoint("TOPLEFT", 136, 2)
   local checker = swatch:CreateTexture(nil, "BACKGROUND")
   checker:SetPoint("TOPLEFT")
   checker:SetPoint("BOTTOMRIGHT", swatch, "BOTTOM")
@@ -417,17 +421,20 @@ local function ColorRow(parent, key)
   AddBorder(swatch, .6, .6, .65, 1)
   swatch:SetScript("OnClick", function() ClickSound(); OpenColorPicker(key) end)
 
-  local slider = Slider(holder, 90, 0, 100, 1, Percent, function(v)
+  local slider = Slider(holder, 80, 0, 100, 1, Percent, function(v)
     local c = ns.db.colors[key]
     c.a = v / 100
     ns:ApplyColors()
     swatch.color:SetColorTexture(c.r, c.g, c.b, c.a)
   end)
-  slider:SetPoint("LEFT", holder, "TOPLEFT", 168, -6)
+  slider:SetPoint("LEFT", holder, "TOPLEFT", 178, -6)
 
   return holder, function()
     local c = ns.db.colors[key]
+    local shown = ns:ElementOn(key)
+    on:Set(shown)
     label:SetText(ColorLabel(key))
+    if shown then label:SetTextColor(GOLD_R, GOLD_G, GOLD_B) else label:SetTextColor(.5, .5, .5) end
     swatch.color:SetColorTexture(c.r, c.g, c.b, c.a)
     slider:Set(floor(c.a * 100 + .5))
   end
@@ -1414,9 +1421,7 @@ local function LayoutPage(p, page, OnRefresh)
     row.name = Text(row, "", "GameFontHighlight")
     row.name:SetPoint("LEFT", 30, 0)
     row.show = Check(row, Tr("SHOW"), function(on)
-      ns.db.bars[row.key].show = on
-      ns:ApplyLayout()
-      ns:UpdateVisibility()
+      ns:SetElementOn(row.key, on) -- the same as the box of its colour (Bar page)
       Refresh()
     end)
     row.show:SetPoint("RIGHT", -70, 0)
