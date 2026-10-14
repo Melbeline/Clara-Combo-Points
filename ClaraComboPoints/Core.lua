@@ -88,6 +88,9 @@ local defaults = {
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
   bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
   healthClassColor = false, -- health bar in the class colour rather than its own
+  hidden   = false,    -- the whole HUD hidden by hand (portrait menu, options, /cl hide)
+  -- hidden when the player is in one of these situations (ns.HIDE_WHEN)
+  hideWhen = { solo = false, party = false, raid = false, dungeon = false, raid10 = false, raid20 = false, raid40 = false },
   -- The bars, top to bottom in this order, each at its own size and scale. Mana: druids only,
   -- in every form; health: hidden until turned on.
   bars = {
@@ -547,8 +550,49 @@ local function ShownKey()
   return key
 end
 
+-- Situations the HUD can be hidden in: the group (none, a party, a raid group) and the
+-- instance (a dungeon, a raid of 10, 20 or 40 players; 25 counts as 20).
+ns.HIDE_WHEN = { "solo", "party", "raid", "dungeon", "raid10", "raid20", "raid40" }
+function ns:Situation()
+  local now = {}
+  if IsInRaid and IsInRaid() then
+    now.raid = true
+  elseif IsInGroup and IsInGroup() then
+    now.party = true
+  else
+    now.solo = true
+  end
+  local inside, kind = false, nil
+  if IsInInstance then inside, kind = IsInInstance() end
+  if inside and kind == "party" then now.dungeon = true end
+  if inside and kind == "raid" then
+    local size = 40
+    if GetInstanceInfo then
+      local _, _, _, _, maxPlayers, _, _, _, groupSize = GetInstanceInfo()
+      size = (type(maxPlayers) == "number" and maxPlayers > 0 and maxPlayers)
+        or (type(groupSize) == "number" and groupSize > 0 and groupSize) or 40
+    end
+    now[size <= 10 and "raid10" or size <= 25 and "raid20" or "raid40"] = true
+  end
+  return now
+end
+
+-- Hidden by hand, or by a situation ticked in the options (those wait while the HUD is being
+-- set up: options open, bar or icons unlocked).
+function ns:HiddenNow()
+  local db = self.db
+  if db.hidden then return true end
+  if self.optionsOpen or not db.locked or not db.iconsLocked then return false end
+  local now = self:Situation()
+  for _, key in ipairs(self.HIDE_WHEN) do
+    if db.hideWhen[key] and now[key] then return true end
+  end
+  return false
+end
+
 local function ShouldShow()
   if not (ns.isRogue or ns.isWarrior or ns.isDruid) then return false end
+  if ns:HiddenNow() then return false end
   return ShownKey():find("1") ~= nil
 end
 
@@ -703,6 +747,25 @@ end
 
 function ns:ApplyAlpha()
   hud:SetAlpha(self.db.alpha)
+end
+
+-- The whole HUD's opacity, 0 to 1 (options, portrait menu).
+function ns:SetAlpha(alpha)
+  self.db.alpha = math.min(1, math.max(0, alpha))
+  self:ApplyAlpha()
+  self:RefreshOptions()
+end
+
+-- The whole HUD hidden or shown again by hand.
+function ns:SetHidden(hidden)
+  self.db.hidden = hidden and true or false
+  self:UpdateVisibility()
+  self:RefreshOptions()
+end
+
+function ns:SetHideWhen(key, on)
+  self.db.hideWhen[key] = on and true or false
+  self:UpdateVisibility()
 end
 
 -- Out of combat the bar and the combo points / icons fade to their own opacity. Not while
@@ -1120,6 +1183,9 @@ local function CleanProfile(db, class)
   end
   if db.outline ~= "NONE" and db.outline ~= "OUTLINE" and db.outline ~= "THICKOUTLINE" then db.outline = defaults.outline end
   if db.cpSource ~= "TARGET" and db.cpSource ~= "PLAYER" then db.cpSource = defaults.cpSource end
+  for key in pairs(db.hideWhen) do
+    if defaults.hideWhen[key] == nil then db.hideWhen[key] = nil end
+  end
   CleanRows(db, class)
 end
 
@@ -1158,7 +1224,7 @@ function ns:CleanProfileData(data, class, into)
   local clean = CopyKnown(data, defaults, {})
   clean.rows = CopyRows(data.rows)
   CleanProfile(clean, class)
-  clean.locked, clean.iconsLocked = nil, nil
+  clean.locked, clean.iconsLocked, clean.hidden = nil, nil, nil
   if not into then return clean end
   wipe(into)
   for k, v in pairs(clean) do into[k] = v end
@@ -1264,6 +1330,8 @@ function ns:PLAYER_LOGIN()
   pcall(events.RegisterEvent, events, "ADDON_RESTRICTION_STATE_CHANGED") -- auras secret beyond combat (encounters, PvP)
   events:RegisterEvent("UI_SCALE_CHANGED")
   events:RegisterEvent("DISPLAY_SIZE_CHANGED")
+  events:RegisterEvent("GROUP_ROSTER_UPDATE") -- hidden in some situations (ns:HiddenNow)
+  events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
   events:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
   events:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
   events:RegisterUnitEvent("UNIT_MAXPOWER", "player")
@@ -1303,6 +1371,11 @@ function ns:PLAYER_ENTERING_WORLD()
   self:UpdatePowerMode()
   self:AurasReadable()
 end
+
+function ns:GROUP_ROSTER_UPDATE()
+  self:UpdateVisibility()
+end
+ns.ZONE_CHANGED_NEW_AREA = ns.GROUP_ROSTER_UPDATE
 
 -- A shift only redraws the bar when it changes what the bar shows (energy / rage).
 function ns:UNIT_DISPLAYPOWER()
@@ -1452,10 +1525,91 @@ function ns:AskResetAddon()
 end
 
 ---------------------------------------------------------------------------
--- Portrait right-click menu: "Reload UI" in Other Options, just above Edit Mode
+-- Portrait right-click menu, in Other Options just above Edit Mode: the HUD's opacity (a
+-- slider like the game's "Overall opacity") with a box to show / hide the whole HUD on the
+-- same line, then "Reload UI"
 ---------------------------------------------------------------------------
 local function ReloadInterface()
   if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+end
+
+-- The line is one frame of this addon's, lent to the menu while it is open (a frame of the
+-- menu's own pool could be handed to another menu afterwards, with this slider's callback).
+local MENU_LINE_W, MENU_LINE_H = 252, 44 -- room for the German title and the value
+local menuLine
+local function MenuLine()
+  if menuLine then return menuLine end
+  local f = CreateFrame("Frame", nil, UIParent)
+  f:SetSize(MENU_LINE_W, MENU_LINE_H)
+  f:Hide()
+  f.label = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.label:SetPoint("TOPLEFT", 0, -2)
+  f.label:SetJustifyH("LEFT")
+  f.value = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  f.value:SetPoint("TOPRIGHT", 0, -3)
+  f.label:SetPoint("RIGHT", f.value, "LEFT", -4, 0)
+  f.label:SetWordWrap(false)
+  local check = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+  check:SetSize(22, 22)
+  check:SetPoint("BOTTOMLEFT", -3, 1)
+  check:SetScript("OnClick", function(self)
+    if PlaySound and SOUNDKIT then
+      PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+    end
+    ns:SetHidden(not self:GetChecked())
+  end)
+  check:SetScript("OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(L.MENU_SHOW_TIP)
+    GameTooltip:Show()
+  end)
+  check:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  f.check = check
+  local slider = CreateFrame("Frame", nil, f, "MinimalSliderWithSteppersTemplate")
+  -- beside the box, inside the line (the template's 40 px would reach over the next entry)
+  slider:SetPoint("LEFT", check, "RIGHT", -2, 0)
+  slider:SetSize(MENU_LINE_W - 17, 24)
+  slider:Init(100, 0, 100, 20) -- 5 % a step
+  slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value)
+    if f.filling then return end
+    ns:SetAlpha(value / 100)
+    f.value:SetText(("%d %%"):format(math.floor(value + .5)))
+  end, f)
+  f.slider = slider
+  menuLine = f
+  return f
+end
+
+local function FillMenuLine(f)
+  f.filling = true
+  f.label:SetText(L.MENU_OPACITY)
+  local percent = math.floor(ns.db.alpha * 100 + .5)
+  f.slider:SetValue(percent)
+  f.value:SetText(("%d %%"):format(percent))
+  f.check:SetChecked(not ns.db.hidden)
+  f.filling = nil
+end
+
+local function MenuLineDescription()
+  local description = MenuUtil.CreateFrame()
+  description:AddInitializer(function(frame)
+    local f = MenuLine()
+    f:SetParent(frame)
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    f:SetFrameLevel(frame:GetFrameLevel() + 2)
+    FillMenuLine(f)
+    f:Show()
+    return MENU_LINE_W, MENU_LINE_H
+  end)
+  description:AddResetter(function(frame)
+    if not menuLine or menuLine:GetParent() ~= frame then return end -- already lent again
+    menuLine:Hide()
+    menuLine:ClearAllPoints()
+    menuLine:SetParent(UIParent)
+  end)
+  return description
 end
 
 local function AddReloadEntry(_, root)
@@ -1466,10 +1620,17 @@ local function AddReloadEntry(_, root)
       break
     end
   end
+  -- the opacity line: the classes the HUD is for, in clients with the game's slider
+  local line = ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame and MenuLineDescription()
   if editModeIndex then
+    if line then
+      root:Insert(line, editModeIndex)
+      editModeIndex = editModeIndex + 1
+    end
     root:Insert(MenuUtil.CreateButton(L.RELOAD_UI, ReloadInterface), editModeIndex)
-  else
-    root:CreateButton(L.RELOAD_UI, ReloadInterface) -- no Edit Mode entry: at the end
+  else -- no Edit Mode entry: at the end
+    if line then root:Insert(line) end
+    root:CreateButton(L.RELOAD_UI, ReloadInterface)
   end
 end
 
@@ -1494,6 +1655,9 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
   elseif cmd == "unlock" then
     ns:SetLocked(false)
     Print(L.UNLOCKED)
+  elseif cmd == "hide" or cmd == "show" then
+    ns:SetHidden(cmd == "hide")
+    Print(cmd == "hide" and L.HIDDEN_NOW or L.SHOWN_NOW)
   elseif cmd == "scale" and tonumber(arg) then
     ns:SetScalePercent(arg)
     Print(L.SCALE_SET:format(ns:GetScalePercent()))

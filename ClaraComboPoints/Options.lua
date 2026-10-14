@@ -697,6 +697,26 @@ local function DragGhost(parent)
   return f
 end
 
+-- One of the game's menus, opened at the cursor by a click on a button of ours. A click on the
+-- button while its menu is open closes it: left alone, the game would close the menu on the
+-- press and open it again where the cursor is. (The menu frames are reused: still ours?)
+local function MenuOpen(owner)
+  local menu = owner.menu
+  return menu ~= nil and menu:IsShown() and (not menu.GetOwnerRegion or menu:GetOwnerRegion() == owner)
+end
+local function OwnerHandlesPress(self, _, event)
+  return event == "GLOBAL_MOUSE_DOWN" and MenuOpen(self)
+end
+local function ToggleMenu(owner, generator)
+  if MenuOpen(owner) then
+    owner.menu:Close()
+    owner.menu = nil
+    return
+  end
+  owner.HandlesGlobalMouseEvent = OwnerHandlesPress
+  owner.menu = MenuUtil.CreateContextMenu(owner, generator)
+end
+
 -- Click on an icon: where it is watched, its rank, remove (the game's menus).
 local function IconMenu(b, side, k)
   local i, entry = b.index, b.entry
@@ -715,7 +735,7 @@ local function IconMenu(b, side, k)
     return
   end
   local spell = ns:EntrySpell(entry)
-  MenuUtil.CreateContextMenu(b, function(_, root)
+  ToggleMenu(b, function(_, root)
     root:CreateTitle(ns:SpellName(spell) or tostring(spell))
     for _, on in ipairs(ns.CONDITIONS) do
       root:CreateRadio(OnName(on), function() return ns:EntryOn(Current()) == on end, function() Change(nil, on) end)
@@ -891,7 +911,7 @@ local function Choice(parent, w, options, get, set)
     ClickSound()
     local list = options()
     if MenuUtil and MenuUtil.CreateContextMenu then
-      MenuUtil.CreateContextMenu(self, function(_, root)
+      ToggleMenu(self, function(_, root)
         for _, o in ipairs(list) do
           root:CreateRadio(o[2], function() return get() == o[1] end, function() Pick(o[1]) end)
         end
@@ -2026,15 +2046,19 @@ local function Build()
   local centerBtn = Button(bar, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end)
   centerBtn:SetPoint("TOPLEFT", LEFT + 160, -80)
   -- icons unlocked: spells dropped on the HUD's rows, icons moved or dragged off (Tracker.lua)
-  local iconsBtn = Button(bar, "", 150, 22, function() ns:SetIconsLocked(not ns.db.iconsLocked) end)
-  iconsBtn:SetPoint("TOPLEFT", LEFT, -108)
-  iconsBtn:HookScript("OnEnter", function(self)
+  local function IconsTip(self)
     if not GameTooltip then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:SetText(self:GetText() or "")
     GameTooltip:AddLine(L.ICONS_UNLOCKED_HINT, .9, .9, .9, true)
     GameTooltip:Show()
+  end
+  local iconsBtn = Button(bar, "", 150, 22, function(self)
+    ns:SetIconsLocked(not ns.db.iconsLocked)
+    if GameTooltip and GameTooltip:IsOwned(self) then IconsTip(self) end -- its new name
   end)
+  iconsBtn:SetPoint("TOPLEFT", LEFT, -108)
+  iconsBtn:HookScript("OnEnter", IconsTip)
   iconsBtn:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   local iconsHint = Hint(bar, Tr("ICONS_UNLOCKED_SHORT"))
   iconsHint:SetPoint("LEFT", iconsBtn, "RIGHT", 10, 0)
@@ -2239,6 +2263,23 @@ local function Build()
     { frame = preview, height = 34 },
     { frame = reset,   height = 30 },
   }, advancedBox))
+
+  -- The whole HUD shown or hidden by hand (also in the portrait's menu), or hidden in some
+  -- situations
+  Section(text, "HIDE_SECTION", RIGHT, -284, nil, -546)
+  local showAddon = Check(text, Tr("SHOW_ADDON"), function(on) ns:SetHidden(not on) end)
+  showAddon:SetPoint("TOPLEFT", RIGHT, -312)
+  OnRefresh(function() showAddon:Set(not ns.db.hidden) end)
+  Text(text, Tr("HIDE_WHEN")):SetPoint("TOPLEFT", RIGHT, -334)
+  for i, key in ipairs(ns.HIDE_WHEN) do
+    local check = Check(text, Tr("HIDE_" .. key:upper()), function(on) ns:SetHideWhen(key, on) end)
+    check:SetPoint("TOPLEFT", RIGHT + 8, -356 - (i - 1) * 22)
+    OnRefresh(function() check:Set(ns.db.hideWhen[key]) end)
+  end
+  local hideHint = Hint(text, Tr("HIDE_HINT"))
+  hideHint:SetPoint("TOPLEFT", RIGHT, -508)
+  hideHint:SetWidth(COL_W)
+  hideHint:SetWordWrap(true)
 
   IconsPage(p, pages[3], OnRefresh)
   LayoutPage(p, pages[4], OnRefresh)

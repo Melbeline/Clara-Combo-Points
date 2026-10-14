@@ -1109,7 +1109,7 @@ end
 -- the HUD to another profile while the button is held.)
 local function DragValid(d)
   local row = d.profile == ns.db and ns.db.rows[d.side] and ns.db.rows[d.side][d.k]
-  return row and row[d.i] == d.entry and ns:IconsEditable()
+  return row and row[d.i] == d.entry and ns:IconsEditable() and ns.iconLayer:IsVisible()
 end
 
 -- Let go elsewhere than where it should: nothing moves.
@@ -1126,7 +1126,10 @@ local function EndDrag()
   local d = StopDrag()
   if d.row then
     local ok, msg = ns:MoveIconTo(d.side, d.k, d.i, d.row.side, d.row.k, d.at)
-    if not ok and msg then ns.Print(msg) end
+    if not ok then
+      if msg then ns.Print(msg) end
+      ns:LayoutIcons() -- the icon stays: its own look again
+    end
   elseif d.out then
     local spell = ns:EntrySpell(d.entry)
     ns:RemoveIcon(d.side, d.k, d.i)
