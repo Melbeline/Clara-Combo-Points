@@ -83,7 +83,7 @@ local defaults = {
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
   bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
   icons = {
-    shape   = "FILL",  -- FILL: the row shares the bar's width / CELL: combo point cell size / SQUARE
+    shape   = "SQUARE", -- SQUARE (default) / CELL: rectangles the size of a combo point / FILL: the row shares the bar's width
     size    = 25,      -- row height (and icon width when square), reference pixels
     timers  = true,    -- countdown numbers on the cooldown swipe (auras and spell cooldowns)
     missing = true,    -- missing auras stay in place, grayed out
@@ -857,7 +857,8 @@ end
 local function CleanEntry(entry)
   if ValidSpell(entry) then return entry end
   if type(entry) == "table" and ValidSpell(entry.spell) then
-    return { spell = entry.spell, on = CONDITION[entry.on] and entry.on or "auto", exact = entry.exact == true or nil }
+    return { spell = entry.spell, on = CONDITION[entry.on] and entry.on or "auto", exact = entry.exact == true or nil,
+      mine = entry.mine == true or nil }
   end
 end
 
@@ -884,7 +885,7 @@ local function CleanProfile(db, class)
   end
   if type(db.icons) == "table" then db.icons.square = nil end
   FillProfile(db, class)
-  if db.icons.shape ~= "FILL" and db.icons.shape ~= "CELL" and db.icons.shape ~= "SQUARE" then db.icons.shape = "FILL" end
+  if db.icons.shape ~= "FILL" and db.icons.shape ~= "CELL" and db.icons.shape ~= "SQUARE" then db.icons.shape = defaults.icons.shape end
   if db.scale * 100 < ns.MIN_SCALE or db.scale * 100 > ns.MAX_SCALE then db.scale = defaults.scale end
   if db.alpha < 0 or db.alpha > 1 then db.alpha = defaults.alpha end
   if db.oocPower < 0 or db.oocPower > 1 then db.oocPower = defaults.oocPower end

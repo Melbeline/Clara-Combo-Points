@@ -11,6 +11,7 @@ Locales.lua
 Core.lua
 Profiles.lua
 SpellCatalog.lua
+SpellNames.lua
 Tracker.lua
 Options.lua
 SettingsPage.lua

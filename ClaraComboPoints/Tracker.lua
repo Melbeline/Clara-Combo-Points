@@ -52,10 +52,12 @@ ns.CONDITIONS = { "auto", "self", "target", "enemy", "friend" }
 local GetAuraDuration = C_UnitAuras and C_UnitAuras.GetAuraDuration
 local GetAuraDataByIndex = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
 
--- A row entry: a spell ID or name, or { spell = ID or name, on = condition, exact = true }
--- (exact: this rank only).
+-- A row entry: a spell ID or name, or { spell = ID or name, on = condition, exact = true,
+-- mine = true } (exact: this rank only; mine: only the aura you cast, not another player's).
 function ns:EntrySpell(entry) if type(entry) == "table" then return entry.spell end return entry end
 function ns:EntryOn(entry) return type(entry) == "table" and entry.on or "auto" end
+function ns:EntryMine(entry) return type(entry) == "table" and entry.mine == true end
+local MINE = "|PLAYER" -- aura filter: cast by you
 
 local rows = { above = {}, below = {} }
 local dirty
@@ -273,7 +275,7 @@ function ns:LayoutIcons()
           slot.cd:SetPoint("BOTTOMRIGHT", -inset, inset)
           SetCountFonts(slot.count, slot.cd, w, size)
           local spell = self:EntrySpell(spells[i])
-          slot.spell, slot.on = spell, self:EntryOn(spells[i])
+          slot.spell, slot.on, slot.mine = spell, self:EntryOn(spells[i]), self:EntryMine(spells[i])
           slot.exact = type(spells[i]) == "table" and spells[i].exact and type(spell) == "number" and self:RankIDs(spell) or nil
           slot.name = self:SpellName(spell)
           slot.byName = type(spell) == "string"
@@ -317,15 +319,16 @@ local function ScanAuras(unit, name, filter)
   end
 end
 
--- By name, where the icon's condition says. Also says when the aura is there in another rank
--- than the one watched.
+-- By name, where the icon's condition says (only yours if it says so). Also says when the
+-- aura is there in another rank than the one watched.
 local function FindAura(slot)
   local otherRank
   for _, lookup in ipairs(LOOKUPS[slot.on] or LOOKUPS.auto) do
     local unit = lookup[1]
     if unit ~= "target" or TargetFits(slot.on) then
-      local aura = ns:FindAura(unit, slot.name, lookup[2])
-      if not aura and slot.byName then aura = ScanAuras(unit, slot.name, lookup[2]) end
+      local filter = lookup[2] .. (slot.mine and MINE or "")
+      local aura = ns:FindAura(unit, slot.name, filter)
+      if not aura and slot.byName then aura = ScanAuras(unit, slot.name, filter) end
       if aura then
         if not slot.exact or issecretvalue(aura.spellId) or slot.exact[aura.spellId] then return aura, unit end
         otherRank = true
@@ -632,7 +635,7 @@ function ns:SyncAuraButtons()
         local wanted = {}
         if ids then
           for _, watch in ipairs(SECURE[slot.on] or SECURE.auto) do
-            local rec = AuraButton(slot, watch[1], watch[2])
+            local rec = AuraButton(slot, watch[1], watch[2] .. (slot.mine and MINE or ""))
             if rec then wanted[rec] = true end
           end
         end
@@ -688,7 +691,7 @@ function ns:DebugIcons()
         for key, rec in pairs(slot.secure or {}) do buttons[#buttons + 1] = key .. (rec and (rec.enabled and "+" or "-") or "x") end
         table.sort(buttons)
         Add(("%s %d: %s (%s) on %s, IDs %s, buttons %s"):format(RowName(side, k), i, tostring(slot.name), tostring(slot.spell),
-          tostring(slot.on), ids and IDKey(ids) or "none", #buttons > 0 and table.concat(buttons, " ") or "none"))
+          tostring(slot.on) .. (slot.mine and " (mine)" or ""), ids and IDKey(ids) or "none", #buttons > 0 and table.concat(buttons, " ") or "none"))
       end
     end
   end
@@ -706,7 +709,7 @@ function ns:SpellByName(text)
     local ok, info = pcall(GetSpellInfo, text)
     if ok and type(info) == "table" and Plain(info.spellID) then return info.spellID end
   end
-  local rec = self:CatalogRecord(text)
+  local rec = self:CatalogRecord(text) or self:CatalogByAnyName(text) -- the game's name, else any language
   if rec then return rec.ranks[#rec.ranks][2] end -- its highest rank
   for _, unit in ipairs({ "player", "target" }) do
     for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
@@ -714,6 +717,11 @@ function ns:SpellByName(text)
       if aura and Plain(aura.spellId) and self:SpellName(aura.spellId) then return aura.spellId end
     end
   end
+  -- part of a name: the only class spell it can be
+  local several
+  rec, several = self:CatalogByAnyName(text, true)
+  if rec then return rec.ranks[#rec.ranks][2] end
+  return nil, several
 end
 
 -- "7386", a spell link, or a name. A known name is stored as its ID (so it follows the
@@ -727,16 +735,21 @@ function ns:ParseSpell(text)
     return nil, L.UNKNOWN_ID:format(text)
   end
   text = text:match("^%[(.+)%]$") or text
-  local found = self:SpellByName(text)
+  local found, several = self:SpellByName(text)
   if found then return found end
+  if several then
+    local names = {}
+    for i = 1, min(4, #several) do names[i] = self:CatalogName(several[i]) end
+    return nil, L.SEVERAL_SPELLS:format(table.concat(names, ", ") .. (#several > 4 and ", ..." or ""))
+  end
   return text, nil, true
 end
 
 -- Same spell watched the same way (the same spell may be watched on you and on the target,
--- and one rank apart from all ranks).
+-- one rank apart from all ranks, and yours apart from anyone's).
 local function Exact(entry) return type(entry) == "table" and entry.exact or nil end
 local function Same(a, b)
-  if ns:EntryOn(a) ~= ns:EntryOn(b) then return false end
+  if ns:EntryOn(a) ~= ns:EntryOn(b) or ns:EntryMine(a) ~= ns:EntryMine(b) then return false end
   local sa, sb = ns:EntrySpell(a), ns:EntrySpell(b)
   if sa == sb then return Exact(a) == Exact(b) end
   if Exact(a) or Exact(b) then return false end
@@ -789,16 +802,19 @@ function ns:RemoveIcon(side, k, i)
 end
 
 -- Changes icon i: its spell (or rank), where it looks for its aura (auto, self, target, enemy
--- target, friend target) and whether only that rank counts. nil keeps the current value.
-function ns:SetIconEntry(side, k, i, spell, on, exact)
+-- target, friend target), whether only that rank counts and whether only the aura you cast
+-- counts. nil keeps the current value.
+function ns:SetIconEntry(side, k, i, spell, on, exact, mine)
   local spells = self.db.rows[side][k]
   local entry = spells[i]
   if entry == nil then return false end
   if spell == nil then spell = self:EntrySpell(entry) end
   if on == nil then on = self:EntryOn(entry) end
   if exact == nil then exact = Exact(entry) end
+  if mine == nil then mine = self:EntryMine(entry) end
   exact = exact and type(spell) == "number" or nil
-  local changed = (on == "auto" and not exact) and spell or { spell = spell, on = on, exact = exact }
+  mine = mine or nil
+  local changed = (on == "auto" and not exact and not mine) and spell or { spell = spell, on = on, exact = exact, mine = mine }
   if Duplicate(spells, changed, i) then return false, L.DUPLICATE:format(self:SpellName(spell) or tostring(spell)) end
   spells[i] = changed
   self:LayoutIcons()
@@ -812,14 +828,16 @@ function ns:SetIconCondition(side, k, i, on) return self:SetIconEntry(side, k, i
 -- Class spell lists (SpellCatalog.lua): { kind, rank 1 ID, rank 2 ID, ... } per spell
 ---------------------------------------------------------------------------
 -- (alt: the same ranks under other IDs, as some spells have in Forever)
-local catalogIndex -- spell ID and lower-case name -> { kind =, class =, ranks = { { rank, ID, other ID } known here } }
+local catalogIndex -- spell ID and lower-case name -> { kind =, class =, ranks = { { rank, ID, other ID } known here },
+                    --   name = the game's name, names = { English, French, German } (SpellNames.lua) }
 local catalogByName -- lower-case name -> every record of that name (several classes, a cast and its aura)
+local catalogList   -- every record, in the lists' order
 local function CatalogIndex()
   if catalogIndex then return catalogIndex end
-  catalogIndex, catalogByName = {}, {}
+  catalogIndex, catalogByName, catalogList = {}, {}, {}
   for _, class in ipairs(ns.SPELL_CATALOG or {}) do
     for _, spell in ipairs(class.spells) do
-      local rec = { kind = spell[1], class = class.class, ranks = {} }
+      local rec = { kind = spell[1], class = class.class, ranks = {}, names = ns.SPELL_NAMES and ns.SPELL_NAMES[spell[2]] }
       for r = 2, #spell do
         local id, alt = spell[r], spell.alt and spell.alt[r - 1] or nil
         if not ns:SpellName(id) then id, alt = alt, nil end
@@ -836,10 +854,79 @@ local function CatalogIndex()
         if not catalogIndex[key] then catalogIndex[key] = rec end
         catalogByName[key] = catalogByName[key] or {}
         table.insert(catalogByName[key], rec)
+        catalogList[#catalogList + 1] = rec
       end
     end
   end
   return catalogIndex
+end
+
+-- The client's language: the class spells show the game's names in it, and the addon's own
+-- names (SpellNames.lua) in the other languages.
+local CLIENT = GetLocale and GetLocale() or "enUS"
+if CLIENT == "enGB" then CLIENT = "enUS" end
+
+-- A class spell's name in the addon's language, as the panel shows it. The hint after some
+-- names (where the aura comes from: "Chilled (Frost Armor)") is added to the game's name.
+function ns:CatalogName(rec)
+  local own = rec.names and rec.names[self.NAME_LANGS[self.lang] or 0]
+  if self.lang ~= CLIENT and own then return own end
+  local hint = (own or (rec.names and rec.names[1]) or ""):match(" %b()$")
+  if hint and rec.name:sub(-#hint) ~= hint then return rec.name .. hint end
+  return rec.name
+end
+
+-- Search keys of a class spell: its names in the game's language, English, French, German.
+local function Keys(rec)
+  if not rec.keys then
+    local keys, seen = {}, {}
+    local function Add(name)
+      local key = name and ns:SearchKey(name)
+      if key and key ~= "" and not seen[key] then seen[key] = true; keys[#keys + 1] = key end
+    end
+    Add(rec.name)
+    for i = 1, 3 do Add(rec.names and rec.names[i]) end
+    rec.keys = keys
+  end
+  return rec.keys
+end
+
+-- Does a class spell answer a search (a search key: ns:SearchKey)? An ID finds the spell it is
+-- a rank of; text finds the names that contain it, in any of the languages.
+function ns:CatalogMatches(rec, query)
+  local id = tonumber(query)
+  if id then
+    for _, r in ipairs(rec.ranks) do if r[2] == id or r[3] == id then return true end end
+    return false
+  end
+  for _, key in ipairs(Keys(rec)) do
+    if key:find(query, 1, true) then return true end
+  end
+  return false
+end
+
+-- A class spell by its name in any language: the same name, else the only spell whose name
+-- contains the text (spells of the same name count as one). Returns it, or nil and the
+-- spells found when there are several.
+function ns:CatalogByAnyName(text, partial)
+  local query = self:SearchKey(text)
+  if query == "" or tonumber(query) then return end
+  CatalogIndex()
+  for _, rec in ipairs(catalogList) do
+    for _, key in ipairs(Keys(rec)) do
+      if key == query then return rec end
+    end
+  end
+  if not partial then return end
+  local found, names = {}, {}
+  for _, rec in ipairs(catalogList) do
+    if self:CatalogMatches(rec, query) and not names[rec.name] then
+      names[rec.name] = true
+      found[#found + 1] = rec
+    end
+  end
+  if #found == 1 then return found[1] end
+  return nil, #found > 1 and found or nil
 end
 
 -- The IDs of one rank (several when the game has the same rank twice), for "this rank only".

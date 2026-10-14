@@ -538,6 +538,7 @@ local function IconTooltip(self)
     GameTooltip:AddLine(which, .6, .6, .65)
   end
   GameTooltip:AddLine(L.WATCHED_ON:format(OnName(ns:EntryOn(self.entry))), GOLD_R, GOLD_G, GOLD_B)
+  if ns:EntryMine(self.entry) then GameTooltip:AddLine(L.MINE_ONLY, GOLD_R, GOLD_G, GOLD_B) end
   GameTooltip:AddLine(L.ICON_TIP, .6, .6, .65, true)
   GameTooltip:Show()
 end
@@ -698,9 +699,9 @@ end
 local function IconMenu(b, side, k)
   local i, entry = b.index, b.entry
   local function Current() return ns.db.rows[side][k][i] end
-  local function Change(spell, on, exact)
+  local function Change(spell, on, exact, mine)
     if Current() == nil then return end
-    local ok, msg = ns:SetIconEntry(side, k, i, spell, on, exact)
+    local ok, msg = ns:SetIconEntry(side, k, i, spell, on, exact, mine)
     if not ok then ShowStatus(false, msg) end
   end
   if not (MenuUtil and MenuUtil.CreateContextMenu) then
@@ -717,6 +718,8 @@ local function IconMenu(b, side, k)
     for _, on in ipairs(ns.CONDITIONS) do
       root:CreateRadio(OnName(on), function() return ns:EntryOn(Current()) == on end, function() Change(nil, on) end)
     end
+    root:CreateCheckbox(L.MINE_ONLY, function() return ns:EntryMine(Current()) end,
+      function() Change(nil, nil, nil, not ns:EntryMine(Current())) end)
     local ranks = ns:SpellRanks(spell)
     if ranks then
       root:CreateDivider()
@@ -923,8 +926,31 @@ local function Catalog(p)
   hint:SetWidth(SIDE_W - 32)
   hint:SetWordWrap(true)
 
+  -- Search: a name in the game's language, English, French or German, whole or in part,
+  -- accents and case aside; or a spell ID.
+  local query = "" -- search key (ns:SearchKey), "" for the whole list
+  local search = InputBox(f, SIDE_W - 32)
+  search:SetMaxLetters(60)
+  search.holder:SetPoint("TOPLEFT", 16, -78)
+  local placeholder = search:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+  placeholder:SetPoint("LEFT", 2, 0)
+  placeholder:SetPoint("RIGHT", -20, 0)
+  placeholder:SetJustifyH("LEFT")
+  placeholder:SetWordWrap(false)
+  OnRelabel(function() placeholder:SetText(L.CATALOG_SEARCH) end)
+  local clear = CreateFrame("Button", nil, search.holder)
+  clear:SetSize(16, 16)
+  clear:SetPoint("RIGHT", -3, 0)
+  local cross = clear:CreateTexture(nil, "ARTWORK")
+  cross:SetAllPoints()
+  cross:SetTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
+  clear:SetScript("OnClick", function()
+    search:SetText("")
+    search:ClearFocus()
+  end)
+
   local inset = Box(f)
-  inset:SetPoint("TOPLEFT", 10, -104)
+  inset:SetPoint("TOPLEFT", 10, -128)
   inset:SetPoint("BOTTOMRIGHT", -10, 12)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsSpellsScroll", inset, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 4, -6)
@@ -933,21 +959,27 @@ local function Catalog(p)
   local child = CreateFrame("Frame", nil, scroll)
   child:SetSize(CHILD_W, 10)
   scroll:SetScrollChild(child)
+  local noMatch = Hint(child, Tr("CATALOG_NONE"))
+  noMatch:SetPoint("TOP", 0, -12)
 
   -- column titles, over the list
-  local RANK_X, ON_X = 150, 256
+  local RANK_X, ON_X, MINE_X = 140, 236, CHILD_W - 22
   Text(f, Tr("CATALOG_SPELL")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + 32, 14)
   Text(f, Tr("CATALOG_RANK")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + RANK_X, 14)
   Text(f, Tr("CATALOG_ON")):SetPoint("TOPLEFT", inset, "TOPLEFT", 4 + ON_X, 14)
+  local mineTitle = Text(f, Tr("CATALOG_MINE"))
+  mineTitle:SetPoint("TOPRIGHT", inset, "TOPLEFT", 4 + CHILD_W, 14)
+  mineTitle:SetJustifyH("RIGHT")
 
-  local groups, expanded, picks = {}, {}, {}
+  local groups, expanded, picks, rowOf = {}, {}, {}, {}
   local Layout
 
-  -- what a spell of the list adds: its rank (all by default), watched where chosen
+  -- what a spell of the list adds: its rank (all by default), watched where chosen, yours only
+  -- or anyone's
   local function Entry(rec)
     local pick = picks[rec]
     local id = pick.rank > 0 and rec.ranks[pick.rank][2] or rec.ranks[#rec.ranks][2]
-    return { spell = id, on = pick.on, exact = pick.rank > 0 or nil }
+    return { spell = id, on = pick.on, exact = pick.rank > 0 or nil, mine = pick.mine or nil }
   end
 
   local function SpellRow(rec)
@@ -967,8 +999,7 @@ local function Catalog(p)
     name:SetJustifyH("LEFT")
     name:SetWordWrap(true)
     if name.SetMaxLines then name:SetMaxLines(2) end
-    name:SetText(rec.name)
-    picks[rec] = { rank = 0, on = KIND_ON[rec.kind] or "self" }
+    picks[rec] = { rank = 0, on = KIND_ON[rec.kind] or "self", mine = false }
     if #rec.ranks > 1 then
       row.rank = Choice(row, ON_X - RANK_X - 6, function()
         local list = { { 0, L.ALL_RANKS } }
@@ -977,12 +1008,29 @@ local function Catalog(p)
       end, function() return picks[rec].rank end, function(v) picks[rec].rank = v end)
       row.rank:SetPoint("LEFT", RANK_X, 0)
     end
-    row.on = Choice(row, CHILD_W - ON_X - 4, function()
+    row.on = Choice(row, MINE_X - ON_X - 6, function()
       local list = {}
       for _, on in ipairs(PICK_ON) do list[#list + 1] = { on, OnName(on) } end
       return list
     end, function() return picks[rec].on end, function(v) picks[rec].on = v end)
     row.on:SetPoint("LEFT", ON_X, 0)
+    -- cast by you only (else anyone's)
+    local mine = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+    mine:SetSize(22, 22)
+    mine:SetPoint("LEFT", MINE_X, 0)
+    mine:SetScript("OnClick", function(self)
+      ClickSound()
+      picks[rec].mine = self:GetChecked() and true or false
+    end)
+    mine:SetScript("OnEnter", function(self)
+      if not GameTooltip then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText(L.MINE_ONLY)
+      GameTooltip:AddLine(L.MINE_TIP, 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    mine:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    row.mine = mine
     row:RegisterForDrag("LeftButton")
     row:SetScript("OnDragStart", function() StartDrag(Entry(rec)) end)
     row:SetScript("OnDragStop", EndDrag)
@@ -995,15 +1043,17 @@ local function Catalog(p)
       if not GameTooltip or drag then return end
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       local id = Entry(rec).spell
-      if not (GameTooltip.SetSpellByID and pcall(GameTooltip.SetSpellByID, GameTooltip, id)) then GameTooltip:SetText(rec.name) end
+      if not (GameTooltip.SetSpellByID and pcall(GameTooltip.SetSpellByID, GameTooltip, id)) then GameTooltip:SetText(ns:CatalogName(rec)) end
       GameTooltip:AddLine(L["KIND_" .. rec.kind] or "", .6, .6, .65)
       GameTooltip:AddLine(L.CATALOG_ADD:format(ns:RowName(selSide, selK)), GOLD_R, GOLD_G, GOLD_B, true)
       GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     function row:Refresh()
+      name:SetText(ns:CatalogName(rec)) -- in the addon's language
       if self.rank then self.rank:Refresh() end
       self.on:Refresh()
+      self.mine:SetChecked(picks[rec].mine)
     end
     return row
   end
@@ -1019,7 +1069,6 @@ local function Catalog(p)
         end
       end
     end
-    table.sort(recs, function(a, b) return SortKey(a.name) < SortKey(b.name) end)
     if #recs > 0 then
       local color = CLASS_COLORS[class.class] or { GOLD_R, GOLD_G, GOLD_B }
       local head = CreateFrame("Button", nil, child)
@@ -1037,8 +1086,9 @@ local function Catalog(p)
       label:SetPoint("LEFT", 26, 0)
       label:SetTextColor(color[1], color[2], color[3])
       OnRelabel(function() label:SetText(L["CLASS_" .. class.class] or class.class) end)
-      Hint(head, tostring(#recs)):SetPoint("RIGHT", -8, 0)
-      local g = { class = class.class, head = head, recs = recs }
+      local count = Hint(head, "")
+      count:SetPoint("RIGHT", -8, 0)
+      local g = { class = class.class, head = head, recs = recs, count = count }
       head:SetScript("OnClick", function()
         ClickSound()
         expanded[g.class] = not expanded[g.class]
@@ -1048,32 +1098,80 @@ local function Catalog(p)
     end
   end
 
+  -- alphabetical in the addon's language
+  local function ByName(a, b)
+    local ka, kb = SortKey(ns:CatalogName(a)), SortKey(ns:CatalogName(b))
+    if ka ~= kb then return ka < kb end
+    return a.ranks[1][2] < b.ranks[1][2]
+  end
+
+  -- The classes, each with its spells when unfolded. While searching: only the spells found,
+  -- in their classes, all unfolded.
   function Layout()
     local y = 0
+    local searching = query ~= ""
     for _, g in ipairs(groups) do
-      g.head:ClearAllPoints()
-      g.head:SetPoint("TOPLEFT", 0, -y)
-      y = y + SIDE_HEAD_H + 2
-      local open = expanded[g.class]
-      g.head.sign:SetTexture(open and MINUS or PLUS)
-      if open and not g.rows then
-        g.rows = {}
-        for i, rec in ipairs(g.recs) do g.rows[i] = SpellRow(rec) end
+      local list = {}
+      for _, rec in ipairs(g.recs) do
+        if not searching or ns:CatalogMatches(rec, query) then list[#list + 1] = rec end
       end
-      for _, row in ipairs(g.rows or {}) do
-        row:SetShown(open)
-        if open then
+      table.sort(list, ByName)
+      local visible = #list > 0
+      local open = visible and (searching or expanded[g.class])
+      g.head:SetShown(visible)
+      g.count:SetText(searching and (#list .. " / " .. #g.recs) or tostring(#g.recs))
+      if visible then
+        g.head:ClearAllPoints()
+        g.head:SetPoint("TOPLEFT", 0, -y)
+        g.head.sign:SetTexture(open and MINUS or PLUS)
+        y = y + SIDE_HEAD_H + 2
+      end
+      local shown = {}
+      g.rows = {} -- (the group's rows: shown ones first, in their order)
+      if open then
+        for _, rec in ipairs(list) do
+          local row = rowOf[rec] or SpellRow(rec)
+          rowOf[rec] = row
           row:ClearAllPoints()
           row:SetPoint("TOPLEFT", 0, -y)
+          row:Show()
           row:Refresh()
+          shown[row] = true
+          g.rows[#g.rows + 1] = row
           y = y + SIDE_ROW_H
         end
+        y = y + 4
       end
-      if open then y = y + 4 end
+      for _, rec in ipairs(g.recs) do
+        local row = rowOf[rec]
+        if row and not shown[row] then
+          row:Hide()
+          g.rows[#g.rows + 1] = row
+        end
+      end
     end
-    child:SetHeight(max(y, 10))
+    noMatch:SetShown(searching and y == 0)
+    child:SetHeight(max(y, 40))
   end
   OnRelabel(function() Layout() end)
+
+  local function ShowPlaceholder()
+    placeholder:SetShown(search:GetText() == "" and not search:HasFocus())
+    clear:SetShown(search:GetText() ~= "")
+  end
+  search:SetScript("OnTextChanged", function(self)
+    local key = ns:SearchKey(self:GetText())
+    ShowPlaceholder()
+    if key == query then return end
+    query = key
+    scroll:SetVerticalScroll(0)
+    Layout()
+  end)
+  search:SetScript("OnEditFocusGained", ShowPlaceholder)
+  search:SetScript("OnEditFocusLost", ShowPlaceholder)
+  search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  ShowPlaceholder()
 
   -- Shown with the icons page, unless closed. Opens with the tab's class unfolded, and moves
   -- the window left if the panel would go past the screen's edge.
@@ -1093,6 +1191,7 @@ local function Catalog(p)
     end
   end
   f.groups = groups
+  f.search = search
   return f
 end
 
