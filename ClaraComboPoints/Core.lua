@@ -293,7 +293,12 @@ local function UpdateCombo()
   -- rows above it come down onto the rage bar (unless the option keeps them in place). An
   -- unreadable (secret) count keeps them in place.
   local onBar = powerType == POWER_RAGE and ns.profileClass == "DRUID" and not ns.db.bearIconsFixed
-    and not issecretvalue(v) and v == 0
+    and not issecretvalue(v)
+  if onBar then -- points on cells turned off show nothing either
+    for i = 1, math.min(v, NUM_POINTS) do
+      if not ns.db.disabled["cp" .. i] then onBar = false break end
+    end
+  end
   if onBar ~= ns.iconsOnBar then
     ns.iconsOnBar = onBar
     ns:LayoutIcons()
@@ -578,6 +583,14 @@ local function ShownKey()
   return key
 end
 
+-- What the layout depends on: the bars shown and the bars taking room (a druid's form can
+-- change the second alone: caster form to Bear Form with the rage bar turned off).
+local function LayoutKey()
+  local key = ShownKey()
+  for _, k in ipairs(ns.BAR_KEYS) do key = key .. (BarUsed(k) and "1" or "0") end
+  return key
+end
+
 -- Situations the HUD can be hidden in: the group (none, a party, a raid group) and the
 -- instance (a dungeon, a raid of 10, 20 or 40 players; 25 counts as 20).
 ns.HIDE_WHEN = { "solo", "party", "raid", "dungeon", "raid10", "raid20", "raid40" }
@@ -636,10 +649,10 @@ local function ShouldShow()
   return ShownKey():find("1") ~= nil or IconsAlone()
 end
 
-local shownKey -- the bars laid out (ApplyLayout)
+local shownKey -- the bars laid out (ApplyLayout: LayoutKey)
 function ns:UpdateVisibility()
   iconLayer:SetShown(FormShown())
-  if ShownKey() ~= shownKey then self:ApplyLayout() end
+  if LayoutKey() ~= shownKey then self:ApplyLayout() end
   hud:SetShown(ShouldShow())
 end
 
@@ -858,9 +871,16 @@ function ns:ApplyLayout()
       wide = math.max(wide, b.width * b.scale)
     end
   end
-  hud:SetSize(wide, math.max(1, y - ROW_GAP))
+  if y == 0 then
+    -- every bar off (icons alone): the HUD keeps the energy / rage bar's room, to be grabbed
+    -- while unlocked; the icon rows meet on its top line, so no hole shows
+    local p = bars.power
+    hud:SetSize(p.width * p.scale, p.height * p.scale)
+  else
+    hud:SetSize(wide, y - ROW_GAP)
+  end
   noBar:SetWidth(bars.power.width * bars.power.scale)
-  shownKey = ShownKey()
+  shownKey = LayoutKey()
   -- the combo cells turned on share the row's width (a cell keeps its point: cell 3 lights up
   -- at 3 points, wherever it sits)
   local cb = bars.combo
@@ -883,7 +903,8 @@ end
 -- shape take them).
 function ns:ComboCellSize()
   local cb = self.db.bars.combo
-  local n = math.max(1, #CellsOn())
+  local n = #CellsOn()
+  if n == 0 or self.profileClass == "WARRIOR" then n = NUM_POINTS end -- no combo row: five cells' size
   return (cb.width - (n - 1) * CP_GAP) / n * cb.scale, cb.height * cb.scale, CP_GAP * cb.scale
 end
 
@@ -1081,6 +1102,7 @@ end
 function ns:ResetIcons()
   self.db.rows = self:DefaultRows(self.profileClass)
   self:LayoutIcons()
+  self:UpdateVisibility()
   self:RefreshOptions()
 end
 

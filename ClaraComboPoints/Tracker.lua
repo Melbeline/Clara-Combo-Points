@@ -793,6 +793,7 @@ function ns:AddIcon(side, k, entry, at)
   if #spells >= self.MAX_ICONS then return false, L.ROW_FULL:format(self.MAX_ICONS) end
   table.insert(spells, max(1, min(at or #spells + 1, #spells + 1)), entry)
   self:LayoutIcons()
+  self:UpdateVisibility() -- every bar off: the icons alone may show the HUD now
   self:RefreshOptions()
   return true, (byName and L.ADDED_BY_NAME or L.ADDED):format(name, RowName(side, k))
 end
@@ -800,6 +801,7 @@ end
 function ns:RemoveIcon(side, k, i)
   table.remove(self.db.rows[side][k], i)
   self:LayoutIcons()
+  self:UpdateVisibility()
   self:RefreshOptions()
 end
 
@@ -976,6 +978,7 @@ end
 function ns:ClearRow(side, k)
   wipe(self.db.rows[side][k])
   self:LayoutIcons()
+  self:UpdateVisibility()
   self:RefreshOptions()
 end
 
