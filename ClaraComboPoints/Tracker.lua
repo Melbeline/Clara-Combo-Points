@@ -231,13 +231,15 @@ function ns:LayoutIcons()
   if not db then return end
   local look = db.icons
   local shape = look.shape
-  local size = shape == "CELL" and self.CP_HEIGHT or look.size
-  local cellW = (self.WIDTH - 4 * self.CP_GAP) / 5 -- a combo point cell
+  local cellW, cellH = self:ComboCellSize() -- a combo point cell
+  local size = shape == "CELL" and cellH or look.size
+  local top, bottom, topWidth, bottomWidth = self:IconAnchors()
   for _, side in ipairs(self.SIDES) do
-    -- each row sits on the previous one; empty rows take no room
-    -- (in Bear Form without combo points, the rows above sit on the rage bar: see Core.lua)
-    local anchor = self.powerBar
-    if side == "above" and self.comboRow:IsShown() and not self.iconsOnBar then anchor = self.comboRow end
+    -- each row sits on the previous one, from the top bar up or the bottom bar down; empty
+    -- rows take no room (in Bear Form without combo points, the rows above sit on the rage
+    -- bar: see Core.lua). The Bar width shape takes the width of that bar.
+    local anchor = side == "above" and top or bottom
+    local barWidth = side == "above" and topWidth or bottomWidth
     for k = 1, self.MAX_ROWS do
       local spells = db.rows[side][k]
       local row = GetRow(side, k)
@@ -251,9 +253,9 @@ function ns:LayoutIcons()
         -- cell, however many there are; SQUARE: square icons. CELL and SQUARE rows are
         -- centred on the bar.
         local w = (shape == "SQUARE" and size) or (shape == "CELL" and cellW)
-          or (self.WIDTH - (n - 1) * self.CP_GAP) / n
+          or (barWidth - (n - 1) * self.CP_GAP) / n
         row:ClearAllPoints()
-        row:SetSize(shape == "FILL" and self.WIDTH or (n * w + (n - 1) * self.CP_GAP), size)
+        row:SetSize(shape == "FILL" and barWidth or (n * w + (n - 1) * self.CP_GAP), size)
         if side == "above" then
           row:SetPoint("BOTTOM", anchor, "TOP", 0, self.ROW_GAP)
         else

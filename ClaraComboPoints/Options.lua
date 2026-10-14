@@ -29,13 +29,15 @@ local ICONS = {
 }
 
 local CLASS_TABS = { "ROGUE", "DRUID", "WARRIOR" }
-local PAGES = { "PAGE_BAR", "PAGE_TEXT", "PAGE_ICONS" }
-local COLOR_KEYS = { "cp1", "cp2", "cp3", "cp4", "cp5", "energy", "rage", "cost", "bg", "text" }
-local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", cost = "COST_COLOR", bg = "BACKGROUND" }
--- colours a class never uses (warriors have no combo points: their icons wear the button frame)
+local PAGES = { "PAGE_BAR", "PAGE_TEXT", "PAGE_ICONS", "PAGE_LAYOUT" }
+local COLOR_KEYS = { "cp1", "cp2", "cp3", "cp4", "cp5", "energy", "rage", "mana", "health", "cost", "bg", "text" }
+local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", mana = "MANA_BAR", health = "HEALTH_BAR", cost = "COST_COLOR",
+  bg = "BACKGROUND" }
+-- colours a class never uses (warriors have no combo points: their icons wear the button frame;
+-- only druids have a mana bar)
 local NO_COLOR = {
-  ROGUE = { rage = true, cost = true },
-  WARRIOR = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true },
+  ROGUE = { rage = true, cost = true, mana = true },
+  WARRIOR = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true, mana = true },
 }
 local RESOURCE = { ROGUE = "ENERGY", DRUID = "BOTH", WARRIOR = "RAGE" }           -- energy, rage or both
 local SCALE_PRESETS = { 50, 75, 100, 125, 150, 200, 300 }
@@ -1296,6 +1298,184 @@ local function TextDialog(p)
 end
 
 ---------------------------------------------------------------------------
+-- Layout page: the bars of the tab's class, top to bottom (drag one to move it; mana and
+-- health can be turned off), and the size of the bar picked: width, height, scale.
+---------------------------------------------------------------------------
+local BAR_ROW_H = 30
+local DEFAULT_BARS = ns.defaults.bars
+
+local function BarName(key)
+  if key == "combo" then return L.BAR_COMBO end
+  if key == "power" then return L["BAR_POWER_" .. RESOURCE[editing]] end
+  if key == "mana" then return L.BAR_MANA end
+  return L.BAR_HEALTH
+end
+
+-- The bars this class has, in the profile's order.
+local function ClassBars()
+  local list = {}
+  for _, key in ipairs(ns.db.bars.order) do
+    if (key ~= "combo" or editing ~= "WARRIOR") and (key ~= "mana" or editing == "DRUID") then list[#list + 1] = key end
+  end
+  return list
+end
+
+-- The class's bars put in a new order; the others (mana for a rogue...) keep their places.
+local function SetClassOrder(list)
+  local order, i = ns.db.bars.order, 0
+  local listed = {}
+  for _, key in ipairs(list) do listed[key] = true end
+  for n, key in ipairs(order) do
+    if listed[key] then
+      i = i + 1
+      order[n] = list[i]
+    end
+  end
+  ns:ApplyLayout()
+end
+
+local function LayoutPage(p, page, OnRefresh)
+  local box = Section(page, "BARS_ORDER", LEFT, -56)
+  local hint = Hint(page, Tr("BARS_HINT"))
+  hint:SetPoint("TOPLEFT", LEFT, -78)
+  hint:SetWidth(COL_W)
+  hint:SetWordWrap(true)
+  local LIST_TOP = -104
+  local list = CreateFrame("Frame", nil, page)
+  list:SetPoint("TOPLEFT", LEFT, LIST_TOP)
+  list:SetSize(COL_W, 4 * BAR_ROW_H)
+  local picked = "power" -- the bar whose size is shown
+  local dragKey, dropAt  -- while a bar is dragged: it, and where it would go
+  local rows = {}
+  local Refresh
+
+  -- the order shown: while dragging, the bar where it would land
+  local function Shown()
+    local keys = ClassBars()
+    if not dragKey then return keys end
+    local out = {}
+    for _, key in ipairs(keys) do if key ~= dragKey then out[#out + 1] = key end end
+    table.insert(out, max(1, min(dropAt or 1, #out + 1)), dragKey)
+    return out
+  end
+
+  local function RowUnderCursor()
+    local _, y = GetCursorPosition()
+    y = y / list:GetEffectiveScale()
+    local top = list:GetTop()
+    if not top then return 1 end
+    return max(1, min(#ClassBars(), floor((top - y) / BAR_ROW_H) + 1))
+  end
+
+  local function Drop()
+    if not dragKey then return end
+    local order = Shown()
+    dragKey, dropAt = nil, nil
+    SetClassOrder(order)
+    p:Refresh()
+  end
+
+  for i = 1, 4 do
+    local row = CreateFrame("Button", nil, list)
+    row:SetSize(COL_W, BAR_ROW_H - 4)
+    row:SetPoint("TOPLEFT", 0, -(i - 1) * BAR_ROW_H)
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints()
+    local hl = row:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, .06)
+    -- a grip: three lines
+    for g = 1, 3 do
+      local line = row:CreateTexture(nil, "ARTWORK")
+      line:SetColorTexture(.7, .7, .75, .9)
+      line:SetSize(12, 2)
+      line:SetPoint("LEFT", 8, 5 - (g - 1) * 5)
+    end
+    row.name = Text(row, "", "GameFontHighlight")
+    row.name:SetPoint("LEFT", 30, 0)
+    row.show = Check(row, Tr("SHOW"), function(on)
+      ns.db.bars[row.key].show = on
+      ns:ApplyLayout()
+      ns:UpdateVisibility()
+      Refresh()
+    end)
+    row.show:SetPoint("RIGHT", -70, 0)
+    row:RegisterForDrag("LeftButton")
+    row:SetScript("OnClick", function(self)
+      ClickSound()
+      picked = self.key
+      p:Refresh() -- its sizes on the right
+    end)
+    row:SetScript("OnDragStart", function(self)
+      dragKey, dropAt = self.key, RowUnderCursor()
+      Refresh()
+    end)
+    row:SetScript("OnDragStop", Drop)
+    rows[i] = row
+  end
+  -- the drop follows the cursor; it also ends if the button that started it went away
+  list:SetScript("OnUpdate", function()
+    if not dragKey then return end
+    if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then Drop() return end
+    local at = RowUnderCursor()
+    if at ~= dropAt then
+      dropAt = at
+      Refresh()
+    end
+  end)
+  page:HookScript("OnHide", function() dragKey, dropAt = nil, nil end)
+
+  -- Size of the bar picked
+  local sizeBox = Section(page, "BAR_SIZE", RIGHT, -56, nil, -232)
+  local sizeTitle = Text(page, "", "GameFontNormal")
+  sizeTitle:SetPoint("TOPLEFT", RIGHT, -78)
+  local function SizeSlider(label, y, minV, maxV, unit, field, factor)
+    Text(page, Tr(label)):SetPoint("TOPLEFT", RIGHT, y)
+    local slider = Slider(page, 150, minV, maxV, 1, unit, function(v)
+      ns.db.bars[picked][field] = v / factor
+      ns:ApplyLayout()
+    end)
+    slider:SetPoint("LEFT", page, "TOPLEFT", RIGHT + 90, y - 6)
+    OnRefresh(function() slider:Set(floor(ns.db.bars[picked][field] * factor + .5)) end)
+    return slider
+  end
+  SizeSlider("BAR_WIDTH", -104, ns.MIN_BAR_W, ns.MAX_BAR_W, "", "width", 1)
+  SizeSlider("BAR_HEIGHT", -134, ns.MIN_BAR_H, ns.MAX_BAR_H, "", "height", 1)
+  SizeSlider("BAR_SCALE", -164, ns.MIN_BAR_SCALE, ns.MAX_BAR_SCALE, Percent, "scale", 100)
+  Button(page, Tr("DEFAULT_SIZE"), 150, 22, function()
+    local b, d = ns.db.bars[picked], DEFAULT_BARS[picked]
+    b.width, b.height, b.scale = d.width, d.height, d.scale
+    ns:ApplyLayout()
+    p:Refresh()
+  end):SetPoint("TOPLEFT", RIGHT, -194)
+  Hint(page, Tr("COLORS_ON_BAR_PAGE")):SetPoint("TOPLEFT", RIGHT, -226)
+  sizeBox:Fit(-238)
+
+  function Refresh()
+    local keys = Shown()
+    local listed = {}
+    for _, key in ipairs(keys) do listed[key] = true end
+    if not listed[picked] then picked = "power" end
+    for i, row in ipairs(rows) do
+      local key = keys[i]
+      row:SetShown(key ~= nil)
+      if key then
+        row.key = key
+        row.name:SetText(BarName(key))
+        row.name:SetAlpha((key == dragKey) and .5 or 1)
+        local optional = key == "mana" or key == "health"
+        row.show:SetShown(optional)
+        if optional then row.show:Set(ns.db.bars[key].show) end
+        SelectRow(row.bg, key == picked or key == dragKey)
+      end
+    end
+    box:Fit(LIST_TOP - #keys * BAR_ROW_H + 2)
+    sizeTitle:SetText(BarName(picked))
+  end
+  OnRefresh(function() Refresh() end)
+end
+
+---------------------------------------------------------------------------
 -- Icons page: icon look, adding spells, the rows (and the class spells panel beside it)
 ---------------------------------------------------------------------------
 local function IconsPage(p, icons, OnRefresh)
@@ -1346,7 +1526,8 @@ local function IconsPage(p, icons, OnRefresh)
     iconSize:SetShown(not cell)
     iconSize.box.holder:SetShown(not cell)
     cellSize:SetShown(cell)
-    cellSize:SetText(L.CELL_SIZE:format(floor((ns.WIDTH - 4 * ns.CP_GAP) / 5 + .5), ns.CP_HEIGHT))
+    local cw, ch = ns:ComboCellSize()
+    cellSize:SetText(L.CELL_SIZE:format(floor(cw + .5), floor(ch + .5)))
     bearFixed:SetShown(editing == "DRUID")
     lookBox:Fit(editing == "DRUID" and -244 or -220)
     bearFixed:Set(ns.db.bearIconsFixed)
@@ -1908,6 +2089,16 @@ local function Build()
     local holder, refresh = ColorRow(bar, key)
     OnRefresh(refresh)
     colorItems[#colorItems + 1] = { frame = holder, height = 28, when = function() return not (NO_COLOR[editing] or {})[key] end }
+    if key == "health" then -- or the class's colour
+      local classColor = Holder(bar, 26)
+      local check = Check(classColor, Tr("CLASS_COLOR"), function(on)
+        ns.db.healthClassColor = on
+        ns:ApplyColors()
+      end)
+      check:SetPoint("TOPLEFT", 0, -4)
+      OnRefresh(function() check:Set(ns.db.healthClassColor) end)
+      colorItems[#colorItems + 1] = { frame = classColor, height = 26 }
+    end
   end
   local resetColors = Holder(bar, 30)
   Button(resetColors, Tr("DEFAULT_COLORS"), 150, 22, function() ns:ResetColors() end):SetPoint("TOPLEFT", 0, -6)
@@ -2026,6 +2217,7 @@ local function Build()
   }, advancedBox))
 
   IconsPage(p, pages[3], OnRefresh)
+  LayoutPage(p, pages[4], OnRefresh)
 
   -- Footer: commands, and which tab this character uses (the corner keeps the scale grip) --
   Hint(p, "/cl lock  ·  /cl unlock  ·  /cl scale 120  ·  /cl reset  ·  /cl reset pos"):SetPoint("BOTTOMLEFT", LEFT, 16)

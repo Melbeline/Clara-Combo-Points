@@ -21,6 +21,7 @@ local POWER         = Enum and Enum.PowerType or {}
 local POWER_RAGE    = POWER.Rage or 1
 local POWER_ENERGY  = POWER.Energy or 3
 local POWER_COMBO   = POWER.ComboPoints or 4
+local POWER_MANA    = POWER.Mana or 0
 local WHITE         = "Interface\\Buttons\\WHITE8X8"
 local FONT_DIR      = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Fonts\\"
 local issecretvalue = issecretvalue or function() return false end
@@ -36,6 +37,9 @@ ns.WIDTH, ns.CP_HEIGHT, ns.CP_GAP, ns.ROW_GAP = WIDTH, CP_HEIGHT, CP_GAP, ROW_GA
 
 ns.MIN_SCALE, ns.MAX_SCALE = 10, 500 -- percent
 ns.MIN_TIMER, ns.MAX_TIMER = 50, 200 -- countdown numbers on the icons, percent
+-- each bar's own size (reference pixels) and scale (percent)
+ns.MIN_BAR_W, ns.MAX_BAR_W, ns.MIN_BAR_H, ns.MAX_BAR_H, ns.MIN_BAR_SCALE, ns.MAX_BAR_SCALE = 40, 800, 4, 120, 25, 400
+ns.BAR_KEYS = { "combo", "power", "mana", "health" } -- combo points, energy / rage, mana (druids), health
 ns.MAX_ICONS, ns.MAX_ROWS = 20, 3     -- icons per row, rows above and below the bar
 
 -- preview: size of the name in the options' font list, for fonts drawn much bigger than the rest
@@ -82,6 +86,16 @@ local defaults = {
   oocTop   = .2,       -- combo points and icons
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
   bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
+  healthClassColor = false, -- health bar in the class colour rather than its own
+  -- The bars, top to bottom in this order, each at its own size and scale. Mana: druids only,
+  -- in every form; health: hidden until turned on.
+  bars = {
+    order  = { "combo", "power", "mana", "health" },
+    combo  = { width = WIDTH, height = CP_HEIGHT, scale = 1 },
+    power  = { width = WIDTH, height = POWER_HEIGHT, scale = 1 },
+    mana   = { width = WIDTH, height = 12, scale = 1, show = true },
+    health = { width = WIDTH, height = 16, scale = 1, show = false },
+  },
   icons = {
     shape   = "SQUARE", -- SQUARE (default) / CELL: rectangles the size of a combo point / FILL: the row shares the bar's width
     size    = 25,      -- row height (and icon width when square), reference pixels
@@ -98,6 +112,8 @@ local defaults = {
     cp5    = { r = 1, g = 0,    b = .455, a = 1 },
     energy = { r = 1, g = 1,    b = 0,    a = 1 },
     rage   = { r = .663, g = 0, b = 0,    a = 1 },
+    mana   = { r = 0, g = 0,    b = 1,    a = 1 }, -- the game's mana blue
+    health = { r = 0, g = 1,    b = 0,    a = 1 }, -- the game's health green
     cost   = { r = 1, g = 1,    b = 1,    a = .45 },
     bg     = { r = 0, g = 0,    b = 0,    a = .6 },
     text   = { r = 1, g = 1,    b = 1,    a = 1 },
@@ -142,7 +158,8 @@ end
 ns.Print = Print
 
 ---------------------------------------------------------------------------
--- HUD: combo row on top (not for warriors), power bar at the bottom
+-- HUD: the combo row (not for warriors), the energy / rage bar, the mana bar (druids) and the
+-- health bar, stacked in the order the profile says (ApplyLayout)
 ---------------------------------------------------------------------------
 local hud = CreateFrame("Frame", "ClaraComboPointsHUD", UIParent)
 hud:SetSize(WIDTH, CP_HEIGHT + ROW_GAP + POWER_HEIGHT)
@@ -165,26 +182,16 @@ local function CreateBar(parent, minValue, maxValue)
 end
 
 local comboRow = CreateFrame("Frame", nil, hud)
-comboRow:SetPoint("TOPLEFT")
-comboRow:SetPoint("TOPRIGHT")
-comboRow:SetHeight(CP_HEIGHT)
+comboRow:SetSize(WIDTH, CP_HEIGHT)
 ns.comboRow = comboRow
 
 -- One status bar per combo point, spanning [i-1, i]: feeding every bar the same combo
 -- count fills the first N of them, without ever having to read the number.
 local cells = {}
-local cellWidth = (WIDTH - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS
-for i = 1, NUM_POINTS do
-  local bar = CreateBar(comboRow, i - 1, i)
-  bar:SetPoint("TOPLEFT", (i - 1) * (cellWidth + CP_GAP), 0)
-  bar:SetSize(cellWidth, CP_HEIGHT)
-  cells[i] = bar
-end
+for i = 1, NUM_POINTS do cells[i] = CreateBar(comboRow, i - 1, i) end
 
 local power = CreateBar(hud, 0, 100)
-power:SetPoint("BOTTOMLEFT")
-power:SetPoint("BOTTOMRIGHT")
-power:SetHeight(POWER_HEIGHT)
+power:SetSize(WIDTH, POWER_HEIGHT)
 ns.powerBar = power
 
 -- Rage about to be spent, drawn over the end of the bar going back from the current value.
@@ -207,6 +214,20 @@ textHolder:SetFrameLevel(power:GetFrameLevel() + 3)
 local powerText = textHolder:CreateFontString(nil, "OVERLAY")
 powerText:SetPoint("CENTER")
 powerText:SetFont(ns.fonts[1].path, defaults.fontSize, defaults.outline)
+
+-- Mana (druids) and health: a bar and its value
+local function ValueBar()
+  local bar = CreateBar(hud, 0, 100)
+  bar:SetSize(WIDTH, 12)
+  bar.text = bar:CreateFontString(nil, "OVERLAY")
+  bar.text:SetPoint("CENTER")
+  bar.text:SetFont(ns.fonts[1].path, 10, defaults.outline)
+  return bar
+end
+local manaBar, healthBar = ValueBar(), ValueBar()
+ns.manaBar, ns.healthBar = manaBar, healthBar
+local elements = { combo = comboRow, power = power, mana = manaBar, health = healthBar }
+ns.barFrames = elements
 
 -- Icon rows live here (Tracker.lua), so they fade together with the combo row.
 local iconLayer = CreateFrame("Frame", nil, hud)
@@ -278,7 +299,7 @@ end
 
 local maxPower, lastPower
 local function UpdatePower()
-  if not hud:IsShown() then return end
+  if not power:IsVisible() then return end
   -- the preview fills the rage bar (rage is usually 0 out of combat), so its colours show
   local v = (ns.preview and powerType == POWER_RAGE) and (maxPower or 100) or UnitPower("player", powerType)
   if issecretvalue(v) then
@@ -300,6 +321,48 @@ local function UpdatePowerMax()
     maxPower = m
   end
   lastPower = nil
+end
+
+-- Mana and health, read every frame like the energy (unchanged values cost a comparison);
+-- their maxima on the safety refresh. Possibly secret: only handed to the bar and the text.
+local lastMana, lastHealth
+local function UpdateMana()
+  if not manaBar:IsVisible() then return end
+  local v = UnitPower("player", POWER_MANA)
+  if issecretvalue(v) then
+    lastMana = nil
+  elseif v == lastMana then
+    return
+  else
+    lastMana = v
+  end
+  manaBar:SetValue(v)
+  manaBar.text:SetText(v)
+end
+
+local function UpdateHealth()
+  if not healthBar:IsVisible() then return end
+  local v = UnitHealth("player")
+  if issecretvalue(v) then
+    lastHealth = nil
+  elseif v == lastHealth then
+    return
+  else
+    lastHealth = v
+  end
+  healthBar:SetValue(v)
+  healthBar.text:SetText(v)
+end
+
+local function UpdateMaxima()
+  if manaBar:IsVisible() then
+    local m = UnitPowerMax("player", POWER_MANA)
+    if issecretvalue(m) or (type(m) == "number" and m > 0) then manaBar:SetMinMaxValues(0, m) end
+  end
+  if healthBar:IsVisible() then
+    local m = UnitHealthMax("player")
+    if issecretvalue(m) or (type(m) == "number" and m > 0) then healthBar:SetMinMaxValues(0, m) end
+  end
 end
 
 ---------------------------------------------------------------------------
@@ -422,7 +485,8 @@ local function UpdateCost()
   if rage > 0 then
     local max = Plain(maxPower)
     if not max or max <= 0 then max = 100 end
-    costTex:SetWidth(math.min(WIDTH, rage / max * WIDTH))
+    local width = ns.db.bars.power.width -- in the bar's own units
+    costTex:SetWidth(math.min(width, rage / max * width))
     costClip:Show()
   else
     costClip:Hide()
@@ -438,9 +502,12 @@ local function RefreshCost()
 end
 
 local function RefreshValues()
-  lastCombo, lastPower = nil, nil
+  lastCombo, lastPower, lastMana, lastHealth = nil, nil, nil, nil
   UpdatePowerMax()
   UpdatePower()
+  UpdateMaxima()
+  UpdateMana()
+  UpdateHealth()
   UpdateCombo()
   RefreshCost()
   ns:MarkIconsDirty() -- read on the next frame, once
@@ -449,18 +516,39 @@ end
 -- Updates are skipped while the HUD is hidden, so catch up on everything when it comes back.
 hud:SetScript("OnShow", RefreshValues)
 
--- Rogues and warriors always see the HUD. Druids see it in Cat Form (energy) and Bear Form
--- (rage), unless "Cat and Bear Form only" is off. While unlocked or while the options are
--- open it shows in any form, so it can be moved and coloured.
-local function ShouldShow()
-  if ns.isRogue or ns.isWarrior then return true end
-  if not ns.isDruid then return false end
+-- Combo points, energy / rage and the icons: druids see them in Cat Form (energy) and Bear
+-- Form (rage), unless "Cat and Bear Form only" is off; while unlocked or while the options
+-- are open, in any form, so they can be moved and coloured. Rogues and warriors always.
+local function FormShown()
+  if not ns.isDruid then return true end
   if not ns.db.druidCatOnly or not ns.db.locked or ns.optionsOpen then return true end
   local pt = UnitPowerType("player")
   return issecretvalue(pt) or pt == POWER_ENERGY or pt == POWER_RAGE
 end
 
+-- Which bars show: the mana bar (druids) in every form, the health bar when turned on.
+local function BarShown(key)
+  if key == "combo" then return ns.profileClass ~= "WARRIOR" and FormShown() end
+  if key == "power" then return FormShown() end
+  if key == "mana" then return ns.profileClass == "DRUID" and ns.db.bars.mana.show end
+  return ns.db.bars.health.show
+end
+
+local function ShownKey()
+  local key = ""
+  for _, k in ipairs(ns.BAR_KEYS) do key = key .. (BarShown(k) and "1" or "0") end
+  return key
+end
+
+local function ShouldShow()
+  if not (ns.isRogue or ns.isWarrior or ns.isDruid) then return false end
+  return ShownKey():find("1") ~= nil
+end
+
+local shownKey -- the bars laid out (ApplyLayout)
 function ns:UpdateVisibility()
+  iconLayer:SetShown(FormShown())
+  if ShownKey() ~= shownKey then self:ApplyLayout() end
   hud:SetShown(ShouldShow())
 end
 
@@ -469,6 +557,8 @@ end
 local sinceRefresh = 0
 hud:SetScript("OnUpdate", function(_, elapsed)
   UpdatePower()
+  UpdateMana()
+  UpdateHealth()
   ns:UpdateIconsIfDirty()
   if regenDirty then
     UpdateRegen()
@@ -478,6 +568,7 @@ hud:SetScript("OnUpdate", function(_, elapsed)
   if sinceRefresh >= REFRESH then
     sinceRefresh = 0
     UpdateCombo()
+    UpdateMaxima()
     if predicting then
       UpdateQueued()
       UpdateCost()
@@ -523,9 +614,19 @@ function ns:GetOutline()
   return self.db.outline ~= "NONE" and self.db.outline or ""
 end
 
+-- The mana and health values: the font size, or less on a thin bar.
+local function ValueFonts()
+  local db = ns.db
+  for key, bar in pairs({ mana = manaBar, health = healthBar }) do
+    ns:SetFont(bar.text, math.max(6, math.min(db.fontSize, db.bars[key].height - 2)), ns:GetOutline())
+    bar.text:SetShown(db.showText)
+  end
+end
+
 function ns:ApplyFont()
   self:SetFont(powerText, self.db.fontSize, self:GetOutline())
   powerText:SetShown(self.db.showText)
+  ValueFonts()
   self:LayoutIcons()
 end
 
@@ -542,6 +643,29 @@ function ns:ApplyColors()
   power.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a)
   costTex:SetColorTexture(c.cost.r, c.cost.g, c.cost.b, c.cost.a)
   powerText:SetTextColor(c.text.r, c.text.g, c.text.b, c.text.a)
+  manaBar:SetStatusBarColor(c.mana.r, c.mana.g, c.mana.b, c.mana.a)
+  local h = c.health
+  local r, g, b = h.r, h.g, h.b
+  if self.db.healthClassColor then r, g, b = self:ClassColor(self.profileClass) end
+  healthBar:SetStatusBarColor(r, g, b, h.a)
+  for _, bar in ipairs({ manaBar, healthBar }) do
+    bar.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a)
+    bar.text:SetTextColor(c.text.r, c.text.g, c.text.b, c.text.a)
+  end
+end
+
+-- A class's colour, as the game shows it (raid frames, names).
+local CLASS_FALLBACK = { ROGUE = { 1, .96, .41 }, DRUID = { 1, .49, .04 }, WARRIOR = { .78, .61, .43 } }
+function ns:ClassColor(class)
+  local c
+  if C_ClassColor and C_ClassColor.GetClassColor then
+    local ok, color = pcall(C_ClassColor.GetClassColor, class)
+    if ok then c = color end
+  end
+  c = c or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
+  if c and type(c.r) == "number" then return c.r, c.g, c.b end
+  c = CLASS_FALLBACK[class] or { 1, 1, 1 }
+  return c[1], c[2], c[3]
 end
 
 -- Rage for warriors and for druids in Bear Form, energy otherwise. In Bear Form the empty
@@ -584,7 +708,10 @@ function ns:ApplyFade()
   local top = fade and db.oocTop or 1
   comboRow:SetAlpha(top)
   iconLayer:SetAlpha(top)
-  power:SetAlpha(fade and db.oocPower or 1)
+  local bars = fade and db.oocPower or 1
+  power:SetAlpha(bars)
+  manaBar:SetAlpha(bars)
+  healthBar:SetAlpha(bars)
 end
 
 function ns:PreviewFade()
@@ -610,12 +737,60 @@ function ns:ApplyScale()
   self:ApplyPosition()
 end
 
--- Warriors have no combo row: the HUD is the bar alone and the first icon row sits on it.
+-- The bars shown, top to bottom in the profile's order, each centred at its own size and
+-- scale, 4 apart; the HUD is as large as all of them. (Warriors have no combo row: the first
+-- icon row sits on the bar.)
 function ns:ApplyLayout()
-  local hasCombo = self.profileClass ~= "WARRIOR"
-  comboRow:SetShown(hasCombo)
-  hud:SetHeight(hasCombo and (CP_HEIGHT + ROW_GAP + POWER_HEIGHT) or POWER_HEIGHT)
+  local bars = self.db.bars
+  local y, wide = 0, 1
+  for _, key in ipairs(bars.order) do
+    local frame, on = elements[key], BarShown(key)
+    frame:SetShown(on)
+    if on then
+      local b = bars[key]
+      frame:SetScale(b.scale)
+      frame:SetSize(b.width, b.height)
+      frame:ClearAllPoints()
+      frame:SetPoint("TOP", hud, "TOP", 0, -y / b.scale)
+      y = y + b.height * b.scale + ROW_GAP
+      wide = math.max(wide, b.width * b.scale)
+    end
+  end
+  hud:SetSize(wide, math.max(1, y - ROW_GAP))
+  shownKey = ShownKey()
+  -- the combo cells share the row's width
+  local cb = bars.combo
+  local cellWidth = (cb.width - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS
+  for i = 1, NUM_POINTS do
+    cells[i]:ClearAllPoints()
+    cells[i]:SetPoint("TOPLEFT", (i - 1) * (cellWidth + CP_GAP), 0)
+    cells[i]:SetSize(cellWidth, cb.height)
+  end
+  ValueFonts()
   self:LayoutIcons()
+  RefreshValues()
+end
+
+-- A combo point cell's size on the HUD (icons of the Rectangular shape take it).
+function ns:ComboCellSize()
+  local cb = self.db.bars.combo
+  return (cb.width - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS * cb.scale, cb.height * cb.scale
+end
+
+-- The bars the icon rows sit on, with their widths on the HUD: the top one for the rows
+-- above, the bottom one for the rows below. (In Bear Form without combo points the empty
+-- combo row is passed over.)
+function ns:IconAnchors()
+  local bars = self.db.bars
+  local top, bottom = "power", "power"
+  local found
+  for _, key in ipairs(bars.order) do
+    if elements[key]:IsShown() and not (key == "combo" and self.iconsOnBar) then
+      if not found then top, found = key, true end
+      bottom = key
+    end
+  end
+  return elements[top], elements[bottom], bars[top].width * bars[top].scale, bars[bottom].width * bars[bottom].scale
 end
 
 function ns:SetScalePercent(percent)
@@ -894,6 +1069,24 @@ local function CleanProfile(db, class)
   if db.icons.size < 12 or db.icons.size > 64 then db.icons.size = defaults.icons.size end
   if not (db.icons.timerSize >= ns.MIN_TIMER and db.icons.timerSize <= ns.MAX_TIMER) then db.icons.timerSize = defaults.icons.timerSize end
   if not (math.abs(db.x) <= 4000 and math.abs(db.y) <= 4000) then db.x, db.y = defaults.x, defaults.y end
+  -- the bars: each once in the order, sizes in range
+  local order, seen = {}, {}
+  for _, key in ipairs(db.bars.order) do
+    if defaults.bars[key] and key ~= "order" and not seen[key] then
+      seen[key] = true
+      order[#order + 1] = key
+    end
+  end
+  for _, key in ipairs(ns.BAR_KEYS) do
+    if not seen[key] then order[#order + 1] = key end
+  end
+  db.bars.order = order
+  for _, key in ipairs(ns.BAR_KEYS) do
+    local b, d = db.bars[key], defaults.bars[key]
+    if not (b.width >= ns.MIN_BAR_W and b.width <= ns.MAX_BAR_W) then b.width = d.width end
+    if not (b.height >= ns.MIN_BAR_H and b.height <= ns.MAX_BAR_H) then b.height = d.height end
+    if not (b.scale * 100 >= ns.MIN_BAR_SCALE and b.scale * 100 <= ns.MAX_BAR_SCALE) then b.scale = d.scale end
+  end
   for key, c in pairs(db.colors) do
     local default = defaults.colors[key]
     if default then
