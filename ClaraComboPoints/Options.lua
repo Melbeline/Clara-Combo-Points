@@ -1425,6 +1425,14 @@ local function LayoutPage(p, page, OnRefresh)
   end)
   page:HookScript("OnHide", function() dragKey, dropAt = nil, nil end)
 
+  -- the bar picked, if the class shown has it, else its energy / rage bar (checked before
+  -- the size sliders read it)
+  local function CheckPicked()
+    for _, key in ipairs(ClassBars()) do if key == picked then return end end
+    picked = "power"
+  end
+  OnRefresh(CheckPicked)
+
   -- Size of the bar picked
   local sizeBox = Section(page, "BAR_SIZE", RIGHT, -56, nil, -232)
   local sizeTitle = Text(page, "", "GameFontNormal")
@@ -1453,9 +1461,7 @@ local function LayoutPage(p, page, OnRefresh)
 
   function Refresh()
     local keys = Shown()
-    local listed = {}
-    for _, key in ipairs(keys) do listed[key] = true end
-    if not listed[picked] then picked = "power" end
+    CheckPicked()
     for i, row in ipairs(rows) do
       local key = keys[i]
       row:SetShown(key ~= nil)

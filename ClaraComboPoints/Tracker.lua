@@ -234,7 +234,7 @@ function ns:LayoutIcons()
   if not db then return end
   local look = db.icons
   local shape = look.shape
-  local cellW, cellH = self:ComboCellSize() -- a combo point cell
+  local cellW, cellH, cellGap = self:ComboCellSize() -- a combo point cell
   local size = shape == "CELL" and cellH or look.size
   local top, bottom, topWidth, bottomWidth = self:IconAnchors()
   local editable = self:IconsEditable()
@@ -256,10 +256,11 @@ function ns:LayoutIcons()
         -- FILL: the row shares the bar's width; CELL: each icon the size of a combo point
         -- cell, however many there are; SQUARE: square icons. CELL and SQUARE rows are
         -- centred on the bar. (Icons unlocked: the empty rows show too, to drop spells on.)
+        local gap = shape == "CELL" and cellGap or self.CP_GAP
         local w = (shape == "SQUARE" and size) or (shape == "CELL" and cellW)
-          or (barWidth - max(0, n - 1) * self.CP_GAP) / max(1, n)
+          or (barWidth - max(0, n - 1) * gap) / max(1, n)
         row:ClearAllPoints()
-        local rowWidth = (shape == "FILL" or n == 0) and barWidth or (n * w + (n - 1) * self.CP_GAP)
+        local rowWidth = (shape == "FILL" or n == 0) and barWidth or (n * w + (n - 1) * gap)
         row:SetSize(rowWidth, size)
         row:EditMode(editable, max(barWidth, rowWidth), size)
         if side == "above" then
@@ -273,7 +274,7 @@ function ns:LayoutIcons()
           row.slots[i] = slot
           slot:ClearAllPoints()
           slot:SetSize(w, size)
-          slot:SetPoint("TOPLEFT", (i - 1) * (w + self.CP_GAP), 0)
+          slot:SetPoint("TOPLEFT", (i - 1) * (w + gap), 0)
           slot.w, slot.h = w, size
           Crop(slot.icon, w, size)
           LayoutFrame(slot, slot.frame, w, size)
@@ -711,9 +712,10 @@ end
 ---------------------------------------------------------------------------
 -- Editing (options)
 ---------------------------------------------------------------------------
--- A spell's ID from its name in the client's language: your spellbook first, then the class
--- spell lists (spells of other classes), then the auras on you and your target, without
--- minding upper / lower case.
+-- A spell's ID from its name: your spellbook first, then the class spell lists (spells of
+-- other classes, by their name in any language), then the auras on you and your target,
+-- without minding upper / lower case or accents. Only whole names: a part of one would take
+-- the place of an aura of that name (an NPC's "Slow" is not Slow Fall).
 function ns:SpellByName(text)
   if GetSpellInfo then
     local ok, info = pcall(GetSpellInfo, text)
@@ -727,11 +729,6 @@ function ns:SpellByName(text)
       if aura and Plain(aura.spellId) and self:SpellName(aura.spellId) then return aura.spellId end
     end
   end
-  -- part of a name: the only class spell it can be
-  local several
-  rec, several = self:CatalogByAnyName(text, true)
-  if rec then return rec.ranks[#rec.ranks][2] end
-  return nil, several
 end
 
 -- "7386", a spell link, or a name. A known name is stored as its ID (so it follows the
@@ -745,13 +742,8 @@ function ns:ParseSpell(text)
     return nil, L.UNKNOWN_ID:format(text)
   end
   text = text:match("^%[(.+)%]$") or text
-  local found, several = self:SpellByName(text)
+  local found = self:SpellByName(text)
   if found then return found end
-  if several then
-    local names = {}
-    for i = 1, min(4, #several) do names[i] = self:CatalogName(several[i]) end
-    return nil, L.SEVERAL_SPELLS:format(table.concat(names, ", ") .. (#several > 4 and ", ..." or ""))
-  end
   return text, nil, true
 end
 
@@ -915,10 +907,8 @@ function ns:CatalogMatches(rec, query)
   return false
 end
 
--- A class spell by its name in any language: the same name, else the only spell whose name
--- contains the text (spells of the same name count as one). Returns it, or nil and the
--- spells found when there are several.
-function ns:CatalogByAnyName(text, partial)
+-- A class spell by its name in any language (case and accents aside).
+function ns:CatalogByAnyName(text)
   local query = self:SearchKey(text)
   if query == "" or tonumber(query) then return end
   CatalogIndex()
@@ -927,16 +917,6 @@ function ns:CatalogByAnyName(text, partial)
       if key == query then return rec end
     end
   end
-  if not partial then return end
-  local found, names = {}, {}
-  for _, rec in ipairs(catalogList) do
-    if self:CatalogMatches(rec, query) and not names[rec.name] then
-      names[rec.name] = true
-      found[#found + 1] = rec
-    end
-  end
-  if #found == 1 then return found[1] end
-  return nil, #found > 1 and found or nil
 end
 
 -- The IDs of one rank (several when the game has the same rank twice), for "this rank only".
@@ -1114,15 +1094,36 @@ local function TrackDrag()
   end
 end
 
-local function EndDrag()
-  if not hudDrag then return end
-  TrackDrag()
+-- The drag is over: the ghost goes, the dragged icon is lit again.
+local function StopDrag()
   local d = hudDrag
   hudDrag = nil
   ghost:Hide()
   marker:Hide()
   local from = rows[d.side] and rows[d.side][d.k]
   if from and from.slots[d.i] then from.slots[d.i]:SetAlpha(1) end
+  return d
+end
+
+-- Still the icon picked up, in the profile it came from? (The options closing can switch
+-- the HUD to another profile while the button is held.)
+local function DragValid(d)
+  local row = d.profile == ns.db and ns.db.rows[d.side] and ns.db.rows[d.side][d.k]
+  return row and row[d.i] == d.entry and ns:IconsEditable()
+end
+
+-- Let go elsewhere than where it should: nothing moves.
+local function CancelDrag()
+  if not hudDrag then return end
+  StopDrag()
+  ns:LayoutIcons()
+end
+
+local function EndDrag()
+  if not hudDrag then return end
+  if not DragValid(hudDrag) then return CancelDrag() end
+  TrackDrag()
+  local d = StopDrag()
   if d.row then
     local ok, msg = ns:MoveIconTo(d.side, d.k, d.i, d.row.side, d.row.k, d.at)
     if not ok and msg then ns.Print(msg) end
@@ -1141,7 +1142,7 @@ local function StartDrag(slot)
   if entry == nil then return end
   if GameTooltip then GameTooltip:Hide() end
   Ghost()
-  hudDrag = { side = slot.side, k = slot.k, i = slot.index, entry = entry }
+  hudDrag = { side = slot.side, k = slot.k, i = slot.index, entry = entry, profile = ns.db }
   ghost.tex:SetTexture(slot.spellIcon)
   slot:SetAlpha(.3)
   ghost:Show()
@@ -1195,10 +1196,16 @@ function ns:EditableRow(row)
   end
 end
 
--- Drags end with the button let go (also when the icon went away meanwhile), and when the
--- icons are locked again.
+-- Drags end with the button let go (also when the icon went away meanwhile); they are
+-- called off when the icons are locked again or the HUD shows another profile.
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
   if not hudDrag then return end
-  if (IsMouseButtonDown and not IsMouseButtonDown("LeftButton")) or not ns:IconsEditable() then EndDrag() else TrackDrag() end
+  if not DragValid(hudDrag) then
+    CancelDrag()
+  elseif IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then
+    EndDrag()
+  else
+    TrackDrag()
+  end
 end)

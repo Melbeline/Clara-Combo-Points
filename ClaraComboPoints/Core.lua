@@ -527,12 +527,18 @@ local function FormShown()
   return issecretvalue(pt) or pt == POWER_ENERGY or pt == POWER_RAGE
 end
 
--- Which bars show: the mana bar (druids) in every form, the health bar when turned on.
-local function BarShown(key)
-  if key == "combo" then return ns.profileClass ~= "WARRIOR" and FormShown() end
-  if key == "power" then return FormShown() end
+-- The bars of the class shown: the mana bar (druids) and the health bar when turned on.
+local function BarUsed(key)
+  if key == "combo" then return ns.profileClass ~= "WARRIOR" end
+  if key == "power" then return true end
   if key == "mana" then return ns.profileClass == "DRUID" and ns.db.bars.mana.show end
   return ns.db.bars.health.show
+end
+
+-- Which bars show: combo points and energy / rage as the form allows, the others always.
+local function BarShown(key)
+  if key == "combo" or key == "power" then return BarUsed(key) and FormShown() end
+  return BarUsed(key)
 end
 
 local function ShownKey()
@@ -738,16 +744,17 @@ function ns:ApplyScale()
   self:ApplyPosition()
 end
 
--- The bars shown, top to bottom in the profile's order, each centred at its own size and
--- scale, 4 apart; the HUD is as large as all of them. (Warriors have no combo row: the first
+-- The class's bars, top to bottom in the profile's order, each centred at its own size and
+-- scale, 4 apart; the HUD is as large as all of them. A bar the form hides keeps its place, so
+-- the druid's mana bar stays put on shapeshifting. (Warriors have no combo row: the first
 -- icon row sits on the bar.)
 function ns:ApplyLayout()
   local bars = self.db.bars
   local y, wide = 0, 1
   for _, key in ipairs(bars.order) do
-    local frame, on = elements[key], BarShown(key)
-    frame:SetShown(on)
-    if on then
+    local frame = elements[key]
+    frame:SetShown(BarShown(key))
+    if BarUsed(key) then
       local b = bars[key]
       frame:SetScale(b.scale)
       frame:SetSize(b.width, b.height)
@@ -772,10 +779,11 @@ function ns:ApplyLayout()
   RefreshValues()
 end
 
--- A combo point cell's size on the HUD (icons of the Rectangular shape take it).
+-- A combo point cell's size on the HUD, and the gap between cells (icons of the Rectangular
+-- shape take them).
 function ns:ComboCellSize()
   local cb = self.db.bars.combo
-  return (cb.width - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS * cb.scale, cb.height * cb.scale
+  return (cb.width - (NUM_POINTS - 1) * CP_GAP) / NUM_POINTS * cb.scale, cb.height * cb.scale, CP_GAP * cb.scale
 end
 
 -- The bars the icon rows sit on, with their widths on the HUD: the top one for the rows
