@@ -71,6 +71,7 @@ ns.fonts = {
 ns.PROFILES = { "ROGUE", "DRUID", "WARRIOR" }
 local defaults = {
   locked   = true,
+  iconsLocked = true, -- unlocked: the icon rows are edited on the HUD itself (Tracker.lua)
   x        = 0,      -- centre of the HUD, reference pixels from the screen centre
   y        = -204,
   scale    = 1,      -- 1 = 100 %
@@ -521,7 +522,7 @@ hud:SetScript("OnShow", RefreshValues)
 -- are open, in any form, so they can be moved and coloured. Rogues and warriors always.
 local function FormShown()
   if not ns.isDruid then return true end
-  if not ns.db.druidCatOnly or not ns.db.locked or ns.optionsOpen then return true end
+  if not ns.db.druidCatOnly or not ns.db.locked or not ns.db.iconsLocked or ns.optionsOpen then return true end
   local pt = UnitPowerType("player")
   return issecretvalue(pt) or pt == POWER_ENERGY or pt == POWER_RAGE
 end
@@ -704,7 +705,7 @@ end
 local inCombat = false
 function ns:ApplyFade()
   local db = self.db
-  local fade = db.fadeOOC and not inCombat and db.locked and (not self.optionsOpen or self.fadePreview ~= nil)
+  local fade = db.fadeOOC and not inCombat and db.locked and db.iconsLocked and (not self.optionsOpen or self.fadePreview ~= nil)
   local top = fade and db.oocTop or 1
   comboRow:SetAlpha(top)
   iconLayer:SetAlpha(top)
@@ -940,17 +941,29 @@ function ns:ResetIcons()
   self:RefreshOptions()
 end
 
--- Every class's bar locked (the one shown, and the others for when they are shown).
+-- Every class's bar and icons locked (the ones shown, and the others for when they are shown).
 function ns:LockAll()
-  for _, profile in pairs(self.sv.profiles) do profile.locked = true end
+  for _, profile in pairs(self.sv.profiles) do profile.locked, profile.iconsLocked = true, true end
+  self:SetIconsLocked(true)
   self:SetLocked(true)
 end
 
 function ns:AllLocked()
   for _, profile in pairs(self.sv.profiles) do
-    if not profile.locked then return false end
+    if not profile.locked or not profile.iconsLocked then return false end
   end
   return true
+end
+
+-- Icons unlocked: every row shows on the HUD (the empty ones too) to drop spells from the
+-- spellbook on, move icons around, or drag them off to remove them (Tracker.lua).
+function ns:SetIconsLocked(locked)
+  self.db.iconsLocked = locked and true or false
+  self:UpdateVisibility()
+  self:LayoutIcons()
+  self:ApplyFade()
+  self:RefreshOptions()
+  self:RefreshSettingsPage()
 end
 
 -- Everything back to the defaults: the three class tabs (bar, colours, font, icons) and the
@@ -984,7 +997,7 @@ end
 function ns:LockOtherProfiles()
   local home = self.homeClass or "ROGUE"
   for class, profile in pairs(self.sv.profiles) do
-    if class ~= home then profile.locked = true end
+    if class ~= home then profile.locked, profile.iconsLocked = true, true end
   end
 end
 
@@ -1137,7 +1150,7 @@ function ns:CleanProfileData(data, class, into)
   local clean = CopyKnown(data, defaults, {})
   clean.rows = CopyRows(data.rows)
   CleanProfile(clean, class)
-  clean.locked = nil
+  clean.locked, clean.iconsLocked = nil, nil
   if not into then return clean end
   wipe(into)
   for k, v in pairs(clean) do into[k] = v end
@@ -1467,6 +1480,7 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
   if not ns.db then return end
   local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
   if cmd == "lock" then
+    ns:SetIconsLocked(true)
     ns:SetLocked(true)
     Print(L.LOCKED)
   elseif cmd == "unlock" then

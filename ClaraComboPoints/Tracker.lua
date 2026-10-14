@@ -174,6 +174,7 @@ local function NewSlot(row)
   slot.frame = {}
   for i = 1, FrameArt() and #PIECES or 1 do slot.frame[i] = slot.over:CreateTexture(nil, "OVERLAY") end
   slot.count = slot.over:CreateFontString(nil, "OVERLAY")
+  ns:EditableSlot(slot) -- (editing on the HUD, below)
   return slot
 end
 
@@ -182,7 +183,9 @@ local function GetRow(side, k)
   if not row then
     row = CreateFrame("Frame", nil, ns.iconLayer)
     row.slots = {}
+    row.side, row.k = side, k
     rows[side][k] = row
+    ns:EditableRow(row) -- (editing on the HUD, below)
   end
   return row
 end
@@ -234,6 +237,7 @@ function ns:LayoutIcons()
   local cellW, cellH = self:ComboCellSize() -- a combo point cell
   local size = shape == "CELL" and cellH or look.size
   local top, bottom, topWidth, bottomWidth = self:IconAnchors()
+  local editable = self:IconsEditable()
   for _, side in ipairs(self.SIDES) do
     -- each row sits on the previous one, from the top bar up or the bottom bar down; empty
     -- rows take no room (in Bear Form without combo points, the rows above sit on the rage
@@ -246,16 +250,18 @@ function ns:LayoutIcons()
       local n = #spells
       row.spells = spells
       for i = n + 1, #row.slots do row.slots[i]:Hide() end
-      if n == 0 then
+      if n == 0 and not editable then
         row:Hide()
       else
         -- FILL: the row shares the bar's width; CELL: each icon the size of a combo point
         -- cell, however many there are; SQUARE: square icons. CELL and SQUARE rows are
-        -- centred on the bar.
+        -- centred on the bar. (Icons unlocked: the empty rows show too, to drop spells on.)
         local w = (shape == "SQUARE" and size) or (shape == "CELL" and cellW)
-          or (barWidth - (n - 1) * self.CP_GAP) / n
+          or (barWidth - max(0, n - 1) * self.CP_GAP) / max(1, n)
         row:ClearAllPoints()
-        row:SetSize(shape == "FILL" and barWidth or (n * w + (n - 1) * self.CP_GAP), size)
+        local rowWidth = (shape == "FILL" or n == 0) and barWidth or (n * w + (n - 1) * self.CP_GAP)
+        row:SetSize(rowWidth, size)
+        row:EditMode(editable, max(barWidth, rowWidth), size)
         if side == "above" then
           row:SetPoint("BOTTOM", anchor, "TOP", 0, self.ROW_GAP)
         else
@@ -278,6 +284,8 @@ function ns:LayoutIcons()
           SetCountFonts(slot.count, slot.cd, w, size)
           local spell = self:EntrySpell(spells[i])
           slot.spell, slot.on, slot.mine = spell, self:EntryOn(spells[i]), self:EntryMine(spells[i])
+          slot.side, slot.k, slot.index = side, k, i
+          slot:EnableMouse(editable)
           slot.exact = type(spells[i]) == "table" and spells[i].exact and type(spell) == "number" and self:RankIDs(spell) or nil
           slot.name = self:SpellName(spell)
           slot.byName = type(spell) == "string"
@@ -990,3 +998,207 @@ function ns:ClearRow(side, k)
   self:LayoutIcons()
   self:RefreshOptions()
 end
+
+---------------------------------------------------------------------------
+-- Editing on the HUD (icons unlocked, Position on the bar page): every row shows, the empty
+-- ones too; a spell picked up in the spellbook is dropped on a row where it should go; an
+-- icon is dragged to another place or row, or off the HUD to remove it.
+---------------------------------------------------------------------------
+local hudDrag -- the icon being dragged: { side, k, i, entry }, and where it would go
+local ghost, marker
+
+function ns:IconsEditable()
+  return self.db ~= nil and self.db.iconsLocked == false and self.iconLayer:IsShown()
+end
+
+local function CursorSpell()
+  if not GetCursorInfo then return end
+  local kind, _, _, spellID = GetCursorInfo()
+  if kind == "spell" and type(spellID) == "number" and spellID > 0 then return spellID end
+end
+
+local function Cursor(frame)
+  local x, y = GetCursorPosition()
+  local s = frame:GetEffectiveScale()
+  return x / s, y / s
+end
+
+local function Inside(frame)
+  if not frame:IsVisible() then return false end
+  local x, y = Cursor(frame)
+  local l, r, t, b = frame:GetLeft(), frame:GetRight(), frame:GetTop(), frame:GetBottom()
+  return l ~= nil and x >= l and x <= r and y >= b and y <= t
+end
+
+-- Where in a row the cursor is: the place before the first icon whose middle is past it
+-- (the icon being dragged left out).
+local function PlaceAt(row)
+  local x = Cursor(row)
+  local at = 1
+  for i = 1, #(row.spells or {}) do
+    local slot = row.slots[i]
+    if not (hudDrag and hudDrag.side == row.side and hudDrag.k == row.k and hudDrag.i == i) then
+      local l, r = slot:GetLeft(), slot:GetRight()
+      if l and x > (l + r) / 2 then at = at + 1 end
+    end
+  end
+  return at
+end
+
+local function RowUnderCursor()
+  for _, side in ipairs(ns.SIDES) do
+    for _, row in pairs(rows[side]) do
+      if row:IsShown() and Inside(row.hit) then return row end
+    end
+  end
+end
+
+-- A spell from the spellbook let go over a row (or one of its icons): added there.
+local function DropSpell(row, at)
+  local spellID = CursorSpell()
+  if not spellID or not ns:IconsEditable() then return end
+  local ok, msg = ns:AddIcon(row.side, row.k, spellID, at or PlaceAt(row))
+  if ok and ClearCursor then ClearCursor() end
+  if msg then ns.Print(msg) end
+end
+
+local function Ghost()
+  if ghost then return ghost end
+  ghost = CreateFrame("Frame", nil, UIParent)
+  ghost:SetSize(30, 30)
+  ghost:SetFrameStrata("TOOLTIP")
+  ghost.tex = ghost:CreateTexture(nil, "ARTWORK")
+  ghost.tex:SetAllPoints()
+  ghost.tex:SetTexCoord(TRIM, 1 - TRIM, TRIM, 1 - TRIM)
+  ghost.cross = ghost:CreateTexture(nil, "OVERLAY") -- let go here: removed
+  ghost.cross:SetSize(20, 20)
+  ghost.cross:SetPoint("BOTTOMRIGHT", 6, -6)
+  ghost.cross:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+  ghost:SetAlpha(.85)
+  ghost:Hide()
+  marker = ns.iconLayer:CreateTexture(nil, "OVERLAY")
+  marker:SetColorTexture(1, .82, 0, .9)
+  marker:SetWidth(3)
+  marker:Hide()
+  return ghost
+end
+
+-- The drag follows the cursor: the place it would land is marked; off the HUD, a cross says
+-- the icon goes.
+local function TrackDrag()
+  local x, y = Cursor(UIParent)
+  ghost:ClearAllPoints()
+  ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+  local row = RowUnderCursor()
+  hudDrag.row, hudDrag.at = row, row and PlaceAt(row)
+  hudDrag.out = not row and not Inside(ns.hud)
+  ghost.tex:SetVertexColor(1, hudDrag.out and .35 or 1, hudDrag.out and .35 or 1)
+  ghost.cross:SetShown(hudDrag.out)
+  marker:SetShown(row ~= nil)
+  if row then
+    -- before the icon that would follow, or after the last one
+    local others = {}
+    for i = 1, #(row.spells or {}) do
+      if not (hudDrag.side == row.side and hudDrag.k == row.k and hudDrag.i == i) then others[#others + 1] = row.slots[i] end
+    end
+    marker:ClearAllPoints()
+    marker:SetHeight(row:GetHeight())
+    local next = others[hudDrag.at]
+    if next then
+      marker:SetPoint("RIGHT", next, "LEFT", -1, 0)
+    elseif others[#others] then
+      marker:SetPoint("LEFT", others[#others], "RIGHT", 1, 0)
+    else
+      marker:SetPoint("CENTER", row, "CENTER")
+    end
+  end
+end
+
+local function EndDrag()
+  if not hudDrag then return end
+  TrackDrag()
+  local d = hudDrag
+  hudDrag = nil
+  ghost:Hide()
+  marker:Hide()
+  local from = rows[d.side] and rows[d.side][d.k]
+  if from and from.slots[d.i] then from.slots[d.i]:SetAlpha(1) end
+  if d.row then
+    local ok, msg = ns:MoveIconTo(d.side, d.k, d.i, d.row.side, d.row.k, d.at)
+    if not ok and msg then ns.Print(msg) end
+  elseif d.out then
+    local spell = ns:EntrySpell(d.entry)
+    ns:RemoveIcon(d.side, d.k, d.i)
+    ns.Print(L.REMOVED:format(ns:SpellName(spell) or tostring(spell), RowName(d.side, d.k)))
+  else
+    ns:LayoutIcons()
+  end
+end
+
+local function StartDrag(slot)
+  if hudDrag or not ns:IconsEditable() then return end
+  local entry = ns.db.rows[slot.side][slot.k][slot.index]
+  if entry == nil then return end
+  if GameTooltip then GameTooltip:Hide() end
+  Ghost()
+  hudDrag = { side = slot.side, k = slot.k, i = slot.index, entry = entry }
+  ghost.tex:SetTexture(slot.spellIcon)
+  slot:SetAlpha(.3)
+  ghost:Show()
+  TrackDrag()
+end
+
+local function SlotTooltip(self)
+  if not GameTooltip or hudDrag or not ns:IconsEditable() then return end
+  GameTooltip:SetOwner(self, "ANCHOR_TOP")
+  local spell = self.spell
+  if not (type(spell) == "number" and GameTooltip.SetSpellByID and pcall(GameTooltip.SetSpellByID, GameTooltip, spell)) then
+    GameTooltip:SetText(self.name or tostring(spell))
+  end
+  GameTooltip:AddLine(L.HUD_ICON_TIP, 1, .82, 0, true)
+  GameTooltip:Show()
+end
+
+function ns:EditableSlot(slot)
+  slot:EnableMouse(false)
+  slot:RegisterForDrag("LeftButton")
+  slot:SetScript("OnDragStart", StartDrag)
+  slot:SetScript("OnDragStop", EndDrag)
+  slot:SetScript("OnReceiveDrag", function(self) DropSpell(self:GetParent(), self.index) end)
+  slot:SetScript("OnMouseUp", function(self) if CursorSpell() then DropSpell(self:GetParent(), self.index) end end)
+  slot:SetScript("OnEnter", SlotTooltip)
+  slot:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+end
+
+-- Each row's area while editing: the bar's width (or its icons', if wider), tinted, named
+-- when empty; spells are dropped on it.
+function ns:EditableRow(row)
+  local hit = CreateFrame("Frame", nil, row)
+  hit:SetPoint("CENTER")
+  hit:SetFrameLevel(row:GetFrameLevel()) -- under the icons
+  hit:EnableMouse(false)
+  hit:Hide()
+  local tint = hit:CreateTexture(nil, "BACKGROUND")
+  tint:SetAllPoints()
+  tint:SetColorTexture(.25, .6, 1, .25)
+  hit.label = hit:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  hit.label:SetPoint("CENTER")
+  hit:SetScript("OnReceiveDrag", function() DropSpell(row) end)
+  hit:SetScript("OnMouseUp", function() if CursorSpell() then DropSpell(row) end end)
+  row.hit = hit
+  function row:EditMode(on, width, height)
+    hit:SetShown(on)
+    hit:EnableMouse(on)
+    if not on then return end
+    hit:SetSize(width, height)
+    hit.label:SetText(#(self.spells or {}) == 0 and L.DROP_HERE:format(RowName(self.side, self.k)) or "")
+  end
+end
+
+-- Drags end with the button let go (also when the icon went away meanwhile), and when the
+-- icons are locked again.
+local watcher = CreateFrame("Frame")
+watcher:SetScript("OnUpdate", function()
+  if not hudDrag then return end
+  if (IsMouseButtonDown and not IsMouseButtonDown("LeftButton")) or not ns:IconsEditable() then EndDrag() else TrackDrag() end
+end)

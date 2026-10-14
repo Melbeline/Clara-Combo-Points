@@ -164,10 +164,10 @@ local function Same(a, b)
   return true
 end
 
--- What a profile keeps of a tab's settings: everything but the lock (a moment's state).
+-- What a profile keeps of a tab's settings: everything but the locks (a moment's state).
 local function Snapshot(db)
   local copy = DeepCopy(db)
-  copy.locked = nil
+  copy.locked, copy.iconsLocked = nil, nil
   return copy
 end
 
@@ -277,9 +277,9 @@ function ns:LoadProfile(class, name)
   local data = Store(class)[name]
   if not data then return false, L.PROFILE_MISSING end
   local db = self.sv.profiles[class]
-  local locked = db.locked
+  local locked, iconsLocked = db.locked, db.iconsLocked
   self:CleanProfileData(data, class, db) -- a copy: the saved profile stays as it is
-  db.locked = locked
+  db.locked, db.iconsLocked = locked, iconsLocked
   self.sv.active[class] = name
   if db == self.db then self:ApplyAll() end
   self:RefreshOptions()

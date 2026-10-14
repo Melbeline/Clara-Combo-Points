@@ -12,7 +12,7 @@ local L = ns.L
 
 local floor, ceil, min, max = math.floor, math.ceil, math.min, math.max
 
-local PANEL_W, PANEL_H = 720, 660
+local PANEL_W, PANEL_H = 720, 690
 local TABS_X, FLAG_STEP = 14, 30 -- first tab; flags, one every 30
 local OPACITY_TAIL = 52          -- the opacity slider's box and "%"
 local FOOTER_RIGHT = 28          -- footer text, clear of the scale grip
@@ -1597,9 +1597,9 @@ end
 -- loaded, deleted, exported and imported.
 ---------------------------------------------------------------------------
 local function ProfilesSection(p, bar, OnRefresh)
-  Section(bar, "PROFILES", LEFT, -420, nil, -562)
+  Section(bar, "PROFILES", LEFT, -448, nil, -590)
   local loaded = Hint(bar, "") -- the profile on the tab, and whether it changed since
-  loaded:SetPoint("TOPLEFT", LEFT, -442)
+  loaded:SetPoint("TOPLEFT", LEFT, -470)
   loaded:SetWidth(COL_W)
   loaded:SetWordWrap(false)
   local picked = {} -- per tab: the profile chosen in the list
@@ -1613,9 +1613,9 @@ local function ProfilesSection(p, bar, OnRefresh)
     for _, name in ipairs(ns:ProfileNames(editing)) do options[#options + 1] = { name, name } end
     return options
   end, Picked, function(name) picked[editing] = name; p:Refresh() end)
-  list:SetPoint("TOPLEFT", LEFT, -459)
+  list:SetPoint("TOPLEFT", LEFT, -487)
   local profStatus = Text(bar, "", "GameFontHighlightSmall")
-  profStatus:SetPoint("TOPLEFT", LEFT, -544)
+  profStatus:SetPoint("TOPLEFT", LEFT, -572)
   profStatus:SetWidth(COL_W)
   local function ProfileStatus(ok, msg)
     profStatus:SetText(msg or "")
@@ -1650,7 +1650,7 @@ local function ProfilesSection(p, bar, OnRefresh)
       Load(class, name)
     end
   end)
-  loadBtn:SetPoint("TOPLEFT", LEFT + 174, -458)
+  loadBtn:SetPoint("TOPLEFT", LEFT + 174, -486)
   local deleteBtn = Button(bar, Tr("PROFILE_DELETE"), 74, 22, function()
     local class, name = editing, Picked()
     if not name then return end
@@ -1658,12 +1658,12 @@ local function ProfilesSection(p, bar, OnRefresh)
       ProfileStatus(ns:DeleteProfile(class, name))
     end }, { L.CANCEL })
   end)
-  deleteBtn:SetPoint("TOPLEFT", LEFT + 250, -458)
+  deleteBtn:SetPoint("TOPLEFT", LEFT + 250, -486)
 
   -- Save: under the name typed (the loaded profile's name to start with)
   local nameBox = InputBox(bar, 170)
   nameBox:SetMaxLetters(32)
-  nameBox.holder:SetPoint("TOPLEFT", LEFT, -486)
+  nameBox.holder:SetPoint("TOPLEFT", LEFT, -514)
   local function Save()
     local class, name = editing, ns.CleanProfileName(nameBox:GetText())
     nameBox:ClearFocus()
@@ -1686,7 +1686,7 @@ local function ProfilesSection(p, bar, OnRefresh)
   nameBox:SetScript("OnEnterPressed", Save)
   nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   local saveBtn = Button(bar, Tr("PROFILE_SAVE"), 150, 22, Save)
-  saveBtn:SetPoint("TOPLEFT", LEFT + 174, -486)
+  saveBtn:SetPoint("TOPLEFT", LEFT + 174, -514)
 
   local textBox = TextDialog(p)
   local exportBtn = Button(bar, Tr("PROFILE_EXPORT"), 158, 22, function()
@@ -1697,7 +1697,7 @@ local function ProfilesSection(p, bar, OnRefresh)
     textBox:Open(L.PROFILE_EXPORT_TITLE:format(name), hint, ns:ExportProfile(editing, name), L.SELECT_ALL,
       function() textBox:SelectAll() end)
   end)
-  exportBtn:SetPoint("TOPLEFT", LEFT, -514)
+  exportBtn:SetPoint("TOPLEFT", LEFT, -542)
   local importBtn = Button(bar, Tr("PROFILE_IMPORT"), 158, 22, function()
     local class = editing
     textBox:Open(L.PROFILE_IMPORT_TITLE:format(L["TAB_" .. class]), L.PROFILE_IMPORT_HINT, nil, L.PROFILE_IMPORT, function(text)
@@ -1712,7 +1712,7 @@ local function ProfilesSection(p, bar, OnRefresh)
       p:Refresh()
     end)
   end)
-  importBtn:SetPoint("TOPLEFT", LEFT + 162, -514)
+  importBtn:SetPoint("TOPLEFT", LEFT + 162, -542)
   -- (a tab change or a language change closes the box: it belongs to the tab it opened on)
   OnRelabel(function() textBox:Hide() end)
   function p.ClearProfileMessages()
@@ -2014,32 +2014,42 @@ local function Build()
 
   -- Page 1: position, scale, opacity | colours -----------------------------------
   local bar = pages[1]
-  Section(bar, "POSITION", LEFT, -56, nil, -102)
+  Section(bar, "POSITION", LEFT, -56, nil, -130)
   local lockBtn = Button(bar, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
   lockBtn:SetPoint("TOPLEFT", LEFT, -80)
   local centerBtn = Button(bar, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end)
   centerBtn:SetPoint("TOPLEFT", LEFT + 160, -80)
+  -- icons unlocked: spells dropped on the HUD's rows, icons moved or dragged off (Tracker.lua)
+  local iconsBtn = Button(bar, "", 150, 22, function() ns:SetIconsLocked(not ns.db.iconsLocked) end)
+  iconsBtn:SetPoint("TOPLEFT", LEFT, -108)
+  local iconsHint = Hint(bar, Tr("ICONS_UNLOCKED_HINT"))
+  iconsHint:SetPoint("LEFT", iconsBtn, "RIGHT", 10, 0)
+  iconsHint:SetWidth(COL_W - 160)
+  iconsHint:SetWordWrap(true)
   OnRefresh(function()
     lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
     lockBtn:SetActive(not ns.db.locked)
+    iconsBtn:SetLabel(ns.db.iconsLocked and L.UNLOCK_ICONS or L.LOCK_ICONS)
+    iconsBtn:SetActive(not ns.db.iconsLocked)
+    iconsHint:SetShown(not ns.db.iconsLocked)
   end)
 
-  Section(bar, "SCALE", LEFT, -130, nil, -206)
+  Section(bar, "SCALE", LEFT, -158, nil, -234)
   local presetButtons = {}
   for i, pct in ipairs(SCALE_PRESETS) do
     local b = Button(bar, pct .. "%", 40, 22, function() ns:SetScalePercent(pct) end)
-    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -154)
+    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -182)
     b.percent = pct
     presetButtons[i] = b
   end
   local scaleBox = NumberBox(bar, 50, function(text) ns:SetScalePercent(text) end)
-  scaleBox.holder:SetPoint("TOPLEFT", LEFT, -184)
+  scaleBox.holder:SetPoint("TOPLEFT", LEFT, -212)
   Text(bar, "%"):SetPoint("LEFT", scaleBox.holder, "RIGHT", 4, 0)
   local applyScale = Button(bar, Tr("APPLY"), 90, 22, function()
     scaleBox:ClearFocus()
     ns:SetScalePercent(scaleBox:GetText())
   end)
-  applyScale:SetPoint("TOPLEFT", LEFT + 72, -184)
+  applyScale:SetPoint("TOPLEFT", LEFT + 72, -212)
   Hint(bar, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("LEFT", applyScale, "RIGHT", 10, 0)
   OnRefresh(function()
     local now = ns:GetScalePercent()
@@ -2047,33 +2057,33 @@ local function Build()
     if not scaleBox:HasFocus() then scaleBox:SetText(tostring(now)) end
   end)
 
-  Section(bar, "GLOBAL_OPACITY", LEFT, -234, nil, -272)
+  Section(bar, "GLOBAL_OPACITY", LEFT, -262, nil, -300)
   local alphaSlider = Slider(bar, 230, 0, 100, 1, Percent, function(v)
     ns.db.alpha = v / 100
     ns:ApplyAlpha()
   end)
-  alphaSlider:SetPoint("LEFT", bar, "TOPLEFT", LEFT, -261)
+  alphaSlider:SetPoint("LEFT", bar, "TOPLEFT", LEFT, -289)
   OnRefresh(function() alphaSlider:Set(floor(ns.db.alpha * 100 + .5)) end)
 
-  Section(bar, "OOC", LEFT, -298, nil, -392)
+  Section(bar, "OOC", LEFT, -326, nil, -420)
   local fade = Check(bar, Tr("FADE_OOC"), function(on)
     ns.db.fadeOOC = on
     ns:PreviewFade()
   end)
-  fade:SetPoint("TOPLEFT", LEFT, -324)
-  Button(bar, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", bar, "TOPLEFT", LEFT + COL_W, -318)
-  Text(bar, Tr("OOC_POWER")):SetPoint("TOPLEFT", LEFT, -350)
+  fade:SetPoint("TOPLEFT", LEFT, -352)
+  Button(bar, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", bar, "TOPLEFT", LEFT + COL_W, -346)
+  Text(bar, Tr("OOC_POWER")):SetPoint("TOPLEFT", LEFT, -378)
   local oocPower = Slider(bar, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocPower = v / 100
     ns:PreviewFade()
   end)
-  oocPower:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -356)
-  Text(bar, Tr("OOC_TOP")):SetPoint("TOPLEFT", LEFT, -376)
+  oocPower:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -384)
+  Text(bar, Tr("OOC_TOP")):SetPoint("TOPLEFT", LEFT, -404)
   local oocTop = Slider(bar, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocTop = v / 100
     ns:PreviewFade()
   end)
-  oocTop:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -382)
+  oocTop:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -410)
   OnRefresh(function()
     fade:Set(ns.db.fadeOOC)
     oocPower:Set(floor(ns.db.oocPower * 100 + .5))
