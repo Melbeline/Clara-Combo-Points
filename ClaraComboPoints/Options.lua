@@ -138,8 +138,8 @@ local function Rule(parent, x, y, w)
   return t
 end
 
--- A group of settings in a box like the character sheet's stat groups: rounded silver
--- border, dark fill, gold title. The box sits on the page's back layer, under the widgets.
+-- A group of settings in a box like the character sheet's panels: bronze border, dark fill,
+-- gold title. The box sits on the page's back layer, under the widgets.
 -- key: the title's locale key (or nil: box.title:SetText later). bottom: lowest y of the
 -- group's content (or later, box:Fit(y)).
 local GROUP_BACKDROP = {
@@ -150,13 +150,33 @@ local GROUP_BACKDROP = {
 }
 local PAD = 9 -- box margin around its content
 
+-- The look of a group (and of the specialisations menu): the bronze border of the character
+-- sheet's panels in this client, over a dark fill; without that art, the tooltip border in
+-- bronze.
+local INSIDE_FRAME = "common-insideframe"
+local function GroupLook(box)
+  if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(INSIDE_FRAME) then
+    local fill = box:CreateTexture(nil, "BACKGROUND")
+    fill:SetPoint("TOPLEFT", 3, -3)
+    fill:SetPoint("BOTTOMRIGHT", -3, 3)
+    fill:SetColorTexture(0, 0, 0, .55)
+    local border = box:CreateTexture(nil, "BORDER")
+    border:SetAtlas(INSIDE_FRAME)
+    border:SetPoint("TOPLEFT", 1, 1) -- as the character sheet places it
+    border:SetPoint("BOTTOMRIGHT", -4, 2)
+    box.border = border
+  else
+    box:SetBackdrop(GROUP_BACKDROP)
+    box:SetBackdropColor(0, 0, 0, .55)
+    box:SetBackdropBorderColor(.72, .58, .34, 1)
+  end
+end
+
 local function Section(parent, key, x, y, width, bottom)
   local box = CreateFrame("Frame", nil, parent.back, "BackdropTemplate")
   box:SetPoint("TOPLEFT", parent, "TOPLEFT", x - PAD, y + PAD)
   box:SetWidth((width or COL_W) + 2 * PAD)
-  box:SetBackdrop(GROUP_BACKDROP)
-  box:SetBackdropColor(0, 0, 0, .55)
-  box:SetBackdropBorderColor(.62, .62, .66, 1)
+  GroupLook(box)
   local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   fs:SetPoint("TOPLEFT", x, y)
   if key then OnRelabel(function() fs:SetText(L[key]) end) end
@@ -1033,7 +1053,7 @@ local function Catalog(p)
 
   local inset = Box(f)
   inset:SetPoint("TOPLEFT", 10, -128)
-  inset:SetPoint("BOTTOMRIGHT", -10, 12)
+  inset:SetPoint("BOTTOMRIGHT", -10, 26) -- (its corner grip under it)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsSpellsScroll", inset, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 4, -6)
   scroll:SetPoint("BOTTOMRIGHT", -26, 6)
@@ -1986,8 +2006,8 @@ end
 
 ---------------------------------------------------------------------------
 -- Where the window is (sv.window: its top left corner in UIParent units, nil = centred), its
--- scale and opacity. It is not held on the screen: /cl reset pos (or the game's AddOns
--- options) brings it back.
+-- scale and opacity; the spells panel beside it, or on its own (sv.catalog). Nothing is held on
+-- the screen: /cl reset pos (or the game's AddOns options) brings them back.
 ---------------------------------------------------------------------------
 local GRIP = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-"
 
@@ -1997,6 +2017,37 @@ local function AutoScale()
   local width = UIParent:GetWidth()
   if width and width > 0 then return min(1, width / (PANEL_W + SIDE_W)) end
   return 1
+end
+
+-- The spells panel: locked, beside the window (at its scale, moved and sized with it); or
+-- unlocked, where the player put it, at its own scale whatever the window's.
+local function CatalogFree()
+  local c = ns.sv.catalog
+  return not c.locked and c.left ~= nil
+end
+
+local function PlaceCatalog()
+  if not catalog then return end
+  local c = ns.sv.catalog
+  catalog:ClearAllPoints()
+  if CatalogFree() then
+    catalog:SetScale(c.scale / panel:GetScale())
+    catalog:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", c.left / c.scale, c.top / c.scale)
+  else
+    catalog:SetScale(1)
+    catalog:SetPoint("TOPLEFT", panel, "TOPRIGHT", 0, 0)
+  end
+end
+
+-- Unlocked: from then on the panel keeps the place and size it has now, on its own.
+local function FreeCatalog()
+  local c = ns.sv.catalog
+  if c.locked or c.left then return end
+  local s = panel:GetScale() * catalog:GetScale()
+  local left, top = catalog:GetLeft(), catalog:GetTop()
+  if not (left and top) then return end
+  c.left, c.top, c.scale = left * s, top * s, s
+  PlaceCatalog()
 end
 
 local function PlaceWindow()
@@ -2009,6 +2060,7 @@ local function PlaceWindow()
   else
     panel:SetPoint("CENTER", UIParent, "CENTER")
   end
+  PlaceCatalog()
 end
 
 -- Remembers where the window is, after a drag or a change of scale.
@@ -2022,8 +2074,10 @@ local function SaveWindowPlace()
 end
 
 -- The spells panel opens on the right of the window: if it would go past the screen's edge,
--- the window moves left (unless it is already partly off the screen, where it was put).
+-- the window moves left (unless it is already partly off the screen, where it was put). A
+-- panel on its own stays where it was put.
 function FitSidePanel()
+  if not ns.sv.catalog.locked then return end
   local left, right, top, screen = panel:GetLeft(), panel:GetRight(), panel:GetTop(), UIParent:GetRight()
   if not (left and right and top and screen) then return end
   screen = screen / panel:GetScale() -- in the window's own units
@@ -2052,8 +2106,11 @@ function ns:GetWindowScale()
   return self.sv.window.scale or (panel and panel:GetScale()) or AutoScale()
 end
 
+-- The window back in the middle of the screen, and the spells panel beside it.
 function ns:ResetWindowPosition()
   self.sv.window.left, self.sv.window.top = nil, nil
+  local c = self.sv.catalog
+  c.left, c.top, c.scale = nil, nil, nil
   if panel then
     PlaceWindow()
     if catalog:IsShown() then FitSidePanel() end
@@ -2069,20 +2126,39 @@ function ns:ResetOptionsWindow()
   if catalog:IsShown() then FitSidePanel() end
 end
 
--- Bottom right corner: hold the left or right mouse button on it and drag, to make the whole
--- window bigger or smaller (its top left corner stays put).
-local function ScaleGrip(p)
-  local grip = CreateFrame("Button", nil, p)
+-- The spells panel locked beside the window, or unlocked to be moved and sized on its own
+-- (its lock, in its title bar). Locked again, it goes back beside the window.
+function ns:SetCatalogLocked(locked)
+  local c = self.sv.catalog
+  c.locked = locked and true or false
+  if c.locked then c.left, c.top, c.scale = nil, nil, nil end
+  if panel then
+    if c.locked then
+      PlaceCatalog()
+      if catalog:IsShown() then FitSidePanel() end
+    else
+      FreeCatalog()
+    end
+  end
+  self:RefreshOptions()
+end
+
+-- A bottom right corner (the window's, the spells panel's): hold the left or right mouse button
+-- on it and drag to make bigger or smaller what Sizing() gives; its top left corner stays put.
+-- Sizing() returns that corner (UIParent units), the scale now, the width and height up to the
+-- corner held (unscaled), a function applying a scale, and one run when let go.
+local function ScaleGrip(host, Sizing)
+  local grip = CreateFrame("Button", nil, host)
   grip:SetSize(16, 16)
   grip:SetPoint("BOTTOMRIGHT", -5, 5)
-  grip:SetFrameLevel(p:GetFrameLevel() + 20)
+  grip:SetFrameLevel(host:GetFrameLevel() + 20)
   grip:SetNormalTexture(GRIP .. "Up")
   grip:SetPushedTexture(GRIP .. "Down")
   grip:SetHighlightTexture(GRIP .. "Highlight")
   local percent = grip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   percent:SetPoint("BOTTOMRIGHT", grip, "TOPRIGHT", 0, 18) -- over the window opacity, not on it
   percent:Hide()
-  local held, left, top, offX, offY
+  local held, left, top, offX, offY, W, H, Apply, Done
   local function Cursor()
     local x, y = GetCursorPosition()
     local s = UIParent:GetEffectiveScale()
@@ -2092,11 +2168,9 @@ local function ScaleGrip(p)
   local function Follow()
     local x, y = Cursor()
     x, y = x - offX, y - offY
-    local s = ((x - left) * PANEL_W + (top - y) * PANEL_H) / (PANEL_W * PANEL_W + PANEL_H * PANEL_H)
+    local s = ((x - left) * W + (top - y) * H) / (W * W + H * H)
     s = min(ns.MAX_WINDOW_SCALE, max(ns.MIN_WINDOW_SCALE, s))
-    p:SetScale(s)
-    p:ClearAllPoints()
-    p:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / s, top / s)
+    Apply(s)
     percent:SetText(floor(s * 100 + .5) .. " %")
   end
   local function Stop()
@@ -2104,16 +2178,16 @@ local function ScaleGrip(p)
     held = nil
     percent:Hide()
     grip:SetButtonState("NORMAL")
-    ns.sv.window.scale = p:GetScale()
-    SaveWindowPlace()
+    Done()
   end
   grip:SetScript("OnMouseDown", function(_, button)
     if held then return end
     if GameTooltip then GameTooltip:Hide() end
-    local s = p:GetScale()
-    left, top = p:GetLeft() * s, p:GetTop() * s
+    local s
+    left, top, s, W, H, Apply, Done = Sizing()
+    if not left then return end
     local x, y = Cursor()
-    offX, offY = x - (left + PANEL_W * s), y - (top - PANEL_H * s)
+    offX, offY = x - (left + W * s), y - (top - H * s)
     held = button
     grip:SetButtonState("PUSHED", true)
     percent:Show()
@@ -2134,6 +2208,119 @@ local function ScaleGrip(p)
   end)
   grip:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   return grip
+end
+
+-- The window sized, with the spells panel if it is locked to it (a panel on its own keeps its
+-- size). extraW: from the panel's corner, past the window.
+local function WindowSizing(extraW)
+  return function()
+    if not ns.sv.catalog.locked then FreeCatalog() end
+    local s = panel:GetScale()
+    local l, t = panel:GetLeft(), panel:GetTop()
+    if not (l and t) then return end
+    local left, top = l * s, t * s
+    return left, top, s, PANEL_W + (extraW or 0), PANEL_H, function(new)
+      panel:SetScale(new)
+      panel:ClearAllPoints()
+      panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / new, top / new)
+      PlaceCatalog()
+    end, function()
+      ns.sv.window.scale = panel:GetScale()
+      SaveWindowPlace()
+    end
+  end
+end
+
+-- The spells panel's corner: everything while it is locked, the panel alone when it is not.
+local function CatalogSizing()
+  local c = ns.sv.catalog
+  if c.locked then return WindowSizing(SIDE_W)() end
+  FreeCatalog()
+  if not c.left then return WindowSizing(SIDE_W)() end
+  local left, top = c.left, c.top
+  return left, top, c.scale, SIDE_W, PANEL_H, function(new)
+    c.left, c.top, c.scale = left, top, new
+    PlaceCatalog()
+  end, function() end
+end
+
+-- The spells panel's own controls: its lock in the title bar, moving it by its title (the
+-- whole window while it is locked) and its corner.
+local LOCK = "Interface\\Buttons\\LockButton-"
+local function CatalogControls(p)
+  local f = catalog
+  f:SetMovable(true)
+  f:SetClampedToScreen(false)
+  if f.SetDontSavePosition then f:SetDontSavePosition(true) end
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", function(self)
+    if ns.sv.catalog.locked then
+      self.moving = "window"
+      p:StartMoving()
+    else
+      FreeCatalog()
+      self.moving = "panel"
+      self:StartMoving()
+    end
+  end)
+  local function StopMoving(self)
+    local what = self.moving
+    self.moving = nil
+    if what == "window" then
+      p:StopMovingOrSizing()
+      SaveWindowPlace()
+    elseif what == "panel" then
+      self:StopMovingOrSizing()
+      local c = ns.sv.catalog
+      local s = p:GetScale() * self:GetScale()
+      local left, top = self:GetLeft(), self:GetTop()
+      if left and top and not c.locked then c.left, c.top = left * s, top * s end
+      PlaceCatalog()
+    end
+  end
+  f:SetScript("OnDragStop", StopMoving)
+  f:HookScript("OnHide", StopMoving) -- closed mid-drag: it stays where it was let go
+
+  local lock = CreateFrame("Button", nil, f)
+  lock:SetSize(22, 22)
+  lock:SetPoint("TOPLEFT", 5, -1)
+  local over = f.TitleContainer or f.NineSlice or f -- above the frame's border art
+  lock:SetFrameLevel(over:GetFrameLevel() + 2)
+  lock:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+  local function Art()
+    local locked = ns.sv.catalog.locked
+    local state = locked and "Locked" or "Unlocked"
+    lock:SetNormalTexture(LOCK .. state .. "-Up")
+    lock:SetPushedTexture(LOCK .. state .. "-Down")
+    local t = lock:GetNormalTexture()
+    -- a client without the old lock button: the game's padlock, dimmed when unlocked
+    if t and t.GetTextureFileID and not t:GetTextureFileID() and lock.SetNormalAtlas then
+      lock:SetNormalAtlas("QuestSharing-Padlock")
+      lock:SetPushedAtlas("QuestSharing-Padlock")
+      t = lock:GetNormalTexture()
+      t:SetDesaturated(not locked)
+      t:SetAlpha(locked and 1 or .6)
+    end
+  end
+  local function Tip(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    local locked = ns.sv.catalog.locked
+    GameTooltip:SetText(locked and L.CATALOG_LOCKED or L.CATALOG_UNLOCKED)
+    GameTooltip:AddLine(locked and L.CATALOG_LOCKED_TIP or L.CATALOG_UNLOCKED_TIP, 1, 1, 1, true)
+    GameTooltip:Show()
+  end
+  lock:SetScript("OnClick", function(self)
+    ClickSound()
+    ns:SetCatalogLocked(not ns.sv.catalog.locked)
+    Art()
+    if GameTooltip and GameTooltip:IsOwned(self) then Tip(self) end
+  end)
+  lock:SetScript("OnEnter", Tip)
+  lock:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  f.lock = lock
+  f.grip = ScaleGrip(f, CatalogSizing)
+  return Art
 end
 
 ---------------------------------------------------------------------------
@@ -2186,6 +2373,335 @@ local function Part(page)
   return f
 end
 
+---------------------------------------------------------------------------
+-- General page: position, size, opacity | look of the bars and their text
+---------------------------------------------------------------------------
+local function GeneralPage(p, gen, OnRefresh)
+  Section(gen, "POSITION", LEFT, -56, nil, -110)
+  local lockBtn = Button(gen, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
+  lockBtn:SetPoint("TOPLEFT", LEFT, -80)
+  Button(gen, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end):SetPoint("TOPLEFT", LEFT + 160, -80)
+  OnRefresh(function()
+    lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
+    lockBtn:SetActive(not ns.db.locked)
+  end)
+
+  Section(gen, "SCALE", LEFT, -138, nil, -230)
+  local presetButtons = {}
+  for i, pct in ipairs(SCALE_PRESETS) do
+    local b = Button(gen, pct .. "%", 40, 22, function() ns:SetScalePercent(pct) end)
+    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -162)
+    b.percent = pct
+    presetButtons[i] = b
+  end
+  local scaleSlider = Slider(gen, 200, ns.MIN_SCALE, ns.MAX_SCALE, 1, Percent, function(v) ns:SetScalePercent(v) end, 40)
+  scaleSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT, -198)
+  Hint(gen, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("TOPLEFT", LEFT, -214)
+  OnRefresh(function()
+    local now = ns:GetScalePercent()
+    for _, b in ipairs(presetButtons) do b:SetActive(b.percent == now) end
+    scaleSlider:Set(now)
+  end)
+
+  Section(gen, "OPACITY", LEFT, -258, nil, -386)
+  Text(gen, Tr("GLOBAL_OPACITY")):SetPoint("TOPLEFT", LEFT, -282)
+  local alphaSlider = Slider(gen, 100, 0, 100, 1, Percent, function(v)
+    ns.db.alpha = v / 100
+    ns:ApplyAlpha()
+  end)
+  alphaSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -288)
+  local fade = Check(gen, Tr("FADE_OOC"), function(on)
+    ns.db.fadeOOC = on
+    ns:PreviewFade()
+    p:Refresh()
+  end)
+  fade:SetPoint("TOPLEFT", LEFT, -312)
+  Button(gen, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", gen, "TOPLEFT", LEFT + COL_W, -306)
+  local oocPowerLabel = Text(gen, "")
+  oocPowerLabel:SetPoint("TOPLEFT", LEFT + 21, -338)
+  local oocPower = Slider(gen, 100, 0, 100, 1, Percent, function(v)
+    ns.db.oocPower = v / 100
+    ns:PreviewFade()
+  end)
+  oocPower:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -344)
+  local oocTopLabel = Text(gen, "")
+  oocTopLabel:SetPoint("TOPLEFT", LEFT + 21, -364)
+  local oocTop = Slider(gen, 100, 0, 100, 1, Percent, function(v)
+    ns.db.oocTop = v / 100
+    ns:PreviewFade()
+  end)
+  oocTop:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -370)
+  OnRefresh(function()
+    alphaSlider:Set(floor(ns.db.alpha * 100 + .5))
+    -- the bars of the class: energy and / or rage, or mana / health; combo points and icons,
+    -- or icons
+    local power = editing == "ROGUE" and L.ENERGY_BAR or editing == "WARRIOR" and L.RAGE_BAR or L.OOC_POWER
+    oocPowerLabel:SetText(ns.POWER_CLASSES[editing] and power or L.OOC_MANA)
+    oocTopLabel:SetText(ns.COMBO_CLASSES[editing] and L.OOC_TOP or L.OOC_ICONS)
+    fade:Set(ns.db.fadeOOC)
+    oocPower:Set(floor(ns.db.oocPower * 100 + .5))
+    oocTop:Set(floor(ns.db.oocTop * 100 + .5))
+    local a = ns.db.fadeOOC and 1 or .45 -- (only used with the fade)
+    for _, r in ipairs({ oocPowerLabel, oocTopLabel, oocPower, oocPower.box.holder, oocTop, oocTop.box.holder }) do r:SetAlpha(a) end
+  end)
+
+  -- Look: the bars' style, then their values' text, then the background of every bar
+  local look = Section(gen, "LOOK", RIGHT, -56)
+  Text(gen, Tr("BAR_STYLE")):SetPoint("TOPLEFT", RIGHT, -80)
+  local styleButtons = {}
+  for i, skin in ipairs(ns.SKINS) do
+    local b = Button(gen, Tr("SKIN_" .. skin), 100, 22, function()
+      ns:SetSkin(skin)
+      p:Refresh()
+    end)
+    b:SetPoint("TOPLEFT", RIGHT + (i - 1) * 108, -96)
+    b.skin = skin
+    styleButtons[i] = b
+  end
+  local styleHint = Wrapped(gen, Tr("SKIN_HINT"))
+  styleHint:SetPoint("TOPLEFT", RIGHT, -124)
+  local TEXT_H = 212
+  local text = CreateFrame("Frame", nil, gen) -- under the hint, however many lines it takes
+  text:SetSize(COL_W, TEXT_H)
+  text:SetPoint("TOPLEFT", styleHint, "BOTTOMLEFT", 0, -10)
+  Rule(text, 0, 0)
+  Text(text, Tr("VALUE_TEXT")):SetPoint("TOPLEFT", 0, -10)
+  local showText = Check(text, nil, function(on)
+    ns.db.showText = on
+    ns:ApplyFont()
+    p:Refresh()
+  end)
+  showText:SetPoint("TOPLEFT", 0, -30)
+  Text(text, Tr("FONT")):SetPoint("TOPLEFT", 0, -58)
+  local font = FontChoice(text, COL_W - 90)
+  font:SetPoint("TOPLEFT", 90, -53)
+  Text(text, Tr("SIZE")):SetPoint("TOPLEFT", 0, -86)
+  local sizeSlider = Slider(text, 150, 6, 40, 1, "", function(v)
+    ns.db.fontSize = v
+    ns:ApplyFont()
+  end)
+  sizeSlider:SetPoint("LEFT", text, "TOPLEFT", 90, -92)
+  Text(text, Tr("OUTLINE")):SetPoint("TOPLEFT", 0, -114)
+  local outlineButtons = {}
+  for i, o in ipairs(OUTLINES) do
+    local b = Button(text, Tr(o[2]), 70, 22, function()
+      ns.db.outline = o[1]
+      ns:ApplyFont()
+      p:Refresh()
+    end)
+    b:SetPoint("TOPLEFT", 90 + (i - 1) * 76, -108)
+    b.value = o[1]
+    outlineButtons[i] = b
+  end
+  local textColor, textColorRefresh = ColorRow(text, "text", Tr("COLOR"), function() return false end)
+  textColor:SetPoint("TOPLEFT", 0, -140)
+  OnRefresh(textColorRefresh)
+  Rule(text, 0, -174)
+  local bg, bgRefresh = ColorRow(text, "bg", Tr("BARS_BG"))
+  bg:SetPoint("TOPLEFT", 0, -184)
+  OnRefresh(bgRefresh)
+  OnRefresh(function()
+    for _, b in ipairs(styleButtons) do b:SetActive(b.skin == ns.db.skin) end
+    showText:SetLabel(L["SHOW_" .. RESOURCE[editing]])
+    showText:Set(ns.db.showText)
+    font:Refresh()
+    sizeSlider:Set(ns.db.fontSize)
+    for _, b in ipairs(outlineButtons) do b:SetActive(b.value == ns.db.outline) end
+    look:Fit(-124 - (styleHint:GetStringHeight() or 36) - 10 - TEXT_H)
+  end)
+end
+
+---------------------------------------------------------------------------
+-- Visibility page: the addon shown or hidden by hand (also in the portrait's menu), druid
+-- forms, the portrait's menu | hidden in some situations
+---------------------------------------------------------------------------
+local function VisibilityPage(p, vis, OnRefresh)
+  local shownBox = Section(vis, "DISPLAY", LEFT, -56)
+  local showAddon = Check(vis, Tr("SHOW_ADDON"), function(on) ns:SetHidden(not on) end)
+  showAddon:SetPoint("TOPLEFT", LEFT, -80)
+  local catOnly = Check(vis, Tr("CAT_ONLY"), function(on) ns:SetDruidCatOnly(on) end)
+  catOnly:SetPoint("TOPLEFT", LEFT, -104)
+  local menuPart = Part(vis) -- under the box above, whatever its height
+  Section(menuPart, "SP_MENU", LEFT, 0, nil, -62)
+  local menuLine = Check(menuPart, Tr("MENU_SECTION"), function(on) ns:SetMenuOption("line", on) end)
+  menuLine:SetPoint("TOPLEFT", LEFT, -24)
+  local menuReload = Check(menuPart, Tr("SP_MENU_RELOAD"), function(on) ns:SetMenuOption("reload", on) end)
+  menuReload:SetPoint("TOPLEFT", LEFT, -48)
+  OnRefresh(function()
+    showAddon:Set(ns:ShownByChoice()) -- the character's own choice, as the portrait's box
+    local druid = editing == "DRUID"
+    catOnly:SetShown(druid)
+    catOnly:Set(ns.db.druidCatOnly)
+    local bottom = druid and -116 or -92
+    shownBox:Fit(bottom)
+    menuPart:Place(bottom - 28)
+    menuLine:Set(ns.sv.menu.line ~= false)
+    menuReload:Set(ns.sv.menu.reload ~= false)
+  end)
+
+  local hideBox = Section(vis, "HIDE_WHEN", RIGHT, -56)
+  local COLUMNS = { solo = { 0, 1 }, party = { 0, 2 }, raid = { 0, 3 },
+    dungeon = { 1, 1 }, raid10 = { 1, 2 }, raid20 = { 1, 3 }, raid40 = { 1, 4 }, battleground = { 1, 5 } }
+  Text(vis, Tr("HIDE_GROUP")):SetPoint("TOPLEFT", RIGHT, -80)
+  Text(vis, Tr("HIDE_ZONE")):SetPoint("TOPLEFT", RIGHT + 160, -80)
+  for _, key in ipairs(ns.HIDE_WHEN) do
+    local at = COLUMNS[key]
+    local check = Check(vis, Tr("HIDE_" .. key:upper()), function(on) ns:SetHideWhen(key, on) end)
+    check:SetPoint("TOPLEFT", RIGHT + 4 + at[1] * 160, -100 - (at[2] - 1) * 22)
+    OnRefresh(function() check:Set(ns.db.hideWhen[key]) end)
+  end
+  local hideHint = Wrapped(vis, Tr("HIDE_HINT"))
+  hideHint:SetPoint("TOPLEFT", RIGHT, -218)
+  OnRefresh(function() hideBox:Fit(-218 - (hideHint:GetStringHeight() or 24)) end)
+end
+
+---------------------------------------------------------------------------
+-- Profiles page: the profiles | reset the tab (two clicks). Returns the reset button.
+---------------------------------------------------------------------------
+local function ProfilesPage(p, prof, OnRefresh)
+  ProfilesSection(p, prof, OnRefresh)
+  local resetBox = Section(prof, "RESET_TITLE", RIGHT, -56)
+  local resetAll
+  resetAll = Button(prof, "", 220, 22, function()
+    if resetAll.armed then
+      resetAll.armed = nil
+      ns:ResetAll()
+    else
+      local token = {} -- each confirmation has its own 3 s, untouched by an earlier one
+      resetAll.armed = token
+      C_Timer.After(3, function()
+        if resetAll.armed ~= token then return end
+        resetAll.armed = nil
+        if p:IsShown() then p:Refresh() end
+      end)
+    end
+    p:Refresh()
+  end)
+  resetAll:SetPoint("TOPLEFT", RIGHT, -82)
+  local resetHint = Wrapped(prof, Tr("RESET_HINT"))
+  resetHint:SetPoint("TOPLEFT", RIGHT, -112)
+  OnRefresh(function()
+    resetAll:SetLabel(resetAll.armed and L.CONFIRM or L.RESET_CLASS:format(L["TAB_" .. editing]))
+    resetBox:Fit(-112 - (resetHint:GetStringHeight() or 24))
+  end)
+  return resetAll
+end
+
+-- The portrait's icon: the specialisation picked for the tab's class (a right-click on the
+-- portrait), else the class's own.
+local function PortraitIcon(class)
+  local i, specs = ns.sv.portraits[class], ns.SPECS[class]
+  if i and specs and specs[i] then return "Interface\\Icons\\" .. specs[i] end
+  return ICONS[class]
+end
+
+-- A compact menu of the class's specialisations, each with its icon and name, in the look of
+-- the window's groups; the one worn is lit. A click elsewhere closes it.
+local SPEC_ROW_H = 26
+local function SpecMenu(p, anchor)
+  local m = CreateFrame("Frame", nil, p, "BackdropTemplate")
+  m:SetFrameStrata("DIALOG")
+  m:EnableMouse(true)
+  m:Hide()
+  GroupLook(m)
+  m.rows = {}
+  for i = 1, 4 do
+    local r = CreateFrame("Button", nil, m)
+    r:SetHeight(SPEC_ROW_H)
+    r:SetPoint("TOPLEFT", 6, -6 - (i - 1) * SPEC_ROW_H)
+    r:SetPoint("RIGHT", m, "RIGHT", -6, 0)
+    r.bg = r:CreateTexture(nil, "BACKGROUND")
+    r.bg:SetAllPoints()
+    local hl = r:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, .08)
+    if i > 1 then -- a thin line between two rows
+      local line = r:CreateTexture(nil, "ARTWORK")
+      line:SetColorTexture(.62, .62, .66, .3)
+      line:SetHeight(1)
+      line:SetPoint("TOPLEFT")
+      line:SetPoint("TOPRIGHT")
+    end
+    r.icon = r:CreateTexture(nil, "ARTWORK")
+    r.icon:SetSize(20, 20)
+    r.icon:SetPoint("LEFT", 3, 0)
+    r.icon:SetTexCoord(.08, .92, .08, .92)
+    r.name = r:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    r.name:SetPoint("LEFT", r.icon, "RIGHT", 8, 0)
+    r.name:SetJustifyH("LEFT")
+    r.index = i
+    r:SetScript("OnClick", function(self)
+      ClickSound()
+      ns.sv.portraits[m.class] = self.index
+      m:Hide()
+      p:Refresh()
+    end)
+    m.rows[i] = r
+  end
+  function m:Open(class)
+    self.class = class
+    local specs, worn, width = ns.SPECS[class] or {}, PortraitIcon(class), 0
+    for i, r in ipairs(self.rows) do
+      local icon = specs[i]
+      r:SetShown(icon ~= nil)
+      if icon then
+        local path = "Interface\\Icons\\" .. icon
+        r.icon:SetTexture(path)
+        r.name:SetText(L["SPEC_" .. class .. "_" .. i])
+        width = max(width, r.name:GetStringWidth())
+        SelectRow(r.bg, path == worn)
+      end
+    end
+    self:SetSize(6 + 3 + 20 + 8 + ceil(width) + 12 + 6, 12 + #specs * SPEC_ROW_H)
+    self:ClearAllPoints()
+    self:SetPoint("TOPLEFT", anchor, "BOTTOMRIGHT", -12, 8)
+    self:Show()
+  end
+  m:SetScript("OnShow", function(self) self:RegisterEvent("GLOBAL_MOUSE_DOWN") end)
+  m:SetScript("OnHide", function(self) self:UnregisterEvent("GLOBAL_MOUSE_DOWN") end)
+  m:SetScript("OnEvent", function(self)
+    if not self:IsMouseOver() and not anchor:IsMouseOver() then self:Hide() end
+  end)
+  return m
+end
+
+-- The portrait: a right-click picks the tab's icon among its class's specialisations (the
+-- window still moves when dragged by it). Returns the menu.
+local function PortraitControls(p, portrait)
+  -- The portrait: a right-click picks the tab's icon among its class's specialisations; the
+  -- window still moves when dragged by it.
+  local portraitButton = CreateFrame("Button", nil, p)
+  portraitButton:SetFrameLevel(((p.PortraitContainer and p.PortraitContainer:GetFrameLevel()) or p:GetFrameLevel()) + 5)
+  if portrait then
+    portraitButton:SetAllPoints(portrait)
+  else
+    portraitButton:SetSize(58, 58)
+    portraitButton:SetPoint("TOPLEFT", -5, 7)
+  end
+  portraitButton:RegisterForClicks("RightButtonUp")
+  portraitButton:RegisterForDrag("LeftButton")
+  portraitButton:SetScript("OnDragStart", function() p:StartMoving() end)
+  portraitButton:SetScript("OnDragStop", function()
+    p:StopMovingOrSizing()
+    SaveWindowPlace()
+  end)
+  local specMenu = SpecMenu(p, portraitButton)
+  portraitButton:SetScript("OnClick", function()
+    ClickSound()
+    if GameTooltip then GameTooltip:Hide() end
+    if specMenu:IsShown() then specMenu:Hide() else specMenu:Open(editing) end
+  end)
+  portraitButton:SetScript("OnEnter", function(self)
+    if not GameTooltip or specMenu:IsShown() then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(L.PORTRAIT_TIP)
+    GameTooltip:Show()
+  end)
+  portraitButton:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  p.portraitButton, p.specMenu = portraitButton, specMenu
+  return specMenu
+end
+
 local function Build()
   relabels = {}
   local p = CreateFrame("Frame", "ClaraComboPointsOptions", UIParent, "PortraitFrameTemplate")
@@ -2213,6 +2729,8 @@ local function Build()
   -- the character sheet's palette: near-black background (settings groups in boxes, below)
   if p.Bg then p.Bg:SetVertexColor(.32, .32, .34) end
 
+  local specMenu = PortraitControls(p, portrait)
+
   local refreshers = {}
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
   local resetAll
@@ -2226,6 +2744,7 @@ local function Build()
         L["TAB_" .. class])
     end, function()
       editing = class
+      specMenu:Hide()
       resetAll.armed = nil
       status:SetText("")
       p.ClearProfileMessages()
@@ -2370,11 +2889,11 @@ local function Build()
   local opacityLabel = Text(p, Tr("WINDOW_OPACITY"))
   opacityLabel:SetPoint("RIGHT", opacity, "LEFT", -8, 0)
   OnRefresh(function() opacity:Set(floor(ns.sv.window.alpha * 100 + .5)) end)
-  ScaleGrip(p)
+  p.grip = ScaleGrip(p, WindowSizing())
   OnRefresh(function()
     for _, t in ipairs(tabs) do t:SetActive(t.class == editing) end
     for _, f in ipairs(flags) do f:SetActive(f.lang == ns.lang) end
-    if portrait then portrait:SetTexture(ICONS[editing]) end
+    if portrait then portrait:SetTexture(PortraitIcon(editing)) end
   end)
   OnRefresh(function()
     for i, content in ipairs(pages) do
@@ -2384,211 +2903,14 @@ local function Build()
     for _, b in ipairs(navButtons) do b:SetActive(b.page == page) end
   end)
 
-  -- General: position, size, opacity | look of the bars and their text -------------------
-  local gen = pages[1]
-  Section(gen, "POSITION", LEFT, -56, nil, -110)
-  local lockBtn = Button(gen, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
-  lockBtn:SetPoint("TOPLEFT", LEFT, -80)
-  Button(gen, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end):SetPoint("TOPLEFT", LEFT + 160, -80)
-  OnRefresh(function()
-    lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
-    lockBtn:SetActive(not ns.db.locked)
-  end)
-
-  Section(gen, "SCALE", LEFT, -138, nil, -230)
-  local presetButtons = {}
-  for i, pct in ipairs(SCALE_PRESETS) do
-    local b = Button(gen, pct .. "%", 40, 22, function() ns:SetScalePercent(pct) end)
-    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -162)
-    b.percent = pct
-    presetButtons[i] = b
-  end
-  local scaleSlider = Slider(gen, 200, ns.MIN_SCALE, ns.MAX_SCALE, 1, Percent, function(v) ns:SetScalePercent(v) end, 40)
-  scaleSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT, -198)
-  Hint(gen, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("TOPLEFT", LEFT, -214)
-  OnRefresh(function()
-    local now = ns:GetScalePercent()
-    for _, b in ipairs(presetButtons) do b:SetActive(b.percent == now) end
-    scaleSlider:Set(now)
-  end)
-
-  Section(gen, "OPACITY", LEFT, -258, nil, -386)
-  Text(gen, Tr("GLOBAL_OPACITY")):SetPoint("TOPLEFT", LEFT, -282)
-  local alphaSlider = Slider(gen, 100, 0, 100, 1, Percent, function(v)
-    ns.db.alpha = v / 100
-    ns:ApplyAlpha()
-  end)
-  alphaSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -288)
-  local fade = Check(gen, Tr("FADE_OOC"), function(on)
-    ns.db.fadeOOC = on
-    ns:PreviewFade()
-    p:Refresh()
-  end)
-  fade:SetPoint("TOPLEFT", LEFT, -312)
-  Button(gen, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", gen, "TOPLEFT", LEFT + COL_W, -306)
-  local oocPowerLabel = Text(gen, "")
-  oocPowerLabel:SetPoint("TOPLEFT", LEFT + 21, -338)
-  local oocPower = Slider(gen, 100, 0, 100, 1, Percent, function(v)
-    ns.db.oocPower = v / 100
-    ns:PreviewFade()
-  end)
-  oocPower:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -344)
-  local oocTopLabel = Text(gen, "")
-  oocTopLabel:SetPoint("TOPLEFT", LEFT + 21, -364)
-  local oocTop = Slider(gen, 100, 0, 100, 1, Percent, function(v)
-    ns.db.oocTop = v / 100
-    ns:PreviewFade()
-  end)
-  oocTop:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -370)
-  OnRefresh(function()
-    alphaSlider:Set(floor(ns.db.alpha * 100 + .5))
-    -- the bars of the class: energy and / or rage, or mana / health; combo points and icons,
-    -- or icons
-    local power = editing == "ROGUE" and L.ENERGY_BAR or editing == "WARRIOR" and L.RAGE_BAR or L.OOC_POWER
-    oocPowerLabel:SetText(ns.POWER_CLASSES[editing] and power or L.OOC_MANA)
-    oocTopLabel:SetText(ns.COMBO_CLASSES[editing] and L.OOC_TOP or L.OOC_ICONS)
-    fade:Set(ns.db.fadeOOC)
-    oocPower:Set(floor(ns.db.oocPower * 100 + .5))
-    oocTop:Set(floor(ns.db.oocTop * 100 + .5))
-    local a = ns.db.fadeOOC and 1 or .45 -- (only used with the fade)
-    for _, r in ipairs({ oocPowerLabel, oocTopLabel, oocPower, oocPower.box.holder, oocTop, oocTop.box.holder }) do r:SetAlpha(a) end
-  end)
-
-  -- Look: the bars' style, then their values' text, then the background of every bar
-  local look = Section(gen, "LOOK", RIGHT, -56)
-  Text(gen, Tr("BAR_STYLE")):SetPoint("TOPLEFT", RIGHT, -80)
-  local styleButtons = {}
-  for i, skin in ipairs(ns.SKINS) do
-    local b = Button(gen, Tr("SKIN_" .. skin), 100, 22, function()
-      ns:SetSkin(skin)
-      p:Refresh()
-    end)
-    b:SetPoint("TOPLEFT", RIGHT + (i - 1) * 108, -96)
-    b.skin = skin
-    styleButtons[i] = b
-  end
-  local styleHint = Wrapped(gen, Tr("SKIN_HINT"))
-  styleHint:SetPoint("TOPLEFT", RIGHT, -124)
-  local TEXT_H = 212
-  local text = CreateFrame("Frame", nil, gen) -- under the hint, however many lines it takes
-  text:SetSize(COL_W, TEXT_H)
-  text:SetPoint("TOPLEFT", styleHint, "BOTTOMLEFT", 0, -10)
-  Rule(text, 0, 0)
-  Text(text, Tr("VALUE_TEXT")):SetPoint("TOPLEFT", 0, -10)
-  local showText = Check(text, nil, function(on)
-    ns.db.showText = on
-    ns:ApplyFont()
-    p:Refresh()
-  end)
-  showText:SetPoint("TOPLEFT", 0, -30)
-  Text(text, Tr("FONT")):SetPoint("TOPLEFT", 0, -58)
-  local font = FontChoice(text, COL_W - 90)
-  font:SetPoint("TOPLEFT", 90, -53)
-  Text(text, Tr("SIZE")):SetPoint("TOPLEFT", 0, -86)
-  local sizeSlider = Slider(text, 150, 6, 40, 1, "", function(v)
-    ns.db.fontSize = v
-    ns:ApplyFont()
-  end)
-  sizeSlider:SetPoint("LEFT", text, "TOPLEFT", 90, -92)
-  Text(text, Tr("OUTLINE")):SetPoint("TOPLEFT", 0, -114)
-  local outlineButtons = {}
-  for i, o in ipairs(OUTLINES) do
-    local b = Button(text, Tr(o[2]), 70, 22, function()
-      ns.db.outline = o[1]
-      ns:ApplyFont()
-      p:Refresh()
-    end)
-    b:SetPoint("TOPLEFT", 90 + (i - 1) * 76, -108)
-    b.value = o[1]
-    outlineButtons[i] = b
-  end
-  local textColor, textColorRefresh = ColorRow(text, "text", Tr("COLOR"), function() return false end)
-  textColor:SetPoint("TOPLEFT", 0, -140)
-  OnRefresh(textColorRefresh)
-  Rule(text, 0, -174)
-  local bg, bgRefresh = ColorRow(text, "bg", Tr("BARS_BG"))
-  bg:SetPoint("TOPLEFT", 0, -184)
-  OnRefresh(bgRefresh)
-  OnRefresh(function()
-    for _, b in ipairs(styleButtons) do b:SetActive(b.skin == ns.db.skin) end
-    showText:SetLabel(L["SHOW_" .. RESOURCE[editing]])
-    showText:Set(ns.db.showText)
-    font:Refresh()
-    sizeSlider:Set(ns.db.fontSize)
-    for _, b in ipairs(outlineButtons) do b:SetActive(b.value == ns.db.outline) end
-    look:Fit(-124 - (styleHint:GetStringHeight() or 36) - 10 - TEXT_H)
-  end)
-
+  GeneralPage(p, pages[1], OnRefresh)
   BarsPage(p, pages[2], OnRefresh)
   IconsPage(p, pages[3], OnRefresh)
+  OnRefresh(CatalogControls(p))
 
-  -- Visibility: the addon shown or hidden by hand (also in the portrait's menu), druid forms,
-  -- the portrait's menu | hidden in some situations -----------------------------------
-  local vis = pages[4]
-  local shownBox = Section(vis, "DISPLAY", LEFT, -56)
-  local showAddon = Check(vis, Tr("SHOW_ADDON"), function(on) ns:SetHidden(not on) end)
-  showAddon:SetPoint("TOPLEFT", LEFT, -80)
-  local catOnly = Check(vis, Tr("CAT_ONLY"), function(on) ns:SetDruidCatOnly(on) end)
-  catOnly:SetPoint("TOPLEFT", LEFT, -104)
-  local menuPart = Part(vis) -- under the box above, whatever its height
-  Section(menuPart, "SP_MENU", LEFT, 0, nil, -62)
-  local menuLine = Check(menuPart, Tr("MENU_SECTION"), function(on) ns:SetMenuOption("line", on) end)
-  menuLine:SetPoint("TOPLEFT", LEFT, -24)
-  local menuReload = Check(menuPart, Tr("SP_MENU_RELOAD"), function(on) ns:SetMenuOption("reload", on) end)
-  menuReload:SetPoint("TOPLEFT", LEFT, -48)
-  OnRefresh(function()
-    showAddon:Set(ns:ShownByChoice()) -- the character's own choice, as the portrait's box
-    local druid = editing == "DRUID"
-    catOnly:SetShown(druid)
-    catOnly:Set(ns.db.druidCatOnly)
-    local bottom = druid and -116 or -92
-    shownBox:Fit(bottom)
-    menuPart:Place(bottom - 28)
-    menuLine:Set(ns.sv.menu.line ~= false)
-    menuReload:Set(ns.sv.menu.reload ~= false)
-  end)
+  VisibilityPage(p, pages[4], OnRefresh)
 
-  local hideBox = Section(vis, "HIDE_WHEN", RIGHT, -56)
-  local COLUMNS = { solo = { 0, 1 }, party = { 0, 2 }, raid = { 0, 3 },
-    dungeon = { 1, 1 }, raid10 = { 1, 2 }, raid20 = { 1, 3 }, raid40 = { 1, 4 } }
-  Text(vis, Tr("HIDE_GROUP")):SetPoint("TOPLEFT", RIGHT, -80)
-  Text(vis, Tr("HIDE_ZONE")):SetPoint("TOPLEFT", RIGHT + 160, -80)
-  for _, key in ipairs(ns.HIDE_WHEN) do
-    local at = COLUMNS[key]
-    local check = Check(vis, Tr("HIDE_" .. key:upper()), function(on) ns:SetHideWhen(key, on) end)
-    check:SetPoint("TOPLEFT", RIGHT + 4 + at[1] * 160, -100 - (at[2] - 1) * 22)
-    OnRefresh(function() check:Set(ns.db.hideWhen[key]) end)
-  end
-  local hideHint = Wrapped(vis, Tr("HIDE_HINT"))
-  hideHint:SetPoint("TOPLEFT", RIGHT, -196)
-  OnRefresh(function() hideBox:Fit(-196 - (hideHint:GetStringHeight() or 24)) end)
-
-  -- Profiles | reset the tab ----------------------------------------------------------
-  local prof = pages[5]
-  ProfilesSection(p, prof, OnRefresh)
-  local resetBox = Section(prof, "RESET_TITLE", RIGHT, -56)
-  resetAll = Button(prof, "", 220, 22, function()
-    if resetAll.armed then
-      resetAll.armed = nil
-      ns:ResetAll()
-    else
-      local token = {} -- each confirmation has its own 3 s, untouched by an earlier one
-      resetAll.armed = token
-      C_Timer.After(3, function()
-        if resetAll.armed ~= token then return end
-        resetAll.armed = nil
-        if p:IsShown() then p:Refresh() end
-      end)
-    end
-    p:Refresh()
-  end)
-  resetAll:SetPoint("TOPLEFT", RIGHT, -82)
-  local resetHint = Wrapped(prof, Tr("RESET_HINT"))
-  resetHint:SetPoint("TOPLEFT", RIGHT, -112)
-  OnRefresh(function()
-    resetAll:SetLabel(resetAll.armed and L.CONFIRM or L.RESET_CLASS:format(L["TAB_" .. editing]))
-    resetBox:Fit(-112 - (resetHint:GetStringHeight() or 24))
-  end)
+  resetAll = ProfilesPage(p, pages[5], OnRefresh)
 
   function p:Refresh()
     for _, fn in ipairs(refreshers) do fn() end
@@ -2608,6 +2930,7 @@ local function Build()
     if InCombatLockdown() then self:Refresh() else ns:SetPreview(true) end
   end)
   p:SetScript("OnHide", function()
+    specMenu:Hide()
     drag = nil -- closed mid-drag: the icon stays where it was
     catalog.unfolded = nil -- opened again: on the tab's class
     if dragNav then -- a page of the list too (a hidden frame gets no OnDragStop)

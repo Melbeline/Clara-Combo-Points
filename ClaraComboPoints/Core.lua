@@ -99,7 +99,8 @@ local defaults = {
   -- health bars, the rage about to be spent and the value have settings of their own)
   disabled = { cp1 = false, cp2 = false, cp3 = false, cp4 = false, cp5 = false, energy = false, rage = false, bg = false },
   -- hidden when the player is in one of these situations (ns.HIDE_WHEN)
-  hideWhen = { solo = false, party = false, raid = false, dungeon = false, raid10 = false, raid20 = false, raid40 = false },
+  hideWhen = { solo = false, party = false, raid = false, dungeon = false, raid10 = false, raid20 = false, raid40 = false,
+    battleground = false },
   -- The bars, top to bottom in this order, each at its own size and scale. Mana: druids only,
   -- in every form; health: hidden until turned on.
   bars = {
@@ -706,8 +707,8 @@ local function LayoutKey()
 end
 
 -- Situations the HUD can be hidden in: the group (none, a party, a raid group) and the
--- instance (a dungeon, a raid of 10, 20 or 40 players; 25 counts as 20).
-ns.HIDE_WHEN = { "solo", "party", "raid", "dungeon", "raid10", "raid20", "raid40" }
+-- instance (a dungeon, a raid of 10, 20 or 40 players - 25 counts as 20 -, a battleground).
+ns.HIDE_WHEN = { "solo", "party", "raid", "dungeon", "raid10", "raid20", "raid40", "battleground" }
 function ns:Situation()
   local now = {}
   if IsInRaid and IsInRaid() then
@@ -720,6 +721,7 @@ function ns:Situation()
   local inside, kind = false, nil
   if IsInInstance then inside, kind = IsInInstance() end
   if inside and kind == "party" then now.dungeon = true end
+  if inside and kind == "pvp" then now.battleground = true end
   if inside and kind == "raid" then
     local size = 40
     if GetInstanceInfo then
@@ -1372,6 +1374,8 @@ function ns:ResetAddon()
   end
   self.sv.menu = { line = true, reload = true }
   self.sv.pageOrder = DefaultPageOrder()
+  self.sv.catalog = { locked = true }
+  self.sv.portraits = {}
   wipe(self.sv.window)
   self.sv.window.alpha = 1 -- centred, at the scale that fits the screen, opaque
   wipe(self.sv.active)
@@ -1572,6 +1576,40 @@ local function CleanWindow(sv)
   end
 end
 
+-- The options' spells panel: locked beside the window (moved and sized with it), or on its own
+-- with its place (top left corner in UIParent units) and scale.
+local function CleanCatalog(sv)
+  local c = type(sv.catalog) == "table" and sv.catalog or {}
+  local clean = { locked = c.locked ~= false }
+  if not clean.locked and Finite(c.left) and Finite(c.top) and Finite(c.scale)
+    and c.scale >= ns.MIN_WINDOW_SCALE and c.scale <= ns.MAX_WINDOW_SCALE then
+    clean.left, clean.top, clean.scale = c.left, c.top, c.scale
+  end
+  sv.catalog = clean
+end
+
+-- The icon each class tab wears in the options' portrait: one of its specialisations
+-- (ns.SPECS), or the default.
+ns.SPECS = {
+  PRIEST  = { "Spell_Holy_PowerWordShield", "Spell_Holy_GuardianSpirit", "Spell_Shadow_ShadowWordPain" },
+  MAGE    = { "Spell_Holy_MagicalSentry", "Spell_Fire_FireBolt02", "Spell_Frost_FrostBolt02" },
+  WARLOCK = { "Spell_Shadow_DeathCoil", "Spell_Shadow_Metamorphosis", "Spell_Shadow_RainOfFire" },
+  DRUID   = { "Spell_Nature_StarFall", "Ability_Druid_CatForm", "Ability_Racial_BearForm", "Spell_Nature_HealingTouch" },
+  ROGUE   = { "Ability_Rogue_Eviscerate", "Ability_BackStab", "Ability_Stealth" },
+  HUNTER  = { "Ability_Hunter_BestialDiscipline", "Ability_Hunter_FocusedAim", "Ability_Hunter_Camouflage" },
+  SHAMAN  = { "Spell_Nature_Lightning", "Spell_Shaman_ImprovedStormstrike", "Spell_Nature_MagicImmunity" },
+  PALADIN = { "Spell_Holy_HolyBolt", "Ability_Paladin_ShieldoftheTemplar", "Spell_Holy_AuraOfLight" },
+  WARRIOR = { "Ability_Warrior_SavageBlow", "Ability_Warrior_InnerRage", "Ability_Warrior_DefensiveStance" },
+}
+local function CleanPortraits(sv)
+  local old = type(sv.portraits) == "table" and sv.portraits or {}
+  sv.portraits = {}
+  for class, specs in pairs(ns.SPECS) do
+    local i = old[class]
+    if type(i) == "number" and i >= 1 and i <= #specs and i == math.floor(i) then sv.portraits[class] = i end
+  end
+end
+
 -- What this addon adds to the portrait's menu (account-wide): its section, "Reload UI". And
 -- the order of the options window's pages (each page once; another count: the default).
 local function CleanMenu(sv)
@@ -1627,6 +1665,8 @@ local function InitDB()
     end
   end
   CleanWindow(sv)
+  CleanCatalog(sv)
+  CleanPortraits(sv)
   CleanMenu(sv)
   ns:InitProfiles(sv) -- Profiles.lua: the profiles saved on each class tab
   moverText:SetText(L.MOVER)
