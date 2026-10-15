@@ -1,6 +1,6 @@
 -- Clara Combo Points - saved profiles
 -- Each class tab keeps its own named profiles: a copy of all its settings (position, scale,
--- colours, font, icons...). They are saved, loaded and deleted from the bar page, and passed
+-- colours, font, icons...). They are saved, loaded and deleted from the Profiles page, and passed
 -- to another account as a line of text (export / import).
 
 local ADDON, ns = ...

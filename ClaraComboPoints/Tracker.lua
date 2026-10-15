@@ -984,7 +984,7 @@ function ns:ClearRow(side, k)
 end
 
 ---------------------------------------------------------------------------
--- Editing on the HUD (icons unlocked, Position on the bar page): every row shows, the empty
+-- Editing on the HUD (icons unlocked, on the Icons page): every row shows, the empty
 -- ones too; a spell picked up in the spellbook is dropped on a row where it should go; an
 -- icon is dragged to another place or row, or off the HUD to remove it.
 ---------------------------------------------------------------------------

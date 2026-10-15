@@ -1170,9 +1170,9 @@ function ns:SetDruidCatOnly(on)
   self:RefreshOptions()
 end
 
--- Each line of the colour list turned on or off. Mana and health are the bars' Show boxes
--- (Layout page), the rage about to be spent and the value have their own options; the others
--- (combo cells, energy bar, rage bar, background) are switched here only.
+-- Each part turned on or off (the boxes of the options' colour lines). Mana and health are
+-- their bars' boxes, the rage about to be spent and the value have their own options; the
+-- others (combo cells, energy bar, rage bar, background) are switched here only.
 function ns:ElementOn(key)
   local db = self.db
   if key == "mana" or key == "health" then return db.bars[key].show end
@@ -1194,6 +1194,39 @@ function ns:SetElementOn(key, on)
     db.disabled[key] = not on
   else
     return
+  end
+  self:ApplyAll()
+  self:UpdateVisibility()
+  self:RefreshOptions()
+end
+
+-- The parts a bar of a class is made of: the five combo cells, the resources its energy /
+-- rage bar shows, the mana bar, the health bar.
+function ns:BarParts(key, class)
+  class = class or self.profileClass
+  if key == "combo" then return { "cp1", "cp2", "cp3", "cp4", "cp5" } end
+  if key == "power" then
+    if class == "ROGUE" then return { "energy" } end
+    if class == "WARRIOR" then return { "rage" } end
+    return { "energy", "rage" }
+  end
+  return { key }
+end
+
+-- A bar is on while any of its parts is (the options' list of bars).
+function ns:BarOn(key)
+  for _, part in ipairs(self:BarParts(key)) do
+    if self:ElementOn(part) then return true end
+  end
+  return false
+end
+
+-- A whole bar turned on or off: all its parts, then the HUD once.
+function ns:SetBarOn(key, on)
+  on = on and true or false
+  local db = self.db
+  for _, part in ipairs(self:BarParts(key)) do
+    if part == "mana" or part == "health" then db.bars[part].show = on else db.disabled[part] = not on end
   end
   self:ApplyAll()
   self:UpdateVisibility()
@@ -1237,11 +1270,17 @@ function ns:ResetFade()
   self:RefreshOptions()
 end
 
-function ns:ResetColors()
-  self.db.colors = CopyDefaults(defaults.colors, {})
-  for key in pairs(self.GAME_COLORS) do -- the style's own colours
-    local c = self:SkinColor(self.db.skin, key)
-    self.db.colors[key].r, self.db.colors[key].g, self.db.colors[key].b = c.r, c.g, c.b
+-- Colours back to their defaults (the style's own for the bars it colours): all of them, or
+-- the keys listed (one bar's).
+function ns:ResetColors(keys)
+  if keys then
+    for _, key in ipairs(keys) do self.db.colors[key] = self:SkinColor(self.db.skin, key) end
+  else
+    self.db.colors = CopyDefaults(defaults.colors, {})
+    for key in pairs(self.GAME_COLORS) do -- the style's own colours
+      local c = self:SkinColor(self.db.skin, key)
+      self.db.colors[key].r, self.db.colors[key].g, self.db.colors[key].b = c.r, c.g, c.b
+    end
   end
   self:ApplyColors()
   self:RefreshOptions()
@@ -1302,6 +1341,22 @@ function ns:SetIconsLocked(locked)
   self:RefreshMenuLine()
 end
 
+-- The options window's pages: General, Bars, Icons, Visibility, Profiles (Options.lua).
+ns.PAGE_COUNT = 5
+local function DefaultPageOrder()
+  local order = {}
+  for i = 1, ns.PAGE_COUNT do order[i] = i end
+  return order
+end
+
+-- What the portrait's menu shows (account-wide): the addon's section, "Reload UI". Set here or
+-- in the game's AddOns options, each shows the other's change.
+function ns:SetMenuOption(field, on)
+  self.sv.menu[field] = on and true or false
+  self:RefreshOptions()
+  self:RefreshSettingsPage()
+end
+
 -- Everything back to the defaults: the three class tabs (bar, colours, font, icons) and the
 -- options window. The saved profiles, the interface language and what the addon learned
 -- about auras stay.
@@ -1316,7 +1371,7 @@ function ns:ResetAddon()
     FillProfile(profile, class)
   end
   self.sv.menu = { line = true, reload = true }
-  self.sv.pageOrder = { 1, 2, 3, 4 }
+  self.sv.pageOrder = DefaultPageOrder()
   wipe(self.sv.window)
   self.sv.window.alpha = 1 -- centred, at the scale that fits the screen, opaque
   wipe(self.sv.active)
@@ -1518,8 +1573,7 @@ local function CleanWindow(sv)
 end
 
 -- What this addon adds to the portrait's menu (account-wide): its section, "Reload UI". And
--- the order of the options window's page tabs (each page once).
-ns.PAGE_COUNT = 4
+-- the order of the options window's pages (each page once; another count: the default).
 local function CleanMenu(sv)
   local m = type(sv.menu) == "table" and sv.menu or {}
   sv.menu = { line = m.line ~= false, reload = m.reload ~= false }
@@ -1530,7 +1584,7 @@ local function CleanMenu(sv)
       order[#order + 1] = i
     end
   end
-  if #order ~= ns.PAGE_COUNT then order = { 1, 2, 3, 4 } end
+  if #order ~= ns.PAGE_COUNT then order = DefaultPageOrder() end
   sv.pageOrder = order
 end
 

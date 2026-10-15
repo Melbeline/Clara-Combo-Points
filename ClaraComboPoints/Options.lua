@@ -1,8 +1,11 @@
 -- Clara Combo Points - options window (/clara or /cl)
 -- Built from Blizzard's own frame templates, the look of the game's windows: metal frame with
 -- portrait, insets, red buttons, tabs, checkboxes and sliders.
---   Top row: one tab per class profile (Rogue, Druid, Warrior) and the three pages (bar, font &
---   advanced, icons) on the left, the window opacity, the language flags on the right.
+--   Top: one tab per class profile, in one row; the language flags in the title bar.
+--   Left: the pages (General, Bars, Icons, Visibility, Profiles), each with a line saying what
+--   it holds (drag one to change its place), and the preview.
+--   Each option is on one page only.
+--   Bottom: the commands, and the window's opacity.
 --   The window can be dragged anywhere, even off the screen, and scaled from its bottom right
 --   corner; where it is, its scale and opacity are kept (account-wide).
 -- Colours use Blizzard's own colour picker.
@@ -12,15 +15,15 @@ local L = ns.L
 
 local floor, ceil, min, max = math.floor, math.ceil, math.min, math.max
 
-local PANEL_W, PANEL_H = 720, 720
+local NAV_W, BODY_W = 168, 720    -- the list of pages on the left; a page (two columns)
+local PANEL_W, PANEL_H = NAV_W + BODY_W, 720
 local TABS_X, FLAG_STEP = 14, 30 -- first tab; flags, one every 30
-local ROW1_Y, ROW2_Y = -84, -116 -- bottoms of the two rows of tabs (each tab is 32 tall)
-local OPACITY_TAIL = 52          -- the opacity slider's box and "%"
-local FOOTER_RIGHT = 28          -- footer text, clear of the scale grip
-local CONTENT_TOP = -68 -- settings start under the title and the two rows of tabs
+local TABS_Y = -84               -- bottom of the row of class tabs (each tab is 32 tall)
+local FOOTER_RIGHT = 28          -- footer, clear of the scale grip
+local CONTENT_TOP = -40          -- pages start under the class tabs (their first group at -96)
+local NAV_TOP, NAV_ROW_H = -88, 54 -- the list of pages: its top, one page's height
 local LEFT, RIGHT, COL_W = 20, 380, 320
-local FULL_W = PANEL_W - 2 * LEFT
-local FONT_ROW_H = 22
+local FULL_W = BODY_W - 2 * LEFT
 local GOLD_R, GOLD_G, GOLD_B = 1, .82, 0
 local FLAG_DIR = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Flags\\"
 local ICONS = {
@@ -35,14 +38,20 @@ local ICONS = {
   PALADIN = "Interface\\Icons\\Spell_Holy_HolyBolt",
 }
 
--- the class tabs, in two rows; the second ends with the page tabs
-local CLASS_ROWS = { { "PRIEST", "MAGE", "WARLOCK", "DRUID", "ROGUE" }, { "HUNTER", "SHAMAN", "PALADIN", "WARRIOR" } }
-local PAGES = { "PAGE_BAR", "PAGE_TEXT", "PAGE_ICONS", "PAGE_LAYOUT" }
-local COLOR_KEYS = { "cp1", "cp2", "cp3", "cp4", "cp5", "energy", "rage", "mana", "health", "cost", "bg", "text" }
-local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", mana = "MANA_BAR", health = "HEALTH_BAR", cost = "COST_COLOR",
-  bg = "BACKGROUND" }
+-- the class tabs, in one row
+local CLASSES = { "PRIEST", "MAGE", "WARLOCK", "DRUID", "ROGUE", "HUNTER", "SHAMAN", "PALADIN", "WARRIOR" }
+-- the pages: name, what they hold
+local PAGES = {
+  { "PAGE_GENERAL", "NAV_GENERAL" }, { "PAGE_BARS", "NAV_BARS" }, { "PAGE_ICONS", "NAV_ICONS" },
+  { "PAGE_VISIBILITY", "NAV_VISIBILITY" }, { "PAGE_PROFILES", "NAV_PROFILES" },
+}
+local ICONS_PAGE = 3 -- the class spells panel opens beside it
+-- the colours of each bar (Bars page); background and value text are on the General page
+local BAR_COLORS = { combo = { "cp1", "cp2", "cp3", "cp4", "cp5" }, power = { "energy", "rage", "cost" },
+  mana = { "mana" }, health = { "health" } }
+local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", mana = "MANA_BAR", health = "HEALTH_BAR", cost = "COST_COLOR" }
 -- colours a class never uses (warriors have no combo points: their icons wear the button frame;
--- only druids have a mana bar)
+-- the mana classes have neither combo points nor energy / rage)
 local MANA_ONLY = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true, rage = true, cost = true }
 local NO_COLOR = {
   ROGUE = { rage = true, cost = true, mana = true },
@@ -55,10 +64,11 @@ local SCALE_PRESETS = { 50, 75, 100, 125, 150, 200, 300 }
 local OUTLINES = { { "NONE", "OUTLINE_NONE" }, { "OUTLINE", "OUTLINE_THIN" }, { "THICKOUTLINE", "OUTLINE_THICK" } }
 local ROW_LINES = { { "above", 3 }, { "above", 2 }, { "above", 1 }, false, { "below", 1 }, { "below", 2 }, { "below", 3 } }
 local SHAPES = { "FILL", "CELL", "SQUARE" } -- icons: the row fills the bar's width / combo point cells / squares
+local FONT_MENU_H = 360 -- the list of fonts scrolls past this height
 
 local panel           -- the window, built the first time it opens
 local editing         -- class profile shown in the window
-local page = 1        -- bottom tab
+local page = 1        -- page shown
 local selSide, selK = "above", 1 -- icon row that "Add" fills
 local relabels        -- text setters (run again on language change)
 
@@ -111,9 +121,27 @@ local function Hint(parent, s)
   return fs
 end
 
+-- A hint as wide as a column, on as many lines as it needs.
+local function Wrapped(parent, s, w)
+  local fs = Hint(parent, s)
+  fs:SetWidth(w or COL_W)
+  fs:SetWordWrap(true)
+  return fs
+end
+
+-- A thin line between the parts of a group.
+local function Rule(parent, x, y, w)
+  local t = parent:CreateTexture(nil, "ARTWORK")
+  t:SetColorTexture(.62, .62, .66, .35)
+  t:SetSize(w or COL_W, 1)
+  t:SetPoint("TOPLEFT", x, y)
+  return t
+end
+
 -- A group of settings in a box like the character sheet's stat groups: rounded silver
 -- border, dark fill, gold title. The box sits on the page's back layer, under the widgets.
--- bottom: lowest y of the group's content (or later, box:Fit(y)).
+-- key: the title's locale key (or nil: box.title:SetText later). bottom: lowest y of the
+-- group's content (or later, box:Fit(y)).
 local GROUP_BACKDROP = {
   bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
   edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -131,7 +159,8 @@ local function Section(parent, key, x, y, width, bottom)
   box:SetBackdropBorderColor(.62, .62, .66, 1)
   local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   fs:SetPoint("TOPLEFT", x, y)
-  OnRelabel(function() fs:SetText(L[key]) end)
+  if key then OnRelabel(function() fs:SetText(L[key]) end) end
+  box.title = fs
   function box:Fit(lowest) self:SetHeight(y - lowest + 2 * PAD) end
   box:Fit(bottom or y - 40)
   return box
@@ -371,6 +400,26 @@ local function Flag(parent, lang, onClick)
   return b
 end
 
+-- One of the game's menus, opened at the cursor by a click on a button of ours. A click on the
+-- button while its menu is open closes it: left alone, the game would close the menu on the
+-- press and open it again where the cursor is. (The menu frames are reused: still ours?)
+local function MenuOpen(owner)
+  local menu = owner.menu
+  return menu ~= nil and menu:IsShown() and (not menu.GetOwnerRegion or menu:GetOwnerRegion() == owner)
+end
+local function OwnerHandlesPress(self, _, event)
+  return event == "GLOBAL_MOUSE_DOWN" and MenuOpen(self)
+end
+local function ToggleMenu(owner, generator)
+  if MenuOpen(owner) then
+    owner.menu:Close()
+    owner.menu = nil
+    return
+  end
+  owner.HandlesGlobalMouseEvent = OwnerHandlesPress
+  owner.menu = MenuUtil.CreateContextMenu(owner, generator)
+end
+
 ---------------------------------------------------------------------------
 -- Colour picker (Blizzard's: hue wheel, brightness bar, opacity slider)
 ---------------------------------------------------------------------------
@@ -401,15 +450,15 @@ end
 local function ColorLabel(key)
   local i = key:match("^cp(%d)$")
   if i then return L.CP:format(tonumber(i)) end
-  if key == "text" then return L["VALUE_" .. RESOURCE[editing]] end
-  if key == "bg" and not ns.COMBO_CLASSES[editing] then return L.BAR_BG end
   return L[COLOR_LABELS[key]]
 end
 
--- One colour: label, swatch (opens the picker), opacity slider. Returns its holder and refresh.
-local function ColorRow(parent, key)
+-- One colour: its box (turned off: the part is not drawn and takes no room, ns:SetElementOn),
+-- label, swatch (opens the picker), opacity slider. label(): its text (default: the part's
+-- name); boxed(): whether it has a box (default: yes; a bar of a single part is switched in the
+-- list of bars). Returns its holder and refresh.
+local function ColorRow(parent, key, labelFn, boxed)
   local holder = Holder(parent, 28)
-  -- turned off: the part is not drawn and takes no room (ns:SetElementOn)
   local on = Check(holder, nil, function(v) ns:SetElementOn(key, v) end)
   on:SetPoint("TOPLEFT", 2, 1)
   local label = Text(holder, "")
@@ -441,12 +490,14 @@ local function ColorRow(parent, key)
     swatch.color:SetColorTexture(c.r, c.g, c.b, c.a)
   end)
   slider:SetPoint("LEFT", holder, "TOPLEFT", 178, -6)
+  holder.on, holder.swatch, holder.slider, holder.label = on, swatch, slider, label
 
   return holder, function()
     local c = ns.db.colors[key]
     local shown = ns:ElementOn(key)
+    on:SetShown(not boxed or boxed())
     on:Set(shown)
-    label:SetText(ColorLabel(key))
+    label:SetText(labelFn and labelFn() or ColorLabel(key))
     if shown then label:SetTextColor(GOLD_R, GOLD_G, GOLD_B) else label:SetTextColor(.5, .5, .5) end
     swatch.color:SetColorTexture(c.r, c.g, c.b, c.a)
     slider:Set(floor(c.a * 100 + .5))
@@ -454,79 +505,88 @@ local function ColorRow(parent, key)
 end
 
 ---------------------------------------------------------------------------
--- Font list: every font name is drawn in its own font, at a size that fits the list
+-- Font: a dropdown, the game's menu listing every font, each name drawn in its own font
 ---------------------------------------------------------------------------
-local function FontList(parent, x, y, w, h)
-  local box = Box(parent)
-  box:SetPoint("TOPLEFT", x, y)
-  box:SetSize(w, h)
+-- The menu's texts can't take a font file (the game forbids SetFont on them): each font gets a
+-- font object of its own, made the first time the list opens.
+local fontObjects, fontCount = {}, 0
+local function FontObject(f)
+  local key = f.path .. "|" .. (f.preview or 13)
+  local fo = fontObjects[key]
+  if fo == nil then
+    fo = false
+    if CreateFont then
+      fontCount = fontCount + 1
+      local made = CreateFont("ClaraComboPointsMenuFont" .. fontCount)
+      local ok = made:SetFont(f.path, f.preview or 13, "")
+      if ok ~= false and made:GetFont() then fo = made end
+    end
+    fontObjects[key] = fo
+  end
+  return fo or nil
+end
 
-  local scroll = CreateFrame("ScrollFrame", nil, box)
-  scroll:SetPoint("TOPLEFT", 4, -4)
-  scroll:SetPoint("BOTTOMRIGHT", -4, 4)
-  local child = CreateFrame("Frame", nil, scroll)
-  child:SetSize(w - 8, h - 8)
-  scroll:SetScrollChild(child)
-  scroll:EnableMouseWheel(true)
-  scroll:SetScript("OnMouseWheel", function(self, delta)
-    local maxScroll = max(0, child:GetHeight() - self:GetHeight())
-    self:SetVerticalScroll(min(maxScroll, max(0, self:GetVerticalScroll() - delta * FONT_ROW_H * 2)))
-  end)
-
-  local hint = Hint(parent, Tr("MORE_FONTS"))
-  hint:SetPoint("TOPRIGHT", box, "BOTTOMRIGHT", 0, -3)
-
-  local rows = {}
-  local colW = (w - 8 - 8) / 2
-  local textW = colW - 10
-  return function()
+local function FontChoice(parent, w)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(w, 22)
+  local bg = b:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(0, 0, 0, .5)
+  AddBorder(b, .4, .4, .45, 1)
+  local hl = b:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints()
+  hl:SetColorTexture(1, 1, 1, .1)
+  local arrow = b:CreateTexture(nil, "ARTWORK")
+  arrow:SetSize(18, 18)
+  arrow:SetPoint("RIGHT", 1, 0)
+  arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.text:SetPoint("LEFT", 6, 0)
+  b.text:SetPoint("RIGHT", arrow, "LEFT", 0, 0)
+  b.text:SetJustifyH("LEFT")
+  b.text:SetWordWrap(false)
+  local shown -- the font the button is drawn in
+  local function Pick(name)
+    ns.db.font = name
+    ns:ApplyFont()
+    panel:Refresh()
+  end
+  -- the font chosen, its name drawn in it (a font that fails to load: the game's)
+  function b:Refresh()
+    local fonts, now = ns:GetFonts(), nil
+    for _, f in ipairs(fonts) do if f.name == ns.db.font then now = f end end
+    now = now or fonts[1]
+    if not now then return end
+    if shown ~= now.path then
+      shown = now.path
+      local ok = self.text:SetFont(now.path, min(14, now.preview or 13), "")
+      if ok == false or not self.text:GetFont() then self.text:SetFontObject(GameFontHighlightSmall) end
+    end
+    self.text:SetText(now.name)
+  end
+  b:SetScript("OnClick", function(self)
+    ClickSound()
     local fonts = ns:GetFonts()
-    for i, f in ipairs(fonts) do
-      local row = rows[i]
-      if not row then
-        row = CreateFrame("Button", nil, child)
-        row:SetSize(colW, FONT_ROW_H - 2)
-        row:SetPoint("TOPLEFT", 2 + ((i - 1) % 2) * (colW + 4), -2 - floor((i - 1) / 2) * FONT_ROW_H)
-        row.bg = row:CreateTexture(nil, "BACKGROUND")
-        row.bg:SetAllPoints()
-        local hl = row:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetAllPoints()
-        hl:SetColorTexture(1, 1, 1, .08)
-        row.text = row:CreateFontString(nil, "OVERLAY")
-        row.text:SetPoint("LEFT", 6, 0)
-        row.text:SetPoint("RIGHT", -4, 0)
-        row.text:SetJustifyH("LEFT")
-        row.text:SetWordWrap(false)
-        row:SetScript("OnClick", function(self)
-          ClickSound()
-          ns.db.font = self.fontName
-          ns:ApplyFont()
-          panel:Refresh()
-        end)
-        rows[i] = row
-      end
-      -- Fonts drawn much bigger than the rest have their own size. Any other font is
-      -- measured every time (a font still loading can measure wrong) and shrunk to fit.
-      if row.fontName ~= f.name or not f.preview then
-        row.fontName = f.name
-        local size = f.preview or 13
-        local ok = row.text:SetFont(f.path, size, "")
-        if ok == false or not row.text:GetFont() then row.text:SetFontObject(GameFontHighlightSmall) end
-        row.text:SetText(f.name)
-        local measure = row.text.GetUnboundedStringWidth or row.text.GetStringWidth
-        local width = measure(row.text)
-        local path = row.text:GetFont()
-        if path and not f.preview and width > textW then
-          row.text:SetFont(path, max(7, floor(size * textW / width)), "")
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then -- no menus in this client: the next font
+      local n = 1
+      for i, f in ipairs(fonts) do if f.name == ns.db.font then n = i % #fonts + 1 end end
+      if fonts[n] then Pick(fonts[n].name) end
+      return
+    end
+    ToggleMenu(self, function(_, root)
+      if root.SetScrollMode then root:SetScrollMode(FONT_MENU_H) end
+      for _, f in ipairs(fonts) do
+        local radio = root:CreateRadio(f.name, function() return ns.db.font == f.name end, function() Pick(f.name) end)
+        local fo = FontObject(f)
+        if fo and radio and radio.AddInitializer then
+          radio:AddInitializer(function(button)
+            if button.fontString then button.fontString:SetFontObject(fo) end
+          end)
         end
       end
-      local selected = (f.name == ns.db.font)
-      SelectRow(row.bg, selected)
-      row.text:SetTextColor(selected and GOLD_R or 1, selected and GOLD_G or 1, selected and GOLD_B or 1)
-    end
-    child:SetHeight(max(h - 8, 4 + ceil(#fonts / 2) * FONT_ROW_H))
-    hint:SetShown(child:GetHeight() > h - 8)
-  end
+    end)
+  end)
+  return b
 end
 
 ---------------------------------------------------------------------------
@@ -715,26 +775,6 @@ local function DragGhost(parent)
     if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then EndDrag() else TrackDrag() end
   end)
   return f
-end
-
--- One of the game's menus, opened at the cursor by a click on a button of ours. A click on the
--- button while its menu is open closes it: left alone, the game would close the menu on the
--- press and open it again where the cursor is. (The menu frames are reused: still ours?)
-local function MenuOpen(owner)
-  local menu = owner.menu
-  return menu ~= nil and menu:IsShown() and (not menu.GetOwnerRegion or menu:GetOwnerRegion() == owner)
-end
-local function OwnerHandlesPress(self, _, event)
-  return event == "GLOBAL_MOUSE_DOWN" and MenuOpen(self)
-end
-local function ToggleMenu(owner, generator)
-  if MenuOpen(owner) then
-    owner.menu:Close()
-    owner.menu = nil
-    return
-  end
-  owner.HandlesGlobalMouseEvent = OwnerHandlesPress
-  owner.menu = MenuUtil.CreateContextMenu(owner, generator)
 end
 
 -- Click on an icon: where it is watched, its rank, remove (the game's menus).
@@ -1349,8 +1389,9 @@ local function TextDialog(p)
 end
 
 ---------------------------------------------------------------------------
--- Layout page: the bars of the tab's class, top to bottom (drag one to move it; mana and
--- health can be turned off), and the size of the bar picked: width, height, scale.
+-- Bars page: the bars of the tab's class, top to bottom (drag one to move it, its box shows it
+-- or takes it off, a click picks it), and all about the bar picked: its size, its colours, and
+-- what only that bar has.
 ---------------------------------------------------------------------------
 local BAR_ROW_H = 30
 local DEFAULT_BARS = ns.defaults.bars
@@ -1386,17 +1427,38 @@ local function SetClassOrder(list)
   ns:ApplyLayout()
 end
 
-local function LayoutPage(p, page, OnRefresh)
+-- The colours of a bar the class has.
+local function BarColorKeys(key)
+  local list, never = {}, NO_COLOR[editing] or {}
+  for _, k in ipairs(BAR_COLORS[key] or {}) do if not never[k] then list[#list + 1] = k end end
+  return list
+end
+
+local function DefaultSize(key)
+  local b, d = ns.db.bars[key], DEFAULT_BARS[key]
+  b.width, b.height, b.scale = d.width, d.height, d.scale
+end
+
+-- The colour a bar of the list shows beside its name: the resource it shows, or the class's
+-- colour for a health bar wearing it.
+local function BarColor(key)
+  if key == "health" and ns.db.healthClassColor then
+    local r, g, b = ns:ClassColor(editing)
+    return r, g, b, ns.db.colors.health.a
+  end
+  local part = key == "power" and (editing == "WARRIOR" and "rage" or "energy") or key
+  local c = ns.db.colors[part]
+  return c.r, c.g, c.b, c.a
+end
+
+local function BarsPage(p, page, OnRefresh)
   local box = Section(page, "BARS_ORDER", LEFT, -56)
-  local hint = Hint(page, Tr("BARS_HINT"))
-  hint:SetPoint("TOPLEFT", LEFT, -78)
-  hint:SetWidth(COL_W)
-  hint:SetWordWrap(true)
-  local LIST_TOP = -108
+  Wrapped(page, Tr("BARS_HINT")):SetPoint("TOPLEFT", LEFT, -78)
+  local LIST_TOP = -114
   local list = CreateFrame("Frame", nil, page)
   list:SetPoint("TOPLEFT", LEFT, LIST_TOP)
   list:SetSize(COL_W, 4 * BAR_ROW_H)
-  local picked = "power" -- the bar whose size is shown
+  local picked = "power" -- the bar whose settings are shown
   local dragKey, dropAt  -- while a bar is dragged: it, and where it would go
   local rows = {}
   local Refresh
@@ -1443,18 +1505,22 @@ local function LayoutPage(p, page, OnRefresh)
       line:SetSize(12, 2)
       line:SetPoint("LEFT", 8, 5 - (g - 1) * 5)
     end
+    -- shown, or taken off: the other bars close up
+    row.show = Check(row, nil, function(on) ns:SetBarOn(row.key, on) end)
+    row.show:SetPoint("LEFT", 30, 0)
     row.name = Text(row, "", "GameFontHighlight")
-    row.name:SetPoint("LEFT", 30, 0)
-    row.show = Check(row, Tr("SHOW"), function(on)
-      ns:SetElementOn(row.key, on) -- the same as the box of its colour (Bar page)
-      Refresh()
-    end)
-    row.show:SetPoint("RIGHT", -70, 0)
+    row.name:SetPoint("LEFT", 52, 0)
+    -- its colours, as on the bar (a combo point each)
+    row.swatches = {}
+    for n = 1, 5 do
+      local t = row:CreateTexture(nil, "ARTWORK")
+      row.swatches[n] = t
+    end
     row:RegisterForDrag("LeftButton")
     row:SetScript("OnClick", function(self)
       ClickSound()
       picked = self.key
-      p:Refresh() -- its sizes on the right
+      p:Refresh() -- its settings on the right
     end)
     row:SetScript("OnDragStart", function(self)
       dragKey, dropAt = self.key, RowUnderCursor()
@@ -1475,8 +1541,8 @@ local function LayoutPage(p, page, OnRefresh)
   end)
   page:HookScript("OnHide", function() dragKey, dropAt = nil, nil end)
 
-  -- the bar picked, if the class shown has it, else its energy / rage bar (checked before
-  -- the size sliders read it)
+  -- the bar picked, if the class shown has it, else its energy / rage bar (checked before the
+  -- settings read it)
   local function CheckPicked()
     local keys = ClassBars()
     for _, key in ipairs(keys) do if key == picked then return end end
@@ -1484,10 +1550,17 @@ local function LayoutPage(p, page, OnRefresh)
   end
   OnRefresh(CheckPicked)
 
-  -- Size of the bar picked
-  local sizeBox = Section(page, "BAR_SIZE", RIGHT, -56, nil, -232)
-  local sizeTitle = Text(page, "", "GameFontNormal")
-  sizeTitle:SetPoint("TOPLEFT", RIGHT, -78)
+  -- every bar of the class: default sizes and colours, in one click
+  local allBars = Button(page, Tr("DEFAULT_ALL_BARS"), 220, 22, function()
+    for _, key in ipairs(ClassBars()) do DefaultSize(key) end
+    ns:ApplyLayout()
+    ns:ResetColors()
+  end)
+  local allHint = Wrapped(page, Tr("DEFAULT_ALL_HINT"))
+  allHint:SetPoint("TOPLEFT", allBars, "BOTTOMLEFT", 0, -6)
+
+  -- The bar picked: its size
+  local detail = Section(page, nil, RIGHT, -56)
   local function SizeSlider(label, y, minV, maxV, unit, field, factor)
     Text(page, Tr(label)):SetPoint("TOPLEFT", RIGHT, y)
     local slider = Slider(page, 150, minV, maxV, 1, unit, function(v)
@@ -1498,47 +1571,76 @@ local function LayoutPage(p, page, OnRefresh)
     OnRefresh(function() slider:Set(floor(ns.db.bars[picked][field] * factor + .5)) end)
     return slider
   end
-  SizeSlider("BAR_WIDTH", -104, ns.MIN_BAR_W, ns.MAX_BAR_W, "", "width", 1)
-  SizeSlider("BAR_HEIGHT", -134, ns.MIN_BAR_H, ns.MAX_BAR_H, "", "height", 1)
-  SizeSlider("BAR_SCALE", -164, ns.MIN_BAR_SCALE, ns.MAX_BAR_SCALE, Percent, "scale", 100)
-  Button(page, Tr("DEFAULT_SIZE"), 150, 22, function()
-    local b, d = ns.db.bars[picked], DEFAULT_BARS[picked]
-    b.width, b.height, b.scale = d.width, d.height, d.scale
-    ns:ApplyLayout()
-    p:Refresh()
-  end):SetPoint("TOPLEFT", RIGHT, -194)
-  Hint(page, Tr("COLORS_ON_BAR_PAGE")):SetPoint("TOPLEFT", RIGHT, -226)
-  sizeBox:Fit(-238)
+  SizeSlider("BAR_WIDTH", -84, ns.MIN_BAR_W, ns.MAX_BAR_W, "", "width", 1)
+  SizeSlider("BAR_HEIGHT", -112, ns.MIN_BAR_H, ns.MAX_BAR_H, "", "height", 1)
+  SizeSlider("BAR_SCALE", -140, ns.MIN_BAR_SCALE, ns.MAX_BAR_SCALE, Percent, "scale", 100)
+  Rule(page, RIGHT, -166)
+  Text(page, Tr("COLORS")):SetPoint("TOPLEFT", RIGHT, -176)
 
-  -- The bars' style: flat, or the game's bars framed like the portrait's or like a tooltip
-  Section(page, "BAR_STYLE", RIGHT, -262, nil, -350)
-  local styleButtons = {}
-  for i, skin in ipairs(ns.SKINS) do
-    local b = Button(page, Tr("SKIN_" .. skin), 100, 22, function()
-      ns:SetSkin(skin)
-      p:Refresh()
-    end)
-    b:SetPoint("TOPLEFT", RIGHT + (i - 1) * 108, -288)
-    b.skin = skin
-    styleButtons[i] = b
+  -- its colours, each part with a box if the bar has more than one (the rage about to be spent
+  -- always: it is shown or not)
+  local function Boxed(key)
+    return key == "cost" or #ns:BarParts(picked, editing) > 1
   end
-  local styleHint = Hint(page, Tr("SKIN_HINT"))
-  styleHint:SetPoint("TOPLEFT", RIGHT, -318)
-  styleHint:SetWidth(COL_W)
-  styleHint:SetWordWrap(true)
-  OnRefresh(function()
-    for _, b in ipairs(styleButtons) do b:SetActive(b.skin == ns.db.skin) end
-  end)
-
-  -- every bar of the class back to its default size, in one click
-  local allSizes = Button(page, Tr("DEFAULT_SIZE_ALL"), 260, 22, function()
-    for _, key in ipairs(ClassBars()) do
-      local b, d = ns.db.bars[key], DEFAULT_BARS[key]
-      b.width, b.height, b.scale = d.width, d.height, d.scale
+  local function Has(key)
+    for _, k in ipairs(BarColorKeys(picked)) do if k == key then return true end end
+    return false
+  end
+  local items = {}
+  for _, bar in ipairs({ "combo", "power", "mana", "health" }) do
+    for _, key in ipairs(BAR_COLORS[bar]) do
+      local holder, refresh = ColorRow(page, key, nil, function() return Boxed(key) end)
+      OnRefresh(refresh)
+      items[#items + 1] = { frame = holder, height = 28, when = function() return Has(key) end }
+      if key == "cost" then -- the spells that spend it
+        local spells = Holder(page, 18)
+        local names = Hint(spells, "")
+        names:SetPoint("TOPLEFT", 20, -1)
+        names:SetWidth(COL_W - 20)
+        names:SetWordWrap(false)
+        OnRefresh(function()
+          local list = {}
+          for _, id in ipairs(ns.PREDICTED_SPELLS[editing] or {}) do list[#list + 1] = ns:SpellName(id) end
+          names:SetText(table.concat(list, ", "))
+        end)
+        items[#items + 1] = { frame = spells, height = 18, when = function() return Has("cost") end }
+      elseif key == "health" then -- or the class's colour
+        local classColor = Holder(page, 26)
+        local check = Check(classColor, Tr("CLASS_COLOR"), function(on)
+          ns.db.healthClassColor = on
+          ns:ApplyColors()
+          p:Refresh()
+        end)
+        check:SetPoint("TOPLEFT", 2, -4)
+        OnRefresh(function() check:Set(ns.db.healthClassColor) end)
+        items[#items + 1] = { frame = classColor, height = 26, when = function() return picked == "health" end }
+      end
     end
+  end
+
+  -- combo points: read on the target or on the player
+  local source = Holder(page, 38)
+  Text(source, Tr("SOURCE")):SetPoint("TOPLEFT", 0, -12)
+  local srcTarget = Button(source, Tr("SOURCE_TARGET"), 124, 22, function() ns:SetComboSource("TARGET") end)
+  srcTarget:SetPoint("TOPLEFT", 90, -6)
+  local srcPlayer = Button(source, Tr("SOURCE_PLAYER"), 90, 22, function() ns:SetComboSource("PLAYER") end)
+  srcPlayer:SetPoint("TOPLEFT", 220, -6)
+  OnRefresh(function()
+    srcTarget:SetActive(ns.db.cpSource == "TARGET")
+    srcPlayer:SetActive(ns.db.cpSource == "PLAYER")
+  end)
+  items[#items + 1] = { frame = source, height = 38, when = function() return picked == "combo" end }
+
+  -- this bar back to its default size, or colours
+  local defaults = Holder(page, 36)
+  Button(defaults, Tr("DEFAULT_SIZE"), 150, 22, function()
+    DefaultSize(picked)
     ns:ApplyLayout()
     p:Refresh()
-  end)
+  end):SetPoint("TOPLEFT", 0, -10)
+  Button(defaults, Tr("DEFAULT_COLORS"), 150, 22, function() ns:ResetColors(BarColorKeys(picked)) end):SetPoint("TOPLEFT", 160, -10)
+  items[#items + 1] = { frame = defaults, height = 36 }
+  OnRefresh(Stack(page, RIGHT, -196, items, detail))
 
   function Refresh()
     local keys = Shown()
@@ -1549,24 +1651,40 @@ local function LayoutPage(p, page, OnRefresh)
       if key then
         row.key = key
         row.name:SetText(BarName(key))
-        row.name:SetAlpha((key == dragKey) and .5 or 1)
-        local optional = key == "mana" or key == "health"
-        row.show:SetShown(optional)
-        if optional then row.show:Set(ns.db.bars[key].show) end
+        local on = ns:BarOn(key)
+        row.name:SetAlpha((key == dragKey) and .5 or (on and 1 or .55))
+        row.show:Set(on)
+        local combo = key == "combo"
+        for n, t in ipairs(row.swatches) do
+          t:ClearAllPoints()
+          t:SetShown(combo or n == 1)
+          if combo then
+            local c = ns.db.colors["cp" .. n]
+            t:SetSize(7, 10)
+            t:SetPoint("RIGHT", -10 - (5 - n) * 8, 0)
+            t:SetColorTexture(c.r, c.g, c.b, c.a)
+          elseif n == 1 then
+            t:SetSize(39, 10)
+            t:SetPoint("RIGHT", -10, 0)
+            t:SetColorTexture(BarColor(key))
+          end
+          t:SetAlpha(on and 1 or .3)
+        end
         SelectRow(row.bg, key == picked or key == dragKey)
       end
     end
-    local below = LIST_TOP - #keys * BAR_ROW_H - 6
-    allSizes:ClearAllPoints()
-    allSizes:SetPoint("TOPLEFT", page, "TOPLEFT", LEFT, below)
-    box:Fit(below - 24)
-    sizeTitle:SetText(BarName(picked))
+    local below = LIST_TOP - #keys * BAR_ROW_H - 8
+    allBars:ClearAllPoints()
+    allBars:SetPoint("TOPLEFT", page, "TOPLEFT", LEFT, below)
+    box:Fit(below - 22 - 6 - (allHint:GetStringHeight() or 12))
+    detail.title:SetText(BarName(picked))
   end
   OnRefresh(function() Refresh() end)
 end
 
 ---------------------------------------------------------------------------
--- Icons page: icon look, adding spells, the rows (and the class spells panel beside it)
+-- Icons page: their look, editing them on the bar, adding spells, the rows (and the class
+-- spells panel beside it)
 ---------------------------------------------------------------------------
 local function IconsPage(p, icons, OnRefresh)
   local lookBox = Section(icons, "ICON_LOOK", LEFT, -56)
@@ -1594,21 +1712,30 @@ local function IconsPage(p, icons, OnRefresh)
     ns.db.icons.timers = on
     ns:SyncAuraButtons() -- the game's aura buttons too
     ns:UpdateIcons()
+    p:Refresh()
   end)
   timers:SetPoint("TOPLEFT", LEFT, -160)
+  -- countdown numbers on the icons: a percentage of the size that fits each icon
+  local timerLabel = Text(icons, Tr("TIMER_SIZE"))
+  timerLabel:SetPoint("TOPLEFT", LEFT + 21, -184)
+  local timerSize = Slider(icons, 100, ns.MIN_TIMER, ns.MAX_TIMER, 5, Percent, function(v)
+    ns.db.icons.timerSize = v
+    ns:LayoutIcons()
+  end)
+  timerSize:SetPoint("LEFT", icons, "TOPLEFT", LEFT + 160, -190)
   local missing = Check(icons, Tr("SHOW_MISSING"), function(on)
     ns.db.icons.missing = on
     ns:UpdateIcons()
   end)
-  missing:SetPoint("TOPLEFT", LEFT, -184)
+  missing:SetPoint("TOPLEFT", LEFT, -212)
   local reverse = Check(icons, Tr("REVERSE"), function(on)
     ns.db.icons.reverse = on
     ns:SyncAuraButtons() -- the game's aura buttons too
     ns:UpdateIcons()
   end)
-  reverse:SetPoint("TOPLEFT", LEFT, -208)
+  reverse:SetPoint("TOPLEFT", LEFT, -236)
   local bearFixed = Check(icons, Tr("BEAR_FIXED"), function(on) ns:SetBearIconsFixed(on) end)
-  bearFixed:SetPoint("TOPLEFT", LEFT, -232)
+  bearFixed:SetPoint("TOPLEFT", LEFT, -260)
   OnRefresh(function()
     local shape = ns.db.icons.shape
     for _, b in ipairs(shapeButtons) do b:SetActive(b.shape == shape) end
@@ -1619,11 +1746,17 @@ local function IconsPage(p, icons, OnRefresh)
     local cw, ch = ns:ComboCellSize()
     cellSize:SetText(L.CELL_SIZE:format(floor(cw + .5), floor(ch + .5)))
     bearFixed:SetShown(editing == "DRUID")
-    lookBox:Fit(editing == "DRUID" and -244 or -220)
+    lookBox:Fit(editing == "DRUID" and -272 or -248)
     bearFixed:Set(ns.db.bearIconsFixed)
     reverse:Set(ns.db.icons.reverse)
     iconSize:Set(ns.db.icons.size)
     timers:Set(ns.db.icons.timers)
+    timerSize:Set(ns.db.icons.timerSize)
+    local on = ns.db.icons.timers -- the countdown's size: only with the countdown
+    timerLabel:SetAlpha(on and 1 or .45)
+    timerSize:SetAlpha(on and 1 or .45)
+    timerSize.box.holder:SetAlpha(on and 1 or .45)
+    if timerSize.unit then timerSize.unit:SetAlpha(on and 1 or .45) end
     missing:Set(ns.db.icons.missing)
   end)
 
@@ -1652,15 +1785,27 @@ local function IconsPage(p, icons, OnRefresh)
   defaultBtn:SetPoint("TOPLEFT", RIGHT + 160, -152)
   OnRefresh(function() addBtn:SetLabel(L.ADD .. " > " .. ns:RowName(selSide, selK)) end)
 
-  Section(icons, "ROWS", LEFT, -280, FULL_W, -546)
+  -- Icons unlocked, for every class: spells dropped on the HUD's rows, icons moved or dragged
+  -- off (Tracker.lua)
+  local hudBox = Section(icons, "ICONS_ON_HUD", RIGHT, -204)
+  local onHud = Check(icons, Tr("EDIT_ON_HUD"), function(on) ns:SetIconsLocked(not on) end)
+  onHud:SetPoint("TOPLEFT", RIGHT, -228)
+  local hudHint = Wrapped(icons, Tr("ICONS_UNLOCKED_HINT"))
+  hudHint:SetPoint("TOPLEFT", RIGHT, -246)
+  OnRefresh(function()
+    onHud:Set(not ns.db.iconsLocked)
+    hudBox:Fit(-246 - (hudHint:GetStringHeight() or 24))
+  end)
+
+  Section(icons, "ROWS", LEFT, -300, FULL_W, -566)
   local catalogBtn = Button(icons, Tr("CATALOG_OPEN"), 150, 22, function()
     catalog.closed = catalog:IsShown()
     p:Refresh()
   end)
-  catalogBtn:SetPoint("TOPRIGHT", icons, "TOPLEFT", LEFT + FULL_W, -275)
-  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -300)
+  catalogBtn:SetPoint("TOPRIGHT", icons, "TOPLEFT", LEFT + FULL_W, -295)
+  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -320)
   for i, def in ipairs(ROW_LINES) do
-    local y = -316 - (i - 1) * 30
+    local y = -336 - (i - 1) * 30
     if def then
       OnRefresh(IconLine(icons, def[1], def[2], y))
     else -- the bar, between the rows above and below it
@@ -1673,23 +1818,23 @@ local function IconsPage(p, icons, OnRefresh)
       rule:SetPoint("RIGHT", icons, "TOPLEFT", LEFT + FULL_W, y - 14)
     end
   end
-  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -532)
+  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -552)
   ghost = DragGhost(p)
   catalog = Catalog(p)
   OnRefresh(function()
-    catalog:Sync(page == 3)
+    catalog:Sync(page == ICONS_PAGE)
     catalogBtn:SetActive(catalog:IsShown())
   end)
 end
 
 ---------------------------------------------------------------------------
--- Profiles of the tab being edited (bar page): named copies of all its settings, saved,
+-- Profiles of the tab being edited (Profiles page): named copies of all its settings, saved,
 -- loaded, deleted, exported and imported.
 ---------------------------------------------------------------------------
 local function ProfilesSection(p, bar, OnRefresh)
-  Section(bar, "PROFILES", LEFT, -448, nil, -590)
+  Section(bar, "PROFILES", LEFT, -56, nil, -198)
   local loaded = Hint(bar, "") -- the profile on the tab, and whether it changed since
-  loaded:SetPoint("TOPLEFT", LEFT, -470)
+  loaded:SetPoint("TOPLEFT", LEFT, -78)
   loaded:SetWidth(COL_W)
   loaded:SetWordWrap(false)
   local picked = {} -- per tab: the profile chosen in the list
@@ -1703,9 +1848,9 @@ local function ProfilesSection(p, bar, OnRefresh)
     for _, name in ipairs(ns:ProfileNames(editing)) do options[#options + 1] = { name, name } end
     return options
   end, Picked, function(name) picked[editing] = name; p:Refresh() end)
-  list:SetPoint("TOPLEFT", LEFT, -487)
+  list:SetPoint("TOPLEFT", LEFT, -95)
   local profStatus = Text(bar, "", "GameFontHighlightSmall")
-  profStatus:SetPoint("TOPLEFT", LEFT, -572)
+  profStatus:SetPoint("TOPLEFT", LEFT, -180)
   profStatus:SetWidth(COL_W)
   local function ProfileStatus(ok, msg)
     profStatus:SetText(msg or "")
@@ -1740,7 +1885,7 @@ local function ProfilesSection(p, bar, OnRefresh)
       Load(class, name)
     end
   end)
-  loadBtn:SetPoint("TOPLEFT", LEFT + 174, -486)
+  loadBtn:SetPoint("TOPLEFT", LEFT + 174, -94)
   local deleteBtn = Button(bar, Tr("PROFILE_DELETE"), 74, 22, function()
     local class, name = editing, Picked()
     if not name then return end
@@ -1748,12 +1893,12 @@ local function ProfilesSection(p, bar, OnRefresh)
       ProfileStatus(ns:DeleteProfile(class, name))
     end }, { L.CANCEL })
   end)
-  deleteBtn:SetPoint("TOPLEFT", LEFT + 250, -486)
+  deleteBtn:SetPoint("TOPLEFT", LEFT + 250, -94)
 
   -- Save: under the name typed (the loaded profile's name to start with)
   local nameBox = InputBox(bar, 170)
   nameBox:SetMaxLetters(32)
-  nameBox.holder:SetPoint("TOPLEFT", LEFT, -514)
+  nameBox.holder:SetPoint("TOPLEFT", LEFT, -122)
   local function Save()
     local class, name = editing, ns.CleanProfileName(nameBox:GetText())
     nameBox:ClearFocus()
@@ -1776,7 +1921,7 @@ local function ProfilesSection(p, bar, OnRefresh)
   nameBox:SetScript("OnEnterPressed", Save)
   nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   local saveBtn = Button(bar, Tr("PROFILE_SAVE"), 150, 22, Save)
-  saveBtn:SetPoint("TOPLEFT", LEFT + 174, -514)
+  saveBtn:SetPoint("TOPLEFT", LEFT + 174, -122)
 
   local textBox = TextDialog(p)
   local exportBtn = Button(bar, Tr("PROFILE_EXPORT"), 158, 22, function()
@@ -1787,7 +1932,7 @@ local function ProfilesSection(p, bar, OnRefresh)
     textBox:Open(L.PROFILE_EXPORT_TITLE:format(name), hint, ns:ExportProfile(editing, name), L.SELECT_ALL,
       function() textBox:SelectAll() end)
   end)
-  exportBtn:SetPoint("TOPLEFT", LEFT, -542)
+  exportBtn:SetPoint("TOPLEFT", LEFT, -150)
   local importBtn = Button(bar, Tr("PROFILE_IMPORT"), 158, 22, function()
     local class = editing
     textBox:Open(L.PROFILE_IMPORT_TITLE:format(L["TAB_" .. class]), L.PROFILE_IMPORT_HINT, nil, L.PROFILE_IMPORT, function(text)
@@ -1802,7 +1947,7 @@ local function ProfilesSection(p, bar, OnRefresh)
       p:Refresh()
     end)
   end)
-  importBtn:SetPoint("TOPLEFT", LEFT + 162, -542)
+  importBtn:SetPoint("TOPLEFT", LEFT + 162, -150)
   -- (a tab change or a language change closes the box: it belongs to the tab it opened on)
   OnRelabel(function() textBox:Hide() end)
   function p.ClearProfileMessages()
@@ -1914,7 +2059,7 @@ function ns:ResetOptionsWindow()
   if not panel then return end
   PlaceWindow()
   panel:SetAlpha(self.sv.window.alpha)
-  panel.PlacePageTabs() -- their order back to the default too
+  panel.PlaceNav() -- the pages in their default order too
   if catalog:IsShown() then FitSidePanel() end
 end
 
@@ -1988,6 +2133,52 @@ end
 ---------------------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------------------
+local NAV_BUTTON_W = NAV_W - 16 - 8 -- in the list's inset, 4 from each side
+
+-- A page in the list on the left: its name, and below it what it holds.
+local function NavButton(parent, i, nameKey, descKey, onClick)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(NAV_BUTTON_W, NAV_ROW_H - 4)
+  b.bg = b:CreateTexture(nil, "BACKGROUND")
+  b.bg:SetAllPoints()
+  local hl = b:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints()
+  hl:SetColorTexture(1, 1, 1, .06)
+  b.name = Text(b, Tr(nameKey), "GameFontNormal")
+  b.name:SetPoint("TOPLEFT", 8, -7)
+  b.name:SetWidth(NAV_BUTTON_W - 12)
+  b.name:SetWordWrap(false)
+  b.desc = Hint(b, Tr(descKey))
+  b.desc:SetPoint("TOPLEFT", 8, -24)
+  b.desc:SetWidth(NAV_BUTTON_W - 12)
+  b.desc:SetWordWrap(true)
+  if b.desc.SetMaxLines then b.desc:SetMaxLines(2) end
+  b.page = i
+  b:SetScript("OnClick", function(self)
+    if self.dragged then return end -- let go after a drag: no click
+    ClickSound()
+    onClick(self)
+  end)
+  function b:SetActive(on)
+    SelectRow(self.bg, on)
+    if on then self.name:SetTextColor(1, 1, 1) else self.name:SetTextColor(GOLD_R, GOLD_G, GOLD_B) end
+  end
+  return b
+end
+
+-- A part of a page placed where the parts above it end (its group box moves with it).
+local function Part(page)
+  local f = CreateFrame("Frame", nil, page)
+  f:SetSize(BODY_W, 1)
+  f.back = CreateFrame("Frame", nil, page.back)
+  f.back:SetAllPoints(f)
+  function f:Place(y)
+    self:ClearAllPoints()
+    self:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+  end
+  return f
+end
+
 local function Build()
   relabels = {}
   local p = CreateFrame("Frame", "ClaraComboPointsOptions", UIParent, "PortraitFrameTemplate")
@@ -2019,104 +2210,138 @@ local function Build()
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
   local resetAll
 
-  -- Class tabs in two rows ----------------------------------------------------------
-  local tabs, rowTabs = {}, {}
-  for r, row in ipairs(CLASS_ROWS) do
-    rowTabs[r] = {}
-    for i, class in ipairs(row) do
-      local t = Tab(p, Tr("TAB_" .. class), function()
-        editing = class
-        resetAll.armed = nil
-        status:SetText("")
-        p.ClearProfileMessages()
-        ns:SetActiveProfile(class)
-        p:Refresh()
-      end)
-      if i == 1 then
-        t:SetPoint("BOTTOMLEFT", p, "TOPLEFT", TABS_X, r == 1 and ROW1_Y or ROW2_Y)
-      else
-        t:SetPoint("LEFT", rowTabs[r][i - 1], "RIGHT", 4, 0)
-      end
-      t.class = class
-      -- the game's tab sizes itself to its text when shown: back to the common width
-      local function Keep(self) if self.fixedWidth then PanelTemplates_TabResize(self, 0, self.fixedWidth) end end
-      t:HookScript("OnShow", Keep)
-      t:HookScript("OnEvent", Keep)
-      tabs[#tabs + 1] = t
-      rowTabs[r][i] = t
+  -- Class tabs, in one row, each name in its class's colour ---------------------------
+  local tabs = {}
+  for i, class in ipairs(CLASSES) do
+    local t = Tab(p, function()
+      local c = CLASS_COLORS[class]
+      return ("|cff%02x%02x%02x%s|r"):format(floor(c[1] * 255 + .5), floor(c[2] * 255 + .5), floor(c[3] * 255 + .5),
+        L["TAB_" .. class])
+    end, function()
+      editing = class
+      resetAll.armed = nil
+      status:SetText("")
+      p.ClearProfileMessages()
+      ns:SetActiveProfile(class)
+      p:Refresh()
+    end)
+    if i == 1 then
+      t:SetPoint("BOTTOMLEFT", p, "TOPLEFT", TABS_X, TABS_Y)
+    else
+      t:SetPoint("LEFT", tabs[i - 1], "RIGHT", 4, 0)
     end
+    t.class = class
+    -- the game's tab sizes itself to its text when shown: back to the common width
+    local function Keep(self) if self.fixedWidth then PanelTemplates_TabResize(self, 0, self.fixedWidth) end end
+    t:HookScript("OnShow", Keep)
+    t:HookScript("OnEvent", Keep)
+    tabs[i] = t
   end
-  -- Pages, and their tabs after the second row of class tabs, in the order the player set by
-  -- dragging them (ns.sv.pageOrder)
-  local pages, pageTabs = {}, {}
-  local PlacePageTabs
-  for i, key in ipairs(PAGES) do
+  -- all as wide as the widest if the row still fits; else each at its own width; if even that
+  -- is too wide (a long language), all narrowed alike (the game's tab shortens its text)
+  OnRelabel(function()
+    local room = PANEL_W - TABS_X - 14 - (#tabs - 1) * 4
+    local widest, total = 0, 0
+    for _, t in ipairs(tabs) do
+      PanelTemplates_TabResize(t, 0)
+      widest = max(widest, t:GetWidth())
+      total = total + t:GetWidth()
+    end
+    local fixed
+    if widest * #tabs <= room then fixed = widest elseif total > room then fixed = floor(room / #tabs) end
+    for _, t in ipairs(tabs) do
+      t.fixedWidth = fixed
+      if fixed then PanelTemplates_TabResize(t, 0, fixed) end
+    end
+  end)
+
+  -- Pages, and the list of them on the left in the order the player set by dragging them
+  -- (ns.sv.pageOrder) --------------------------------------------------------------
+  local nav = Box(p)
+  nav:SetPoint("TOPLEFT", 12, NAV_TOP)
+  nav:SetPoint("BOTTOMLEFT", 12, 40)
+  nav:SetWidth(NAV_W - 16)
+  local pages, navButtons = {}, {}
+  for i, def in ipairs(PAGES) do
     local content = CreateFrame("Frame", nil, p)
-    content:SetPoint("TOPLEFT", 0, CONTENT_TOP)
-    content:SetSize(PANEL_W, PANEL_H + CONTENT_TOP)
+    content:SetPoint("TOPLEFT", NAV_W, CONTENT_TOP)
+    content:SetSize(BODY_W, PANEL_H + CONTENT_TOP)
     content.back = CreateFrame("Frame", nil, p) -- group boxes, under the page's widgets
     content.back:SetAllPoints(content)
     content:SetFrameLevel(content.back:GetFrameLevel() + 4)
     pages[i] = content
-    local t = Tab(p, Tr(key), function(self)
-      if self.dragged then return end -- let go after a drag: no click
+    navButtons[i] = NavButton(nav, i, def[1], def[2], function()
       page = i
       p:Refresh()
     end)
-    t.page = i
-    pageTabs[i] = t
   end
-  -- a page tab dragged along the row takes the place where it is let go
-  local dragTab
+  -- a page dragged up or down the list takes the place where it is let go
+  local dragNav
   local function Order()
     local order = {}
-    for _, i in ipairs(ns.sv.pageOrder) do order[#order + 1] = pageTabs[i] end
+    for _, i in ipairs(ns.sv.pageOrder) do order[#order + 1] = navButtons[i] end
     return order
   end
-  function PlacePageTabs()
-    local prev = rowTabs[2][#rowTabs[2]]
-    for n, t in ipairs(Order()) do
-      t:ClearAllPoints()
-      t:SetPoint("LEFT", prev, "RIGHT", n == 1 and 14 or 4, 0)
-      prev = t
+  local function PlaceNav()
+    for n, b in ipairs(Order()) do
+      b:ClearAllPoints()
+      b:SetPoint("TOPLEFT", nav, "TOPLEFT", 4, -4 - (n - 1) * NAV_ROW_H)
     end
   end
   local function DropIndex()
-    local x = GetCursorPosition() / p:GetEffectiveScale()
+    local _, y = GetCursorPosition()
+    y = y / p:GetEffectiveScale()
     local at = 1
-    for _, t in ipairs(Order()) do
-      if t ~= dragTab then
-        local l, w = t:GetLeft(), t:GetWidth()
-        if l and x > l + w / 2 then at = at + 1 end
+    for _, b in ipairs(Order()) do
+      if b ~= dragNav then
+        local bottom, h = b:GetBottom(), b:GetHeight()
+        if bottom and y < bottom + h / 2 then at = at + 1 end
       end
     end
     return at
   end
   local function MoveDragged()
-    if not dragTab then return end
+    if not dragNav then return end
     local order = {}
-    for _, i in ipairs(ns.sv.pageOrder) do if i ~= dragTab.page then order[#order + 1] = i end end
-    table.insert(order, math.max(1, math.min(DropIndex(), #order + 1)), dragTab.page)
+    for _, i in ipairs(ns.sv.pageOrder) do if i ~= dragNav.page then order[#order + 1] = i end end
+    table.insert(order, max(1, min(DropIndex(), #order + 1)), dragNav.page)
     ns.sv.pageOrder = order
-    PlacePageTabs()
+    PlaceNav()
   end
-  for _, t in ipairs(pageTabs) do
-    t:RegisterForDrag("LeftButton")
-    t:HookScript("OnMouseDown", function(self) self.dragged = nil end)
-    t:SetScript("OnDragStart", function(self)
-      dragTab, self.dragged = self, true
+  for _, b in ipairs(navButtons) do
+    b:RegisterForDrag("LeftButton")
+    b:HookScript("OnMouseDown", function(self) self.dragged = nil end)
+    b:SetScript("OnDragStart", function(self)
+      dragNav, self.dragged = self, true
       self:SetAlpha(.6)
       self:SetScript("OnUpdate", MoveDragged)
     end)
-    t:SetScript("OnDragStop", function(self)
+    b:SetScript("OnDragStop", function(self)
       self:SetScript("OnUpdate", nil)
       self:SetAlpha(1)
       MoveDragged()
-      dragTab = nil
+      dragNav = nil
     end)
   end
-  PlacePageTabs()
-  p.PlacePageTabs = PlacePageTabs
+  PlaceNav()
+  p.PlaceNav = PlaceNav
+
+  -- under the pages: the preview (everything lit), then which tab this character uses
+  local previewBtn = Button(nav, Tr("PREVIEW"), NAV_BUTTON_W, 22, function() ns:SetPreview(not ns.preview) end)
+  previewBtn:SetPoint("TOPLEFT", nav, "TOPLEFT", 4, -4 - #PAGES * NAV_ROW_H - 10)
+  local previewHint = Hint(nav, Tr("PREVIEW_HINT"))
+  previewHint:SetPoint("TOP", previewBtn, "BOTTOM", 0, -4)
+  OnRefresh(function() previewBtn:SetActive(ns.preview) end)
+  local who
+  if ns.enabled then
+    who = Hint(nav, function() return L.THIS_CHARACTER:format(L["TAB_" .. ns.homeClass]) end)
+  else
+    who = Text(nav, Tr("WRONG_CLASS"), "GameFontHighlightSmall")
+    who:SetTextColor(1, .4, .3)
+  end
+  who:SetPoint("BOTTOMLEFT", nav, "BOTTOMLEFT", 10, 10)
+  who:SetWidth(NAV_BUTTON_W - 8)
+  who:SetWordWrap(true)
 
   -- language flags in the title bar, left of the close button
   local flags = {}
@@ -2130,39 +2355,13 @@ local function Build()
     flags[i] = f
   end
 
-  -- Opacity of the window (and of everything shown with it), at the end of the first row of
-  -- tabs; the slider shorter if the tabs leave little room in this language.
+  -- Footer: the commands; the opacity of the window (and of everything shown with it) by the
+  -- scale grip in the corner
+  Hint(p, "/cl lock  ·  /cl unlock  ·  /cl hide  ·  /cl show  ·  /cl reset  ·  /cl reset pos"):SetPoint("LEFT", p, "BOTTOMLEFT", LEFT, 22)
+  local opacity = Slider(p, 90, ns.MIN_WINDOW_ALPHA * 100, 100, 1, Percent, function(v) ns:SetWindowAlpha(v / 100) end, 32)
+  opacity:SetPoint("RIGHT", p, "BOTTOMRIGHT", -FOOTER_RIGHT - 52, 22)
   local opacityLabel = Text(p, Tr("WINDOW_OPACITY"))
-  local opacity = Slider(p, 60, ns.MIN_WINDOW_ALPHA * 100, 100, 1, Percent, function(v) ns:SetWindowAlpha(v / 100) end, 32)
-  opacity:SetPoint("RIGHT", p, "TOPRIGHT", -14 - OPACITY_TAIL, ROW1_Y + 12)
   opacityLabel:SetPoint("RIGHT", opacity, "LEFT", -8, 0)
-  -- class tabs all as wide as the widest, if both rows still fit; else each at its own width
-  OnRelabel(function()
-    local widest = 0
-    for _, t in ipairs(tabs) do
-      PanelTemplates_TabResize(t, 0)
-      widest = max(widest, t:GetWidth())
-    end
-    local function RowWidth(r, w)
-      local width = TABS_X + #rowTabs[r] * (w or 0) + (#rowTabs[r] - 1) * 4
-      if not w then for _, t in ipairs(rowTabs[r]) do width = width + t:GetWidth() end end
-      return width
-    end
-    local pagesWidth = 14 + (#pageTabs - 1) * 4
-    for _, t in ipairs(pageTabs) do pagesWidth = pagesWidth + t:GetWidth() end
-    local labelWidth = opacityLabel:GetStringWidth() + 8
-    local function Fits(w)
-      return RowWidth(1, w) + 12 + labelWidth + 40 + OPACITY_TAIL + 14 <= PANEL_W
-        and RowWidth(2, w) + pagesWidth + 14 <= PANEL_W
-    end
-    local equal = Fits(widest) and widest or nil
-    for _, t in ipairs(tabs) do
-      t.fixedWidth = equal
-      if equal then PanelTemplates_TabResize(t, 0, equal) end
-    end
-    local room = PANEL_W - 14 - OPACITY_TAIL - labelWidth - (RowWidth(1) + 12)
-    opacity:SetWidth(max(40, min(90, room)))
-  end)
   OnRefresh(function() opacity:Set(floor(ns.sv.window.alpha * 100 + .5)) end)
   ScaleGrip(p)
   OnRefresh(function()
@@ -2175,143 +2374,114 @@ local function Build()
       content:SetShown(i == page)
       content.back:SetShown(i == page)
     end
-    for _, t in ipairs(pageTabs) do t:SetActive(t.page == page) end
+    for _, b in ipairs(navButtons) do b:SetActive(b.page == page) end
   end)
 
-  -- Page 1: position, scale, opacity | colours -----------------------------------
-  local bar = pages[1]
-  Section(bar, "POSITION", LEFT, -56, nil, -130)
-  local lockBtn = Button(bar, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
+  -- General: position, size, opacity | look of the bars and their text -------------------
+  local gen = pages[1]
+  Section(gen, "POSITION", LEFT, -56, nil, -110)
+  local lockBtn = Button(gen, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
   lockBtn:SetPoint("TOPLEFT", LEFT, -80)
-  local centerBtn = Button(bar, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end)
-  centerBtn:SetPoint("TOPLEFT", LEFT + 160, -80)
-  -- icons unlocked: spells dropped on the HUD's rows, icons moved or dragged off (Tracker.lua)
-  local function IconsTip(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText(self:GetText() or "")
-    GameTooltip:AddLine(L.ICONS_UNLOCKED_HINT, .9, .9, .9, true)
-    GameTooltip:Show()
-  end
-  local iconsBtn = Button(bar, "", 150, 22, function(self)
-    ns:SetIconsLocked(not ns.db.iconsLocked)
-    if GameTooltip and GameTooltip:IsOwned(self) then IconsTip(self) end -- its new name
-  end)
-  iconsBtn:SetPoint("TOPLEFT", LEFT, -108)
-  iconsBtn:HookScript("OnEnter", IconsTip)
-  iconsBtn:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  local iconsHint = Hint(bar, Tr("ICONS_UNLOCKED_SHORT"))
-  iconsHint:SetPoint("LEFT", iconsBtn, "RIGHT", 10, 0)
-  iconsHint:SetWidth(COL_W - 160)
-  iconsHint:SetWordWrap(true)
+  Button(gen, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end):SetPoint("TOPLEFT", LEFT + 160, -80)
   OnRefresh(function()
     lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
     lockBtn:SetActive(not ns.db.locked)
-    iconsBtn:SetLabel(ns.db.iconsLocked and L.UNLOCK_ICONS or L.LOCK_ICONS)
-    iconsBtn:SetActive(not ns.db.iconsLocked)
-    iconsHint:SetShown(not ns.db.iconsLocked)
   end)
 
-  Section(bar, "SCALE", LEFT, -158, nil, -234)
+  Section(gen, "SCALE", LEFT, -138, nil, -230)
   local presetButtons = {}
   for i, pct in ipairs(SCALE_PRESETS) do
-    local b = Button(bar, pct .. "%", 40, 22, function() ns:SetScalePercent(pct) end)
-    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -182)
+    local b = Button(gen, pct .. "%", 40, 22, function() ns:SetScalePercent(pct) end)
+    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -162)
     b.percent = pct
     presetButtons[i] = b
   end
-  local scaleBox = NumberBox(bar, 50, function(text) ns:SetScalePercent(text) end)
-  scaleBox.holder:SetPoint("TOPLEFT", LEFT, -212)
-  Text(bar, "%"):SetPoint("LEFT", scaleBox.holder, "RIGHT", 4, 0)
-  local applyScale = Button(bar, Tr("APPLY"), 90, 22, function()
-    scaleBox:ClearFocus()
-    ns:SetScalePercent(scaleBox:GetText())
-  end)
-  applyScale:SetPoint("TOPLEFT", LEFT + 72, -212)
-  Hint(bar, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("LEFT", applyScale, "RIGHT", 10, 0)
+  local scaleSlider = Slider(gen, 200, ns.MIN_SCALE, ns.MAX_SCALE, 1, Percent, function(v) ns:SetScalePercent(v) end, 40)
+  scaleSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT, -198)
+  Hint(gen, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("TOPLEFT", LEFT, -214)
   OnRefresh(function()
     local now = ns:GetScalePercent()
     for _, b in ipairs(presetButtons) do b:SetActive(b.percent == now) end
-    if not scaleBox:HasFocus() then scaleBox:SetText(tostring(now)) end
+    scaleSlider:Set(now)
   end)
 
-  Section(bar, "GLOBAL_OPACITY", LEFT, -262, nil, -300)
-  local alphaSlider = Slider(bar, 230, 0, 100, 1, Percent, function(v)
+  Section(gen, "OPACITY", LEFT, -258, nil, -386)
+  Text(gen, Tr("GLOBAL_OPACITY")):SetPoint("TOPLEFT", LEFT, -282)
+  local alphaSlider = Slider(gen, 100, 0, 100, 1, Percent, function(v)
     ns.db.alpha = v / 100
     ns:ApplyAlpha()
   end)
-  alphaSlider:SetPoint("LEFT", bar, "TOPLEFT", LEFT, -289)
-  OnRefresh(function() alphaSlider:Set(floor(ns.db.alpha * 100 + .5)) end)
-
-  Section(bar, "OOC", LEFT, -326, nil, -420)
-  local fade = Check(bar, Tr("FADE_OOC"), function(on)
+  alphaSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 168, -288)
+  local fade = Check(gen, Tr("FADE_OOC"), function(on)
     ns.db.fadeOOC = on
     ns:PreviewFade()
+    p:Refresh()
   end)
-  fade:SetPoint("TOPLEFT", LEFT, -352)
-  Button(bar, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", bar, "TOPLEFT", LEFT + COL_W, -346)
-  local oocPowerLabel = Text(bar, "")
-  oocPowerLabel:SetPoint("TOPLEFT", LEFT, -378)
-  local oocPower = Slider(bar, 100, 0, 100, 1, Percent, function(v)
+  fade:SetPoint("TOPLEFT", LEFT, -312)
+  Button(gen, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", gen, "TOPLEFT", LEFT + COL_W, -306)
+  local oocPowerLabel = Text(gen, "")
+  oocPowerLabel:SetPoint("TOPLEFT", LEFT + 21, -338)
+  local oocPower = Slider(gen, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocPower = v / 100
     ns:PreviewFade()
   end)
-  oocPower:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -384)
-  local oocTopLabel = Text(bar, "")
-  oocTopLabel:SetPoint("TOPLEFT", LEFT, -404)
-  local oocTop = Slider(bar, 100, 0, 100, 1, Percent, function(v)
+  oocPower:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 168, -344)
+  local oocTopLabel = Text(gen, "")
+  oocTopLabel:SetPoint("TOPLEFT", LEFT + 21, -364)
+  local oocTop = Slider(gen, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocTop = v / 100
     ns:PreviewFade()
   end)
-  oocTop:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -410)
+  oocTop:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 168, -370)
   OnRefresh(function()
+    alphaSlider:Set(floor(ns.db.alpha * 100 + .5))
     -- the bars of the class: energy / rage, or mana / health; combo points and icons, or icons
     oocPowerLabel:SetText(ns.POWER_CLASSES[editing] and L.OOC_POWER or L.OOC_MANA)
     oocTopLabel:SetText(ns.COMBO_CLASSES[editing] and L.OOC_TOP or L.OOC_ICONS)
     fade:Set(ns.db.fadeOOC)
     oocPower:Set(floor(ns.db.oocPower * 100 + .5))
     oocTop:Set(floor(ns.db.oocTop * 100 + .5))
+    local a = ns.db.fadeOOC and 1 or .45 -- (only used with the fade)
+    for _, r in ipairs({ oocPowerLabel, oocTopLabel, oocPower, oocPower.box.holder, oocTop, oocTop.box.holder }) do r:SetAlpha(a) end
   end)
 
-  ProfilesSection(p, bar, OnRefresh)
-
-  local colorBox = Section(bar, "COLORS", RIGHT, -56)
-  Hint(bar, Tr("COLORS_HINT")):SetPoint("TOPLEFT", RIGHT, -76)
-  local colorItems = {}
-  for _, key in ipairs(COLOR_KEYS) do
-    local holder, refresh = ColorRow(bar, key)
-    OnRefresh(refresh)
-    colorItems[#colorItems + 1] = { frame = holder, height = 28, when = function() return not (NO_COLOR[editing] or {})[key] end }
-    if key == "health" then -- or the class's colour
-      local classColor = Holder(bar, 26)
-      local check = Check(classColor, Tr("CLASS_COLOR"), function(on)
-        ns.db.healthClassColor = on
-        ns:ApplyColors()
-      end)
-      check:SetPoint("TOPLEFT", 0, -4)
-      OnRefresh(function() check:Set(ns.db.healthClassColor) end)
-      colorItems[#colorItems + 1] = { frame = classColor, height = 26 }
-    end
+  -- Look: the bars' style, then their values' text, then the background of every bar
+  local look = Section(gen, "LOOK", RIGHT, -56)
+  Text(gen, Tr("BAR_STYLE")):SetPoint("TOPLEFT", RIGHT, -80)
+  local styleButtons = {}
+  for i, skin in ipairs(ns.SKINS) do
+    local b = Button(gen, Tr("SKIN_" .. skin), 100, 22, function()
+      ns:SetSkin(skin)
+      p:Refresh()
+    end)
+    b:SetPoint("TOPLEFT", RIGHT + (i - 1) * 108, -96)
+    b.skin = skin
+    styleButtons[i] = b
   end
-  local resetColors = Holder(bar, 30)
-  Button(resetColors, Tr("DEFAULT_COLORS"), 150, 22, function() ns:ResetColors() end):SetPoint("TOPLEFT", 0, -6)
-  colorItems[#colorItems + 1] = { frame = resetColors, height = 30 }
-  OnRefresh(Stack(bar, RIGHT, -98, colorItems, colorBox))
-
-  -- Page 2: font | advanced ----------------------------------------------------
-  local text = pages[2]
-  Section(text, "FONT", LEFT, -56, nil, -440)
-  OnRefresh(FontList(text, LEFT, -80, COL_W, 230))
-
-  Text(text, Tr("SIZE")):SetPoint("TOPLEFT", LEFT, -340)
-  local sizeSlider = Slider(text, 170, 6, 40, 1, "", function(v)
+  local styleHint = Wrapped(gen, Tr("SKIN_HINT"))
+  styleHint:SetPoint("TOPLEFT", RIGHT, -124)
+  local TEXT_H = 212
+  local text = CreateFrame("Frame", nil, gen) -- under the hint, however many lines it takes
+  text:SetSize(COL_W, TEXT_H)
+  text:SetPoint("TOPLEFT", styleHint, "BOTTOMLEFT", 0, -10)
+  Rule(text, 0, 0)
+  Text(text, Tr("VALUE_TEXT")):SetPoint("TOPLEFT", 0, -10)
+  local showText = Check(text, nil, function(on)
+    ns.db.showText = on
+    ns:ApplyFont()
+    p:Refresh()
+  end)
+  showText:SetPoint("TOPLEFT", 0, -30)
+  Text(text, Tr("FONT")):SetPoint("TOPLEFT", 0, -58)
+  local font = FontChoice(text, COL_W - 90)
+  font:SetPoint("TOPLEFT", 90, -53)
+  Text(text, Tr("SIZE")):SetPoint("TOPLEFT", 0, -86)
+  local sizeSlider = Slider(text, 150, 6, 40, 1, "", function(v)
     ns.db.fontSize = v
     ns:ApplyFont()
   end)
-  sizeSlider:SetPoint("LEFT", text, "TOPLEFT", LEFT + 70, -346)
-  OnRefresh(function() sizeSlider:Set(ns.db.fontSize) end)
-
-  Text(text, Tr("OUTLINE")):SetPoint("TOPLEFT", LEFT, -370)
+  sizeSlider:SetPoint("LEFT", text, "TOPLEFT", 90, -92)
+  Text(text, Tr("OUTLINE")):SetPoint("TOPLEFT", 0, -114)
   local outlineButtons = {}
   for i, o in ipairs(OUTLINES) do
     local b = Button(text, Tr(o[2]), 70, 22, function()
@@ -2319,71 +2489,76 @@ local function Build()
       ns:ApplyFont()
       p:Refresh()
     end)
-    b:SetPoint("TOPLEFT", LEFT + 70 + (i - 1) * 76, -364)
+    b:SetPoint("TOPLEFT", 90 + (i - 1) * 76, -108)
     b.value = o[1]
     outlineButtons[i] = b
   end
+  local textColor, textColorRefresh = ColorRow(text, "text", Tr("COLOR"), function() return false end)
+  textColor:SetPoint("TOPLEFT", 0, -140)
+  OnRefresh(textColorRefresh)
+  Rule(text, 0, -174)
+  local bg, bgRefresh = ColorRow(text, "bg", Tr("BARS_BG"))
+  bg:SetPoint("TOPLEFT", 0, -184)
+  OnRefresh(bgRefresh)
   OnRefresh(function()
-    for _, b in ipairs(outlineButtons) do b:SetActive(b.value == ns.db.outline) end
-  end)
-
-  local showText = Check(text, nil, function(on)
-    ns.db.showText = on
-    ns:ApplyFont()
-  end)
-  showText:SetPoint("TOPLEFT", LEFT, -398)
-  OnRefresh(function()
+    for _, b in ipairs(styleButtons) do b:SetActive(b.skin == ns.db.skin) end
     showText:SetLabel(L["SHOW_" .. RESOURCE[editing]])
     showText:Set(ns.db.showText)
+    font:Refresh()
+    sizeSlider:Set(ns.db.fontSize)
+    for _, b in ipairs(outlineButtons) do b:SetActive(b.value == ns.db.outline) end
+    look:Fit(-124 - (styleHint:GetStringHeight() or 36) - 10 - TEXT_H)
   end)
 
-  -- countdown numbers on the icons: a percentage of the size that fits each icon
-  Text(text, Tr("TIMER_SIZE")):SetPoint("TOPLEFT", LEFT, -424)
-  local timerSize = Slider(text, 116, ns.MIN_TIMER, ns.MAX_TIMER, 5, Percent, function(v)
-    ns.db.icons.timerSize = v
-    ns:LayoutIcons()
-  end)
-  timerSize:SetPoint("LEFT", text, "TOPLEFT", LEFT + 136, -430)
-  OnRefresh(function() timerSize:Set(ns.db.icons.timerSize) end)
+  BarsPage(p, pages[2], OnRefresh)
+  IconsPage(p, pages[3], OnRefresh)
 
-  local advancedBox = Section(text, "ADVANCED", RIGHT, -56)
-  local source = Holder(text, 34)
-  Text(source, Tr("SOURCE")):SetPoint("TOPLEFT", 0, -6)
-  local srcTarget = Button(source, Tr("SOURCE_TARGET"), 124, 22, function() ns:SetComboSource("TARGET") end)
-  srcTarget:SetPoint("TOPLEFT", 90, 0)
-  local srcPlayer = Button(source, Tr("SOURCE_PLAYER"), 90, 22, function() ns:SetComboSource("PLAYER") end)
-  srcPlayer:SetPoint("TOPLEFT", 220, 0)
+  -- Visibility: the addon shown or hidden by hand (also in the portrait's menu), druid forms,
+  -- the portrait's menu | hidden in some situations -----------------------------------
+  local vis = pages[4]
+  local shownBox = Section(vis, "DISPLAY", LEFT, -56)
+  local showAddon = Check(vis, Tr("SHOW_ADDON"), function(on) ns:SetHidden(not on) end)
+  showAddon:SetPoint("TOPLEFT", LEFT, -80)
+  local catOnly = Check(vis, Tr("CAT_ONLY"), function(on) ns:SetDruidCatOnly(on) end)
+  catOnly:SetPoint("TOPLEFT", LEFT, -104)
+  local menuPart = Part(vis) -- under the box above, whatever its height
+  Section(menuPart, "SP_MENU", LEFT, 0, nil, -62)
+  local menuLine = Check(menuPart, Tr("MENU_SECTION"), function(on) ns:SetMenuOption("line", on) end)
+  menuLine:SetPoint("TOPLEFT", LEFT, -24)
+  local menuReload = Check(menuPart, Tr("SP_MENU_RELOAD"), function(on) ns:SetMenuOption("reload", on) end)
+  menuReload:SetPoint("TOPLEFT", LEFT, -48)
   OnRefresh(function()
-    srcTarget:SetActive(ns.db.cpSource == "TARGET")
-    srcPlayer:SetActive(ns.db.cpSource == "PLAYER")
+    showAddon:Set(ns:ShownByChoice()) -- the character's own choice, as the portrait's box
+    local druid = editing == "DRUID"
+    catOnly:SetShown(druid)
+    catOnly:Set(ns.db.druidCatOnly)
+    local bottom = druid and -116 or -92
+    shownBox:Fit(bottom)
+    menuPart:Place(bottom - 28)
+    menuLine:Set(ns.sv.menu.line ~= false)
+    menuReload:Set(ns.sv.menu.reload ~= false)
   end)
 
-  local forms = Holder(text, 26)
-  local catOnly = Check(forms, Tr("CAT_ONLY"), function(on) ns:SetDruidCatOnly(on) end)
-  catOnly:SetPoint("TOPLEFT")
-  OnRefresh(function() catOnly:Set(ns.db.druidCatOnly) end)
+  local hideBox = Section(vis, "HIDE_WHEN", RIGHT, -56)
+  local COLUMNS = { solo = { 0, 1 }, party = { 0, 2 }, raid = { 0, 3 },
+    dungeon = { 1, 1 }, raid10 = { 1, 2 }, raid20 = { 1, 3 }, raid40 = { 1, 4 } }
+  Text(vis, Tr("HIDE_GROUP")):SetPoint("TOPLEFT", RIGHT, -80)
+  Text(vis, Tr("HIDE_ZONE")):SetPoint("TOPLEFT", RIGHT + 160, -80)
+  for _, key in ipairs(ns.HIDE_WHEN) do
+    local at = COLUMNS[key]
+    local check = Check(vis, Tr("HIDE_" .. key:upper()), function(on) ns:SetHideWhen(key, on) end)
+    check:SetPoint("TOPLEFT", RIGHT + 4 + at[1] * 160, -100 - (at[2] - 1) * 22)
+    OnRefresh(function() check:Set(ns.db.hideWhen[key]) end)
+  end
+  local hideHint = Wrapped(vis, Tr("HIDE_HINT"))
+  hideHint:SetPoint("TOPLEFT", RIGHT, -196)
+  OnRefresh(function() hideBox:Fit(-196 - (hideHint:GetStringHeight() or 24)) end)
 
-  local predict = Holder(text, 46)
-  local predictCheck = Check(predict, Tr("PREDICT"), function(on) ns:SetPredict(on) end)
-  predictCheck:SetPoint("TOPLEFT")
-  local predictSpells = Hint(predict, "")
-  predictSpells:SetPoint("TOPLEFT", 21, -18)
-  predictSpells:SetWidth(COL_W - 21)
-  OnRefresh(function()
-    predictCheck:Set(ns.db.predict)
-    local names = {}
-    for _, id in ipairs(ns.PREDICTED_SPELLS[editing] or {}) do names[#names + 1] = ns:SpellName(id) end
-    predictSpells:SetText(table.concat(names, ", "))
-  end)
-
-  local preview = Holder(text, 34)
-  local previewBtn = Button(preview, Tr("PREVIEW"), 150, 22, function() ns:SetPreview(not ns.preview) end)
-  previewBtn:SetPoint("TOPLEFT")
-  Hint(preview, Tr("PREVIEW_HINT")):SetPoint("LEFT", previewBtn, "RIGHT", 10, 0)
-  OnRefresh(function() previewBtn:SetActive(ns.preview) end)
-
-  local reset = Holder(text, 30)
-  resetAll = Button(reset, "", 150, 22, function()
+  -- Profiles | reset the tab ----------------------------------------------------------
+  local prof = pages[5]
+  ProfilesSection(p, prof, OnRefresh)
+  local resetBox = Section(prof, "RESET_TITLE", RIGHT, -56)
+  resetAll = Button(prof, "", 220, 22, function()
     if resetAll.armed then
       resetAll.armed = nil
       ns:ResetAll()
@@ -2398,46 +2573,13 @@ local function Build()
     end
     p:Refresh()
   end)
-  resetAll:SetPoint("TOPLEFT")
-  OnRefresh(function() resetAll:SetLabel(resetAll.armed and L.CONFIRM or L.RESET_ALL) end)
-
-  OnRefresh(Stack(text, RIGHT, -84, {
-    { frame = source,  height = 34, when = function() return ns.COMBO_CLASSES[editing] end },
-    { frame = forms,   height = 26, when = function() return editing == "DRUID" end },
-    { frame = predict, height = 46, when = function() return editing == "DRUID" or editing == "WARRIOR" end },
-    { frame = preview, height = 34 },
-    { frame = reset,   height = 30 },
-  }, advancedBox))
-
-  -- The whole HUD shown or hidden by hand (also in the portrait's menu), or hidden in some
-  -- situations
-  Section(text, "HIDE_SECTION", RIGHT, -284, nil, -546)
-  local showAddon = Check(text, Tr("SHOW_ADDON"), function(on) ns:SetHidden(not on) end)
-  showAddon:SetPoint("TOPLEFT", RIGHT, -312)
-  OnRefresh(function() showAddon:Set(ns:ShownByChoice()) end) -- the character's own choice, as the portrait's box
-  Text(text, Tr("HIDE_WHEN")):SetPoint("TOPLEFT", RIGHT, -334)
-  for i, key in ipairs(ns.HIDE_WHEN) do
-    local check = Check(text, Tr("HIDE_" .. key:upper()), function(on) ns:SetHideWhen(key, on) end)
-    check:SetPoint("TOPLEFT", RIGHT + 8, -356 - (i - 1) * 22)
-    OnRefresh(function() check:Set(ns.db.hideWhen[key]) end)
-  end
-  local hideHint = Hint(text, Tr("HIDE_HINT"))
-  hideHint:SetPoint("TOPLEFT", RIGHT, -508)
-  hideHint:SetWidth(COL_W)
-  hideHint:SetWordWrap(true)
-
-  IconsPage(p, pages[3], OnRefresh)
-  LayoutPage(p, pages[4], OnRefresh)
-
-  -- Footer: commands, and which tab this character uses (the corner keeps the scale grip) --
-  Hint(p, "/cl lock  ·  /cl unlock  ·  /cl scale 120  ·  /cl reset  ·  /cl reset pos"):SetPoint("BOTTOMLEFT", LEFT, 16)
-  if ns.enabled then
-    Hint(p, function() return L.THIS_CHARACTER:format(L["TAB_" .. ns.homeClass]) end):SetPoint("BOTTOMRIGHT", -FOOTER_RIGHT, 16)
-  else
-    local warn = Text(p, Tr("WRONG_CLASS"), "GameFontHighlightSmall")
-    warn:SetPoint("BOTTOMRIGHT", -FOOTER_RIGHT, 16)
-    warn:SetTextColor(1, .4, .3)
-  end
+  resetAll:SetPoint("TOPLEFT", RIGHT, -82)
+  local resetHint = Wrapped(prof, Tr("RESET_HINT"))
+  resetHint:SetPoint("TOPLEFT", RIGHT, -112)
+  OnRefresh(function()
+    resetAll:SetLabel(resetAll.armed and L.CONFIRM or L.RESET_CLASS:format(L["TAB_" .. editing]))
+    resetBox:Fit(-112 - (resetHint:GetStringHeight() or 24))
+  end)
 
   function p:Refresh()
     for _, fn in ipairs(refreshers) do fn() end
@@ -2459,10 +2601,10 @@ local function Build()
   p:SetScript("OnHide", function()
     drag = nil -- closed mid-drag: the icon stays where it was
     catalog.unfolded = nil -- opened again: on the tab's class
-    if dragTab then -- a page tab too (a hidden frame gets no OnDragStop)
-      dragTab:SetScript("OnUpdate", nil)
-      dragTab:SetAlpha(1)
-      dragTab = nil
+    if dragNav then -- a page of the list too (a hidden frame gets no OnDragStop)
+      dragNav:SetScript("OnUpdate", nil)
+      dragNav:SetAlpha(1)
+      dragNav = nil
     end
     ghost:Hide()
     if ns.preview then ns:SetPreview(false) end

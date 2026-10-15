@@ -113,7 +113,7 @@ local function Build()
     labels[#labels + 1] = function() text:SetText(L[key]) end
     check:SetScript("OnClick", function(self)
       Click()
-      ns.sv.menu[field] = self:GetChecked() and true or false
+      ns:SetMenuOption(field, self:GetChecked()) -- (the options window's Visibility page too)
     end)
     updates[#updates + 1] = function() check:SetChecked(ns.sv.menu[field] ~= false) end
   end
