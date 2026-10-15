@@ -21,7 +21,7 @@ local TABS_X, FLAG_STEP = 14, 30 -- first tab; flags, one every 30
 local TABS_Y = -84               -- bottom of the row of class tabs (each tab is 32 tall)
 local FOOTER_RIGHT = 28          -- footer, clear of the scale grip
 local CONTENT_TOP = -40          -- pages start under the class tabs (their first group at -96)
-local NAV_TOP, NAV_ROW_H = -88, 54 -- the list of pages: its top, one page's height
+local NAV_TOP, NAV_ROW_H = -88, 56 -- the list of pages: its top, one page's height
 local LEFT, RIGHT, COL_W = 20, 380, 320
 local FULL_W = BODY_W - 2 * LEFT
 local GOLD_R, GOLD_G, GOLD_B = 1, .82, 0
@@ -1563,7 +1563,7 @@ local function BarsPage(p, page, OnRefresh)
   local detail = Section(page, nil, RIGHT, -56)
   local function SizeSlider(label, y, minV, maxV, unit, field, factor)
     Text(page, Tr(label)):SetPoint("TOPLEFT", RIGHT, y)
-    local slider = Slider(page, 150, minV, maxV, 1, unit, function(v)
+    local slider = Slider(page, 168, minV, maxV, 1, unit, function(v) -- boxes in line with the colours'
       ns.db.bars[picked][field] = v / factor
       ns:ApplyLayout()
     end)
@@ -1797,15 +1797,15 @@ local function IconsPage(p, icons, OnRefresh)
     hudBox:Fit(-246 - (hudHint:GetStringHeight() or 24))
   end)
 
-  Section(icons, "ROWS", LEFT, -300, FULL_W, -566)
+  Section(icons, "ROWS", LEFT, -324, FULL_W, -590)
   local catalogBtn = Button(icons, Tr("CATALOG_OPEN"), 150, 22, function()
     catalog.closed = catalog:IsShown()
     p:Refresh()
   end)
-  catalogBtn:SetPoint("TOPRIGHT", icons, "TOPLEFT", LEFT + FULL_W, -295)
-  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -320)
+  catalogBtn:SetPoint("TOPRIGHT", icons, "TOPLEFT", LEFT + FULL_W, -319)
+  Hint(icons, Tr("ROWS_HINT")):SetPoint("TOPLEFT", LEFT, -344)
   for i, def in ipairs(ROW_LINES) do
-    local y = -336 - (i - 1) * 30
+    local y = -360 - (i - 1) * 30
     if def then
       OnRefresh(IconLine(icons, def[1], def[2], y))
     else -- the bar, between the rows above and below it
@@ -1818,7 +1818,7 @@ local function IconsPage(p, icons, OnRefresh)
       rule:SetPoint("RIGHT", icons, "TOPLEFT", LEFT + FULL_W, y - 14)
     end
   end
-  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -552)
+  Hint(icons, Tr("ICON_TIP")):SetPoint("TOPLEFT", LEFT, -576)
   ghost = DragGhost(p)
   catalog = Catalog(p)
   OnRefresh(function()
@@ -1832,7 +1832,7 @@ end
 -- loaded, deleted, exported and imported.
 ---------------------------------------------------------------------------
 local function ProfilesSection(p, bar, OnRefresh)
-  Section(bar, "PROFILES", LEFT, -56, nil, -198)
+  local box = Section(bar, "PROFILES", LEFT, -56)
   local loaded = Hint(bar, "") -- the profile on the tab, and whether it changed since
   loaded:SetPoint("TOPLEFT", LEFT, -78)
   loaded:SetWidth(COL_W)
@@ -1852,11 +1852,17 @@ local function ProfilesSection(p, bar, OnRefresh)
   local profStatus = Text(bar, "", "GameFontHighlightSmall")
   profStatus:SetPoint("TOPLEFT", LEFT, -180)
   profStatus:SetWidth(COL_W)
+  -- the box ends under Export / Import, or under the message when there is one
+  local function FitBox()
+    local msg = profStatus:GetText()
+    box:Fit((msg and msg ~= "") and (-180 - (profStatus:GetStringHeight() or 12)) or -176)
+  end
   local function ProfileStatus(ok, msg)
     profStatus:SetText(msg or "")
     if ok then profStatus:SetTextColor(.4, 1, .4) else profStatus:SetTextColor(1, .45, .35) end
+    FitBox()
   end
-  OnRelabel(function() profStatus:SetText("") end)
+  OnRelabel(function() ProfileStatus(true, "") end)
 
   local function Load(class, name)
     ProfileStatus(ns:LoadProfile(class, name))
@@ -1886,7 +1892,7 @@ local function ProfilesSection(p, bar, OnRefresh)
     end
   end)
   loadBtn:SetPoint("TOPLEFT", LEFT + 174, -94)
-  local deleteBtn = Button(bar, Tr("PROFILE_DELETE"), 74, 22, function()
+  local deleteBtn = Button(bar, Tr("PROFILE_DELETE"), 70, 22, function()
     local class, name = editing, Picked()
     if not name then return end
     ns:Ask(L.PROFILE_DELETE_ASK:format(name), true, { L.PROFILE_DELETE, function()
@@ -1920,7 +1926,7 @@ local function ProfilesSection(p, bar, OnRefresh)
   end
   nameBox:SetScript("OnEnterPressed", Save)
   nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-  local saveBtn = Button(bar, Tr("PROFILE_SAVE"), 150, 22, Save)
+  local saveBtn = Button(bar, Tr("PROFILE_SAVE"), 146, 22, Save)
   saveBtn:SetPoint("TOPLEFT", LEFT + 174, -122)
 
   local textBox = TextDialog(p)
@@ -1951,7 +1957,7 @@ local function ProfilesSection(p, bar, OnRefresh)
   -- (a tab change or a language change closes the box: it belongs to the tab it opened on)
   OnRelabel(function() textBox:Hide() end)
   function p.ClearProfileMessages()
-    profStatus:SetText("")
+    ProfileStatus(true, "")
     textBox:Hide()
   end
 
@@ -2074,7 +2080,7 @@ local function ScaleGrip(p)
   grip:SetPushedTexture(GRIP .. "Down")
   grip:SetHighlightTexture(GRIP .. "Highlight")
   local percent = grip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  percent:SetPoint("BOTTOMRIGHT", grip, "TOPLEFT", 0, 2)
+  percent:SetPoint("BOTTOMRIGHT", grip, "TOPRIGHT", 0, 18) -- over the window opacity, not on it
   percent:Hide()
   local held, left, top, offX, offY
   local function Cursor()
@@ -2162,6 +2168,7 @@ local function NavButton(parent, i, nameKey, descKey, onClick)
   function b:SetActive(on)
     SelectRow(self.bg, on)
     if on then self.name:SetTextColor(1, 1, 1) else self.name:SetTextColor(GOLD_R, GOLD_G, GOLD_B) end
+    if on then self.desc:SetTextColor(.92, .92, .92) else self.desc:SetTextColor(.6, .6, .65) end -- readable on the gold
   end
   return b
 end
@@ -2411,7 +2418,7 @@ local function Build()
     ns.db.alpha = v / 100
     ns:ApplyAlpha()
   end)
-  alphaSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 168, -288)
+  alphaSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -288)
   local fade = Check(gen, Tr("FADE_OOC"), function(on)
     ns.db.fadeOOC = on
     ns:PreviewFade()
@@ -2425,18 +2432,20 @@ local function Build()
     ns.db.oocPower = v / 100
     ns:PreviewFade()
   end)
-  oocPower:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 168, -344)
+  oocPower:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -344)
   local oocTopLabel = Text(gen, "")
   oocTopLabel:SetPoint("TOPLEFT", LEFT + 21, -364)
   local oocTop = Slider(gen, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocTop = v / 100
     ns:PreviewFade()
   end)
-  oocTop:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 168, -370)
+  oocTop:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -370)
   OnRefresh(function()
     alphaSlider:Set(floor(ns.db.alpha * 100 + .5))
-    -- the bars of the class: energy / rage, or mana / health; combo points and icons, or icons
-    oocPowerLabel:SetText(ns.POWER_CLASSES[editing] and L.OOC_POWER or L.OOC_MANA)
+    -- the bars of the class: energy and / or rage, or mana / health; combo points and icons,
+    -- or icons
+    local power = editing == "ROGUE" and L.ENERGY_BAR or editing == "WARRIOR" and L.RAGE_BAR or L.OOC_POWER
+    oocPowerLabel:SetText(ns.POWER_CLASSES[editing] and power or L.OOC_MANA)
     oocTopLabel:SetText(ns.COMBO_CLASSES[editing] and L.OOC_TOP or L.OOC_ICONS)
     fade:Set(ns.db.fadeOOC)
     oocPower:Set(floor(ns.db.oocPower * 100 + .5))

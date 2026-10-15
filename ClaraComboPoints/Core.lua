@@ -14,7 +14,7 @@ local ADDON, ns = ...
 _G.ClaraComboPoints = ns
 local L = ns.L
 
-ns.VERSION = "1.5.0"
+ns.VERSION = "1.6.0"
 
 local NUM_POINTS    = 5
 local POWER         = Enum and Enum.PowerType or {}
