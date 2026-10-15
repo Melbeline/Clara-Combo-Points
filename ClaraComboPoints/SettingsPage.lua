@@ -103,11 +103,28 @@ local function Build()
   hint:SetTextColor(.6, .6, .65)
   hint:SetWordWrap(true)
 
+  -- What the addon adds to the portrait's right-click menu, each part shown or not
+  Text("GameFontNormal", "SP_MENU"):SetPoint("TOPLEFT", 14, -196)
+  local function MenuCheck(key, field, y)
+    local check = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+    check:SetSize(26, 26)
+    check:SetPoint("TOPLEFT", 10, y)
+    local text = check.Text or check.text
+    labels[#labels + 1] = function() text:SetText(L[key]) end
+    check:SetScript("OnClick", function(self)
+      Click()
+      ns.sv.menu[field] = self:GetChecked() and true or false
+    end)
+    updates[#updates + 1] = function() check:SetChecked(ns.sv.menu[field] ~= false) end
+  end
+  MenuCheck("SP_MENU_LINE", "line", -214)
+  MenuCheck("SP_MENU_RELOAD", "reload", -238)
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -204)
+  how:SetPoint("TOPLEFT", 14, -276)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -226)
+  box:SetPoint("TOPLEFT", 10, -298)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)

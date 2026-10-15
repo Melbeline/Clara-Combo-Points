@@ -12,11 +12,12 @@ local L = ns.L
 
 local floor, ceil, min, max = math.floor, math.ceil, math.min, math.max
 
-local PANEL_W, PANEL_H = 720, 690
+local PANEL_W, PANEL_H = 720, 714
 local TABS_X, FLAG_STEP = 14, 30 -- first tab; flags, one every 30
+local ROW1_Y, ROW2_Y = -84, -110 -- bottoms of the two rows of tabs
 local OPACITY_TAIL = 52          -- the opacity slider's box and "%"
 local FOOTER_RIGHT = 28          -- footer text, clear of the scale grip
-local CONTENT_TOP = -38 -- settings start under the title, tab and language row
+local CONTENT_TOP = -62 -- settings start under the title and the two rows of tabs
 local LEFT, RIGHT, COL_W = 20, 380, 320
 local FULL_W = PANEL_W - 2 * LEFT
 local FONT_ROW_H = 22
@@ -26,20 +27,30 @@ local ICONS = {
   ROGUE   = "Interface\\Icons\\Ability_Rogue_Eviscerate",
   DRUID   = "Interface\\Icons\\Ability_Druid_CatForm",
   WARRIOR = "Interface\\Icons\\Ability_Warrior_BattleShout",
+  PRIEST  = "Interface\\Icons\\Spell_Holy_PowerWordShield",
+  MAGE    = "Interface\\Icons\\Spell_Frost_FrostBolt02",
+  WARLOCK = "Interface\\Icons\\Spell_Shadow_ShadowBolt",
+  HUNTER  = "Interface\\Icons\\Ability_Marksmanship",
+  SHAMAN  = "Interface\\Icons\\Spell_Nature_BloodLust",
+  PALADIN = "Interface\\Icons\\Spell_Holy_HolyBolt",
 }
 
-local CLASS_TABS = { "ROGUE", "DRUID", "WARRIOR" }
+-- the class tabs, in two rows; the second ends with the page tabs
+local CLASS_ROWS = { { "PRIEST", "MAGE", "WARLOCK", "DRUID", "ROGUE" }, { "HUNTER", "SHAMAN", "PALADIN", "WARRIOR" } }
 local PAGES = { "PAGE_BAR", "PAGE_TEXT", "PAGE_ICONS", "PAGE_LAYOUT" }
 local COLOR_KEYS = { "cp1", "cp2", "cp3", "cp4", "cp5", "energy", "rage", "mana", "health", "cost", "bg", "text" }
 local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", mana = "MANA_BAR", health = "HEALTH_BAR", cost = "COST_COLOR",
   bg = "BACKGROUND" }
 -- colours a class never uses (warriors have no combo points: their icons wear the button frame;
 -- only druids have a mana bar)
+local MANA_ONLY = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true, rage = true, cost = true }
 local NO_COLOR = {
   ROGUE = { rage = true, cost = true, mana = true },
   WARRIOR = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true, mana = true },
+  PRIEST = MANA_ONLY, MAGE = MANA_ONLY, WARLOCK = MANA_ONLY, HUNTER = MANA_ONLY, SHAMAN = MANA_ONLY, PALADIN = MANA_ONLY,
 }
-local RESOURCE = { ROGUE = "ENERGY", DRUID = "BOTH", WARRIOR = "RAGE" }           -- energy, rage or both
+local RESOURCE = { ROGUE = "ENERGY", DRUID = "BOTH", WARRIOR = "RAGE", PRIEST = "MANA", MAGE = "MANA",
+  WARLOCK = "MANA", HUNTER = "MANA", SHAMAN = "MANA", PALADIN = "MANA" }           -- the value the bar shows
 local SCALE_PRESETS = { 50, 75, 100, 125, 150, 200, 300 }
 local OUTLINES = { { "NONE", "OUTLINE_NONE" }, { "OUTLINE", "OUTLINE_THIN" }, { "THICKOUTLINE", "OUTLINE_THICK" } }
 local ROW_LINES = { { "above", 3 }, { "above", 2 }, { "above", 1 }, false, { "below", 1 }, { "below", 2 }, { "below", 3 } }
@@ -301,11 +312,13 @@ local function Box(parent)
 end
 
 local function SelectRow(tex, on)
+  tex:SetShown(on and true or false) -- (a gradient set before would stay on a plain colour)
+  if not on then return end
   tex:SetColorTexture(1, 1, 1, 1)
-  if on and CreateColor and tex.SetGradient then
+  if CreateColor and tex.SetGradient then
     tex:SetGradient("HORIZONTAL", CreateColor(1, .82, 0, .45), CreateColor(1, .82, 0, .05))
   else
-    tex:SetColorTexture(1, .82, 0, on and .35 or 0)
+    tex:SetColorTexture(1, .82, 0, .35)
   end
 end
 
@@ -389,7 +402,7 @@ local function ColorLabel(key)
   local i = key:match("^cp(%d)$")
   if i then return L.CP:format(tonumber(i)) end
   if key == "text" then return L["VALUE_" .. RESOURCE[editing]] end
-  if key == "bg" and editing == "WARRIOR" then return L.BAR_BG end
+  if key == "bg" and not ns.COMBO_CLASSES[editing] then return L.BAR_BG end
   return L[COLOR_LABELS[key]]
 end
 
@@ -1153,6 +1166,7 @@ local function Catalog(p)
         g.head:ClearAllPoints()
         g.head:SetPoint("TOPLEFT", 0, -y)
         g.head.sign:SetTexture(open and MINUS or PLUS)
+        if g.class == f.scrollTo then f.scrollY = y end
         y = y + SIDE_HEAD_H + 2
       end
       local shown = {}
@@ -1181,6 +1195,12 @@ local function Catalog(p)
     end
     noMatch:SetShown(searching and y == 0)
     child:SetHeight(max(y, 40))
+    -- a new class on the tab: its spells at the top of the list
+    if f.scrollTo and not searching then
+      local maxScroll = max(0, y - scroll:GetHeight())
+      scroll:SetVerticalScroll(min(f.scrollY or 0, maxScroll))
+    end
+    f.scrollTo, f.scrollY = nil, nil
   end
   OnRelabel(function() Layout() end)
 
@@ -1202,13 +1222,16 @@ local function Catalog(p)
   search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   ShowPlaceholder()
 
-  -- Shown with the icons page, unless closed. Opens with the tab's class unfolded, and moves
-  -- the window left if the panel would go past the screen's edge.
+  -- Shown with the icons page, unless closed. Opens on the tab's class (unfolded, the others
+  -- folded, scrolled to it), and moves the window left if the panel would go past the
+  -- screen's edge.
   function f:Sync(onPage)
     local want = onPage and not self.closed
     if want and self.unfolded ~= editing then
+      wipe(expanded)
       expanded[editing] = true
       self.unfolded = editing
+      self.scrollTo = editing
       if self:IsShown() then Layout() end
     end
     if want and not self:IsShown() then
@@ -1342,7 +1365,8 @@ end
 local function ClassBars()
   local list = {}
   for _, key in ipairs(ns.db.bars.order) do
-    if (key ~= "combo" or editing ~= "WARRIOR") and (key ~= "mana" or editing == "DRUID") then list[#list + 1] = key end
+    if (key ~= "combo" or ns.COMBO_CLASSES[editing]) and (key ~= "power" or ns.POWER_CLASSES[editing])
+      and (key ~= "mana" or ns.MANA_CLASSES[editing]) then list[#list + 1] = key end
   end
   return list
 end
@@ -1453,8 +1477,9 @@ local function LayoutPage(p, page, OnRefresh)
   -- the bar picked, if the class shown has it, else its energy / rage bar (checked before
   -- the size sliders read it)
   local function CheckPicked()
-    for _, key in ipairs(ClassBars()) do if key == picked then return end end
-    picked = "power"
+    local keys = ClassBars()
+    for _, key in ipairs(keys) do if key == picked then return end end
+    picked = ns.POWER_CLASSES[editing] and "power" or keys[1] or "health"
   end
   OnRefresh(CheckPicked)
 
@@ -1484,6 +1509,36 @@ local function LayoutPage(p, page, OnRefresh)
   Hint(page, Tr("COLORS_ON_BAR_PAGE")):SetPoint("TOPLEFT", RIGHT, -226)
   sizeBox:Fit(-238)
 
+  -- The bars' style: flat, or the game's bars framed like the portrait's or like a tooltip
+  Section(page, "BAR_STYLE", RIGHT, -262, nil, -350)
+  local styleButtons = {}
+  for i, skin in ipairs(ns.SKINS) do
+    local b = Button(page, Tr("SKIN_" .. skin), 100, 22, function()
+      ns:SetSkin(skin)
+      p:Refresh()
+    end)
+    b:SetPoint("TOPLEFT", RIGHT + (i - 1) * 108, -288)
+    b.skin = skin
+    styleButtons[i] = b
+  end
+  local styleHint = Hint(page, Tr("SKIN_HINT"))
+  styleHint:SetPoint("TOPLEFT", RIGHT, -318)
+  styleHint:SetWidth(COL_W)
+  styleHint:SetWordWrap(true)
+  OnRefresh(function()
+    for _, b in ipairs(styleButtons) do b:SetActive(b.skin == ns.db.skin) end
+  end)
+
+  -- every bar of the class back to its default size, in one click
+  local allSizes = Button(page, Tr("DEFAULT_SIZE_ALL"), 260, 22, function()
+    for _, key in ipairs(ClassBars()) do
+      local b, d = ns.db.bars[key], DEFAULT_BARS[key]
+      b.width, b.height, b.scale = d.width, d.height, d.scale
+    end
+    ns:ApplyLayout()
+    p:Refresh()
+  end)
+
   function Refresh()
     local keys = Shown()
     CheckPicked()
@@ -1500,7 +1555,10 @@ local function LayoutPage(p, page, OnRefresh)
         SelectRow(row.bg, key == picked or key == dragKey)
       end
     end
-    box:Fit(LIST_TOP - #keys * BAR_ROW_H + 2)
+    local below = LIST_TOP - #keys * BAR_ROW_H - 6
+    allSizes:ClearAllPoints()
+    allSizes:SetPoint("TOPLEFT", page, "TOPLEFT", LEFT, below)
+    box:Fit(below - 24)
     sizeTitle:SetText(BarName(picked))
   end
   OnRefresh(function() Refresh() end)
@@ -1959,27 +2017,33 @@ local function Build()
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
   local resetAll
 
-  -- Class tabs, language flags --------------------------------------------------
-  local tabs = {}
-  for i, class in ipairs(CLASS_TABS) do
-    local t = Tab(p, Tr("TAB_" .. class), function()
-      editing = class
-      resetAll.armed = nil
-      status:SetText("")
-      p.ClearProfileMessages()
-      ns:SetActiveProfile(class)
-      p:Refresh()
-    end)
-    if i == 1 then
-      t:SetPoint("BOTTOMLEFT", p, "TOPLEFT", TABS_X, -86) -- standing on the insets, under the portrait
-    else
-      t:SetPoint("LEFT", tabs[i - 1], "RIGHT", 4, 0)
+  -- Class tabs in two rows ----------------------------------------------------------
+  local tabs, rowTabs = {}, {}
+  for r, row in ipairs(CLASS_ROWS) do
+    rowTabs[r] = {}
+    for i, class in ipairs(row) do
+      local t = Tab(p, Tr("TAB_" .. class), function()
+        editing = class
+        resetAll.armed = nil
+        status:SetText("")
+        p.ClearProfileMessages()
+        ns:SetActiveProfile(class)
+        p:Refresh()
+      end)
+      if i == 1 then
+        t:SetPoint("BOTTOMLEFT", p, "TOPLEFT", TABS_X, r == 1 and ROW1_Y or ROW2_Y)
+      else
+        t:SetPoint("LEFT", rowTabs[r][i - 1], "RIGHT", 4, 0)
+      end
+      t.class = class
+      tabs[#tabs + 1] = t
+      rowTabs[r][i] = t
     end
-    t.class = class
-    tabs[i] = t
   end
-  -- Pages and their tabs, after the class tabs ---------------------------------
+  -- Pages, and their tabs after the second row of class tabs, in the order the player set by
+  -- dragging them (ns.sv.pageOrder)
   local pages, pageTabs = {}, {}
+  local PlacePageTabs
   for i, key in ipairs(PAGES) do
     local content = CreateFrame("Frame", nil, p)
     content:SetPoint("TOPLEFT", 0, CONTENT_TOP)
@@ -1988,45 +2052,102 @@ local function Build()
     content.back:SetAllPoints(content)
     content:SetFrameLevel(content.back:GetFrameLevel() + 4)
     pages[i] = content
-    local t = Tab(p, Tr(key), function()
+    local t = Tab(p, Tr(key), function(self)
+      if self.dragged then return end -- let go after a drag: no click
       page = i
       p:Refresh()
     end)
-    t:SetPoint("LEFT", i == 1 and tabs[#tabs] or pageTabs[i - 1], "RIGHT", i == 1 and 14 or 4, 0)
     t.page = i
     pageTabs[i] = t
   end
+  -- a page tab dragged along the row takes the place where it is let go
+  local dragTab
+  local function Order()
+    local order = {}
+    for _, i in ipairs(ns.sv.pageOrder) do order[#order + 1] = pageTabs[i] end
+    return order
+  end
+  function PlacePageTabs()
+    local prev = rowTabs[2][#rowTabs[2]]
+    for n, t in ipairs(Order()) do
+      t:ClearAllPoints()
+      t:SetPoint("LEFT", prev, "RIGHT", n == 1 and 14 or 4, 0)
+      prev = t
+    end
+  end
+  local function DropIndex()
+    local x = GetCursorPosition() / p:GetEffectiveScale()
+    local at = 1
+    for _, t in ipairs(Order()) do
+      if t ~= dragTab then
+        local l, w = t:GetLeft(), t:GetWidth()
+        if l and x > l + w / 2 then at = at + 1 end
+      end
+    end
+    return at
+  end
+  local function MoveDragged()
+    local order = {}
+    for _, i in ipairs(ns.sv.pageOrder) do if i ~= dragTab.page then order[#order + 1] = i end end
+    table.insert(order, math.max(1, math.min(DropIndex(), #order + 1)), dragTab.page)
+    ns.sv.pageOrder = order
+    PlacePageTabs()
+  end
+  for _, t in ipairs(pageTabs) do
+    t:RegisterForDrag("LeftButton")
+    t:HookScript("OnMouseDown", function(self) self.dragged = nil end)
+    t:SetScript("OnDragStart", function(self)
+      dragTab, self.dragged = self, true
+      self:SetAlpha(.6)
+      self:SetScript("OnUpdate", MoveDragged)
+    end)
+    t:SetScript("OnDragStop", function(self)
+      self:SetScript("OnUpdate", nil)
+      self:SetAlpha(1)
+      MoveDragged()
+      dragTab = nil
+    end)
+  end
+  PlacePageTabs()
 
-  -- language flags at the right end of the row
+  -- language flags in the title bar, left of the close button
   local flags = {}
   for i, lang in ipairs(ns.LANGUAGES) do
     local f = Flag(p, lang, function(code) ns:SetLanguage(code) end)
-    f:SetPoint("RIGHT", p, "TOPRIGHT", -14 - (#ns.LANGUAGES - i) * FLAG_STEP, -74)
+    f:SetPoint("RIGHT", p, "TOPRIGHT", -34 - (#ns.LANGUAGES - i) * FLAG_STEP, -11)
     flags[i] = f
   end
 
-  -- Opacity of the window (and of everything shown with it), between the tabs and the flags;
-  -- above them if the tabs leave no room in this language.
+  -- Opacity of the window (and of everything shown with it), at the end of the first row of
+  -- tabs; the slider shorter if the tabs leave little room in this language.
   local opacityLabel = Text(p, Tr("WINDOW_OPACITY"))
   local opacity = Slider(p, 60, ns.MIN_WINDOW_ALPHA * 100, 100, 1, Percent, function(v) ns:SetWindowAlpha(v / 100) end, 32)
+  opacity:SetPoint("RIGHT", p, "TOPRIGHT", -14 - OPACITY_TAIL, ROW1_Y + 12)
+  opacityLabel:SetPoint("RIGHT", opacity, "LEFT", -8, 0)
+  -- class tabs all as wide as the widest, if both rows still fit; else each at its own width
   OnRelabel(function()
-    local tabsRight = TABS_X + (#tabs + #pageTabs - 2) * 4 + 14
-    for _, t in ipairs(tabs) do tabsRight = tabsRight + t:GetWidth() end
-    for _, t in ipairs(pageTabs) do tabsRight = tabsRight + t:GetWidth() end
-    local flagsLeft = PANEL_W - 14 - (#flags - 1) * FLAG_STEP - 26
-    local x = tabsRight + 12
-    local room = flagsLeft - 8 - x - OPACITY_TAIL -- for the slider, its box and "%" after it
-    opacity:ClearAllPoints()
-    opacityLabel:ClearAllPoints()
-    if room >= 40 then
-      opacity:SetWidth(min(room, 90))
-      opacity:SetPoint("LEFT", p, "TOPLEFT", x, -74)
-      opacityLabel:SetPoint("BOTTOMLEFT", opacity, "TOPLEFT", 0, 6)
-    else
-      opacity:SetWidth(90)
-      opacity:SetPoint("RIGHT", p, "TOPRIGHT", -14 - OPACITY_TAIL, -48)
-      opacityLabel:SetPoint("RIGHT", opacity, "LEFT", -8, 0)
+    local widest = 0
+    for _, t in ipairs(tabs) do
+      PanelTemplates_TabResize(t, 0)
+      widest = max(widest, t:GetWidth())
     end
+    local function RowWidth(r, w)
+      local width = TABS_X + #rowTabs[r] * (w or 0) + (#rowTabs[r] - 1) * 4
+      if not w then for _, t in ipairs(rowTabs[r]) do width = width + t:GetWidth() end end
+      return width
+    end
+    local pagesWidth = 14 + (#pageTabs - 1) * 4
+    for _, t in ipairs(pageTabs) do pagesWidth = pagesWidth + t:GetWidth() end
+    local labelWidth = opacityLabel:GetStringWidth() + 8
+    local function Fits(w)
+      return RowWidth(1, w) + 12 + labelWidth + 40 + OPACITY_TAIL + 14 <= PANEL_W
+        and RowWidth(2, w) + pagesWidth + 14 <= PANEL_W
+    end
+    if Fits(widest) then
+      for _, t in ipairs(tabs) do PanelTemplates_TabResize(t, 0, widest) end
+    end
+    local room = PANEL_W - 14 - OPACITY_TAIL - labelWidth - (RowWidth(1) + 12)
+    opacity:SetWidth(max(40, min(90, room)))
   end)
   OnRefresh(function() opacity:Set(floor(ns.sv.window.alpha * 100 + .5)) end)
   ScaleGrip(p)
@@ -2262,9 +2383,9 @@ local function Build()
   OnRefresh(function() resetAll:SetLabel(resetAll.armed and L.CONFIRM or L.RESET_ALL) end)
 
   OnRefresh(Stack(text, RIGHT, -84, {
-    { frame = source,  height = 34, when = function() return editing ~= "WARRIOR" end },
+    { frame = source,  height = 34, when = function() return ns.COMBO_CLASSES[editing] end },
     { frame = forms,   height = 26, when = function() return editing == "DRUID" end },
-    { frame = predict, height = 46, when = function() return editing ~= "ROGUE" end },
+    { frame = predict, height = 46, when = function() return editing == "DRUID" or editing == "WARRIOR" end },
     { frame = preview, height = 34 },
     { frame = reset,   height = 30 },
   }, advancedBox))

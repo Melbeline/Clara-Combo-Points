@@ -236,7 +236,7 @@ function ns:LayoutIcons()
   local shape = look.shape
   local cellW, cellH, cellGap = self:ComboCellSize() -- a combo point cell
   local size = shape == "CELL" and cellH or look.size
-  local top, bottom, topWidth, bottomWidth = self:IconAnchors()
+  local top, bottom, topWidth, bottomWidth, topRoom, bottomRoom = self:IconAnchors()
   local editable = self:IconsEditable()
   for _, side in ipairs(self.SIDES) do
     -- each row sits on the previous one, from the top bar up or the bottom bar down; empty
@@ -244,6 +244,7 @@ function ns:LayoutIcons()
     -- bar: see Core.lua). The Bar width shape takes the width of that bar.
     local anchor = side == "above" and top or bottom
     local barWidth = side == "above" and topWidth or bottomWidth
+    local room = (side == "above" and topRoom or bottomRoom) or 0 -- the bar's frame (bar style)
     for k = 1, self.MAX_ROWS do
       local spells = db.rows[side][k]
       local row = GetRow(side, k)
@@ -264,11 +265,11 @@ function ns:LayoutIcons()
         row:SetSize(rowWidth, size)
         row:EditMode(editable, max(barWidth, rowWidth), size)
         if side == "above" then
-          row:SetPoint("BOTTOM", anchor, "TOP", 0, self.ROW_GAP)
+          row:SetPoint("BOTTOM", anchor, "TOP", 0, self.ROW_GAP + room)
         else
-          row:SetPoint("TOP", anchor, "BOTTOM", 0, -self.ROW_GAP)
+          row:SetPoint("TOP", anchor, "BOTTOM", 0, -self.ROW_GAP - room)
         end
-        anchor = row
+        anchor, room = row, 0
         for i = 1, n do
           local slot = row.slots[i] or NewSlot(row)
           row.slots[i] = slot
@@ -1172,7 +1173,19 @@ function ns:EditableSlot(slot)
   slot:SetScript("OnDragStart", StartDrag)
   slot:SetScript("OnDragStop", EndDrag)
   slot:SetScript("OnReceiveDrag", function(self) DropSpell(self:GetParent(), self.index) end)
-  slot:SetScript("OnMouseUp", function(self) if CursorSpell() then DropSpell(self:GetParent(), self.index) end end)
+  slot:SetScript("OnMouseUp", function(self, button)
+    if button == "RightButton" then -- a right-click takes it off the bar
+      if hudDrag or not ns:IconsEditable() then return end
+      local entry = ns.db.rows[self.side][self.k][self.index]
+      if entry == nil then return end
+      local spell = ns:EntrySpell(entry)
+      if GameTooltip then GameTooltip:Hide() end
+      ns:RemoveIcon(self.side, self.k, self.index)
+      ns.Print(L.REMOVED:format(ns:SpellName(spell) or tostring(spell), RowName(self.side, self.k)))
+    elseif CursorSpell() then
+      DropSpell(self:GetParent(), self.index)
+    end
+  end)
   slot:SetScript("OnEnter", SlotTooltip)
   slot:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 end

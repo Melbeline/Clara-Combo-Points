@@ -66,9 +66,14 @@ ns.fonts = {
   { name = "Share Tech Mono",   path = FONT_DIR .. "ShareTechMono-Regular.ttf" },
 }
 
--- Settings of one profile. Rogues, druids and warriors each have their own profile
+-- Settings of one profile. Each class has its own profile
 -- (account-wide); colours sampled from the reference screenshots.
-ns.PROFILES = { "ROGUE", "DRUID", "WARRIOR" }
+ns.PROFILES = { "ROGUE", "DRUID", "WARRIOR", "PRIEST", "MAGE", "WARLOCK", "HUNTER", "SHAMAN", "PALADIN" }
+-- what each class's HUD has: combo points (rogues, druids), an energy / rage bar (rogues,
+-- druids, warriors), a mana bar (druids beside it; the others' own resource)
+ns.COMBO_CLASSES = { ROGUE = true, DRUID = true }
+ns.POWER_CLASSES = { ROGUE = true, DRUID = true, WARRIOR = true }
+ns.MANA_CLASSES = { DRUID = true, PRIEST = true, MAGE = true, WARLOCK = true, HUNTER = true, SHAMAN = true, PALADIN = true }
 local defaults = {
   locked   = true,
   iconsLocked = true, -- unlocked: the icon rows are edited on the HUD itself (Tracker.lua)
@@ -88,6 +93,7 @@ local defaults = {
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
   bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
   healthClassColor = false, -- health bar in the class colour rather than its own
+  skin     = "FLAT",   -- the bars' style: FLAT, CLASSIC (the game's bars), TOOLTIP (tooltip borders)
   hidden   = false,    -- the whole HUD hidden by hand (portrait menu, options, /cl hide)
   -- parts turned off in the colour list: not drawn at all and taking no room (the mana and
   -- health bars, the rage about to be spent and the value have settings of their own)
@@ -235,6 +241,111 @@ local manaBar, healthBar = ValueBar(), ValueBar()
 ns.manaBar, ns.healthBar = manaBar, healthBar
 local elements = { combo = comboRow, power = power, mana = manaBar, health = healthBar }
 ns.barFrames = elements
+---------------------------------------------------------------------------
+-- Bar styles. FLAT: plain colours, no frame. CLASSIC: the game's shaded bars in a thin grey
+-- frame, as on the player's portrait. TOOLTIP: the shaded bars in the game's tooltip border.
+-- The frame of each bar sits under it, around it (SKIN_ROOM, in the bar's units): bars, combo
+-- cells and icon rows keep that much more room between them.
+---------------------------------------------------------------------------
+ns.SKINS = { "FLAT", "CLASSIC", "TOOLTIP" }
+local SHADED = "Interface\\TargetingFrame\\UI-StatusBar"
+local SKIN_ROOM = { FLAT = 0, CLASSIC = 2, TOOLTIP = 5 }
+-- the game's bar colours, which the framed styles start with
+ns.GAME_COLORS = {
+  energy = { r = 1, g = 1, b = 0 }, rage = { r = 1, g = 0, b = 0 },
+  mana = { r = 0, g = 0, b = 1 }, health = { r = 0, g = 1, b = 0 },
+}
+
+function ns:SkinRoom()
+  return SKIN_ROOM[self.db and self.db.skin] or 0
+end
+
+-- The colour a style starts a part with (its default).
+function ns:SkinColor(skin, key)
+  local c = skin ~= "FLAT" and self.GAME_COLORS[key] or defaults.colors[key]
+  return c and { r = c.r, g = c.g, b = c.b, a = defaults.colors[key].a }
+end
+
+local function TooltipColors()
+  local bg, edge = TOOLTIP_DEFAULT_BACKGROUND_COLOR, TOOLTIP_DEFAULT_COLOR
+  local br, bgG, bb = .09, .09, .19
+  if bg and bg.GetRGB then br, bgG, bb = bg:GetRGB() end
+  local er, eg, eb = 1, 1, 1
+  if edge and edge.GetRGB then er, eg, eb = edge:GetRGB() end
+  return br, bgG, bb, er, eg, eb
+end
+
+-- A bar's frame for a style, made the first time: a child of the bar, drawn under it.
+local function SkinFrame(bar, skin)
+  bar.skins = bar.skins or {}
+  local f = bar.skins[skin]
+  if f then return f end
+  f = CreateFrame("Frame", nil, bar, "BackdropTemplate")
+  local room = SKIN_ROOM[skin]
+  f:SetPoint("TOPLEFT", -room, room)
+  f:SetPoint("BOTTOMRIGHT", room, -room)
+  if skin == "CLASSIC" then
+    -- a grey line, a dark line, then the bar (measured on the portrait's bars)
+    f:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+    f:SetBackdropColor(.06, .06, .06, 1)
+    f:SetBackdropBorderColor(.42, .42, .42, 1)
+  else
+    local br, bgG, bb, er, eg, eb = TooltipColors()
+    local layout = NineSliceUtil and NineSliceUtil.GetLayout and NineSliceUtil.GetLayout("TooltipDefaultLayout")
+    if layout then -- the game's own tooltip border
+      NineSliceUtil.ApplyLayout(f, layout)
+      if f.Center then f.Center:SetVertexColor(br, bgG, bb, .9) end
+    else
+      f:SetBackdrop({ bgFile = WHITE, edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+      f:SetBackdropColor(br, bgG, bb, .9)
+      f:SetBackdropBorderColor(er, eg, eb, 1)
+    end
+  end
+  bar.skins[skin] = f
+  return f
+end
+
+local function StyledBars()
+  local list = { power, manaBar, healthBar }
+  for i = 1, NUM_POINTS do list[#list + 1] = cells[i] end
+  return list
+end
+
+function ns:ApplySkin()
+  local skin = self.db.skin
+  for _, bar in ipairs(StyledBars()) do
+    bar:SetStatusBarTexture(skin == "FLAT" and WHITE or SHADED)
+    for name, f in pairs(bar.skins or {}) do f:SetShown(name == skin) end
+    if skin ~= "FLAT" then
+      local f = SkinFrame(bar, skin)
+      f:Show()
+      f:SetFrameLevel(math.max(0, bar:GetFrameLevel() - 1)) -- under the bar
+    end
+  end
+  -- the rage about to be spent hangs off the bar's fill
+  costTex:ClearAllPoints()
+  costTex:SetPoint("TOPRIGHT", power:GetStatusBarTexture(), "TOPRIGHT")
+  costTex:SetPoint("BOTTOMRIGHT", power:GetStatusBarTexture(), "BOTTOMRIGHT")
+end
+
+-- A new style: its room around the bars, and its colours for the parts still at the old
+-- style's (colours the player chose stay).
+function ns:SetSkin(skin)
+  local old = self.db.skin
+  if skin == old or not SKIN_ROOM[skin] then return end
+  for key in pairs(self.GAME_COLORS) do
+    local c, was = self.db.colors[key], self:SkinColor(old, key)
+    if c and was and c.r == was.r and c.g == was.g and c.b == was.b then
+      local new = self:SkinColor(skin, key)
+      c.r, c.g, c.b = new.r, new.g, new.b
+    end
+  end
+  self.db.skin = skin
+  self:ApplyAll()
+  self:RefreshOptions()
+end
+
 -- where the icon rows sit when every bar is turned off: a line at the top of the HUD
 local noBar = CreateFrame("Frame", nil, hud)
 noBar:SetPoint("TOP")
@@ -562,12 +673,15 @@ local function CellsOn()
 end
 
 -- The bars of the class shown, unless turned off: the combo row (some cell on), the bar of the
--- resource it shows now (energy or rage), the mana bar (druids), the health bar. A bar turned
--- off takes no room: the others close up.
+-- resource it shows now (energy or rage), the mana bar, the health bar. A bar turned off takes
+-- no room: the others close up.
 local function BarUsed(key)
-  if key == "combo" then return ns.profileClass ~= "WARRIOR" and #CellsOn() > 0 end
-  if key == "power" then return not ns.db.disabled[WantedPowerType() == POWER_RAGE and "rage" or "energy"] end
-  if key == "mana" then return ns.profileClass == "DRUID" and ns.db.bars.mana.show end
+  local class = ns.profileClass
+  if key == "combo" then return ns.COMBO_CLASSES[class] and #CellsOn() > 0 end
+  if key == "power" then
+    return ns.POWER_CLASSES[class] and not ns.db.disabled[WantedPowerType() == POWER_RAGE and "rage" or "energy"]
+  end
+  if key == "mana" then return ns.MANA_CLASSES[class] and ns.db.bars.mana.show end
   return ns.db.bars.health.show
 end
 
@@ -618,17 +732,41 @@ function ns:Situation()
   return now
 end
 
+-- Hidden by hand is this character's choice: kept in its class's profile, whatever tab the
+-- options show.
+local function OwnProfile()
+  return ns.homeClass and ns.sv.profiles[ns.homeClass] or ns.db
+end
+
+-- Does a situation ticked in the options hide the HUD now? Also the situation as a key: the
+-- HUD shown by hand against the rule stays shown until the situation changes.
+local function RuleHides()
+  local now, hit, key = ns:Situation(), false, {}
+  for _, k in ipairs(ns.HIDE_WHEN) do
+    if now[k] then
+      key[#key + 1] = k
+      if ns.db.hideWhen[k] then hit = true end
+    end
+  end
+  return hit, table.concat(key, ",")
+end
+
 -- Hidden by hand, or by a situation ticked in the options (those wait while the HUD is being
 -- set up: options open, bar or icons unlocked).
 function ns:HiddenNow()
+  if OwnProfile().hidden then return true end
   local db = self.db
-  if db.hidden then return true end
   if self.optionsOpen or not db.locked or not db.iconsLocked then return false end
-  local now = self:Situation()
-  for _, key in ipairs(self.HIDE_WHEN) do
-    if db.hideWhen[key] and now[key] then return true end
-  end
-  return false
+  local hit, key = RuleHides()
+  return hit and self.shownAnyway ~= key
+end
+
+-- What the Show boxes say: shown, unless hidden by hand or by a situation (and not shown
+-- anyway since).
+function ns:ShownByChoice()
+  if OwnProfile().hidden then return false end
+  local hit, key = RuleHides()
+  return not hit or self.shownAnyway == key
 end
 
 -- Every bar turned off: the icon rows still show, if they have spells (or are being edited).
@@ -644,7 +782,7 @@ local function IconsAlone()
 end
 
 local function ShouldShow()
-  if not (ns.isRogue or ns.isWarrior or ns.isDruid) then return false end
+  if not ns.enabled then return false end
   if ns:HiddenNow() then return false end
   return ShownKey():find("1") ~= nil or IconsAlone()
 end
@@ -802,9 +940,15 @@ end
 
 -- The whole HUD hidden or shown again by hand.
 function ns:SetHidden(hidden)
-  self.db.hidden = hidden and true or false
+  OwnProfile().hidden = hidden and true or false
+  self.shownAnyway = nil
+  if not hidden then -- shown against a situation's rule: until the situation changes
+    local hit, key = RuleHides()
+    if hit then self.shownAnyway = key end
+  end
   self:UpdateVisibility()
   self:RefreshOptions()
+  self:RefreshMenuLine()
 end
 
 function ns:SetHideWhen(key, on)
@@ -857,18 +1001,21 @@ end
 -- icon row sits on the bar.)
 function ns:ApplyLayout()
   local bars = self.db.bars
+  local room = self:SkinRoom() -- each bar's frame, around it
   local y, wide = 0, 1
   for _, key in ipairs(bars.order) do
     local frame = elements[key]
     frame:SetShown(BarShown(key))
     if BarUsed(key) then
       local b = bars[key]
+      local around = room * b.scale
+      y = y + around
       frame:SetScale(b.scale)
       frame:SetSize(b.width, b.height)
       frame:ClearAllPoints()
       frame:SetPoint("TOP", hud, "TOP", 0, -y / b.scale)
-      y = y + b.height * b.scale + ROW_GAP
-      wide = math.max(wide, b.width * b.scale)
+      y = y + b.height * b.scale + around + ROW_GAP
+      wide = math.max(wide, (b.width + 2 * room) * b.scale)
     end
   end
   if y == 0 then
@@ -886,11 +1033,12 @@ function ns:ApplyLayout()
   local cb = bars.combo
   local on = CellsOn()
   local n = math.max(1, #on)
-  local cellWidth = (cb.width - (n - 1) * CP_GAP) / n
+  local gap = self:CellGap()
+  local cellWidth = (cb.width - (n - 1) * gap) / n
   for i = 1, NUM_POINTS do cells[i]:Hide() end
   for place, i in ipairs(on) do
     cells[i]:ClearAllPoints()
-    cells[i]:SetPoint("TOPLEFT", (place - 1) * (cellWidth + CP_GAP), 0)
+    cells[i]:SetPoint("TOPLEFT", (place - 1) * (cellWidth + gap), 0)
     cells[i]:SetSize(cellWidth, cb.height)
     cells[i]:Show()
   end
@@ -904,8 +1052,15 @@ end
 function ns:ComboCellSize()
   local cb = self.db.bars.combo
   local n = #CellsOn()
-  if n == 0 or self.profileClass == "WARRIOR" then n = NUM_POINTS end -- no combo row: five cells' size
-  return (cb.width - (n - 1) * CP_GAP) / n * cb.scale, cb.height * cb.scale, CP_GAP * cb.scale
+  if n == 0 or not self.COMBO_CLASSES[self.profileClass] then n = NUM_POINTS end -- no combo row: five cells' size
+  local gap = self:CellGap()
+  return (cb.width - (n - 1) * gap) / n * cb.scale, cb.height * cb.scale, gap * cb.scale
+end
+
+-- Between two combo cells: their frames, and a little room.
+function ns:CellGap()
+  local room = self:SkinRoom()
+  return room > 0 and math.max(CP_GAP, 2 * room + 2) or CP_GAP
 end
 
 -- The bars the icon rows sit on, with their widths on the HUD: the top one for the rows
@@ -923,9 +1078,11 @@ function ns:IconAnchors()
   end
   if not found then
     local w = bars.power.width * bars.power.scale
-    return noBar, noBar, w, w
+    return noBar, noBar, w, w, 0, 0
   end
-  return elements[top], elements[bottom], bars[top].width * bars[top].scale, bars[bottom].width * bars[bottom].scale
+  local room = self:SkinRoom()
+  return elements[top], elements[bottom], bars[top].width * bars[top].scale, bars[bottom].width * bars[bottom].scale,
+    room * bars[top].scale, room * bars[bottom].scale
 end
 
 function ns:SetScalePercent(percent)
@@ -1060,6 +1217,7 @@ end
 
 function ns:ApplyAll()
   self:ApplyScale()
+  self:ApplySkin()
   self:ApplyLayout()
   self:ApplyFont()
   self:UpdatePowerMode() -- colours and values too
@@ -1076,6 +1234,10 @@ end
 
 function ns:ResetColors()
   self.db.colors = CopyDefaults(defaults.colors, {})
+  for key in pairs(self.GAME_COLORS) do -- the style's own colours
+    local c = self:SkinColor(self.db.skin, key)
+    self.db.colors[key].r, self.db.colors[key].g, self.db.colors[key].b = c.r, c.g, c.b
+  end
   self:ApplyColors()
   self:RefreshOptions()
 end
@@ -1123,12 +1285,14 @@ end
 -- Icons unlocked: every row shows on the HUD (the empty ones too) to drop spells from the
 -- spellbook on, move icons around, or drag them off to remove them (Tracker.lua).
 function ns:SetIconsLocked(locked)
-  self.db.iconsLocked = locked and true or false
+  -- one state for every class: unlocking on one tab unlocks them all
+  for _, profile in pairs(self.sv.profiles) do profile.iconsLocked = locked and true or false end
   self:UpdateVisibility()
   self:LayoutIcons()
   self:ApplyFade()
   self:RefreshOptions()
   self:RefreshSettingsPage()
+  self:RefreshMenuLine()
 end
 
 -- Everything back to the defaults: the three class tabs (bar, colours, font, icons) and the
@@ -1144,6 +1308,8 @@ function ns:ResetAddon()
     wipe(profile)
     FillProfile(profile, class)
   end
+  self.sv.menu = { line = true, reload = true }
+  self.sv.pageOrder = { 1, 2, 3, 4 }
   wipe(self.sv.window)
   self.sv.window.alpha = 1 -- centred, at the scale that fits the screen, opaque
   wipe(self.sv.active)
@@ -1157,12 +1323,13 @@ function ns:GetProfileName()
   return L["TAB_" .. (self.profileClass or "ROGUE")]
 end
 
--- An unlock made on another class's options tab must not stay behind in that profile:
--- relocked when the options close, and on logout / reload in case they were still open.
+-- A bar unlocked on another class's options tab must not stay behind in that profile:
+-- relocked when the options close, and on logout / reload in case they were still open. (The
+-- icons' lock is one for every class.)
 function ns:LockOtherProfiles()
   local home = self.homeClass or "ROGUE"
   for class, profile in pairs(self.sv.profiles) do
-    if class ~= home then profile.locked, profile.iconsLocked = true, true end
+    if class ~= home then profile.locked = true end
   end
 end
 
@@ -1277,6 +1444,7 @@ local function CleanProfile(db, class)
   end
   if db.outline ~= "NONE" and db.outline ~= "OUTLINE" and db.outline ~= "THICKOUTLINE" then db.outline = defaults.outline end
   if db.cpSource ~= "TARGET" and db.cpSource ~= "PLAYER" then db.cpSource = defaults.cpSource end
+  if not SKIN_ROOM[db.skin] then db.skin = defaults.skin end
   for _, group in ipairs({ "hideWhen", "disabled" }) do
     for key in pairs(db[group]) do
       if defaults[group][key] == nil then db[group][key] = nil end
@@ -1342,6 +1510,23 @@ local function CleanWindow(sv)
   end
 end
 
+-- What this addon adds to the portrait's menu (account-wide): its section, "Reload UI". And
+-- the order of the options window's page tabs (each page once).
+ns.PAGE_COUNT = 4
+local function CleanMenu(sv)
+  local m = type(sv.menu) == "table" and sv.menu or {}
+  sv.menu = { line = m.line ~= false, reload = m.reload ~= false }
+  local order, seen = {}, {}
+  for _, i in ipairs(type(sv.pageOrder) == "table" and sv.pageOrder or {}) do
+    if type(i) == "number" and i >= 1 and i <= ns.PAGE_COUNT and i == math.floor(i) and not seen[i] then
+      seen[i] = true
+      order[#order + 1] = i
+    end
+  end
+  if #order ~= ns.PAGE_COUNT then order = { 1, 2, 3, 4 } end
+  sv.pageOrder = order
+end
+
 local function InitDB()
   local sv = type(ClaraComboPointsDB) == "table" and ClaraComboPointsDB or {}
   if type(sv.profiles) ~= "table" then
@@ -1381,6 +1566,7 @@ local function InitDB()
     end
   end
   CleanWindow(sv)
+  CleanMenu(sv)
   ns:InitProfiles(sv) -- Profiles.lua: the profiles saved on each class tab
   moverText:SetText(L.MOVER)
   ClaraComboPointsDB = sv
@@ -1409,15 +1595,16 @@ function ns:PLAYER_LOGIN()
   self.isRogue = (class == "ROGUE")
   self.isDruid = (class == "DRUID")
   self.isWarrior = (class == "WARRIOR")
-  self.enabled = self.isRogue or self.isDruid or self.isWarrior
-  self.homeClass = self.isDruid and "DRUID" or self.isWarrior and "WARRIOR" or "ROGUE"
+  self.enabled = self.sv.profiles[class] ~= nil -- the classes of World of Warcraft: Forever
+  self.homeClass = self.enabled and class or "ROGUE"
   self.profileClass = self.homeClass
   self.db = self.sv.profiles[self.homeClass]
+  for _, profile in pairs(self.sv.profiles) do profile.iconsLocked = self.db.iconsLocked end -- one lock for all
   local fighting = UnitAffectingCombat and UnitAffectingCombat("player")
   inCombat = (not issecretvalue(fighting) and fighting) and true or false
   self:ResolveSpells()
   self:ApplyAll()
-  if not self.enabled then return end -- dormant on other classes: no events, no updates
+  if not self.enabled then return end -- dormant on a class it has no tab for: no events, no updates
 
   events:RegisterEvent("PLAYER_ENTERING_WORLD")
   events:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -1434,7 +1621,7 @@ function ns:PLAYER_LOGIN()
   events:RegisterUnitEvent("UNIT_AURA", "player", "target")
   events:RegisterEvent("SPELL_UPDATE_COOLDOWN") -- spell cooldowns and charges on the icons
   events:RegisterEvent("SPELL_UPDATE_CHARGES")
-  if not self.isWarrior then -- combo points
+  if self.isRogue or self.isDruid then -- combo points
     events:RegisterUnitEvent("UNIT_HEALTH", "target")
     events:RegisterUnitEvent("UNIT_FLAGS", "target")
     pcall(events.RegisterEvent, events, "UNIT_DIED") -- not in every client build
@@ -1468,8 +1655,12 @@ function ns:PLAYER_ENTERING_WORLD()
   self:AurasReadable()
 end
 
+-- A new situation: the HUD shown by hand against a rule follows the rules again.
 function ns:GROUP_ROSTER_UPDATE()
+  local _, key = RuleHides()
+  if self.shownAnyway ~= key then self.shownAnyway = nil end
   self:UpdateVisibility()
+  self:RefreshMenuLine()
 end
 ns.ZONE_CHANGED_NEW_AREA = ns.GROUP_ROSTER_UPDATE
 
@@ -1621,9 +1812,9 @@ function ns:AskResetAddon()
 end
 
 ---------------------------------------------------------------------------
--- Portrait right-click menu, in Other Options just above Edit Mode: the HUD's opacity (a
--- slider like the game's "Overall opacity") with a box to show / hide the whole HUD on the
--- same line, then "Reload UI"
+-- Portrait right-click menu: "Reload UI" in Other Options just above Edit Mode, and at the
+-- end a Clara Combo Points section: the HUD's opacity (a slider like the game's "Overall
+-- opacity") between a box to show / hide the whole HUD and a box to lock the icons
 ---------------------------------------------------------------------------
 local function ReloadInterface()
   if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
@@ -1631,41 +1822,57 @@ end
 
 -- The line is one frame of this addon's, lent to the menu while it is open (a frame of the
 -- menu's own pool could be handed to another menu afterwards, with this slider's callback).
-local MENU_LINE_W, MENU_LINE_H = 252, 44 -- room for the German title and the value
+-- It is as narrow as the menu's own entries, so the menu keeps its width.
+local MENU_LINE_W, MENU_LINE_H = 128, 42
 local menuLine
+
+local function BoxTip(self)
+  if not GameTooltip then return end
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+  GameTooltip:SetText(self.tipTitle)
+  if self.tipText then GameTooltip:AddLine(self.tipText, 1, 1, 1, true) end
+  GameTooltip:Show()
+end
+
+local function MenuBox(f, onClick)
+  local box = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+  box:SetSize(22, 22)
+  box:SetScript("OnClick", function(self)
+    if PlaySound and SOUNDKIT then
+      PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+    end
+    onClick(self:GetChecked() and true or false)
+    if GameTooltip and GameTooltip:IsOwned(self) then BoxTip(self) end
+  end)
+  box:SetScript("OnEnter", BoxTip)
+  box:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  return box
+end
+
 local function MenuLine()
   if menuLine then return menuLine end
   local f = CreateFrame("Frame", nil, UIParent)
   f:SetSize(MENU_LINE_W, MENU_LINE_H)
   f:Hide()
-  f.label = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.label = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   f.label:SetPoint("TOPLEFT", 0, -2)
   f.label:SetJustifyH("LEFT")
   f.value = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   f.value:SetPoint("TOPRIGHT", 0, -3)
-  f.label:SetPoint("RIGHT", f.value, "LEFT", -4, 0)
-  f.label:SetWordWrap(false)
-  local check = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-  check:SetSize(22, 22)
-  check:SetPoint("BOTTOMLEFT", -3, 1)
-  check:SetScript("OnClick", function(self)
-    if PlaySound and SOUNDKIT then
-      PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
-    end
-    ns:SetHidden(not self:GetChecked())
-  end)
-  check:SetScript("OnEnter", function(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText(L.MENU_SHOW_TIP)
-    GameTooltip:Show()
-  end)
-  check:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  f.check = check
+  -- shown / hidden on the left, the opacity, icons locked on the right
+  f.check = MenuBox(f, function(on) ns:SetHidden(not on) end)
+  f.check:SetPoint("BOTTOMLEFT", -3, 1)
+  f.lock = MenuBox(f, function(on) ns:SetIconsLocked(on) end)
+  f.lock:SetPoint("BOTTOMRIGHT", 3, 1)
   local slider = CreateFrame("Frame", nil, f, "MinimalSliderWithSteppersTemplate")
-  -- beside the box, inside the line (the template's 40 px would reach over the next entry)
-  slider:SetPoint("LEFT", check, "RIGHT", -2, 0)
-  slider:SetSize(MENU_LINE_W - 17, 24)
+  slider:SetPoint("LEFT", f.check, "RIGHT", 0, 0)
+  slider:SetPoint("RIGHT", f.lock, "LEFT", 0, 0)
+  slider:SetHeight(24) -- the template's 40 would reach over the entry below
+  if slider.Slider then -- the arrows closer in, for a longer track
+    slider.Slider:ClearAllPoints()
+    slider.Slider:SetPoint("TOPLEFT", 13, 0)
+    slider.Slider:SetPoint("BOTTOMRIGHT", -13, 0)
+  end
   slider:Init(100, 0, 100, 20) -- 5 % a step
   slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value)
     if f.filling then return end
@@ -1683,8 +1890,16 @@ local function FillMenuLine(f)
   local percent = math.floor(ns.db.alpha * 100 + .5)
   f.slider:SetValue(percent)
   f.value:SetText(("%d %%"):format(percent))
-  f.check:SetChecked(not ns.db.hidden)
+  f.check:SetChecked(ns:ShownByChoice())
+  f.check.tipTitle = L.MENU_SHOW_TIP
+  f.lock:SetChecked(ns.db.iconsLocked)
+  f.lock.tipTitle, f.lock.tipText = L.MENU_LOCK_TIP, L.MENU_LOCK_TEXT
   f.filling = nil
+end
+
+-- The line shows what was changed elsewhere meanwhile (slash command, options).
+function ns:RefreshMenuLine()
+  if menuLine and menuLine:IsVisible() then FillMenuLine(menuLine) end
 end
 
 local function MenuLineDescription()
@@ -1708,30 +1923,34 @@ local function MenuLineDescription()
   return description
 end
 
-local function AddReloadEntry(_, root)
-  local editModeIndex
-  for index, description in root:EnumerateElementDescriptions() do
-    if HUD_EDIT_MODE_MENU and MenuUtil.GetElementText(description) == HUD_EDIT_MODE_MENU then
-      editModeIndex = index
-      break
+-- What this addon puts in the portrait's menu, each part turned off in the game's options
+-- (Esc > Options > AddOns): "Reload UI" just above Edit Mode, and its own section at the end.
+local function AddMenuEntries(_, root)
+  local menu = ns.sv and ns.sv.menu or {}
+  if menu.reload ~= false then
+    local editModeIndex
+    for index, description in root:EnumerateElementDescriptions() do
+      if HUD_EDIT_MODE_MENU and MenuUtil.GetElementText(description) == HUD_EDIT_MODE_MENU then
+        editModeIndex = index
+        break
+      end
+    end
+    if editModeIndex then
+      root:Insert(MenuUtil.CreateButton(L.RELOAD_UI, ReloadInterface), editModeIndex)
+    else -- no Edit Mode entry: at the end
+      root:CreateButton(L.RELOAD_UI, ReloadInterface)
     end
   end
-  -- the opacity line: the classes the HUD is for, in clients with the game's slider
-  local line = ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame and MenuLineDescription()
-  if editModeIndex then
-    if line then
-      root:Insert(line, editModeIndex)
-      editModeIndex = editModeIndex + 1
-    end
-    root:Insert(MenuUtil.CreateButton(L.RELOAD_UI, ReloadInterface), editModeIndex)
-  else -- no Edit Mode entry: at the end
-    if line then root:Insert(line) end
-    root:CreateButton(L.RELOAD_UI, ReloadInterface)
+  -- the section: the classes the HUD is for, in clients with the game's slider
+  if menu.line ~= false and ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame then
+    root:CreateDivider()
+    root:CreateTitle("Clara Combo Points")
+    root:Insert(MenuLineDescription())
   end
 end
 
 if Menu and Menu.ModifyMenu and MenuUtil then
-  Menu.ModifyMenu("MENU_UNIT_SELF", AddReloadEntry)
+  Menu.ModifyMenu("MENU_UNIT_SELF", AddMenuEntries)
 end
 
 ---------------------------------------------------------------------------
