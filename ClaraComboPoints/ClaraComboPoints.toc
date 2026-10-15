@@ -15,5 +15,8 @@ Profiles.lua
 SpellCatalog.lua
 SpellNames.lua
 Tracker.lua
+Clicks.lua
+LearnedSpells.lua
+Moan.lua
 Options.lua
 SettingsPage.lua

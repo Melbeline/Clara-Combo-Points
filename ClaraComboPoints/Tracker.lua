@@ -302,6 +302,7 @@ function ns:LayoutIcons()
   end
   self:SyncAuraButtons()
   self:MarkIconsDirty() -- states read on the next frame, once
+  if self.SyncClickers then self:SyncClickers() end -- the click buttons follow (Clicks.lua)
 end
 
 ---------------------------------------------------------------------------
@@ -992,8 +993,23 @@ local hudDrag -- the icon being dragged: { side, k, i, entry }, and where it wou
 local ghost, marker
 
 function ns:IconsEditable()
-  return self.db ~= nil and self.db.iconsLocked == false and self.iconLayer:IsShown()
+  return self:EditingIcons() and self.iconLayer:IsShown()
 end
+
+-- Every icon shown on the HUD (Clicks.lua).
+function ns:ForEachIcon(fn)
+  for _, side in ipairs(self.SIDES) do
+    for _, row in pairs(rows[side]) do
+      if row:IsShown() then
+        for i = 1, #(row.spells or {}) do
+          if row.slots[i] then fn(row.slots[i]) end
+        end
+      end
+    end
+  end
+end
+
+function ns:DraggingIcon() return hudDrag ~= nil end
 
 local function CursorSpell()
   if not GetCursorInfo then return end
@@ -1042,6 +1058,7 @@ local function DropSpell(row, at)
   local spellID = CursorSpell()
   if not spellID or not ns:IconsEditable() then return end
   local ok, msg = ns:AddIcon(row.side, row.k, spellID, at or PlaceAt(row))
+  if ok and ns.chatDrop then ns:ChatDropPlaced() end -- a spell from the chat: a little time to move it
   if ok and ClearCursor then ClearCursor() end
   if msg then ns.Print(msg) end
 end
@@ -1106,6 +1123,8 @@ local function StopDrag()
   marker:Hide()
   local from = rows[d.side] and rows[d.side][d.k]
   if from and from.slots[d.i] then from.slots[d.i]:SetAlpha(1) end
+  -- a spell from the chat moved again: a new grace before the rows close
+  if ns.chatDrop and ns.chatDrop.placed then ns:ChatDropPlaced() end
   return d
 end
 

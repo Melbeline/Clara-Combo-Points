@@ -657,9 +657,15 @@ end
 -- Combo points, energy / rage and the icons: druids see them in Cat Form (energy) and Bear
 -- Form (rage), unless "Cat and Bear Form only" is off; while unlocked or while the options
 -- are open, in any form, so they can be moved and coloured. Rogues and warriors always.
+-- The icon rows are being edited on the HUD: unlocked, or open for a spell taken from the chat
+-- (LearnedSpells.lua) until it is placed.
+function ns:EditingIcons()
+  return self.db ~= nil and (self.db.iconsLocked == false or self.chatDrop ~= nil)
+end
+
 local function FormShown()
   if not ns.isDruid then return true end
-  if not ns.db.druidCatOnly or not ns.db.locked or not ns.db.iconsLocked or ns.optionsOpen then return true end
+  if not ns.db.druidCatOnly or not ns.db.locked or ns:EditingIcons() or ns.optionsOpen then return true end
   local pt = UnitPowerType("player")
   return issecretvalue(pt) or pt == POWER_ENERGY or pt == POWER_RAGE
 end
@@ -759,7 +765,7 @@ end
 function ns:HiddenNow()
   if OwnProfile().hidden then return true end
   local db = self.db
-  if self.optionsOpen or not db.locked or not db.iconsLocked then return false end
+  if self.optionsOpen or not db.locked or self:EditingIcons() then return false end
   local hit, key = RuleHides()
   return hit and self.shownAnyway ~= key
 end
@@ -775,7 +781,7 @@ end
 -- Every bar turned off: the icon rows still show, if they have spells (or are being edited).
 local function IconsAlone()
   if not FormShown() then return false end
-  if not ns.db.iconsLocked then return true end
+  if ns:EditingIcons() then return true end
   for _, side in ipairs(ns.SIDES) do
     for _, row in pairs(ns.db.rows[side]) do
       if #row > 0 then return true end
@@ -795,6 +801,7 @@ function ns:UpdateVisibility()
   iconLayer:SetShown(FormShown())
   if LayoutKey() ~= shownKey then self:ApplyLayout() end
   hud:SetShown(ShouldShow())
+  if self.SyncClickers then self:SyncClickers() end -- the click buttons over the icons (Clicks.lua)
 end
 
 -- Energy regenerates continuously, so the bar is read every frame: each point shows up on
@@ -969,7 +976,7 @@ end
 local inCombat = false
 function ns:ApplyFade()
   local db = self.db
-  local fade = db.fadeOOC and not inCombat and db.locked and db.iconsLocked and (not self.optionsOpen or self.fadePreview ~= nil)
+  local fade = db.fadeOOC and not inCombat and db.locked and not self:EditingIcons() and (not self.optionsOpen or self.fadePreview ~= nil)
   local top = fade and db.oocTop or 1
   comboRow:SetAlpha(top)
   iconLayer:SetAlpha(top)
@@ -1690,6 +1697,10 @@ function ns:ADDON_LOADED(name)
   InitDB()
 end
 
+-- What the other files start once the addon is on for this character (its events, its hooks):
+-- nothing at all on a class without a tab.
+ns.onEnable = {}
+
 function ns:PLAYER_LOGIN()
   events:UnregisterEvent("PLAYER_LOGIN")
   local _, class = UnitClass("player")
@@ -1737,6 +1748,7 @@ function ns:PLAYER_LOGIN()
       events:RegisterUnitEvent("UNIT_SPELLCAST_" .. e, "player")
     end
   end
+  for _, start in ipairs(self.onEnable) do start() end -- (Clicks.lua, LearnedSpells.lua)
   self:UpdateVisibility()
 end
 

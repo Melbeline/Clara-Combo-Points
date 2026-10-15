@@ -63,6 +63,14 @@ Page **Icônes** : clique sur une ligne (Haut 1 à 3, Bas 1 à 3) pour la choisi
 - **Retirer** : clic droit sur l'icône, ou glisse-la **hors de la fenêtre** (une croix rouge l'annonce) et lâche-la.
 - **Clic sur une icône** : un menu pour choisir **où surveiller** l'aura (Auto : toi, puis ta cible ; Soi-même ; Cible ; Cible ennemie ; Cible amie), **Lancé par moi uniquement** (seule l'aura que tu as lancée compte, pas le même sort lancé par un autre joueur ; décoché, celle de n'importe qui), le **rang** (tous les rangs ou un seul) et Retirer. L'infobulle rappelle le rang et où l'aura est surveillée.
 
+### Clic sur une icône
+
+Icônes verrouillées, un **clic sur une icône de la barre lance son sort**, comme un bouton de barre d'action, quand ton personnage connaît ce sort (le rang choisi pour l'icône, sinon le plus haut rang connu ; l'infobulle du sort s'affiche au survol). Une icône que ton personnage ne peut pas lancer (un debuff sur ta cible, une aura d'une autre classe…) ne fait rien. Le jeu interdit aux addons de déplacer ces boutons de sort pendant un combat : hors combat ils suivent les icônes, et en combat ils restent là où étaient les icônes quand le combat a commencé ; ceux d'un druide ne répondent que dans la forme où ils ont été placés (une autre forme déplace les icônes).
+
+### Nouveau sort appris
+
+Quand tu apprends un sort, la ligne du chat « You have learned a new ability: [Furtivité]. » permet de le prendre : **appuie sur son nom dans le chat**, le sort vient sur le curseur, à poser sur une barre d'action ou sur la barre de l'addon. Tant que tu le tiens, les lignes d'icônes de l'addon s'ouvrent pour lui, même verrouillées ; elles se referment dès qu'il est posé — sur une barre d'action, tout de suite ; sur l'addon, 5 secondes après, pour pouvoir le reprendre et le déplacer s'il est mal placé (chaque nouveau déplacement redonne 5 secondes). Rien à régler.
+
 ### Icônes sur la barre
 
 Page Icônes, case **Modifier les icônes directement sur la barre** (pour toutes les classes à la fois ; aussi la case de droite de la section du menu du portrait, décochée) : toutes les lignes d'icônes apparaissent sur la barre en jeu, teintées de bleu, même les lignes vides (« Bas 1 : dépose un sort ici »). Prends un sort dans le **grimoire** et lâche-le sur une ligne, à l'endroit voulu ; glisse une icône vers une autre place ou une autre ligne (un trait doré montre où elle va tomber) ; glisse-la **hors de la barre** ou fais un **clic droit** dessus pour la retirer (une croix rouge l'annonce, et un message le dit dans le chat). Verrouiller les icônes (décocher la même case, `/cl lock` ou « Tout verrouiller » dans les options du jeu) les rend à nouveau transparentes aux clics.
@@ -80,6 +88,10 @@ Sur la page Icônes, un panneau s'ouvre à droite de la fenêtre : tous les buff
 - Un changement fait dans les options pendant un combat (sort ajouté, retiré ou déplacé, condition changée) est suivi tout de suite. Seule l'apparence des boutons du jeu (taille, forme, balayage inversé, temps restant) attend la fin du combat, le jeu interdisant aux addons d'y toucher pendant ce temps.
 - Les icônes ressemblent aux boutons des barres d'action : cadre du bouton du jeu, image du sort découpée dans ce cadre (rien ne dépasse des coins), balayage et compte à rebours du jeu (« 2m » à partir de deux minutes, puis « 1:59 », puis les secondes), charges et cumuls en bas à droite (Fracasser armure ×5). Une aura active est allumée avec son temps restant ; un sort avec un temps de recharge propre s'allume quand il est prêt et montre sa recharge sinon. Une aura absente est grisée, ou cachée si tu décoches l'option (les autres gardent leur place).
 - L'**ID** marche quelle que soit la langue du client ; un **nom** doit être écrit dans la langue de ton jeu, majuscules et minuscules sans importance, lettres accentuées comprises (« renew » trouve Renew sur un client anglais, « éclat lunaire » trouve Éclat lunaire sur un client français). Il est cherché dans ton grimoire, puis dans les sorts des classes, puis parmi les auras sur toi et ta cible, et rangé sous son ID. Un nom introuvable est suivi tel quel : point d'interrogation comme icône jusqu'à ce que l'aura soit vue une première fois, puis sa vraie icône (retenue pour les sessions suivantes). Ajouter ensuite le même sort par son ID remplace le nom tapé.
+
+## /moan
+
+L'émote du jeu d'origine (patch 1.12), revenue : `/moan` envoie « Lola moans suggestively. » (dans la langue de l'addon) et, avec une cible sélectionnée ou un nom tapé après (`/moan Bob`), « Lola moans suggestively at Bob. ». C'est une émote : tout le monde autour la voit. Le jeu n'a jamais eu de voix pour elle (aucun fichier son de personnage du jeu n'est un gémissement), elle reste donc muette.
 
 ## Profils
 
