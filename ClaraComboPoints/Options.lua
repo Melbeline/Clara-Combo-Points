@@ -444,9 +444,17 @@ end
 ---------------------------------------------------------------------------
 -- Colour picker (Blizzard's: hue wheel, brightness bar, opacity slider)
 ---------------------------------------------------------------------------
+-- The colour is read again at each change (a reset replaces the table) and only while the tab
+-- it was opened on is shown; a tab change or the window closing closes the picker
+-- (ClosePicker), keeping what was picked.
+local pickerApply -- the picker's change handler while it is ours
 local function OpenColorPicker(key)
-  local c = ns.db.colors[key]
+  local profile = ns.db
+  local c = profile.colors[key]
   local prev = { r = c.r, g = c.g, b = c.b, a = c.a }
+  local function Target()
+    if ns.db == profile then return profile.colors[key] end
+  end
   local function changed()
     ns:ApplyColors()
     ns:RefreshOptions()
@@ -454,18 +462,30 @@ local function OpenColorPicker(key)
   local function apply()
     -- the picker fires this once while being set up, before it holds this colour's opacity
     if not ColorPickerFrame:IsShown() then return end
-    c.r, c.g, c.b = ColorPickerFrame:GetColorRGB()
-    if ColorPickerFrame.GetColorAlpha then c.a = ColorPickerFrame:GetColorAlpha() end
+    local now = Target()
+    if not now then return end
+    now.r, now.g, now.b = ColorPickerFrame:GetColorRGB()
+    if ColorPickerFrame.GetColorAlpha then now.a = ColorPickerFrame:GetColorAlpha() end
     changed()
   end
   local function cancel()
-    c.r, c.g, c.b, c.a = prev.r, prev.g, prev.b, prev.a
+    local now = Target()
+    if not now then return end
+    now.r, now.g, now.b, now.a = prev.r, prev.g, prev.b, prev.a
     changed()
   end
+  pickerApply = apply
   ColorPickerFrame:SetupColorPickerAndShow({
     r = c.r, g = c.g, b = c.b, opacity = c.a, hasOpacity = true,
     swatchFunc = apply, opacityFunc = apply, cancelFunc = cancel,
   })
+end
+
+local function ClosePicker()
+  if pickerApply and ColorPickerFrame and ColorPickerFrame:IsShown() and ColorPickerFrame.swatchFunc == pickerApply then
+    ColorPickerFrame:Hide()
+  end
+  pickerApply = nil
 end
 
 local function ColorLabel(key)
@@ -508,7 +528,7 @@ local function ColorRow(parent, key, labelFn, boxed)
     local c = ns.db.colors[key]
     c.a = v / 100
     ns:ApplyColors()
-    swatch.color:SetColorTexture(c.r, c.g, c.b, c.a)
+    ns:RefreshOptions() -- (the bars' swatches in the Bars list too)
   end)
   slider:SetPoint("LEFT", holder, "TOPLEFT", 178, -6)
   holder.on, holder.swatch, holder.slider, holder.label = on, swatch, slider, label
@@ -682,8 +702,10 @@ end
 -- icon of a row taken out of the window (and of the spells panel) is removed when let go.
 local function TrackDrag()
   local toSide, toK, toI
+  -- over the spells panel (which may lie on the window, unlocked): no row under it
+  local overPanel = catalog and catalog:IsShown() and CursorIn(catalog)
   for _, line in ipairs(lines) do
-    local x = line.frame:IsVisible() and CursorIn(line.frame)
+    local x = not overPanel and line.frame:IsVisible() and CursorIn(line.frame)
     if x and Accepts(line.side, line.k) then
       local n = #ns.db.rows[line.side][line.k]
       if line.side == drag.side and line.k == drag.k then n = n - 1 end
@@ -692,8 +714,7 @@ local function TrackDrag()
       break
     end
   end
-  local out = drag.side ~= nil and not toSide and not CursorIn(panel)
-    and not (catalog and catalog:IsShown() and CursorIn(catalog))
+  local out = drag.side ~= nil and not toSide and not CursorIn(panel) and not overPanel
   if toSide ~= drag.toSide or toK ~= drag.toK or toI ~= drag.toI or out ~= drag.out then
     drag.toSide, drag.toK, drag.toI, drag.out = toSide, toK, toI, out
     for _, line in ipairs(lines) do line.refresh() end
@@ -2117,6 +2138,7 @@ function ns:ResetWindowPosition()
   if panel then
     PlaceWindow()
     if catalog:IsShown() then FitSidePanel() end
+    if not c.locked then FreeCatalog() end -- still on its own, from beside the window
   end
 end
 
@@ -2755,6 +2777,7 @@ local function Build()
     end, function()
       editing = class
       specMenu:Hide()
+      ClosePicker()
       resetAll.armed = nil
       status:SetText("")
       p.ClearProfileMessages()
@@ -2941,6 +2964,7 @@ local function Build()
   end)
   p:SetScript("OnHide", function()
     specMenu:Hide()
+    ClosePicker()
     drag = nil -- closed mid-drag: the icon stays where it was
     catalog.unfolded = nil -- opened again: on the tab's class
     if dragNav then -- a page of the list too (a hidden frame gets no OnDragStop)
