@@ -12,12 +12,12 @@ local L = ns.L
 
 local floor, ceil, min, max = math.floor, math.ceil, math.min, math.max
 
-local PANEL_W, PANEL_H = 720, 714
+local PANEL_W, PANEL_H = 720, 720
 local TABS_X, FLAG_STEP = 14, 30 -- first tab; flags, one every 30
-local ROW1_Y, ROW2_Y = -84, -110 -- bottoms of the two rows of tabs
+local ROW1_Y, ROW2_Y = -84, -116 -- bottoms of the two rows of tabs (each tab is 32 tall)
 local OPACITY_TAIL = 52          -- the opacity slider's box and "%"
 local FOOTER_RIGHT = 28          -- footer text, clear of the scale grip
-local CONTENT_TOP = -62 -- settings start under the title and the two rows of tabs
+local CONTENT_TOP = -68 -- settings start under the title and the two rows of tabs
 local LEFT, RIGHT, COL_W = 20, 380, 320
 local FULL_W = PANEL_W - 2 * LEFT
 local FONT_ROW_H = 22
@@ -1227,6 +1227,7 @@ local function Catalog(p)
   -- screen's edge.
   function f:Sync(onPage)
     local want = onPage and not self.closed
+    if not want then self.unfolded = nil end -- left the Icons page: back on the tab's class next time
     if want and self.unfolded ~= editing then
       wipe(expanded)
       expanded[editing] = true
@@ -1913,6 +1914,7 @@ function ns:ResetOptionsWindow()
   if not panel then return end
   PlaceWindow()
   panel:SetAlpha(self.sv.window.alpha)
+  panel.PlacePageTabs() -- their order back to the default too
   if catalog:IsShown() then FitSidePanel() end
 end
 
@@ -2036,6 +2038,10 @@ local function Build()
         t:SetPoint("LEFT", rowTabs[r][i - 1], "RIGHT", 4, 0)
       end
       t.class = class
+      -- the game's tab sizes itself to its text when shown: back to the common width
+      local function Keep(self) if self.fixedWidth then PanelTemplates_TabResize(self, 0, self.fixedWidth) end end
+      t:HookScript("OnShow", Keep)
+      t:HookScript("OnEvent", Keep)
       tabs[#tabs + 1] = t
       rowTabs[r][i] = t
     end
@@ -2087,6 +2093,7 @@ local function Build()
     return at
   end
   local function MoveDragged()
+    if not dragTab then return end
     local order = {}
     for _, i in ipairs(ns.sv.pageOrder) do if i ~= dragTab.page then order[#order + 1] = i end end
     table.insert(order, math.max(1, math.min(DropIndex(), #order + 1)), dragTab.page)
@@ -2109,12 +2116,17 @@ local function Build()
     end)
   end
   PlacePageTabs()
+  p.PlacePageTabs = PlacePageTabs
 
   -- language flags in the title bar, left of the close button
   local flags = {}
   for i, lang in ipairs(ns.LANGUAGES) do
     local f = Flag(p, lang, function(code) ns:SetLanguage(code) end)
     f:SetPoint("RIGHT", p, "TOPRIGHT", -34 - (#ns.LANGUAGES - i) * FLAG_STEP, -11)
+    -- above the frame's border art, which covers the title bar
+    local over = p.TitleContainer or p.NineSlice or p
+    f:SetFrameLevel(over:GetFrameLevel() + 2)
+    f.art:SetFrameLevel(f:GetFrameLevel() + 1)
     flags[i] = f
   end
 
@@ -2143,8 +2155,10 @@ local function Build()
       return RowWidth(1, w) + 12 + labelWidth + 40 + OPACITY_TAIL + 14 <= PANEL_W
         and RowWidth(2, w) + pagesWidth + 14 <= PANEL_W
     end
-    if Fits(widest) then
-      for _, t in ipairs(tabs) do PanelTemplates_TabResize(t, 0, widest) end
+    local equal = Fits(widest) and widest or nil
+    for _, t in ipairs(tabs) do
+      t.fixedWidth = equal
+      if equal then PanelTemplates_TabResize(t, 0, equal) end
     end
     local room = PANEL_W - 14 - OPACITY_TAIL - labelWidth - (RowWidth(1) + 12)
     opacity:SetWidth(max(40, min(90, room)))
@@ -2236,19 +2250,24 @@ local function Build()
   end)
   fade:SetPoint("TOPLEFT", LEFT, -352)
   Button(bar, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", bar, "TOPLEFT", LEFT + COL_W, -346)
-  Text(bar, Tr("OOC_POWER")):SetPoint("TOPLEFT", LEFT, -378)
+  local oocPowerLabel = Text(bar, "")
+  oocPowerLabel:SetPoint("TOPLEFT", LEFT, -378)
   local oocPower = Slider(bar, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocPower = v / 100
     ns:PreviewFade()
   end)
   oocPower:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -384)
-  Text(bar, Tr("OOC_TOP")):SetPoint("TOPLEFT", LEFT, -404)
+  local oocTopLabel = Text(bar, "")
+  oocTopLabel:SetPoint("TOPLEFT", LEFT, -404)
   local oocTop = Slider(bar, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocTop = v / 100
     ns:PreviewFade()
   end)
   oocTop:SetPoint("LEFT", bar, "TOPLEFT", LEFT + 168, -410)
   OnRefresh(function()
+    -- the bars of the class: energy / rage, or mana / health; combo points and icons, or icons
+    oocPowerLabel:SetText(ns.POWER_CLASSES[editing] and L.OOC_POWER or L.OOC_MANA)
+    oocTopLabel:SetText(ns.COMBO_CLASSES[editing] and L.OOC_TOP or L.OOC_ICONS)
     fade:Set(ns.db.fadeOOC)
     oocPower:Set(floor(ns.db.oocPower * 100 + .5))
     oocTop:Set(floor(ns.db.oocTop * 100 + .5))
@@ -2395,7 +2414,7 @@ local function Build()
   Section(text, "HIDE_SECTION", RIGHT, -284, nil, -546)
   local showAddon = Check(text, Tr("SHOW_ADDON"), function(on) ns:SetHidden(not on) end)
   showAddon:SetPoint("TOPLEFT", RIGHT, -312)
-  OnRefresh(function() showAddon:Set(not ns.db.hidden) end)
+  OnRefresh(function() showAddon:Set(ns:ShownByChoice()) end) -- the character's own choice, as the portrait's box
   Text(text, Tr("HIDE_WHEN")):SetPoint("TOPLEFT", RIGHT, -334)
   for i, key in ipairs(ns.HIDE_WHEN) do
     local check = Check(text, Tr("HIDE_" .. key:upper()), function(on) ns:SetHideWhen(key, on) end)
@@ -2439,6 +2458,12 @@ local function Build()
   end)
   p:SetScript("OnHide", function()
     drag = nil -- closed mid-drag: the icon stays where it was
+    catalog.unfolded = nil -- opened again: on the tab's class
+    if dragTab then -- a page tab too (a hidden frame gets no OnDragStop)
+      dragTab:SetScript("OnUpdate", nil)
+      dragTab:SetAlpha(1)
+      dragTab = nil
+    end
     ghost:Hide()
     if ns.preview then ns:SetPreview(false) end
     ns:LockOtherProfiles()

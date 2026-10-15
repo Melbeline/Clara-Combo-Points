@@ -742,10 +742,11 @@ end
 -- HUD shown by hand against the rule stays shown until the situation changes.
 local function RuleHides()
   local now, hit, key = ns:Situation(), false, {}
+  local rules = OwnProfile().hideWhen -- this character's class, whatever tab the options show
   for _, k in ipairs(ns.HIDE_WHEN) do
     if now[k] then
       key[#key + 1] = k
-      if ns.db.hideWhen[k] then hit = true end
+      if rules[k] then hit = true end
     end
   end
   return hit, table.concat(key, ",")
@@ -917,7 +918,10 @@ function ns:UpdatePowerMode()
   local wanted = WantedPowerType()
   powerType = wanted
   local bear = self.profileClass == "DRUID" and wanted == POWER_RAGE
-  for i = 1, NUM_POINTS do cells[i].bg:SetShown(not bear) end
+  for i = 1, NUM_POINTS do
+    cells[i].bg:SetShown(not bear)
+    for name, f in pairs(cells[i].skins or {}) do f:SetShown(not bear and name == self.db.skin) end -- its frame too
+  end
   predicting = wanted == POWER_RAGE and self.db.predict
   self:ApplyColors()
   RefreshValues()
@@ -954,6 +958,7 @@ end
 function ns:SetHideWhen(key, on)
   self.db.hideWhen[key] = on and true or false
   self:UpdateVisibility()
+  self:RefreshOptions()
 end
 
 -- Out of combat the bar and the combo points / icons fade to their own opacity. Not while
@@ -1255,8 +1260,10 @@ end
 
 -- Resets the profile in use (the options tab being edited, or this character's class).
 function ns:ResetAll()
+  local iconsLocked, hidden = self.db.iconsLocked, self.db.hidden -- not settings of the tab
   wipe(self.db)
   FillProfile(self.db, self.profileClass)
+  self.db.iconsLocked, self.db.hidden = iconsLocked, hidden
   self:ApplyAll()
   self:RefreshOptions()
 end
