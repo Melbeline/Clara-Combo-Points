@@ -154,20 +154,21 @@ local PAD = 9 -- box margin around its content
 -- sheet's panels in this client, over a dark fill; without that art, the tooltip border in
 -- bronze.
 local INSIDE_FRAME = "common-insideframe"
-local function GroupLook(box)
+local function GroupLook(box, alpha) -- alpha: the fill's opacity (default .55)
+  alpha = alpha or .55
   if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(INSIDE_FRAME) then
-    local fill = box:CreateTexture(nil, "BACKGROUND")
-    fill:SetPoint("TOPLEFT", 3, -3)
-    fill:SetPoint("BOTTOMRIGHT", -3, 3)
-    fill:SetColorTexture(0, 0, 0, .55)
     local border = box:CreateTexture(nil, "BORDER")
     border:SetAtlas(INSIDE_FRAME)
     border:SetPoint("TOPLEFT", 1, 1) -- as the character sheet places it
     border:SetPoint("BOTTOMRIGHT", -4, 2)
-    box.border = border
+    local fill = box:CreateTexture(nil, "BACKGROUND") -- inside the art
+    fill:SetPoint("TOPLEFT", border, "TOPLEFT", 3, -3)
+    fill:SetPoint("BOTTOMRIGHT", border, "BOTTOMRIGHT", -3, 3)
+    fill:SetColorTexture(0, 0, 0, alpha)
+    box.border, box.fill = border, fill
   else
     box:SetBackdrop(GROUP_BACKDROP)
-    box:SetBackdropColor(0, 0, 0, .55)
+    box:SetBackdropColor(0, 0, 0, alpha)
     box:SetBackdropBorderColor(.72, .58, .34, 1)
   end
 end
@@ -1766,7 +1767,7 @@ local function IconsPage(p, icons, OnRefresh)
     local cw, ch = ns:ComboCellSize()
     cellSize:SetText(L.CELL_SIZE:format(floor(cw + .5), floor(ch + .5)))
     bearFixed:SetShown(editing == "DRUID")
-    lookBox:Fit(editing == "DRUID" and -272 or -248)
+    lookBox:Fit(editing == "DRUID" and -274 or -250)
     bearFixed:Set(ns.db.bearIconsFixed)
     reverse:Set(ns.db.icons.reverse)
     iconSize:Set(ns.db.icons.size)
@@ -2033,9 +2034,11 @@ local function PlaceCatalog()
   if CatalogFree() then
     catalog:SetScale(c.scale / panel:GetScale())
     catalog:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", c.left / c.scale, c.top / c.scale)
+    catalog:SetFrameStrata("DIALOG") -- over the window if put on it
   else
     catalog:SetScale(1)
     catalog:SetPoint("TOPLEFT", panel, "TOPRIGHT", 0, 0)
+    catalog:SetFrameStrata(panel:GetFrameStrata())
   end
 end
 
@@ -2075,9 +2078,9 @@ end
 
 -- The spells panel opens on the right of the window: if it would go past the screen's edge,
 -- the window moves left (unless it is already partly off the screen, where it was put). A
--- panel on its own stays where it was put.
+-- panel with a place of its own stays where it was put.
 function FitSidePanel()
-  if not ns.sv.catalog.locked then return end
+  if CatalogFree() then return end
   local left, right, top, screen = panel:GetLeft(), panel:GetRight(), panel:GetTop(), UIParent:GetRight()
   if not (left and right and top and screen) then return end
   screen = screen / panel:GetScale() -- in the window's own units
@@ -2147,7 +2150,7 @@ end
 -- on it and drag to make bigger or smaller what Sizing() gives; its top left corner stays put.
 -- Sizing() returns that corner (UIParent units), the scale now, the width and height up to the
 -- corner held (unscaled), a function applying a scale, and one run when let go.
-local function ScaleGrip(host, Sizing)
+local function ScaleGrip(host, Sizing, beside) -- beside: the readout left of the corner
   local grip = CreateFrame("Button", nil, host)
   grip:SetSize(16, 16)
   grip:SetPoint("BOTTOMRIGHT", -5, 5)
@@ -2156,7 +2159,11 @@ local function ScaleGrip(host, Sizing)
   grip:SetPushedTexture(GRIP .. "Down")
   grip:SetHighlightTexture(GRIP .. "Highlight")
   local percent = grip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  percent:SetPoint("BOTTOMRIGHT", grip, "TOPRIGHT", 0, 18) -- over the window opacity, not on it
+  if beside then
+    percent:SetPoint("RIGHT", grip, "LEFT", -4, 0)
+  else
+    percent:SetPoint("BOTTOMRIGHT", grip, "TOPRIGHT", 0, 18) -- over the window opacity, not on it
+  end
   percent:Hide()
   local held, left, top, offX, offY, W, H, Apply, Done
   local function Cursor()
@@ -2319,7 +2326,7 @@ local function CatalogControls(p)
   lock:SetScript("OnEnter", Tip)
   lock:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   f.lock = lock
-  f.grip = ScaleGrip(f, CatalogSizing)
+  f.grip = ScaleGrip(f, CatalogSizing, true) -- (its readout under the list)
   return Art
 end
 
@@ -2532,7 +2539,7 @@ local function VisibilityPage(p, vis, OnRefresh)
     local druid = editing == "DRUID"
     catOnly:SetShown(druid)
     catOnly:Set(ns.db.druidCatOnly)
-    local bottom = druid and -116 or -92
+    local bottom = druid and -118 or -94
     shownBox:Fit(bottom)
     menuPart:Place(bottom - 28)
     menuLine:Set(ns.sv.menu.line ~= false)
@@ -2603,13 +2610,13 @@ local function SpecMenu(p, anchor)
   m:SetFrameStrata("DIALOG")
   m:EnableMouse(true)
   m:Hide()
-  GroupLook(m)
+  GroupLook(m, .95) -- opaque: it opens over the tabs and the page list
   m.rows = {}
   for i = 1, 4 do
     local r = CreateFrame("Button", nil, m)
     r:SetHeight(SPEC_ROW_H)
-    r:SetPoint("TOPLEFT", 6, -6 - (i - 1) * SPEC_ROW_H)
-    r:SetPoint("RIGHT", m, "RIGHT", -6, 0)
+    r:SetPoint("TOPLEFT", 7, -8 - (i - 1) * SPEC_ROW_H) -- inside the bronze art
+    r:SetPoint("RIGHT", m, "RIGHT", -10, 0)
     r.bg = r:CreateTexture(nil, "BACKGROUND")
     r.bg:SetAllPoints()
     local hl = r:CreateTexture(nil, "HIGHLIGHT")
@@ -2649,10 +2656,12 @@ local function SpecMenu(p, anchor)
         r.icon:SetTexture(path)
         r.name:SetText(L["SPEC_" .. class .. "_" .. i])
         width = max(width, r.name:GetStringWidth())
-        SelectRow(r.bg, path == worn)
+        local lit = path == worn
+        SelectRow(r.bg, lit)
+        if lit then r.name:SetTextColor(1, 1, 1) else r.name:SetTextColor(GOLD_R, GOLD_G, GOLD_B) end
       end
     end
-    self:SetSize(6 + 3 + 20 + 8 + ceil(width) + 12 + 6, 12 + #specs * SPEC_ROW_H)
+    self:SetSize(7 + 3 + 20 + 8 + ceil(width) + 12 + 10, 16 + #specs * SPEC_ROW_H)
     self:ClearAllPoints()
     self:SetPoint("TOPLEFT", anchor, "BOTTOMRIGHT", -12, 8)
     self:Show()
@@ -2674,6 +2683,7 @@ local function PortraitControls(p, portrait)
   portraitButton:SetFrameLevel(((p.PortraitContainer and p.PortraitContainer:GetFrameLevel()) or p:GetFrameLevel()) + 5)
   if portrait then
     portraitButton:SetAllPoints(portrait)
+    portraitButton:SetHitRectInsets(2, 2, 0, 4) -- the round portrait, clear of the first class tab
   else
     portraitButton:SetSize(58, 58)
     portraitButton:SetPoint("TOPLEFT", -5, 7)
