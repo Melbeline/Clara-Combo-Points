@@ -1,6 +1,6 @@
 -- Clara Combo Points
--- Rogue, druid and warrior HUD for WoW Forever: combo points on the top row (tracked buffs and
--- debuffs for warriors), energy or rage on the bottom bar, and up to three rows of icons above
+-- HUD for every class of WoW Forever: combo points on the top row (rogues, druids), energy or
+-- rage (rogues, druids, warriors), mana and health bars, and up to three rows of icons above
 -- and below.
 --
 -- Combo points are never predicted from a spell table: the game is asked directly
@@ -87,7 +87,7 @@ local defaults = {
   showText = true,
   druidCatOnly = true, -- druids: HUD only in Cat and Bear Form
   cpSource = "TARGET", -- TARGET: GetComboPoints(player, target) / PLAYER: UnitPower(player, combo)
-  fadeOOC  = true,     -- out of combat the HUD fades to the two opacities below
+  fadeOOC  = false,    -- out of combat the HUD fades to the two opacities below
   oocPower = .2,       -- energy / rage bar
   oocTop   = .2,       -- combo points and icons
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
@@ -112,7 +112,7 @@ local defaults = {
   },
   icons = {
     shape   = "SQUARE", -- SQUARE (default) / CELL: rectangles the size of a combo point / FILL: the row shares the bar's width
-    size    = 25,      -- row height (and icon width when square), reference pixels
+    size    = 55,      -- row height (and icon width when square), reference pixels
     timers  = true,    -- countdown numbers on the cooldown swipe (auras and spell cooldowns)
     missing = true,    -- missing auras stay in place, grayed out
     reverse = false,   -- buffs / debuffs: reversed swipe (lit when fresh), like Blizzard's aura icons
@@ -403,10 +403,12 @@ local function UpdateCombo()
   local v = ns.preview and NUM_POINTS or ReadComboPoints()
   -- Bear Form and no combo points on the target: nothing shows on the combo row, so the icon
   -- rows above it come down onto the rage bar (unless the option keeps them in place). An
-  -- unreadable (secret) count keeps them in place.
+  -- unreadable (secret) count keeps them in place. In combat they always come down in Bear Form:
+  -- the click buttons over the icons, placed before the fight, are there (Clicks.lua).
+  local fighting = InCombatLockdown()
   local onBar = powerType == POWER_RAGE and ns.profileClass == "DRUID" and not ns.db.bearIconsFixed
-    and not issecretvalue(v)
-  if onBar then -- points on cells turned off show nothing either
+    and (fighting or not issecretvalue(v))
+  if onBar and not fighting then -- points on cells turned off show nothing either
     for i = 1, math.min(v, NUM_POINTS) do
       if not ns.db.disabled["cp" .. i] then onBar = false break end
     end
@@ -658,9 +660,10 @@ end
 -- Form (rage), unless "Cat and Bear Form only" is off; while unlocked or while the options
 -- are open, in any form, so they can be moved and coloured. Rogues and warriors always.
 -- The icon rows are being edited on the HUD: unlocked, or open for a spell taken from the chat
--- (LearnedSpells.lua) until it is placed.
+-- (LearnedSpells.lua) until it is placed, or, the options open, for a spell held or dragged
+-- (Tracker.lua: ns.heldDrop).
 function ns:EditingIcons()
-  return self.db ~= nil and (self.db.iconsLocked == false or self.chatDrop ~= nil)
+  return self.db ~= nil and (self.db.iconsLocked == false or self.chatDrop ~= nil or self.heldDrop ~= nil)
 end
 
 local function FormShown()
@@ -794,6 +797,19 @@ local function ShouldShow()
   if not ns.enabled then return false end
   if ns:HiddenNow() then return false end
   return ShownKey():find("1") ~= nil or IconsAlone()
+end
+
+-- Would the HUD show in a form that shows it (a druid out of Cat and Bear Form)? Its click
+-- buttons keep their places meanwhile (Clicks.lua).
+function ns:ShownOutOfForm()
+  if not self.enabled or self:HiddenNow() then return false end
+  for _, k in ipairs(self.BAR_KEYS) do if BarUsed(k) then return true end end
+  for _, side in ipairs(self.SIDES) do
+    for _, row in pairs(self.db.rows[side]) do
+      if #row > 0 then return true end
+    end
+  end
+  return false
 end
 
 local shownKey -- the bars laid out (ApplyLayout: LayoutKey)
@@ -1169,6 +1185,7 @@ end
 function ns:SetOptionsOpen(open)
   self.optionsOpen = open and true or false
   self:WatchLogout(self.optionsOpen)
+  self:WatchHeldSpell(self.optionsOpen) -- (Tracker.lua)
   self:UpdateVisibility()
   self:ApplyFade()
 end
@@ -1272,7 +1289,7 @@ function ns:ApplyAll()
   self:SetLocked(self.db.locked)
 end
 
--- Out of combat section back to its defaults (fade on, 20 % / 20 %).
+-- Out-of-combat fade (General > Opacity) back to its defaults (off, 20 % / 20 %).
 function ns:ResetFade()
   self.db.fadeOOC, self.db.oocPower, self.db.oocTop = defaults.fadeOOC, defaults.oocPower, defaults.oocTop
   self:PreviewFade()
@@ -1366,8 +1383,8 @@ function ns:SetMenuOption(field, on)
   self:RefreshSettingsPage()
 end
 
--- Everything back to the defaults: the three class tabs (bar, colours, font, icons) and the
--- options window. The saved profiles, the interface language and what the addon learned
+-- Everything back to the defaults: every class profile, the options window, its page order,
+-- the spells panel and the portrait icons. The saved profiles, the interface language and what the addon learned
 -- about auras stay.
 function ns:ResetAddon()
   if hud.dragProfile then
@@ -1608,8 +1625,11 @@ ns.SPECS = {
   PALADIN = { "Spell_Holy_HolyBolt", "Ability_Paladin_ShieldoftheTemplar", "Spell_Holy_AuraOfLight" },
   WARRIOR = { "Ability_Warrior_SavageBlow", "Ability_Warrior_InnerRage", "Ability_Warrior_DefensiveStance" },
 }
+local PORTRAITS_VERSION = 2 -- 2: the picks of the test builds forgotten (the first specialisation by default)
 local function CleanPortraits(sv)
   local old = type(sv.portraits) == "table" and sv.portraits or {}
+  if sv.portraitsVersion ~= PORTRAITS_VERSION then old = {} end
+  sv.portraitsVersion = PORTRAITS_VERSION
   sv.portraits = {}
   for class, specs in pairs(ns.SPECS) do
     local i = old[class]

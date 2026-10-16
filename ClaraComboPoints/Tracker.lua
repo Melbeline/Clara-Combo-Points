@@ -1031,13 +1031,14 @@ local function Inside(frame)
 end
 
 -- Where in a row the cursor is: the place before the first icon whose middle is past it
--- (the icon being dragged left out).
-local function PlaceAt(row)
+-- (the icon being dragged left out: skip, else the HUD's own drag).
+local function PlaceAt(row, skip)
+  skip = skip or hudDrag
   local x = Cursor(row)
   local at = 1
   for i = 1, #(row.spells or {}) do
     local slot = row.slots[i]
-    if not (hudDrag and hudDrag.side == row.side and hudDrag.k == row.k and hudDrag.i == i) then
+    if not (skip and skip.side == row.side and skip.k == row.k and skip.i == i) then
       local l, r = slot:GetLeft(), slot:GetRight()
       if l and x > (l + r) / 2 then at = at + 1 end
     end
@@ -1077,11 +1078,33 @@ local function Ghost()
   ghost.cross:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
   ghost:SetAlpha(.85)
   ghost:Hide()
-  marker = ns.iconLayer:CreateTexture(nil, "OVERLAY")
-  marker:SetColorTexture(1, .82, 0, .9)
-  marker:SetWidth(3)
-  marker:Hide()
   return ghost
+end
+
+-- Where a dragged icon would land: a gold line before the icon that would follow, or after
+-- the last one (skip: the icon dragged, left out).
+local function Mark(row, at, skip)
+  if not marker then
+    marker = ns.iconLayer:CreateTexture(nil, "OVERLAY")
+    marker:SetColorTexture(1, .82, 0, .9)
+    marker:SetWidth(3)
+  end
+  marker:SetShown(row ~= nil)
+  if not row then return end
+  local others = {}
+  for i = 1, #(row.spells or {}) do
+    if not (skip and skip.side == row.side and skip.k == row.k and skip.i == i) then others[#others + 1] = row.slots[i] end
+  end
+  marker:ClearAllPoints()
+  marker:SetHeight(row:GetHeight())
+  local next = others[at]
+  if next then
+    marker:SetPoint("RIGHT", next, "LEFT", -1, 0)
+  elseif others[#others] then
+    marker:SetPoint("LEFT", others[#others], "RIGHT", 1, 0)
+  else
+    marker:SetPoint("CENTER", row, "CENTER")
+  end
 end
 
 -- The drag follows the cursor: the place it would land is marked; off the HUD, a cross says
@@ -1095,24 +1118,7 @@ local function TrackDrag()
   hudDrag.out = not row and not Inside(ns.hud)
   ghost.tex:SetVertexColor(1, hudDrag.out and .35 or 1, hudDrag.out and .35 or 1)
   ghost.cross:SetShown(hudDrag.out)
-  marker:SetShown(row ~= nil)
-  if row then
-    -- before the icon that would follow, or after the last one
-    local others = {}
-    for i = 1, #(row.spells or {}) do
-      if not (hudDrag.side == row.side and hudDrag.k == row.k and hudDrag.i == i) then others[#others + 1] = row.slots[i] end
-    end
-    marker:ClearAllPoints()
-    marker:SetHeight(row:GetHeight())
-    local next = others[hudDrag.at]
-    if next then
-      marker:SetPoint("RIGHT", next, "LEFT", -1, 0)
-    elseif others[#others] then
-      marker:SetPoint("LEFT", others[#others], "RIGHT", 1, 0)
-    else
-      marker:SetPoint("CENTER", row, "CENTER")
-    end
-  end
+  Mark(row, hudDrag.at, hudDrag)
 end
 
 -- The drag is over: the ghost goes, the dragged icon is lit again.
@@ -1120,7 +1126,7 @@ local function StopDrag()
   local d = hudDrag
   hudDrag = nil
   ghost:Hide()
-  marker:Hide()
+  Mark(nil)
   local from = rows[d.side] and rows[d.side][d.k]
   if from and from.slots[d.i] then from.slots[d.i]:SetAlpha(1) end
   -- a spell from the chat moved again: a new grace before the rows close
@@ -1233,6 +1239,58 @@ function ns:EditableRow(row)
     hit.label:SetText(#(self.spells or {}) == 0 and L.DROP_HERE:format(RowName(self.side, self.k)) or "")
   end
 end
+
+---------------------------------------------------------------------------
+-- The options open: a spell held on the cursor (picked up in the spellbook) or dragged in the
+-- options (from the class spells panel, or an icon of a row) opens the HUD's rows for it, even
+-- locked, to be dropped there; they close again once it is let go.
+---------------------------------------------------------------------------
+local heldCursor, heldOptions
+local held = CreateFrame("Frame")
+
+local function SetHeld()
+  local now = (heldCursor or heldOptions) and true or nil
+  if now == ns.heldDrop then return end
+  ns.heldDrop = now
+  ns:LayoutIcons()
+  ns:UpdateVisibility()
+  ns:ApplyFade()
+end
+
+held:SetScript("OnEvent", function()
+  heldCursor = CursorSpell() ~= nil
+  SetHeld()
+end)
+
+function ns:WatchHeldSpell(on)
+  if on then held:RegisterEvent("CURSOR_CHANGED") else held:UnregisterEvent("CURSOR_CHANGED") end
+  heldCursor = on and CursorSpell() ~= nil
+  if not on then heldOptions = nil end
+  SetHeld()
+end
+
+-- A drag of the options starts (on) or ends.
+function ns:HoldForOptions(on)
+  heldOptions = on and self.optionsOpen or nil
+  if not on then Mark(nil) end
+  SetHeld()
+end
+
+-- The options' drag over the HUD: the row under the cursor and the place there (the icon
+-- dragged left out: skip = { side, k, i }), marked; else nothing. Also whether the cursor is
+-- over the HUD at all.
+function ns:HUDDropAt(skip)
+  local row = self:IconsEditable() and RowUnderCursor()
+  if not row then
+    Mark(nil)
+    return nil, nil, nil, Inside(self.hud)
+  end
+  local at = PlaceAt(row, skip or {})
+  Mark(row, at, skip)
+  return row.side, row.k, at, true
+end
+
+function ns:HUDDropDone() Mark(nil) end
 
 -- Drags end with the button let go (also when the icon went away meanwhile); they are
 -- called off when the icons are locked again or the HUD shows another profile.

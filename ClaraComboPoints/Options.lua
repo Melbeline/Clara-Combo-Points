@@ -714,7 +714,20 @@ local function TrackDrag()
       break
     end
   end
-  local out = drag.side ~= nil and not toSide and not CursorIn(panel) and not overPanel
+  -- out of the window: a row of the HUD under the cursor (Tracker.lua), the place marked there
+  local overHud
+  if not toSide and not overPanel and not CursorIn(panel) then
+    local side, k, at, over = ns:HUDDropAt(drag.side and { side = drag.side, k = drag.k, i = drag.i })
+    overHud = over
+    if side and Accepts(side, k) then
+      toSide, toK, toI = side, k, at
+    elseif side then
+      ns:HUDDropDone()
+    end
+  else
+    ns:HUDDropDone()
+  end
+  local out = drag.side ~= nil and not toSide and not CursorIn(panel) and not overPanel and not overHud
   if toSide ~= drag.toSide or toK ~= drag.toK or toI ~= drag.toI or out ~= drag.out then
     drag.toSide, drag.toK, drag.toI, drag.out = toSide, toK, toI, out
     for _, line in ipairs(lines) do line.refresh() end
@@ -775,6 +788,7 @@ local function EndDrag()
   local d = drag
   drag = nil
   ghost:Hide()
+  ns:HoldForOptions(false) -- the HUD's rows close again
   if d.toSide then
     selSide, selK = d.toSide, d.toK
     if d.side then
@@ -794,6 +808,7 @@ local function StartDrag(entry, from)
   if from then drag.side, drag.k, drag.i = from.side, from.k, from.i end
   ghost.tex:SetTexture(ns:EntryIcon(ns:EntrySpell(entry)))
   ghost:Show()
+  ns:HoldForOptions(true) -- the HUD's rows open for it, even locked (Tracker.lua)
   TrackDrag()
 end
 
@@ -2311,8 +2326,8 @@ local function CatalogControls(p)
   f:HookScript("OnHide", StopMoving) -- closed mid-drag: it stays where it was let go
 
   local lock = CreateFrame("Button", nil, f)
-  lock:SetSize(22, 22)
-  lock:SetPoint("TOPLEFT", 5, -1)
+  lock:SetSize(26, 26) -- as large as a close button (its art has a margin)
+  lock:SetPoint("TOPLEFT", 3, 0)
   local over = f.TitleContainer or f.NineSlice or f -- above the frame's border art
   lock:SetFrameLevel(over:GetFrameLevel() + 2)
   lock:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
@@ -2320,7 +2335,7 @@ local function CatalogControls(p)
     local locked = ns.sv.catalog.locked
     local state = locked and "Locked" or "Unlocked"
     lock:SetNormalTexture(LOCK .. state .. "-Up")
-    lock:SetPushedTexture(LOCK .. state .. "-Down")
+    lock:SetPushedTexture(LOCK .. "Unlocked-Down") -- (the game has no pressed locked art)
     local t = lock:GetNormalTexture()
     -- a client without the old lock button: the game's padlock, dimmed when unlocked
     if t and t.GetTextureFileID and not t:GetTextureFileID() and lock.SetNormalAtlas then
@@ -2489,7 +2504,7 @@ local function GeneralPage(p, gen, OnRefresh)
   end
   local styleHint = Wrapped(gen, Tr("SKIN_HINT"))
   styleHint:SetPoint("TOPLEFT", RIGHT, -124)
-  local TEXT_H = 212
+  local TEXT_H = 244
   local text = CreateFrame("Frame", nil, gen) -- under the hint, however many lines it takes
   text:SetSize(COL_W, TEXT_H)
   text:SetPoint("TOPLEFT", styleHint, "BOTTOMLEFT", 0, -10)
@@ -2529,6 +2544,8 @@ local function GeneralPage(p, gen, OnRefresh)
   local bg, bgRefresh = ColorRow(text, "bg", Tr("BARS_BG"))
   bg:SetPoint("TOPLEFT", 0, -184)
   OnRefresh(bgRefresh)
+  -- the value text's and the background's colours (each bar has its own button: Bars page)
+  Button(text, Tr("DEFAULT_TEXT_COLORS"), 250, 22, function() ns:ResetColors({ "text", "bg" }) end):SetPoint("TOPLEFT", 0, -216)
   OnRefresh(function()
     for _, b in ipairs(styleButtons) do b:SetActive(b.skin == ns.db.skin) end
     showText:SetLabel(L["SHOW_" .. RESOURCE[editing]])
@@ -2629,7 +2646,7 @@ end
 local SPEC_ROW_H = 26
 local function SpecMenu(p, anchor)
   local m = CreateFrame("Frame", nil, p, "BackdropTemplate")
-  m:SetFrameStrata("DIALOG")
+  m:SetFrameStrata("FULLSCREEN_DIALOG") -- over the spells panel too (DIALOG when detached)
   m:EnableMouse(true)
   m:Hide()
   GroupLook(m, .95) -- opaque: it opens over the tabs and the page list
@@ -2966,6 +2983,7 @@ local function Build()
     specMenu:Hide()
     ClosePicker()
     drag = nil -- closed mid-drag: the icon stays where it was
+    ns:HoldForOptions(false)
     catalog.unfolded = nil -- opened again: on the tab's class
     if dragNav then -- a page of the list too (a hidden frame gets no OnDragStop)
       dragNav:SetScript("OnUpdate", nil)
