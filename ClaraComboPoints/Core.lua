@@ -1586,29 +1586,38 @@ function ns:CleanProfileData(data, class, into)
 end
 
 -- Options window (account-wide): where it is (top left corner, UIParent units; nil = centred),
--- its scale (nil = as large as fits the screen, up to 100 %) and opacity.
+-- its scale (nil = as large as fits the screen, up to 100 %), its size (unscaled; nil = the
+-- default) and opacity.
 ns.MIN_WINDOW_SCALE, ns.MAX_WINDOW_SCALE = .4, 2
 ns.MIN_WINDOW_ALPHA = .2
+ns.MIN_WINDOW_W, ns.MAX_WINDOW_W = 640, 1800
+ns.MIN_WINDOW_H, ns.MAX_WINDOW_H = 540, 1400
+ns.MIN_SIDE_W, ns.MAX_SIDE_W = 380, 900 -- the spells panel's width
 local function CleanWindow(sv)
   local w = type(sv.window) == "table" and sv.window or {}
   sv.window = w
   if not (Finite(w.left) and Finite(w.top)) then w.left, w.top = nil, nil end
   if not (Finite(w.scale) and w.scale >= ns.MIN_WINDOW_SCALE and w.scale <= ns.MAX_WINDOW_SCALE) then w.scale = nil end
   if not (Finite(w.alpha) and w.alpha >= ns.MIN_WINDOW_ALPHA and w.alpha <= 1) then w.alpha = 1 end
+  if not (Finite(w.w) and w.w >= ns.MIN_WINDOW_W and w.w <= ns.MAX_WINDOW_W) then w.w = nil end
+  if not (Finite(w.h) and w.h >= ns.MIN_WINDOW_H and w.h <= ns.MAX_WINDOW_H) then w.h = nil end
   for k in pairs(w) do
-    if k ~= "left" and k ~= "top" and k ~= "scale" and k ~= "alpha" then w[k] = nil end
+    if k ~= "left" and k ~= "top" and k ~= "scale" and k ~= "alpha" and k ~= "w" and k ~= "h" then w[k] = nil end
   end
 end
 
--- The options' spells panel: locked beside the window (moved and sized with it), or on its own
--- with its place (top left corner in UIParent units) and scale.
+-- The options' spells panel: locked beside the window, on its right or its left (moved and
+-- scaled with it, as tall as it), or on its own with its place (top left corner in UIParent
+-- units), scale and height; its width (nil: the default); its known spells only box.
 local function CleanCatalog(sv)
   local c = type(sv.catalog) == "table" and sv.catalog or {}
-  local clean = { locked = c.locked ~= false }
+  local clean = { locked = c.locked ~= false, knownOnly = c.knownOnly == true or nil, side = c.side == "left" and "left" or nil }
   if not clean.locked and Finite(c.left) and Finite(c.top) and Finite(c.scale)
     and c.scale >= ns.MIN_WINDOW_SCALE and c.scale <= ns.MAX_WINDOW_SCALE then
     clean.left, clean.top, clean.scale = c.left, c.top, c.scale
   end
+  if Finite(c.w) and c.w >= ns.MIN_SIDE_W and c.w <= ns.MAX_SIDE_W then clean.w = math.floor(c.w + .5) end
+  if Finite(c.h) and c.h >= ns.MIN_WINDOW_H and c.h <= ns.MAX_WINDOW_H then clean.h = math.floor(c.h + .5) end
   sv.catalog = clean
 end
 

@@ -203,10 +203,12 @@ local function Store(class)
   return saved[class]
 end
 
--- Checks the profiles kept in the saved variables (account-wide), when the addon loads.
+-- Checks the profiles kept in the saved variables (account-wide), when the addon loads; and
+-- which profile each specialisation of a class loads (sv.specs[class][spec index] = name).
 function ns:InitProfiles(sv)
   if type(sv.saved) ~= "table" then sv.saved = {} end
   if type(sv.active) ~= "table" then sv.active = {} end
+  if type(sv.specs) ~= "table" then sv.specs = {} end
   for key in pairs(sv.saved) do
     if not Contains(self.PROFILES, key) then sv.saved[key] = nil end
   end
@@ -224,6 +226,17 @@ function ns:InitProfiles(sv)
   for key in pairs(sv.active) do
     if not Contains(self.PROFILES, key) then sv.active[key] = nil end
   end
+  local specs = {}
+  for _, class in ipairs(self.PROFILES) do
+    local kept = {}
+    for n, name in pairs(type(sv.specs[class]) == "table" and sv.specs[class] or {}) do
+      if type(n) == "number" and n >= 1 and n <= 8 and n == floor(n) and type(name) == "string" and sv.saved[class][name] then
+        kept[n] = name
+      end
+    end
+    if next(kept) then specs[class] = kept end
+  end
+  sv.specs = specs
 end
 
 -- The profile names of a class, in alphabetical order.
@@ -292,6 +305,9 @@ function ns:DeleteProfile(class, name)
   if not store[name] then return false, L.PROFILE_MISSING end
   store[name] = nil
   if self.sv.active[class] == name then self.sv.active[class] = nil end
+  for n, bound in pairs(self.sv.specs[class] or {}) do
+    if bound == name then self.sv.specs[class][n] = nil end
+  end
   self:RefreshOptions()
   return true, L.PROFILE_DELETED:format(name)
 end
@@ -329,3 +345,95 @@ function ns:ImportProfile(class, text)
   self:RefreshOptions()
   return true, name
 end
+
+---------------------------------------------------------------------------
+-- Profiles loaded by specialisation: a profile of the character's class tab can be tied to
+-- its current specialisation (the game's: its talent tree with the most points); when the
+-- character is in that specialisation (logging in, or changing it), the profile is loaded.
+---------------------------------------------------------------------------
+local Spec = C_SpecializationInfo
+
+-- The character's specialisation now (an index of its class) and its name; nil without one.
+function ns:CurrentSpec()
+  local Get = (Spec and Spec.GetSpecialization) or GetSpecialization
+  local ok, n = pcall(Get or error)
+  if not ok or type(n) ~= "number" or (issecretvalue and issecretvalue(n)) or n < 1 then return end
+  return n, self:SpecName(n)
+end
+
+-- A specialisation's name (of the character's class, or of another), in the game's language;
+-- the addon's own names without the game's.
+local CLASS_IDS = { WARRIOR = 1, PALADIN = 2, HUNTER = 3, ROGUE = 4, PRIEST = 5, SHAMAN = 7, MAGE = 8, WARLOCK = 9, DRUID = 11 }
+local function Plain(name)
+  return type(name) == "string" and name ~= "" and not (issecretvalue and issecretvalue(name))
+end
+function ns:SpecName(n, class)
+  class = class or self.homeClass
+  local ok, name, _
+  if class == self.homeClass then
+    local Info = (Spec and Spec.GetSpecializationInfo) or GetSpecializationInfo
+    if Info then ok, _, name = pcall(Info, n) end
+  elseif GetSpecializationInfoForClassID and CLASS_IDS[class] then
+    ok, _, name = pcall(GetSpecializationInfoForClassID, CLASS_IDS[class], n)
+  end
+  if ok and Plain(name) then return name end
+  return L["SPEC_" .. tostring(class) .. "_" .. n] or tostring(n)
+end
+
+-- The profile a specialisation of a class loads.
+function ns:SpecProfile(class, n)
+  local specs = self.sv.specs[class]
+  local name = specs and n and specs[n]
+  if name and Store(class)[name] then return name end
+end
+
+-- Ties a specialisation to a profile of the class (name), or unties it (nil).
+function ns:SetSpecProfile(class, n, name)
+  if not n then return end
+  local specs = self.sv.specs[class] or {}
+  specs[n] = name and Store(class)[name] and name or nil
+  self.sv.specs[class] = next(specs) and specs or nil
+  self:RefreshOptions()
+end
+
+-- The class's specialisations with a profile, as text: "Holy -> Raid, Shadow -> Solo".
+function ns:SpecProfilesText(class)
+  local list = {}
+  for n = 1, 8 do
+    local name = self:SpecProfile(class, n)
+    if name then list[#list + 1] = self:SpecName(n, class) .. " \226\134\146 " .. name end -- (an arrow)
+  end
+  return table.concat(list, ", ")
+end
+
+-- The specialisation changed (or is first known): its profile loaded, unless already on.
+local lastSpec
+function ns:CheckSpecProfile()
+  if not self.enabled then return end
+  local n, specName = self:CurrentSpec()
+  if n == lastSpec then return end
+  lastSpec = n
+  local class = self.homeClass
+  local name = self:SpecProfile(class, n)
+  if not name or self:ActiveProfile(class) == name then return end
+  self:LoadProfile(class, name)
+  self.Print(L.PROFILE_SPEC_LOADED:format(specName, name))
+end
+
+local specWatch = CreateFrame("Frame")
+local pending
+specWatch:SetScript("OnEvent", function()
+  if pending then return end
+  pending = true
+  C_Timer.After(0, function() -- several events for one change: read once
+    pending = nil
+    ns:CheckSpecProfile()
+  end)
+end)
+table.insert(ns.onEnable, function()
+  for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED", "ACTIVE_TALENT_GROUP_CHANGED",
+    "PLAYER_TALENT_UPDATE", "CHARACTER_POINTS_CHANGED", "TRAIT_CONFIG_UPDATED" }) do
+    pcall(specWatch.RegisterEvent, specWatch, event) -- (not every event in every client build)
+  end
+  ns:CheckSpecProfile()
+end)

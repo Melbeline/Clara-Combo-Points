@@ -2,7 +2,8 @@
 -- German, to find a spell by its name in any of these languages (class spells panel, Add a
 -- spell) and to show the panel in the addon's language. The game's own name (in the client's
 -- language) is always searched too. A name in parentheses after the spell's name says where
--- the aura comes from (a talent, an effect); it is not part of the name in the game.
+-- the aura comes from (a talent, an effect); it is not part of the name in the game. Names past
+-- the third are old names of the spell, still found by a search.
 
 local _, ns = ...
 
@@ -324,7 +325,8 @@ ns.SPELL_NAMES = {
   [19740] = { "Blessing of Might", "Bénédiction de puissance", "Segen der Macht" },
   [1022] = { "Blessing of Protection", "Bénédiction de protection", "Segen des Schutzes" },
   [6940] = { "Blessing of Sacrifice", "Bénédiction de sacrifice", "Segen der Opferung" },
-  [1038] = { "Blessing of Salvation", "Bénédiction de salut", "Segen der Rettung" },
+  -- renamed in WoW Forever 1.60.1.70374 (Salvation, Mass Salvation); the old names still find them
+  [1038] = { "Salvation", nil, nil, "Blessing of Salvation", "Bénédiction de salut", "Segen der Rettung" },
   [20911] = { "Blessing of Sanctuary", "Bénédiction du sanctuaire", "Segen des Refugiums" },
   [19742] = { "Blessing of Wisdom", "Bénédiction de sagesse", "Segen der Weisheit" },
   [19746] = { "Concentration Aura", "Aura de concentration", "Aura der Konzentration" },
@@ -340,7 +342,7 @@ ns.SPELL_NAMES = {
   [25898] = { "Greater Blessing of Kings", "Bénédiction des rois supérieure", "Großer Segen der Könige" },
   [25890] = { "Greater Blessing of Light", "Bénédiction de lumière supérieure", "Großer Segen des Lichts" },
   [25782] = { "Greater Blessing of Might", "Bénédiction de puissance supérieure", "Großer Segen der Macht" },
-  [25895] = { "Greater Blessing of Salvation", "Bénédiction de salut supérieure", "Großer Segen der Rettung" },
+  [25895] = { "Mass Salvation", nil, nil, "Greater Blessing of Salvation", "Bénédiction de salut supérieure", "Großer Segen der Rettung" },
   [25899] = { "Greater Blessing of Sanctuary", "Bénédiction du sanctuaire supérieure", "Großer Segen des Refugiums" },
   [25894] = { "Greater Blessing of Wisdom", "Bénédiction de sagesse supérieure", "Großer Segen der Weisheit" },
   [415058] = { "Guarded by the Light", nil, nil },
@@ -417,4 +419,28 @@ ns.SPELL_NAMES = {
   [12292] = { "Sweeping Strikes", "Attaques circulaires", "Weitreichende Stöße" },
   [355] = { "Taunt", "Provocation", "Spott" },
   [6343] = { "Thunder Clap", "Coup de tonnerre", "Donnerknall" },
+  -- General tab, races
+  [6603] = { "Attack", "Attaque", "Angreifen" },
+  [75] = { "Auto Shot", "Tir automatique", "Automatischer Schuss" },
+  [2383] = { "Find Herbs", "Découverte d'herbes", "Kräutersuche" },
+  [2580] = { "Find Minerals", "Découverte de gisements", "Mineraliensuche" },
+  [5019] = { "Shoot", "Tir", "Schießen" },
+  [20600] = { "Perception", "Perception", "Wahrnehmung" },
+  [1259718] = { "Will to Survive", nil, nil },
+  [3481] = { "Find Treasure", "Découverte de trésors", "Schatzsuche" },
+  [20594] = { "Stoneform", "Forme de pierre", "Steingestalt" },
+  [1259799] = { "Elune's Light", nil, nil },
+  [20580] = { "Shadowmeld", "Camouflage dans l'ombre", "Schattenhaftigkeit" },
+  [20589] = { "Escape Artist", "Maître de l'évasion", "Entfesselungskünstler" },
+  [1259823] = { "Eureka!", nil, nil },
+  [1259705] = { "Read Leyline", nil, nil },
+  [1259416] = { "Walk on Air", nil, nil },
+  [20572] = { "Blood Fury", "Fureur sanguinaire", "Kochendes Blut" },
+  [1299026] = { "Shatter Curse", nil, nil },
+  [20577] = { "Cannibalize", "Cannibalisme", "Kannibalismus" },
+  [7744] = { "Will of the Forsaken", "Volonté des Réprouvés", "Wille der Verlassenen" },
+  [20549] = { "War Stomp", "Choc martial", "Kriegsdonner" },
+  [20554] = { "Berserking", "Berserker", "Berserker" },
+  [1260270] = { "Rapid Regeneration", nil, nil },
+  [1259686] = { "Skysight", nil, nil },
 }

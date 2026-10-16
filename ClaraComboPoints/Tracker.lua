@@ -838,9 +838,10 @@ local catalogIndex -- spell ID and lower-case name -> { kind =, class =, ranks =
                     --   name = the game's name, names = { English, French, German } (SpellNames.lua) }
 local catalogByName -- lower-case name -> every record of that name (several classes, a cast and its aura)
 local catalogList   -- every record, in the lists' order
+local entryRec      -- each line of the lists -> its record (a spell in two lists: a record in each)
 local function CatalogIndex()
   if catalogIndex then return catalogIndex end
-  catalogIndex, catalogByName, catalogList = {}, {}, {}
+  catalogIndex, catalogByName, catalogList, entryRec = {}, {}, {}, {}
   for _, class in ipairs(ns.SPELL_CATALOG or {}) do
     for _, spell in ipairs(class.spells) do
       local rec = { kind = spell[1], class = class.class, ranks = {}, names = ns.SPELL_NAMES and ns.SPELL_NAMES[spell[2]] }
@@ -861,6 +862,7 @@ local function CatalogIndex()
         catalogByName[key] = catalogByName[key] or {}
         table.insert(catalogByName[key], rec)
         catalogList[#catalogList + 1] = rec
+        entryRec[spell] = rec
       end
     end
   end
@@ -891,7 +893,7 @@ local function Keys(rec)
       if key and key ~= "" and not seen[key] then seen[key] = true; keys[#keys + 1] = key end
     end
     Add(rec.name)
-    for i = 1, 3 do Add(rec.names and rec.names[i]) end
+    for i = 1, 9 do Add(rec.names and rec.names[i]) end -- (past the third: its old names)
     rec.keys = keys
   end
   return rec.keys
@@ -934,6 +936,12 @@ function ns:RankIDs(spell)
     end
   end
   return ids
+end
+
+-- The record of a line of the lists (SpellCatalog.lua), if this client knows the spell.
+function ns:CatalogEntryRecord(spell)
+  CatalogIndex()
+  return entryRec[spell]
 end
 
 -- The class spell list entry of a spell (ID or name), if any.

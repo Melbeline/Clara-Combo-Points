@@ -316,7 +316,7 @@ ns.SPELL_CATALOG = {
     { "BUFF", 19740, 19834, 19835, 19836, 19837, 19838, 25291 }, -- Blessing of Might
     { "BUFF", 1022, 5599, 10278 }, -- Blessing of Protection
     { "BUFF", 6940, 20729 }, -- Blessing of Sacrifice
-    { "BUFF", 1038 }, -- Blessing of Salvation
+    { "BUFF", 1038 }, -- Salvation (Blessing of Salvation before 1.60.1.70374)
     { "BUFF", 20911, 20912, 20913, 20914 }, -- Blessing of Sanctuary
     { "BUFF", 19742, 19850, 19852, 19853, 19854, 25290 }, -- Blessing of Wisdom
     { "BUFF", 19746 }, -- Concentration Aura
@@ -332,7 +332,7 @@ ns.SPELL_CATALOG = {
     { "BUFF", 25898 }, -- Greater Blessing of Kings
     { "BUFF", 25890 }, -- Greater Blessing of Light
     { "BUFF", 25782, 25916 }, -- Greater Blessing of Might
-    { "BUFF", 25895 }, -- Greater Blessing of Salvation
+    { "BUFF", 25895 }, -- Mass Salvation (Greater Blessing of Salvation before 1.60.1.70374)
     { "BUFF", 25899 }, -- Greater Blessing of Sanctuary
     { "BUFF", 25894, 25918 }, -- Greater Blessing of Wisdom
     { "BUFF", 415058 }, -- Guarded by the Light
@@ -410,5 +410,54 @@ ns.SPELL_CATALOG = {
     { "BUFF", 12292 }, -- Sweeping Strikes
     { "DEBUFF", 355 }, -- Taunt
     { "DEBUFF", 6343, 8198, 8204, 8205, 11580, 11581 }, -- Thunder Clap
+  } },
+  -- the spells of the spellbook's General tab, then each race's (WoW Forever's own: Elune's
+  -- Light, Will to Survive, Eureka!, Read Leyline, Walk on Air, Shatter Curse, Rapid
+  -- Regeneration, Skysight). SPELL: no aura of its own, its icon shows its cooldown.
+  { class = "GENERAL", spells = {
+    { "SPELL", 6603 }, -- Attack
+    { "SPELL", 75 }, -- Auto Shot
+    { "BUFF", 2383 }, -- Find Herbs
+    { "BUFF", 2580 }, -- Find Minerals
+    { "SPELL", 5019 }, -- Shoot
+  } },
+  { class = "HUMAN", spells = {
+    { "BUFF", 20600 }, -- Perception
+    { "SPELL", 1259718 }, -- Will to Survive
+  } },
+  { class = "DWARF", spells = {
+    { "BUFF", 3481 }, -- Find Treasure
+    { "BUFF", 20594 }, -- Stoneform
+  } },
+  { class = "NIGHTELF", spells = {
+    { "SPELL", 1259799 }, -- Elune's Light
+    { "BUFF", 20580 }, -- Shadowmeld
+  } },
+  { class = "GNOME", spells = {
+    { "SPELL", 20589 }, -- Escape Artist
+    { "BUFF", 1259823 }, -- Eureka!
+  } },
+  { class = "SKYBORNE_ALLIANCE", spells = {
+    { "SPELL", 1259705 }, -- Read Leyline
+    { "BUFF", 1259416 }, -- Walk on Air
+  } },
+  { class = "ORC", spells = {
+    { "BUFF", 20572 }, -- Blood Fury
+    { "SPELL", 1299026 }, -- Shatter Curse
+  } },
+  { class = "UNDEAD", spells = {
+    { "BUFF", 20577 }, -- Cannibalize
+    { "BUFF", 7744 }, -- Will of the Forsaken
+  } },
+  { class = "TAUREN", spells = {
+    { "DEBUFF", 20549 }, -- War Stomp
+  } },
+  { class = "TROLL", spells = {
+    { "BUFF", 20554 }, -- Berserking
+    { "BUFF", 1260270 }, -- Rapid Regeneration
+  } },
+  { class = "SKYBORNE_HORDE", spells = {
+    { "SPELL", 1259686 }, -- Skysight
+    { "BUFF", 1259416 }, -- Walk on Air
   } },
 }
