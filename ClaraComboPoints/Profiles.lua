@@ -406,7 +406,8 @@ function ns:SpecProfilesText(class)
   return table.concat(list, ", ")
 end
 
--- The specialisation changed (or is first known): its profile loaded, unless already on.
+-- The specialisation changed (or is first known): its profile loaded, unless already on. The
+-- changes made to the profile on until then are saved in it first (nothing is lost).
 local lastSpec
 function ns:CheckSpecProfile()
   if not self.enabled then return end
@@ -415,7 +416,12 @@ function ns:CheckSpecProfile()
   lastSpec = n
   local class = self.homeClass
   local name = self:SpecProfile(class, n)
-  if not name or self:ActiveProfile(class) == name then return end
+  local active = self:ActiveProfile(class)
+  if not name or active == name then return end
+  if active and self:ProfileModified(class) then
+    self:SaveProfile(class, active)
+    self.Print(L.PROFILE_SPEC_SAVED:format(active))
+  end
   self:LoadProfile(class, name)
   self.Print(L.PROFILE_SPEC_LOADED:format(specName, name))
 end
