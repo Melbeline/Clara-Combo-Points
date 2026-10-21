@@ -1,8 +1,9 @@
 -- Clara Combo Points - a spell just learned is taken from its chat line ("You have learned a new
 -- ability: [Stealth].") with the mouse: pressed on the spell's name, it comes on the cursor, to
--- put on an action bar or on the HUD. While it is held, the HUD's icon rows open for it, even
--- locked; they close again once it is placed - 5 seconds after it lands on the HUD, to move it if
--- it went to the wrong place. Nothing to set: always on.
+-- put on an action bar or on the HUD. A spell taken from the spellbook, the same. While it is
+-- held, the HUD's icon rows open for it, even locked; they close again once it is placed - 5
+-- seconds after it lands on the HUD, to move it if it went to the wrong place. Nothing to set:
+-- always on.
 
 local _, ns = ...
 
@@ -59,6 +60,13 @@ local function EndChatDrop()
   Refresh()
 end
 
+-- The spell now on the cursor: the rows open for it.
+local function Hold(id)
+  ns.chatDrop = { spell = id }
+  watcher:RegisterEvent("CURSOR_CHANGED")
+  Refresh()
+end
+
 -- A press (or a click) on a learned spell's name in the chat: the spell on the cursor.
 local function Grab(link)
   local id = SpellOfLink(link)
@@ -68,9 +76,14 @@ local function Grab(link)
   if GetCursorInfo and GetCursorInfo() then return end -- something else is held
   if not pcall(PickupSpell, id) or not HeldSpell() then return end -- (a passive spell stays put)
   if ItemRefTooltip and ItemRefTooltip:IsShown() then ItemRefTooltip:Hide() end
-  ns.chatDrop = { spell = id }
-  watcher:RegisterEvent("CURSOR_CHANGED")
-  Refresh()
+  Hold(id)
+end
+
+-- Taken from the spellbook (the game's own pickup, run first): the same.
+local function FromBook()
+  local id = HeldSpell()
+  if not id or not ns.db or (ns.chatDrop and ns.chatDrop.spell == id and not ns.chatDrop.placed) then return end
+  Hold(id)
 end
 
 -- Put on the HUD (Tracker.lua, a drop or a move): the rows stay open GRACE seconds more,
@@ -121,6 +134,10 @@ table.insert(ns.onEnable, function()
       if button == "LeftButton" and not (IsModifiedClick and IsModifiedClick()) then Grab(link) end
     end)
   end
+  if hooksecurefunc and C_SpellBook and C_SpellBook.PickupSpellBookItem then
+    hooksecurefunc(C_SpellBook, "PickupSpellBookItem", FromBook)
+  end
+  if hooksecurefunc and PickupSpellBookItem then hooksecurefunc("PickupSpellBookItem", FromBook) end -- (older clients)
   if hooksecurefunc and FCF_OpenTemporaryWindow then -- whisper windows, opened later
     hooksecurefunc("FCF_OpenTemporaryWindow", function()
       for i = 1, NUM_CHAT_WINDOWS or 10 do HookChat(_G["ChatFrame" .. i]) end

@@ -22,6 +22,7 @@ local SCROLL_W = 22               -- right of the pages: their scroll bar, when 
 local PANEL_W, PANEL_H = NAV_W + BODY_W + SCROLL_W, 720 -- the window's default size
 local TABS_X, FLAG_STEP = 14, 30 -- first tab; flags, one every 30
 local TABS_Y = -84               -- bottom of the row of class tabs (each tab is 32 tall)
+local HEADER_X, HEADER_Y = 64, -37 -- the position's line, between the title and the tabs
 local FOOTER_RIGHT = 28          -- footer, clear of the scale grip
 local CONTENT_TOP = -40          -- pages start under the class tabs (their first group at -96)
 local VIEW_TOP = -86             -- the pages' view, under the class tabs (it scrolls them)
@@ -2750,63 +2751,55 @@ local function Part(page)
 end
 
 ---------------------------------------------------------------------------
--- General page: position, size, opacity | look of the bars and their text
+-- General page: size, opacity | look of the bars and their text (the position: above the
+-- class tabs)
 ---------------------------------------------------------------------------
 local function GeneralPage(p, gen, OnRefresh)
-  Section(gen, "POSITION", LEFT, -56, nil, -110)
-  local lockBtn = Button(gen, "", 150, 22, function() ns:SetLocked(not ns.db.locked) end)
-  lockBtn:SetPoint("TOPLEFT", LEFT, -80)
-  Button(gen, Tr("DEFAULT_POS"), 150, 22, function() ns:ResetPosition() end):SetPoint("TOPLEFT", LEFT + 160, -80)
-  OnRefresh(function()
-    lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
-    lockBtn:SetActive(not ns.db.locked)
-  end)
-
-  Section(gen, "SCALE", LEFT, -138, nil, -230)
+  Section(gen, "SCALE", LEFT, -56, nil, -148)
   local presetButtons = {}
   for i, pct in ipairs(SCALE_PRESETS) do
     local b = Button(gen, pct .. "%", 40, 22, function() ns:SetScalePercent(pct) end)
-    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -162)
+    b:SetPoint("TOPLEFT", LEFT + (i - 1) * 44, -80)
     b.percent = pct
     presetButtons[i] = b
   end
   local scaleSlider = Slider(gen, 200, ns.MIN_SCALE, ns.MAX_SCALE, 1, Percent, function(v) ns:SetScalePercent(v) end, 40)
-  scaleSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT, -198)
-  Hint(gen, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("TOPLEFT", LEFT, -214)
+  scaleSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT, -116)
+  Hint(gen, function() return L.SCALE_HINT:format(ns.MIN_SCALE, ns.MAX_SCALE) end):SetPoint("TOPLEFT", LEFT, -132)
   OnRefresh(function()
     local now = ns:GetScalePercent()
     for _, b in ipairs(presetButtons) do b:SetActive(b.percent == now) end
     scaleSlider:Set(now)
   end)
 
-  Section(gen, "OPACITY", LEFT, -258, nil, -386)
-  Text(gen, Tr("GLOBAL_OPACITY")):SetPoint("TOPLEFT", LEFT, -282)
+  Section(gen, "OPACITY", LEFT, -176, nil, -304)
+  Text(gen, Tr("GLOBAL_OPACITY")):SetPoint("TOPLEFT", LEFT, -200)
   local alphaSlider = Slider(gen, 100, 0, 100, 1, Percent, function(v)
     ns.db.alpha = v / 100
     ns:ApplyAlpha()
   end)
-  alphaSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -288)
+  alphaSlider:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -206)
   local fade = Check(gen, Tr("FADE_OOC"), function(on)
     ns.db.fadeOOC = on
     ns:PreviewFade()
     p:Refresh()
   end)
-  fade:SetPoint("TOPLEFT", LEFT, -312)
-  Button(gen, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", gen, "TOPLEFT", LEFT + COL_W, -306)
+  fade:SetPoint("TOPLEFT", LEFT, -230)
+  Button(gen, Tr("OOC_RESET"), 110, 22, function() ns:ResetFade() end):SetPoint("TOPRIGHT", gen, "TOPLEFT", LEFT + COL_W, -224)
   local oocPowerLabel = Text(gen, "")
-  oocPowerLabel:SetPoint("TOPLEFT", LEFT + 21, -338)
+  oocPowerLabel:SetPoint("TOPLEFT", LEFT + 21, -256)
   local oocPower = Slider(gen, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocPower = v / 100
     ns:PreviewFade()
   end)
-  oocPower:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -344)
+  oocPower:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -262)
   local oocTopLabel = Text(gen, "")
-  oocTopLabel:SetPoint("TOPLEFT", LEFT + 21, -364)
+  oocTopLabel:SetPoint("TOPLEFT", LEFT + 21, -282)
   local oocTop = Slider(gen, 100, 0, 100, 1, Percent, function(v)
     ns.db.oocTop = v / 100
     ns:PreviewFade()
   end)
-  oocTop:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -370)
+  oocTop:SetPoint("LEFT", gen, "TOPLEFT", LEFT + 160, -288)
   OnRefresh(function()
     alphaSlider:Set(floor(ns.db.alpha * 100 + .5))
     -- the bars of the class: energy and / or rage, or mana / health; combo points and icons,
@@ -3052,7 +3045,7 @@ local function SpecMenu(p, anchor)
 end
 
 -- The portrait: a right-click picks the tab's icon among its class's specialisations (the
--- window still moves when dragged by it). Returns the menu.
+-- window still moves when dragged by it); beside it, the HUD's position. Returns the menu.
 local function PortraitControls(p, portrait)
   -- The portrait: a right-click picks the tab's icon among its class's specialisations; the
   -- window still moves when dragged by it.
@@ -3086,6 +3079,19 @@ local function PortraitControls(p, portrait)
   end)
   portraitButton:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   p.portraitButton, p.specMenu = portraitButton, specMenu
+
+  -- The HUD's position, above the class tabs: it moves every bar at once (the tab's class)
+  local posLabel = Text(p, Tr("POSITION"), "GameFontNormal")
+  posLabel:SetPoint("LEFT", p, "TOPLEFT", HEADER_X, HEADER_Y)
+  local lockBtn = Button(p, "", 140, 22, function() ns:SetLocked(not ns.db.locked) end)
+  lockBtn:SetPoint("LEFT", posLabel, "RIGHT", 10, 0)
+  local resetPos = Button(p, Tr("DEFAULT_POS"), 140, 22, function() ns:ResetPosition() end)
+  resetPos:SetPoint("LEFT", lockBtn, "RIGHT", 8, 0)
+  p.lockButton, p.resetPosButton = lockBtn, resetPos
+  function p.RefreshPosition()
+    lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
+    lockBtn:SetActive(not ns.db.locked)
+  end
   return specMenu
 end
 
@@ -3121,6 +3127,7 @@ local function Build()
   local refreshers = {}
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
   local resetAll
+  OnRefresh(p.RefreshPosition)
 
   -- Class tabs, in one row, each name in its class's colour ---------------------------
   local tabs = {}

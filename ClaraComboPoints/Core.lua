@@ -1738,6 +1738,7 @@ local function CleanMenu(sv)
   sv.pageOrder = order
 end
 
+local ICONS_VERSION, OLD_ICON_SIZE = 2, 25
 local function InitDB()
   local sv = type(ClaraComboPointsDB) == "table" and ClaraComboPointsDB or {}
   if type(sv.profiles) ~= "table" then
@@ -1790,6 +1791,19 @@ local function InitDB()
   CleanPortraits(sv)
   CleanMenu(sv)
   ns:InitProfiles(sv) -- Profiles.lua: the profiles saved on each class tab
+  -- 1.6 made the icons 55 tall by default (25 before): the profiles still at the old default
+  -- (each class's, and those saved) move up to it, once
+  if sv.iconsVersion ~= ICONS_VERSION then
+    for _, profile in pairs(sv.profiles) do
+      if profile.icons.size == OLD_ICON_SIZE then profile.icons.size = defaults.icons.size end
+    end
+    for _, store in pairs(sv.saved) do
+      for _, data in pairs(store) do
+        if data.icons and data.icons.size == OLD_ICON_SIZE then data.icons.size = defaults.icons.size end
+      end
+    end
+    sv.iconsVersion = ICONS_VERSION
+  end
   moverText:SetText(L.MOVER)
   ClaraComboPointsDB = sv
   ns.sv = sv
