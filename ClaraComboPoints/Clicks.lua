@@ -1,8 +1,8 @@
 -- Clara Combo Points - a click on an icon of the HUD casts its spell (icons locked), when the
 -- character knows that spell; the other icons (a debuff on the target, another class's aura...)
 -- take no click. A spell that needs a form the character is not in (Feral Charge: Bear or Cat
--- Form; Maul: Bear Form; a warrior's stance, a rogue's Stealth) takes that form first: a second
--- click casts the spell (one click, one action: the game's rule).
+-- Form; Maul: Bear Form; a warrior's stance) or stealth (Sap: Stealth; Pounce: Cat Form, then
+-- Prowl) takes that first: a next click casts the spell (one click, one action: the game's rule).
 -- Casting needs the game's secure action buttons, which addons can neither move, show nor hide
 -- in combat. They live in a layer of their own over the HUD (outside it, so that the HUD stays
 -- free to move and hide in combat), placed on the icons out of combat; in combat they stay where
@@ -48,7 +48,7 @@ end
 
 ---------------------------------------------------------------------------
 -- Forms: the stance bar (a druid's forms, a warrior's stances, a rogue's Stealth), and the
--- ones a spell needs, read from its tooltip ("Requires Bear Form, Dire Bear Form").
+-- ones a spell needs, read from its tooltip ("Requires Bear Form, Dire Bear Form"); stealth.
 ---------------------------------------------------------------------------
 local seenCat, seenBear -- a druid's Cat and Bear Form on the stance bar, as seen worn (energy, rage)
 
@@ -71,30 +71,47 @@ local function StanceBar()
   return bar
 end
 
--- The beginning of a tooltip's "Requires ..." line, in the client's language.
-local REQUIRES = {}
+-- A tooltip's requirement lines ("Requires Bear Form, Dire Bear Form", "Nécessite la forme
+-- d'ours ou la forme d'ours redoutable", "Requiert Forme de félin"): read without case, accents
+-- or punctuation (ns:SearchKey), in the client's language.
+local REQUIRES = { "requires", "necessite", "requiert", "benotigt" }
 do
   local text = _G.SPELL_REQUIRED_FORM
   local prefix = type(text) == "string" and text:match("^(.-)%%s")
-  if prefix and prefix ~= "" then REQUIRES[1] = prefix end
-  for _, p in ipairs({ "Requires ", "Nécessite ", "Requiert ", "Benötigt " }) do REQUIRES[#REQUIRES + 1] = p end
+  local key = prefix and ns:SearchKey(prefix)
+  if key and key ~= "" then table.insert(REQUIRES, 1, key) end
 end
 
-local needs = {} -- spell ID -> the stance bar's forms it needs (the one to take first), or false
+-- Openers that need stealth, whatever their tooltip says: Ambush, Garrote, Cheap Shot, Sap, Pick
+-- Pocket, Premeditation (rogues); Pounce, Ravage (druids, in Cat Form). The stealth each class
+-- takes first: Stealth, Prowl.
+local STEALTH_OPENERS = { 8676, 703, 1833, 6770, 921, 14183, 9005, 6785 }
+local STEALTH = { ROGUE = 1784, DRUID = 5215 }
 
-local function FormsOf(id, bar)
+-- What a spell needs: { forms = the stance bar's forms it needs, the one to take first; stealth
+-- = the stealth spell to cast first }, or false.
+local needs = {}
+
+local function Needs(id, bar)
   if needs[id] ~= nil then return needs[id] end
-  local found, order = {}, {}
+  local _, class = UnitClass("player")
+  local stealthName = STEALTH[class] and SpellName and SpellName(STEALTH[class])
+  if not (type(stealthName) == "string" and Plain(stealthName)) then stealthName = nil end
+  local stealthKey = stealthName and ns:SearchKey(stealthName)
+  local keys = {}
+  for i, name in pairs(bar.names) do keys[i] = ns:SearchKey(name) end
+  local found, order, stealth = {}, {}, false
   local data = C_TooltipInfo and C_TooltipInfo.GetSpellByID and C_TooltipInfo.GetSpellByID(id)
   for n, line in ipairs(type(data) == "table" and type(data.lines) == "table" and data.lines or {}) do
     local text = line.leftText
     if type(text) == "string" and Plain(text) then
-      text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+      local key = ns:SearchKey((text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")))
       local requires
-      for _, p in ipairs(REQUIRES) do if text:sub(1, #p) == p then requires = true break end end
+      for _, p in ipairs(REQUIRES) do if key:sub(1, #p) == p then requires = true break end end
       if requires then
-        for i, name in pairs(bar.names) do
-          local at = text:find(name, 1, true)
+        if stealthKey and key:find(stealthKey, 1, true) then stealth = true end
+        for i, k in pairs(keys) do
+          local at = k ~= "" and k ~= stealthKey and key:find(k, 1, true)
           if at and not found[i] then
             found[i] = n * 10000 + at -- in the order the tooltip names them
             order[#order + 1] = i
@@ -103,9 +120,17 @@ local function FormsOf(id, bar)
       end
     end
   end
+  local name = SpellName and SpellName(id)
+  if stealthName and type(name) == "string" and Plain(name) then
+    for _, opener in ipairs(STEALTH_OPENERS) do
+      if SpellName(opener) == name then stealth = true break end
+    end
+  end
   table.sort(order, function(a, b) return found[a] < found[b] end)
-  needs[id] = #order > 0 and order or false
-  return needs[id]
+  local need = false
+  if #order > 0 or stealth then need = { forms = #order > 0 and order or nil, stealth = stealth and stealthName or nil } end
+  needs[id] = need
+  return need
 end
 
 -- The spell's name as a macro casts it: "Maul", or "Maul(Rank 3)" for one rank.
@@ -118,13 +143,21 @@ local function CastName(spell)
   return name
 end
 
--- The click of a spell that needs a form: the spell in one of its forms, else the first of them.
+-- The click of a spell that needs a form or stealth: the spell when all is there, else what
+-- is missing first (the form, then the stealth).
 local function FormMacro(spell, id, bar)
-  local forms = id and FormsOf(id, bar)
-  if not forms then return end
+  local need = id and Needs(id, bar)
+  if not need then return end
   local name = CastName(spell)
   if not name then return end
-  return ("/cast [form:%s] %s; %s"):format(table.concat(forms, "/"), name, bar.names[forms[1]])
+  if need.forms then
+    local forms, form = table.concat(need.forms, "/"), bar.names[need.forms[1]]
+    if need.stealth then
+      return ("/cast [form:%s,stealth] %s; [form:%s] %s; %s"):format(forms, name, forms, need.stealth, form)
+    end
+    return ("/cast [form:%s] %s; %s"):format(forms, name, form)
+  end
+  return ("/cast [stealth] %s; %s"):format(name, need.stealth)
 end
 
 ---------------------------------------------------------------------------
@@ -132,7 +165,7 @@ end
 ---------------------------------------------------------------------------
 local function Tooltip(self)
   if not GameTooltip or not self.spellID then return end
-  GameTooltip:SetOwner(self, "ANCHOR_TOP")
+  ns:TooltipAt(self)
   if not (GameTooltip.SetSpellByID and pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID)) then
     GameTooltip:SetText(tostring(self.spell))
   end

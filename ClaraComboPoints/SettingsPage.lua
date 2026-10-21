@@ -55,7 +55,6 @@ local function Build()
   -- First: the options window back in the middle of the screen, if it was left off it.
   local resetPos = Button("SP_RESET_POS", 270, function()
     ns:ResetWindowPosition()
-    ns.Print(L.WINDOW_POS_RESET)
   end)
   resetPos:SetPoint("TOPLEFT", 10, -66)
   Button("SP_OPEN", 220, OpenOptions):SetPoint("LEFT", resetPos, "RIGHT", 12, 0)

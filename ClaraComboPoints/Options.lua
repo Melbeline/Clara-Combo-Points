@@ -1357,10 +1357,14 @@ local function Catalog(p)
     local searching = query ~= ""
     local only = ns.sv.catalog.knownOnly
     knownOnly:Set(only)
+    -- known spells only: the Skyborne list of the character's faction alone (both know Walk on Air)
+    local faction = UnitFactionGroup and UnitFactionGroup("player")
+    local otherSkyborne = faction == "Alliance" and "SKYBORNE_HORDE" or faction == "Horde" and "SKYBORNE_ALLIANCE" or nil
     for _, g in ipairs(groups) do
       local list, total = {}, 0
+      local skip = only and g.class == otherSkyborne
       for _, rec in ipairs(g.recs) do
-        if not only or KnownRec(rec) then
+        if not skip and (not only or KnownRec(rec)) then
           total = total + 1
           if not searching or ns:CatalogMatches(rec, query) then list[#list + 1] = rec end
         end

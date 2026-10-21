@@ -169,7 +169,24 @@ end
 local function Print(msg)
   print("|cffffd200Clara Combo Points|r: " .. msg)
 end
-ns.Print = Print
+ns.Print = Print -- (only for what is asked for: /cl help, /cl debug)
+
+-- A tooltip of the HUD (its icons) where the game puts its own (bottom right of the screen,
+-- or by the cursor, as set in the game's options), like an action button's.
+function ns:TooltipAt(owner)
+  if GameTooltip_SetDefaultAnchor then
+    GameTooltip_SetDefaultAnchor(GameTooltip, owner)
+  else
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+  end
+end
+
+-- Why something could not be done (a row full, a spell already there): in the game's red error
+-- line at the top of the screen, not in the chat.
+function ns:ShowError(msg)
+  if type(msg) ~= "string" or msg == "" then return end
+  if UIErrorsFrame and UIErrorsFrame.AddMessage then UIErrorsFrame:AddMessage(msg, 1, .1, .1, 1) end
+end
 
 ---------------------------------------------------------------------------
 -- HUD: the combo row (not for warriors), the energy / rage bar, the mana bar (druids) and the
@@ -1949,7 +1966,6 @@ end
 function ns:AskResetAddon()
   self:Ask(L.RESET_ADDON_ASK, true, { L.RESET_ADDON, function()
     self:ResetAddon()
-    Print(L.RESET_ADDON_DONE)
   end }, { L.CANCEL })
 end
 
@@ -2098,6 +2114,14 @@ end
 ---------------------------------------------------------------------------
 -- Slash commands: /clara, /cl, /ccp, /cp
 ---------------------------------------------------------------------------
+-- /rl: the interface reloaded (as /reload).
+SLASH_CLARARELOAD1 = "/rl"
+SlashCmdList.CLARARELOAD = function()
+  if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+end
+
+-- /cl lock, unlock, hide, show, scale and reset pos act without a word in the chat (what they do
+-- shows); only help and debug write there, asked for.
 SLASH_CLARACOMBOPOINTS1 = "/clara"
 SLASH_CLARACOMBOPOINTS2 = "/cl"
 SLASH_CLARACOMBOPOINTS3 = "/ccp"
@@ -2108,19 +2132,14 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
   if cmd == "lock" then
     ns:SetIconsLocked(true)
     ns:SetLocked(true)
-    Print(L.LOCKED)
   elseif cmd == "unlock" then
     ns:SetLocked(false)
-    Print(L.UNLOCKED)
   elseif cmd == "hide" or cmd == "show" then
     ns:SetHidden(cmd == "hide")
-    Print(cmd == "hide" and L.HIDDEN_NOW or L.SHOWN_NOW)
   elseif cmd == "scale" and tonumber(arg) then
     ns:SetScalePercent(arg)
-    Print(L.SCALE_SET:format(ns:GetScalePercent()))
   elseif cmd == "reset" and (arg == "pos" or arg == "position") then
     ns:ResetWindowPosition()
-    Print(L.WINDOW_POS_RESET)
   elseif cmd == "reset" then
     ns:AskResetAddon()
   elseif cmd == "help" then

@@ -1069,7 +1069,7 @@ local function DropSpell(row, at)
   local ok, msg = ns:AddIcon(row.side, row.k, spellID, at or PlaceAt(row))
   if ok and ns.chatDrop then ns:ChatDropPlaced() end -- a spell from the chat: a little time to move it
   if ok and ClearCursor then ClearCursor() end
-  if msg then ns.Print(msg) end
+  if not ok then ns:ShowError(msg) end
 end
 
 local function Ghost()
@@ -1164,13 +1164,11 @@ local function EndDrag()
   if d.row then
     local ok, msg = ns:MoveIconTo(d.side, d.k, d.i, d.row.side, d.row.k, d.at)
     if not ok then
-      if msg then ns.Print(msg) end
+      ns:ShowError(msg)
       ns:LayoutIcons() -- the icon stays: its own look again
     end
   elseif d.out then
-    local spell = ns:EntrySpell(d.entry)
     ns:RemoveIcon(d.side, d.k, d.i)
-    ns.Print(L.REMOVED:format(ns:SpellName(spell) or tostring(spell), RowName(d.side, d.k)))
   else
     ns:LayoutIcons()
   end
@@ -1191,7 +1189,7 @@ end
 
 local function SlotTooltip(self)
   if not GameTooltip or hudDrag or not ns:IconsEditable() then return end
-  GameTooltip:SetOwner(self, "ANCHOR_TOP")
+  ns:TooltipAt(self)
   local spell = self.spell
   if not (type(spell) == "number" and GameTooltip.SetSpellByID and pcall(GameTooltip.SetSpellByID, GameTooltip, spell)) then
     GameTooltip:SetText(self.name or tostring(spell))
@@ -1209,12 +1207,9 @@ function ns:EditableSlot(slot)
   slot:SetScript("OnMouseUp", function(self, button)
     if button == "RightButton" then -- a right-click takes it off the bar
       if hudDrag or not ns:IconsEditable() then return end
-      local entry = ns.db.rows[self.side][self.k][self.index]
-      if entry == nil then return end
-      local spell = ns:EntrySpell(entry)
+      if ns.db.rows[self.side][self.k][self.index] == nil then return end
       if GameTooltip then GameTooltip:Hide() end
       ns:RemoveIcon(self.side, self.k, self.index)
-      ns.Print(L.REMOVED:format(ns:SpellName(spell) or tostring(spell), RowName(self.side, self.k)))
     elseif CursorSpell() then
       DropSpell(self:GetParent(), self.index)
     end

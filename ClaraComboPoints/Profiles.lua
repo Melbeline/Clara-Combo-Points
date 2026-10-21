@@ -418,12 +418,8 @@ function ns:CheckSpecProfile()
   local name = self:SpecProfile(class, n)
   local active = self:ActiveProfile(class)
   if not name or active == name then return end
-  if active and self:ProfileModified(class) then
-    self:SaveProfile(class, active)
-    self.Print(L.PROFILE_SPEC_SAVED:format(active))
-  end
+  if active and self:ProfileModified(class) then self:SaveProfile(class, active) end
   self:LoadProfile(class, name)
-  self.Print(L.PROFILE_SPEC_LOADED:format(specName, name))
 end
 
 local specWatch = CreateFrame("Frame")
