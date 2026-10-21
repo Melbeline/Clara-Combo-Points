@@ -74,6 +74,8 @@ end
 ns.Fold = function(_, s) return Fold(s) end
 
 function ns:SpellIcon(spell)
+  local item = self:ItemOf(spell)
+  if item then return self:ItemIcon(item) or QUESTION_MARK end
   if GetSpellTexture then
     local ok, icon = pcall(GetSpellTexture, spell)
     if ok and icon and not issecretvalue(icon) then return icon end
@@ -239,6 +241,7 @@ function ns:LayoutIcons()
   local size = shape == "CELL" and cellH or look.size
   local top, bottom, topWidth, bottomWidth, topRoom, bottomRoom = self:IconAnchors()
   local editable = self:IconsEditable()
+  local items = {} -- the items on the rows (their spells watched: Items.lua)
   for _, side in ipairs(self.SIDES) do
     -- each row sits on the previous one, from the top bar up or the bottom bar down; empty
     -- rows take no room (in Bear Form without combo points, the rows above sit on the rage
@@ -290,11 +293,21 @@ function ns:LayoutIcons()
           slot.side, slot.k, slot.index = side, k, i
           slot:EnableMouse(editable)
           slot.exact = type(spells[i]) == "table" and spells[i].exact and type(spell) == "number" and self:RankIDs(spell) or nil
-          slot.name = self:SpellName(spell)
-          slot.byName = type(spell) == "string"
-          slot.spellIcon = self:SpellIcon(spell)
-          if slot.spellIcon == QUESTION_MARK and slot.name then slot.spellIcon = self:SeenIcon(slot.name) end
-          slot.hasCooldown = HasCooldown(slot)
+          slot.item = self:ItemOf(spell)
+          if slot.item then
+            -- an item: the buff it gives has the name of the spell it casts, on you
+            slot.name, slot.itemSpell = self:ItemSpell(slot.item)
+            slot.on, slot.byName, slot.hasCooldown = "self", false, false
+            slot.spellIcon = self:SpellIcon(spell)
+            items[#items + 1] = slot.item
+          else
+            slot.itemSpell = nil
+            slot.name = self:SpellName(spell)
+            slot.byName = type(spell) == "string"
+            slot.spellIcon = self:SpellIcon(spell)
+            if slot.spellIcon == QUESTION_MARK and slot.name then slot.spellIcon = self:SeenIcon(slot.name) end
+            slot.hasCooldown = HasCooldown(slot)
+          end
           slot.imbue = self:ImbueKey(spell, slot.name)
         end
         row:Show()
@@ -302,6 +315,7 @@ function ns:LayoutIcons()
     end
     if side == "above" then self:AnchorMoverText(anchor) end
   end
+  self:WatchItemSpells(items)
   self:SyncAuraButtons()
   self:MarkIconsDirty() -- states read on the next frame, once
   if self.SyncClickers then self:SyncClickers() end -- the click buttons follow (Clicks.lua)
@@ -375,6 +389,14 @@ local function SpellCooldown(slot)
     return true
   end
   return false
+end
+
+-- An item's cooldown (potions, food...) on the swipe, true while it runs.
+local function ItemCooldown(slot)
+  local start, duration = ns:ItemCooldown(slot.item)
+  if not start or duration <= GCD then return false end
+  slot.cd:SetCooldown(start, duration)
+  return true
 end
 
 -- Charges of a spell that has some (possibly secret: only handed to SetText).
@@ -455,13 +477,19 @@ local function SetSlot(slot, look, aura, unit, enchant)
     end
   else
     slot.icon:SetTexture(slot.spellIcon)
-    running = SpellCooldown(slot)
+    if slot.item then running = ItemCooldown(slot) else running = SpellCooldown(slot) end
   end
-  if not enchant and not (aura and Plain(aura.applications) and aura.applications > 1) then
+  local carried
+  if slot.item then
+    -- an item: how many you carry (lit while you have some)
+    local n = ns:ItemCount(slot.item)
+    carried = n ~= nil and n > 0
+    slot.count:SetText(n and n > 0 and n or "")
+  elseif not enchant and not (aura and Plain(aura.applications) and aura.applications > 1) then
     local charges = Charges(slot)
     if charges ~= nil then slot.count:SetText(charges) end
   end
-  local lit = enchant or aura or running or slot.hasCooldown
+  local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
   slot:SetShown(lit or look.missing)
@@ -598,8 +626,15 @@ function ns:ImbueStarted(key)
   for slot, last in pairs(lastEnchants) do before[slot] = last end
   pendingImbue = { key = key, at = GetTime(), before = before }
   self:MarkIconsDirty()
-  C_Timer.After(.5, function() self:MarkIconsDirty() end)
-  C_Timer.After(LEARN_TIME, function() self:MarkIconsDirty() end)
+  C_Timer.After(.5, function() self:CheckPendingImbue() end)
+  C_Timer.After(LEARN_TIME, function() self:CheckPendingImbue() end)
+end
+
+-- A weapon's enchantment changed, or a while after the cast: read the weapons if a cast waits
+-- for its enchantment (the icons may not read them: an item not known yet to enchant weapons).
+function ns:CheckPendingImbue()
+  if pendingImbue then self:WeaponEnchants() end
+  self:MarkIconsDirty()
 end
 
 function ns:LearnEnchant(list)
@@ -616,6 +651,7 @@ function ns:LearnEnchant(list)
         and e.left > before.left - (now - before.at) + 1
       if not before or before.id ~= e.id or renewed then
         self.sv.enchantKeys[e.id] = pend.key
+        self:ItemEnchantLearned(pend.key)
         pendingImbue = nil
       end
     end
@@ -818,7 +854,8 @@ local function SecureIDs(slot)
     return any and ids or nil
   end
   if type(slot.spell) == "number" then Add(slot.spell) end
-  for _, rec in ipairs(ns:CatalogRecords(slot.spell, slot.name)) do
+  if slot.itemSpell then Add(slot.itemSpell) end
+  for _, rec in ipairs(slot.item and {} or ns:CatalogRecords(slot.spell, slot.name)) do
     for _, r in ipairs(rec.ranks) do Add(r[2]); Add(r[3]) end
   end
   local learned = slot.name and ns.sv and ns.sv.auraIDs and ns.sv.auraIDs[Fold(slot.name)]
@@ -942,6 +979,12 @@ end
 function ns:ParseSpell(text)
   text = tostring(text or ""):match("^%s*(.-)%s*$")
   if text == "" then return end
+  local item = text:match("item:(%d+)")
+  if item then
+    local entry = self:ItemEntry(item)
+    if entry then return entry end
+    return nil, L.UNKNOWN_ID:format(text)
+  end
   local id = tonumber(text) or tonumber(text:match("spell:(%d+)"))
   if id then
     if id > 0 and id == floor(id) and self:SpellName(id) then return id end
@@ -1223,10 +1266,12 @@ end
 
 function ns:DraggingIcon() return hudDrag ~= nil end
 
+-- What is held on the cursor, as a row entry: a spell's ID, or "item:ID" (from the bags).
 local function CursorSpell()
   if not GetCursorInfo then return end
-  local kind, _, _, spellID = GetCursorInfo()
+  local kind, a, _, spellID = GetCursorInfo()
   if kind == "spell" and type(spellID) == "number" and spellID > 0 then return spellID end
+  if kind == "item" and type(a) == "number" then return ns:ItemEntry(a) end
 end
 
 local function Cursor(frame)
@@ -1266,7 +1311,8 @@ local function RowUnderCursor()
   end
 end
 
--- A spell from the spellbook let go over a row (or one of its icons): added there.
+-- A spell from the spellbook, or an item from the bags, let go over a row (or one of its
+-- icons): added there.
 local function DropSpell(row, at)
   local spellID = CursorSpell()
   if not spellID or not ns:IconsEditable() then return end

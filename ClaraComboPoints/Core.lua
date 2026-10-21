@@ -552,9 +552,13 @@ local GetSpellPowerCost = (C_Spell and C_Spell.GetSpellPowerCost) or GetSpellPow
 local GetSpellName = (C_Spell and C_Spell.GetSpellName) or function(spell) return (GetSpellInfo(spell)) end
 local GetAuraDataBySpellName = C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName
 
--- Localized name of a spell ID, or nil if this client does not know it.
+-- Localized name of a spell ID, or nil if this client does not know it (an item: its name).
 function ns:SpellName(spell)
-  if type(spell) ~= "number" then return spell end
+  if type(spell) ~= "number" then
+    local item = self.ItemOf and self:ItemOf(spell) -- an item ("item:ID"): its name
+    if item then return self:ItemName(item) end
+    return spell
+  end
   local ok, name = pcall(GetSpellName, spell)
   if ok and type(name) == "string" and not issecretvalue(name) and name ~= "" then return name end
 end
@@ -1777,13 +1781,13 @@ local function InitDB()
       end
     end
   end
-  -- weapon enchantments: the imbue each was learned for, and the longest time left seen
-  for _, key in ipairs({ "enchantKeys", "enchantTimes" }) do
+  -- weapon enchantments: the imbue each was learned for, the longest time left seen, and the
+  -- items seen to enchant a weapon
+  local LEARNED = { enchantKeys = "string", enchantTimes = "number", enchantItems = "boolean" }
+  for key, kind in pairs(LEARNED) do
     if type(sv[key]) ~= "table" then sv[key] = {} end
     for id, v in pairs(sv[key]) do
-      if type(id) ~= "number" or (key == "enchantKeys" and type(v) ~= "string") or (key == "enchantTimes" and type(v) ~= "number") then
-        sv[key][id] = nil
-      end
+      if type(id) ~= "number" or type(v) ~= kind then sv[key][id] = nil end
     end
   end
   CleanWindow(sv)
@@ -1877,8 +1881,12 @@ function ns:PLAYER_LOGIN()
   for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "DELAYED", "SUCCEEDED" }) do
     events:RegisterUnitEvent("UNIT_SPELLCAST_" .. e, "player")
   end
-  -- weapon enchantments (imbues, poisons, oils, stones) on the icons
+  -- weapon enchantments (imbues, poisons, oils, stones) on the icons; items: how many, their
+  -- cooldown, their name and icon once the game has them
   events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+  for _, e in ipairs({ "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN", "GET_ITEM_INFO_RECEIVED" }) do
+    pcall(events.RegisterEvent, events, e) -- (not every event in every client build)
+  end
   pcall(events.RegisterEvent, events, "WEAPON_ENCHANT_CHANGED") -- not in every client build
   if class == "SHAMAN" then pcall(events.RegisterEvent, events, "PLAYER_SWING") end -- Windfury's extra attacks (Forever)
   for _, start in ipairs(self.onEnable) do start() end -- (Clicks.lua, LearnedSpells.lua)
@@ -1990,9 +1998,22 @@ function ns:UNIT_SPELLCAST_SUCCEEDED(_, _, spellID)
 end
 
 function ns:UNIT_INVENTORY_CHANGED()
-  self:MarkIconsDirty()
+  self:CheckPendingImbue() -- (Tracker.lua)
 end
 ns.WEAPON_ENCHANT_CHANGED = ns.UNIT_INVENTORY_CHANGED
+
+function ns:BAG_UPDATE_DELAYED()
+  self:MarkIconsDirty()
+end
+ns.BAG_UPDATE_COOLDOWN = ns.BAG_UPDATE_DELAYED
+
+-- An item's data arrived (Items.lua asked for it): its name and icon on the rows and options.
+function ns:GET_ITEM_INFO_RECEIVED(id)
+  if not issecretvalue(id) and self:ItemArrived(id) then
+    self:LayoutIcons()
+    self:RefreshOptions()
+  end
+end
 
 function ns:PLAYER_SWING(duration, swingType)
   self:Swing(duration, swingType) -- (Tracker.lua)

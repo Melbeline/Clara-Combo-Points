@@ -678,6 +678,15 @@ local function IconTooltip(self)
   GameTooltip:SetOwner(self, "ANCHOR_TOP")
   local spell = self.spell
   local named
+  local item = ns:ItemOf(spell)
+  if item then -- an item: its own tooltip, then how to remove it
+    if not (GameTooltip.SetItemByID and pcall(GameTooltip.SetItemByID, GameTooltip, item)) then
+      GameTooltip:SetText(ns:SpellName(spell) or spell)
+    end
+    GameTooltip:AddLine(L.ICON_TIP, .6, .6, .65, true)
+    GameTooltip:Show()
+    return
+  end
   if type(spell) == "number" and GameTooltip.SetSpellByID then
     named = pcall(GameTooltip.SetSpellByID, GameTooltip, spell)
   end
@@ -885,7 +894,8 @@ local function IconMenu(b, side, k)
     if not ok then ShowStatus(false, msg) end
   end
   if not (MenuUtil and MenuUtil.CreateContextMenu) then
-    -- no menus in this client: each click watches the next way
+    -- no menus in this client: each click watches the next way (an item: nothing to change)
+    if ns:ItemOf(ns:EntrySpell(entry)) then return end
     local now = ns:EntryOn(entry)
     for n, on in ipairs(ns.CONDITIONS) do
       if on == now then Change(nil, ns.CONDITIONS[n % #ns.CONDITIONS + 1]) break end
@@ -893,6 +903,16 @@ local function IconMenu(b, side, k)
     return
   end
   local spell = ns:EntrySpell(entry)
+  if ns:ItemOf(spell) then -- an item: nothing to choose, only removed
+    ToggleMenu(b, function(_, root)
+      root:CreateTitle(ns:SpellName(spell) or tostring(spell))
+      root:CreateButton(L.REMOVE, function()
+        if Current() ~= nil then Remove(side, k, i) end
+        panel:Refresh()
+      end)
+    end)
+    return
+  end
   ToggleMenu(b, function(_, root)
     root:CreateTitle(ns:SpellName(spell) or tostring(spell))
     for _, on in ipairs(ns.CONDITIONS) do

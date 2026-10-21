@@ -1,6 +1,7 @@
 -- Clara Combo Points - a click on an icon of the HUD casts its spell (icons locked), when the
 -- character knows that spell; the other icons (a debuff on the target, another class's aura...)
--- take no click. A spell that needs a form the character is not in (Feral Charge: Bear or Cat
+-- take no click. An item's icon uses the item (one for a weapon: left click on the main hand,
+-- right click on the off hand). A spell that needs a form the character is not in (Feral Charge: Bear or Cat
 -- Form; Maul: Bear Form; a warrior's stance) or stealth (Sap: Stealth; Pounce: Cat Form, then
 -- Prowl) takes that first: a next click casts the spell (one click, one action: the game's rule).
 -- Casting needs the game's secure action buttons, which addons can neither move, show nor hide
@@ -36,6 +37,7 @@ local function Plain(v) return not (issecretvalue and issecretvalue(v)) end
 local function Castable(slot)
   local spell = slot.spell
   if spell == nil then return end
+  if slot.item then return spell, nil end -- an item: used
   if slot.exact then
     if type(spell) == "number" and Known(spell) then return spell, spell end
     return
@@ -164,7 +166,16 @@ end
 -- Buttons
 ---------------------------------------------------------------------------
 local function Tooltip(self)
-  if not GameTooltip or not self.spellID then return end
+  if not GameTooltip then return end
+  if self.item then
+    ns:TooltipAt(self)
+    if not (GameTooltip.SetItemByID and pcall(GameTooltip.SetItemByID, GameTooltip, self.item)) then
+      GameTooltip:SetText(ns:ItemName(self.item) or tostring(self.spell))
+    end
+    GameTooltip:Show()
+    return
+  end
+  if not self.spellID then return end
   ns:TooltipAt(self)
   if not (GameTooltip.SetSpellByID and pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID)) then
     GameTooltip:SetText(tostring(self.spell))
@@ -188,7 +199,7 @@ local function Button(layer, i)
   local b = layer.buttons[i]
   if b then return b end
   b = CreateFrame("Button", layer:GetName() .. "Button" .. i, layer, "SecureActionButtonTemplate")
-  b:RegisterForClicks("LeftButtonUp")
+  b:RegisterForClicks("LeftButtonUp", "RightButtonUp") -- (the right button: a weapon's item on the off hand)
   b:SetAttribute("useOnKeyDown", false)
   b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
   b:SetScript("OnEnter", Tooltip)
@@ -208,8 +219,17 @@ local function Read(bar)
     local l, b, w, h = slot:GetRect()
     if not l then return end
     local s = slot:GetEffectiveScale() / ui
-    list[#list + 1] = { spell = spell, id = id, macro = FormMacro(spell, id, bar),
-      l = l * s, b = b * s, w = w * s, h = h * s }
+    local w = { spell = spell, id = id, l = l * s, b = b * s, w = w * s, h = h * s }
+    if slot.item then
+      w.item = slot.item
+      if ns:IsWeaponItem(slot.item) then -- used on a weapon: the main hand, or the off hand
+        w.macro = ("/use %s\n/use 16"):format(spell)
+        w.macro2 = ("/use %s\n/use 17"):format(spell)
+      end
+    else
+      w.macro = FormMacro(spell, id, bar)
+    end
+    list[#list + 1] = w
   end)
   return list
 end
@@ -217,7 +237,7 @@ end
 local function Key(list)
   local parts = {}
   for _, w in ipairs(list) do
-    parts[#parts + 1] = ("%s:%s:%.1f:%.1f:%.1f:%.1f"):format(tostring(w.spell), w.macro or "", w.l, w.b, w.w, w.h)
+    parts[#parts + 1] = ("%s:%s:%s:%.1f:%.1f:%.1f:%.1f"):format(tostring(w.spell), w.macro or "", w.macro2 or "", w.l, w.b, w.w, w.h)
   end
   return table.concat(parts, "|")
 end
@@ -235,16 +255,24 @@ local function Place(n, list, driver)
   local layer = Layer(n)
   for i, w in ipairs(list) do
     local b = Button(layer, i)
+    b:SetAttribute("type2", w.macro2 and "macro" or nil)
+    b:SetAttribute("macrotext2", w.macro2)
+    b:SetAttribute("item", nil)
     if w.macro then
       b:SetAttribute("type1", "macro")
       b:SetAttribute("macrotext", w.macro)
       b:SetAttribute("spell", nil)
+    elseif w.item then
+      b:SetAttribute("type1", "item")
+      b:SetAttribute("item", w.spell)
+      b:SetAttribute("spell", nil)
+      b:SetAttribute("macrotext", nil)
     else
       b:SetAttribute("type1", "spell")
       b:SetAttribute("spell", w.spell)
       b:SetAttribute("macrotext", nil)
     end
-    b.spell, b.spellID = w.spell, w.id
+    b.spell, b.spellID, b.item = w.spell, w.id, w.item
     b:ClearAllPoints()
     b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", w.l, w.b)
     b:SetSize(w.w, w.h)
