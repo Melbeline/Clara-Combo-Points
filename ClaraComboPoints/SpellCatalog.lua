@@ -2,7 +2,8 @@
 -- and spells typed by name (Tracker.lua).
 -- { kind, rank 1 ID, rank 2 ID, ... } -- name
 --   kind: BUFF (helpful), DEBUFF (on enemies), SELFDEBUFF (harmful, on yourself or your allies:
---   Weakened Soul, Forbearance...). alt: the same ranks under a second ID, as WoW Forever has
+--   Weakened Soul, Forbearance...), SPELL (a spell to cast, no aura), IMBUE (a weapon
+--   imbue: its icon watches the enchantment on your weapons). alt: the same ranks under a second ID, as WoW Forever has
 --   some spells twice (false: none for that rank).
 -- Names are read from the game, in its language; spells the game does not know are left out.
 -- Sources: LibClassicDurations, Classic Era spell data (checked rank by rank), and WoW Forever's
@@ -277,11 +278,13 @@ ns.SPELL_CATALOG = {
     { "BUFF", 16166 }, -- Elemental Mastery
     { "BUFF", 8185, 10534, 10535 }, -- Fire Resistance
     { "DEBUFF", 8050, 8052, 8053, 10447, 10448, 29228 }, -- Flame Shock
+    { "IMBUE", 8024, 8027, 8030, 16339, 16341, 16342 }, -- Flametongue Weapon
     { "BUFF", 16257, 16277, 16278, 16279, 16280 }, -- Flurry
     { "BUFF", 29063 }, -- Focused Casting
     { "BUFF", 8182, 10476, 10477 }, -- Frost Resistance
     { "DEBUFF", 8056, 8058, 10472, 10473 }, -- Frost Shock
     { "DEBUFF", 8034, 8037, 10458, 16352, 16353 }, -- Frostbrand Attack
+    { "IMBUE", 8033, 8038, 10456, 16355, 16356 }, -- Frostbrand Weapon
     { "BUFF", 2645 }, -- Ghost Wolf
     { "BUFF", 8836, 10626, 25360 }, -- Grace of Air
     { "BUFF", 8178 }, -- Grounding Totem Effect
@@ -295,6 +298,7 @@ ns.SPELL_CATALOG = {
     { "BUFF", 16188 }, -- Nature's Swiftness
     { "BUFF", 425336 }, -- Rage of the Farseer
     { "BUFF", 408521, 1239242, 1239243 }, -- Riptide
+    { "IMBUE", 8017, 8018, 8019, 10399, 16314, 16315, 16316 }, -- Rockbiter Weapon
     { "BUFF", 6495 }, -- Sentry Totem
     { "BUFF", 408696 }, -- Spirit of the Alpha
     { "BUFF", 8072, 8156, 8157, 10403, 10404, 10405 }, -- Stoneskin
@@ -305,6 +309,7 @@ ns.SPELL_CATALOG = {
     { "BUFF", 131 }, -- Water Breathing
     { "BUFF", 408510 }, -- Water Shield
     { "BUFF", 546 }, -- Water Walking
+    { "IMBUE", 8232, 8235, 10486, 16362 }, -- Windfury Weapon
     { "BUFF", 15108, 15109, 15110 }, -- Windwall
   } },
   { class = "PALADIN", spells = {

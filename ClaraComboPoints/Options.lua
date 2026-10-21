@@ -52,14 +52,15 @@ local PAGES = {
 local ICONS_PAGE = 3 -- the class spells panel opens beside it
 -- the colours of each bar (Bars page); background and value text are on the General page
 local BAR_COLORS = { combo = { "cp1", "cp2", "cp3", "cp4", "cp5" }, power = { "energy", "rage", "cost" },
-  mana = { "mana" }, health = { "health" } }
-local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", mana = "MANA_BAR", health = "HEALTH_BAR", cost = "COST_COLOR" }
+  mana = { "mana", "manaCost" }, health = { "health" } }
+local COLOR_LABELS = { energy = "ENERGY_BAR", rage = "RAGE_BAR", mana = "MANA_BAR", health = "HEALTH_BAR", cost = "COST_COLOR",
+  manaCost = "MANA_COST_COLOR" }
 -- colours a class never uses (warriors have no combo points: their icons wear the button frame;
 -- the mana classes have neither combo points nor energy / rage)
 local MANA_ONLY = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true, rage = true, cost = true }
 local NO_COLOR = {
-  ROGUE = { rage = true, cost = true, mana = true },
-  WARRIOR = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true, mana = true },
+  ROGUE = { rage = true, cost = true, mana = true, manaCost = true },
+  WARRIOR = { cp1 = true, cp2 = true, cp3 = true, cp4 = true, cp5 = true, energy = true, mana = true, manaCost = true },
   PRIEST = MANA_ONLY, MAGE = MANA_ONLY, WARLOCK = MANA_ONLY, HUNTER = MANA_ONLY, SHAMAN = MANA_ONLY, PALADIN = MANA_ONLY,
 }
 local RESOURCE = { ROGUE = "ENERGY", DRUID = "BOTH", WARRIOR = "RAGE", PRIEST = "MANA", MAGE = "MANA",
@@ -1019,7 +1020,7 @@ local CLASS_COLORS = {
   DRUID = { 1, .49, .04 }, HUNTER = { .67, .83, .45 }, SHAMAN = { 0, .44, .87 }, PALADIN = { .96, .55, .73 },
   WARRIOR = { .78, .61, .43 },
 }
-local KIND_ON = { BUFF = "self", DEBUFF = "enemy", SELFDEBUFF = "self", SPELL = "self" } -- where to watch by default
+local KIND_ON = { BUFF = "self", DEBUFF = "enemy", SELFDEBUFF = "self", SPELL = "self", IMBUE = "self" } -- where to watch by default
 -- the lists past the classes: the spellbook's General tab, and the races (Alliance in blue,
 -- Horde in red)
 local GROUP_COLORS = { GENERAL = { GOLD_R, GOLD_G, GOLD_B } }
@@ -1754,10 +1755,10 @@ local function BarsPage(p, page, OnRefresh)
   Rule(R, RIGHT, -166)
   Text(R, Tr("COLORS")):SetPoint("TOPLEFT", RIGHT, -176)
 
-  -- its colours, each part with a box if the bar has more than one (the rage about to be spent
-  -- always: it is shown or not)
+  -- its colours, each part with a box if the bar has more than one (the rage or mana about to
+  -- be spent always: it is shown or not)
   local function Boxed(key)
-    return key == "cost" or #ns:BarParts(picked, editing) > 1
+    return key == "cost" or key == "manaCost" or #ns:BarParts(picked, editing) > 1
   end
   local function Has(key)
     for _, k in ipairs(BarColorKeys(picked)) do if k == key then return true end end
@@ -1781,6 +1782,13 @@ local function BarsPage(p, page, OnRefresh)
           names:SetText(table.concat(list, ", "))
         end)
         items[#items + 1] = { frame = spells, height = 18, when = function() return Has("cost") end }
+      elseif key == "manaCost" then -- which spells it counts
+        local spells = Holder(R, 18)
+        local hint = Hint(spells, Tr("MANA_COST_HINT"))
+        hint:SetPoint("TOPLEFT", 20, -1)
+        hint:SetWidth(COL_W - 20)
+        hint:SetWordWrap(false)
+        items[#items + 1] = { frame = spells, height = 18, when = function() return Has("manaCost") end }
       elseif key == "health" then -- or the class's colour
         local classColor = Holder(R, 26)
         local check = Check(classColor, Tr("CLASS_COLOR"), function(on)

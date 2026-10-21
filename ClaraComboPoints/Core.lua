@@ -91,6 +91,7 @@ local defaults = {
   oocPower = .2,       -- energy / rage bar
   oocTop   = .2,       -- combo points and icons
   predict  = true,     -- rage about to be spent (queued Heroic Strike, Maul...) marked on the bar
+  predictMana = true,  -- mana the spell being cast will spend, marked on the mana bar
   bearIconsFixed = false, -- druids: icon rows stay above the combo points in Bear Form, even without points
   healthClassColor = false, -- health bar in the class colour rather than its own
   skin     = "FLAT",   -- the bars' style: FLAT, CLASSIC (the game's bars), TOOLTIP (tooltip borders)
@@ -129,6 +130,7 @@ local defaults = {
     mana   = { r = 0, g = 0,    b = 1,    a = 1 }, -- the game's mana blue
     health = { r = 0, g = 1,    b = 0,    a = 1 }, -- the game's health green
     cost   = { r = 1, g = 1,    b = 1,    a = .45 },
+    manaCost = { r = 1, g = 1,  b = 1,    a = .45 },
     bg     = { r = 0, g = 0,    b = 0,    a = .6 },
     text   = { r = 1, g = 1,    b = 1,    a = 1 },
   },
@@ -235,8 +237,6 @@ costClip:Hide()
 local costHolder = CreateFrame("Frame", nil, costClip)
 costHolder:SetAllPoints()
 local costTex = costHolder:CreateTexture(nil, "ARTWORK")
-costTex:SetPoint("TOPRIGHT", power:GetStatusBarTexture(), "TOPRIGHT")
-costTex:SetPoint("BOTTOMRIGHT", power:GetStatusBarTexture(), "BOTTOMRIGHT")
 costTex:SetWidth(1)
 
 local textHolder = CreateFrame("Frame", nil, power) -- above the cost marker
@@ -246,17 +246,40 @@ local powerText = textHolder:CreateFontString(nil, "OVERLAY")
 powerText:SetPoint("CENTER")
 powerText:SetFont(ns.fonts[1].path, defaults.fontSize, defaults.outline)
 
--- Mana (druids) and health: a bar and its value
+-- Mana and health: a bar and its value (above the mana about to be spent)
 local function ValueBar()
   local bar = CreateBar(hud, 0, 100)
   bar:SetSize(WIDTH, 12)
-  bar.text = bar:CreateFontString(nil, "OVERLAY")
+  local holder = CreateFrame("Frame", nil, bar)
+  holder:SetAllPoints()
+  holder:SetFrameLevel(bar:GetFrameLevel() + 3)
+  bar.text = holder:CreateFontString(nil, "OVERLAY")
   bar.text:SetPoint("CENTER")
   bar.text:SetFont(ns.fonts[1].path, 10, defaults.outline)
   return bar
 end
 local manaBar, healthBar = ValueBar(), ValueBar()
 ns.manaBar, ns.healthBar = manaBar, healthBar
+
+-- The mana the spell being cast will spend, drawn the same way on the mana bar.
+local manaClip = CreateFrame("Frame", nil, manaBar)
+manaClip:SetAllPoints()
+manaClip:SetClipsChildren(true)
+manaClip:Hide()
+local manaHolder = CreateFrame("Frame", nil, manaClip)
+manaHolder:SetAllPoints()
+local manaCostTex = manaHolder:CreateTexture(nil, "ARTWORK")
+manaCostTex:SetWidth(1)
+
+-- the markers hang off their bar's fill (again whenever a style changes the fill's texture)
+local function AnchorCosts()
+  for tex, bar in pairs({ [costTex] = power, [manaCostTex] = manaBar }) do
+    tex:ClearAllPoints()
+    tex:SetPoint("TOPRIGHT", bar:GetStatusBarTexture(), "TOPRIGHT")
+    tex:SetPoint("BOTTOMRIGHT", bar:GetStatusBarTexture(), "BOTTOMRIGHT")
+  end
+end
+AnchorCosts()
 local elements = { combo = comboRow, power = power, mana = manaBar, health = healthBar }
 ns.barFrames = elements
 ---------------------------------------------------------------------------
@@ -341,10 +364,7 @@ function ns:ApplySkin()
       f:SetFrameLevel(math.max(0, bar:GetFrameLevel() - 1)) -- under the bar
     end
   end
-  -- the rage about to be spent hangs off the bar's fill
-  costTex:ClearAllPoints()
-  costTex:SetPoint("TOPRIGHT", power:GetStatusBarTexture(), "TOPRIGHT")
-  costTex:SetPoint("BOTTOMRIGHT", power:GetStatusBarTexture(), "BOTTOMRIGHT")
+  AnchorCosts()
 end
 
 -- A new style: its room around the bars, and its colours for the parts still at the old
@@ -550,14 +570,18 @@ local function Plain(v) -- a readable number, or nil
   if not issecretvalue(v) and type(v) == "number" then return v end
 end
 
-local function RageCost(spell)
+local function PowerCost(spell, kind)
   if not GetSpellPowerCost then return 0 end
   local ok, costs = pcall(GetSpellPowerCost, spell)
   if not ok or issecretvalue(costs) or type(costs) ~= "table" then return 0 end
   for _, info in ipairs(costs) do
-    if type(info) == "table" and Plain(info.type) == POWER_RAGE then return Plain(info.cost) or 0 end
+    if type(info) == "table" and Plain(info.type) == kind then return Plain(info.cost) or 0 end
   end
   return 0
+end
+
+local function RageCost(spell)
+  return PowerCost(spell, POWER_RAGE)
 end
 
 local swingSpells = {} -- names first (whatever rank is known), then every rank by ID
@@ -590,11 +614,40 @@ local function UpdateQueued()
   end
 end
 
-local function UpdateCast()
-  castCost = 0
-  if not predicting or not UnitCastingInfo then return end
+local manaPredicting  -- the mana bar shown and its prediction wanted
+local manaCast = 0    -- mana the cast in progress will spend
+local manaShown       -- mana currently marked
+
+-- The spell being cast (nil if none, or hidden from addons). Instant spells and channels
+-- spend at once, so only casts are counted.
+local function CastSpell()
+  if not UnitCastingInfo then return end
   local ok, name, _, _, _, _, _, _, _, spellID = pcall(UnitCastingInfo, "player")
-  if ok and not issecretvalue(name) and name and Plain(spellID) then castCost = RageCost(spellID) end
+  if ok and not issecretvalue(name) and name then return Plain(spellID) end
+end
+
+local function UpdateCast()
+  castCost, manaCast = 0, 0
+  if not predicting and not manaPredicting then return end
+  local spell = CastSpell()
+  if not spell then return end
+  if predicting then castCost = RageCost(spell) end
+  if manaPredicting then manaCast = PowerCost(spell, POWER_MANA) end
+end
+
+local function UpdateManaCost()
+  local mana = manaPredicting and manaCast or 0
+  if manaPredicting and ns.preview and mana == 0 then mana = -1 end -- a sample, to see the color
+  if mana == manaShown then return end
+  manaShown = mana
+  if mana ~= 0 then
+    local width = ns.db.bars.mana.width
+    local max = Plain(UnitPowerMax("player", POWER_MANA))
+    manaCostTex:SetWidth(mana < 0 and width * .15 or (max and max > 0) and math.min(width, mana / max * width) or 1)
+    manaClip:Show()
+  else
+    manaClip:Hide()
+  end
 end
 
 local function AurasSecret()
@@ -618,6 +671,7 @@ local function UpdateRegen()
 end
 
 local function UpdateCost()
+  UpdateManaCost()
   local rage = 0
   if predicting then
     rage = queuedCost + castCost
@@ -644,7 +698,7 @@ local function RefreshCost()
   UpdateQueued()
   UpdateCast()
   UpdateRegen()
-  costShown = nil
+  costShown, manaShown = nil, nil
   UpdateCost()
 end
 
@@ -928,6 +982,7 @@ function ns:ApplyColors()
   power:SetStatusBarColor(bar.r, bar.g, bar.b, bar.a)
   power.bg:SetColorTexture(bg.r, bg.g, bg.b, bg.a)
   costTex:SetColorTexture(c.cost.r, c.cost.g, c.cost.b, c.cost.a)
+  manaCostTex:SetColorTexture(c.manaCost.r, c.manaCost.g, c.manaCost.b, c.manaCost.a)
   powerText:SetTextColor(c.text.r, c.text.g, c.text.b, c.text.a)
   manaBar:SetStatusBarColor(c.mana.r, c.mana.g, c.mana.b, c.mana.a)
   local h = c.health
@@ -965,6 +1020,7 @@ function ns:UpdatePowerMode()
     for name, f in pairs(cells[i].skins or {}) do f:SetShown(not bear and name == self.db.skin) end -- its frame too
   end
   predicting = wanted == POWER_RAGE and self.db.predict
+  manaPredicting = self.MANA_CLASSES[self.profileClass] and self.db.bars.mana.show and self.db.predictMana or false
   self:ApplyColors()
   RefreshValues()
 end
@@ -1193,7 +1249,7 @@ function ns:SetPreview(on)
   lastCombo, lastPower = nil, nil
   UpdateCombo()
   UpdatePower()
-  costShown = nil
+  costShown, manaShown = nil, nil
   UpdateCost()
   self:UpdateIcons()
   self:RefreshOptions()
@@ -1220,6 +1276,7 @@ function ns:ElementOn(key)
   local db = self.db
   if key == "mana" or key == "health" then return db.bars[key].show end
   if key == "cost" then return db.predict end
+  if key == "manaCost" then return db.predictMana end
   if key == "text" then return db.showText end
   return not db.disabled[key]
 end
@@ -1231,6 +1288,8 @@ function ns:SetElementOn(key, on)
     db.bars[key].show = on
   elseif key == "cost" then
     db.predict = on
+  elseif key == "manaCost" then
+    db.predictMana = on
   elseif key == "text" then
     db.showText = on
   elseif db.disabled[key] ~= nil then
@@ -1717,6 +1776,15 @@ local function InitDB()
       end
     end
   end
+  -- weapon enchantments: the imbue each was learned for, and the longest time left seen
+  for _, key in ipairs({ "enchantKeys", "enchantTimes" }) do
+    if type(sv[key]) ~= "table" then sv[key] = {} end
+    for id, v in pairs(sv[key]) do
+      if type(id) ~= "number" or (key == "enchantKeys" and type(v) ~= "string") or (key == "enchantTimes" and type(v) ~= "number") then
+        sv[key][id] = nil
+      end
+    end
+  end
   CleanWindow(sv)
   CleanCatalog(sv)
   CleanPortraits(sv)
@@ -1790,10 +1858,15 @@ function ns:PLAYER_LOGIN()
   end
   if self.isDruid or self.isWarrior then -- rage about to be spent
     events:RegisterEvent("CURRENT_SPELL_CAST_CHANGED")
-    for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "DELAYED", "SUCCEEDED" }) do
-      events:RegisterUnitEvent("UNIT_SPELLCAST_" .. e, "player")
-    end
   end
+  -- rage or mana about to be spent; imbues cast (their enchantment learned)
+  for _, e in ipairs({ "START", "STOP", "FAILED", "INTERRUPTED", "DELAYED", "SUCCEEDED" }) do
+    events:RegisterUnitEvent("UNIT_SPELLCAST_" .. e, "player")
+  end
+  -- weapon enchantments (imbues, poisons, oils, stones) on the icons
+  events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+  pcall(events.RegisterEvent, events, "WEAPON_ENCHANT_CHANGED") -- not in every client build
+  if class == "SHAMAN" then pcall(events.RegisterEvent, events, "PLAYER_SWING") end -- Windfury's extra attacks (Forever)
   for _, start in ipairs(self.onEnable) do start() end -- (Clicks.lua, LearnedSpells.lua)
   self:UpdateVisibility()
 end
@@ -1855,7 +1928,7 @@ ns.UNIT_POWER_UPDATE = ns.UNIT_POWER_FREQUENT
 function ns:UNIT_MAXPOWER()
   UpdatePowerMax()
   UpdatePower()
-  costShown = nil
+  costShown, manaShown = nil, nil
   UpdateCost()
 end
 
@@ -1897,8 +1970,18 @@ function ns:UNIT_SPELLCAST_SUCCEEDED(_, _, spellID)
     regenCast = GetTime()
     regenDirty = true
   end
+  if Plain(spellID) then self:SpellDone(spellID) end -- imbues, Windfury (Tracker.lua)
   UpdateCast()
   UpdateCost()
+end
+
+function ns:UNIT_INVENTORY_CHANGED()
+  self:MarkIconsDirty()
+end
+ns.WEAPON_ENCHANT_CHANGED = ns.UNIT_INVENTORY_CHANGED
+
+function ns:PLAYER_SWING(duration, swingType)
+  self:Swing(duration, swingType) -- (Tracker.lua)
 end
 
 function ns:PLAYER_REGEN_DISABLED()

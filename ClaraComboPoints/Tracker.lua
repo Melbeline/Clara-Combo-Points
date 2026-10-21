@@ -10,6 +10,7 @@
 --   - the aura when it is up, with its stacks and time left;
 --   - else the spell's own cooldown (not the global cooldown) when it runs;
 --   - else the spell ready (spells with a cooldown) or the aura missing (grayed out).
+-- Weapon imbues (Rockbiter Weapon...) watch the enchantment on your weapons instead of an aura.
 -- In combat the game hides auras from addons; one of the game's own aura buttons, given the
 -- spell's IDs, shows the aura over the icon instead (see the end of this file's live state).
 -- Icons look like the action bar buttons: the game's button frame around them, the art kept
@@ -294,6 +295,7 @@ function ns:LayoutIcons()
           slot.spellIcon = self:SpellIcon(spell)
           if slot.spellIcon == QUESTION_MARK and slot.name then slot.spellIcon = self:SeenIcon(slot.name) end
           slot.hasCooldown = HasCooldown(slot)
+          slot.imbue = self:ImbueKey(spell, slot.name)
         end
         row:Show()
       end
@@ -398,7 +400,9 @@ local function LearnAuraID(slot, aura)
   ns:SyncAuraButtons()
 end
 
-local function SetSlot(slot, look, aura, unit)
+local Enchanted -- below: a weapon imbue's enchantment on the swipe
+
+local function SetSlot(slot, look, aura, unit, enchant)
   slot.cd:Clear()
   slot.cd:SetReverse(false)
   if slot.cd.SetHideCountdownNumbers then slot.cd:SetHideCountdownNumbers(not look.timers) end
@@ -413,7 +417,10 @@ local function SetSlot(slot, look, aura, unit)
     slot.cd:SetCooldown(GetTime() - 15, 45)
     return
   end
-  if aura then
+  if enchant then
+    slot.icon:SetTexture(slot.spellIcon)
+    Enchanted(slot, look, enchant)
+  elseif aura then
     LearnAuraID(slot, aura)
     local icon = aura.icon
     if issecretvalue(icon) or not icon then
@@ -450,11 +457,11 @@ local function SetSlot(slot, look, aura, unit)
     slot.icon:SetTexture(slot.spellIcon)
     running = SpellCooldown(slot)
   end
-  if not (aura and Plain(aura.applications) and aura.applications > 1) then
+  if not enchant and not (aura and Plain(aura.applications) and aura.applications > 1) then
     local charges = Charges(slot)
     if charges ~= nil then slot.count:SetText(charges) end
   end
-  local lit = aura or running or slot.hasCooldown
+  local lit = enchant or aura or running or slot.hasCooldown
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
   slot:SetShown(lit or look.missing)
@@ -467,13 +474,18 @@ function ns:UpdateIcons()
     return
   end
   local look = self.db.icons
+  local enchants -- the weapons' enchantments, read once
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
       for i = 1, #(row.spells or {}) do
         local slot = row.slots[i]
-        local aura, unit, otherRank
-        if slot.name then aura, unit, otherRank = FindAura(slot) end
-        SetSlot(slot, look, aura, unit)
+        local aura, unit, otherRank, enchant
+        if slot.imbue then
+          enchants = enchants or self:WeaponEnchants()
+          enchant = self:MatchEnchant(slot.imbue, slot.spellIcon, enchants)
+        end
+        if slot.name and not enchant then aura, unit, otherRank = FindAura(slot) end
+        SetSlot(slot, look, aura, unit, enchant)
       end
     end
   end
@@ -486,6 +498,198 @@ end
 
 function ns:UpdateIconsIfDirty()
   if dirty then self:UpdateIcons() end
+end
+
+---------------------------------------------------------------------------
+-- Weapon imbues: Rockbiter, Flametongue, Frostbrand and Windfury Weapon, and the items that
+-- enchant a weapon (poisons, oils, stones: see the consumables). Their icon is lit while one of
+-- your weapons has the enchantment, with its time left on the swipe and its charges. The game
+-- tells enchantments apart by IDs of their own: known from the lists below (Classic Era's),
+-- learned when you cast the spell (the enchantment that shows up on a weapon right after), or
+-- found by their icon.
+---------------------------------------------------------------------------
+local IMBUE_ENCHANTS = { -- by the spell's rank 1 (Classic Era's enchantment IDs, every rank)
+  [8017] = { 1, 6, 29, 503, 504, 683, 1663, 1664, 241 }, -- Rockbiter Weapon
+  [8024] = { 3, 4, 5, 523, 1665, 1666 },                  -- Flametongue Weapon
+  [8033] = { 2, 12, 524, 1667, 1668 },                    -- Frostbrand Weapon
+  [8232] = { 283, 284, 525, 1669 },                       -- Windfury Weapon
+}
+ns.WINDFURY_WEAPON = 8232
+local WEAPONS = { { 0, 16 }, { 1, 17 } } -- Enum.WeaponSlot and inventory slot: main hand, off hand
+local LEARN_TIME = 3 -- seconds after a cast to see its enchantment show up
+local knownEnchants   -- enchantment ID -> imbue key (from IMBUE_ENCHANTS, names read once)
+local pendingImbue    -- a cast waiting for its enchantment: { key =, at =, before = }
+local lastEnchants = {} -- inventory slot -> { id =, left =, at = } as last read
+
+-- An imbue's key: its spell name, folded (every rank is the same imbue).
+local function ImbueKeyOf(name) return name and "imbue:" .. Fold(name) end
+
+function ns:ImbueKey(spell, name)
+  for _, rec in ipairs(self:CatalogRecords(spell, name)) do
+    if rec.kind == "IMBUE" then return ImbueKeyOf(rec.name) end
+  end
+  if self.ItemImbueKey then return self:ItemImbueKey(spell) end -- (consumables)
+end
+
+local function KnownEnchants()
+  if knownEnchants then return knownEnchants end
+  knownEnchants = {}
+  for spell, ids in pairs(IMBUE_ENCHANTS) do
+    local key = ImbueKeyOf(ns:SpellName(spell))
+    if key then for _, id in ipairs(ids) do knownEnchants[id] = key end end
+  end
+  return knownEnchants
+end
+
+-- The enchantments on your weapons: { slot =, id =, left = seconds or nil, charges =, icon = }.
+-- (Forever's call lists a weapon's imbue and its temporary enchantment, a stone or an oil.)
+function ns:WeaponEnchants()
+  local list = {}
+  local function Add(slot, id, ms, charges, icon)
+    id = Plain(id)
+    if not id or id <= 0 then return end
+    ms = Plain(ms)
+    list[#list + 1] = { slot = slot, id = id, left = ms and ms > 0 and ms / 1000 or nil,
+      charges = Plain(charges), icon = Plain(icon) }
+  end
+  local byItem = C_Item and C_Item.GetWeaponEnchantInfo
+  local byInventory = C_PaperDollInfo and C_PaperDollInfo.GetTemporaryEnchantmentInfo
+  for _, w in ipairs(WEAPONS) do
+    local ok, enchants = false, nil
+    if byItem then ok, enchants = pcall(byItem, w[1]) end
+    if ok and type(enchants) == "table" and not issecretvalue(enchants) then
+      for _, e in pairs(enchants) do
+        if type(e) == "table" and Bool(e.hasEnchant) then Add(w[2], e.enchantID, e.timeLeft, e.charges, e.enchantIconID) end
+      end
+    elseif byInventory then
+      local okI, e = pcall(byInventory, w[2])
+      if okI and type(e) == "table" and not issecretvalue(e) then Add(w[2], e.enchantID, e.remainingTimeMs, e.chargesRemaining) end
+    elseif GetWeaponEnchantInfo then
+      local values = { pcall(GetWeaponEnchantInfo) }
+      local at = w[2] == 16 and 2 or 6
+      if values[1] and Bool(values[at]) then Add(w[2], values[at + 3], values[at + 1], values[at + 2]) end
+    end
+  end
+  self:LearnEnchant(list)
+  return list
+end
+
+-- The imbue an enchantment belongs to, if known.
+local function EnchantKey(e)
+  local learned = ns.sv and ns.sv.enchantKeys
+  return learned and learned[e.id] or KnownEnchants()[e.id]
+end
+
+-- An imbue's enchantment among them (on the inventory slot given, or any), if one of your
+-- weapons has it.
+function ns:MatchEnchant(key, icon, enchants, slot)
+  for _, e in ipairs(enchants) do
+    if not slot or e.slot == slot then
+      local owner = EnchantKey(e)
+      if owner == key or (not owner and e.icon and e.icon == icon) then return e end
+    end
+  end
+end
+
+-- A cast or an item used: if it is an imbue, the enchantment that shows up next is its own.
+function ns:ImbueStarted(key)
+  if not key then return end
+  local before = {}
+  for slot, last in pairs(lastEnchants) do before[slot] = last end
+  pendingImbue = { key = key, at = GetTime(), before = before }
+  self:MarkIconsDirty()
+  C_Timer.After(.5, function() self:MarkIconsDirty() end)
+  C_Timer.After(LEARN_TIME, function() self:MarkIconsDirty() end)
+end
+
+function ns:LearnEnchant(list)
+  local now = GetTime()
+  local times = self.sv and self.sv.enchantTimes
+  for _, e in ipairs(list) do
+    -- the longest time left seen: the full duration, for the swipe
+    if times and e.left and (times[e.id] or 0) < e.left then times[e.id] = math.ceil(e.left) end
+    -- (an enchantment already known as another imbue's is not this cast's)
+    local pend, before = pendingImbue, pendingImbue and pendingImbue.before[e.slot]
+    local owner = pend and EnchantKey(e)
+    if pend and self.sv and now - pend.at <= LEARN_TIME and (not owner or owner == pend.key) then
+      local renewed = before and before.id == e.id and e.left and before.left
+        and e.left > before.left - (now - before.at) + 1
+      if not before or before.id ~= e.id or renewed then
+        self.sv.enchantKeys[e.id] = pend.key
+        pendingImbue = nil
+      end
+    end
+  end
+  if pendingImbue and now - pendingImbue.at > LEARN_TIME then pendingImbue = nil end
+  wipe(lastEnchants)
+  for _, e in ipairs(list) do lastEnchants[e.slot] = { id = e.id, left = e.left, at = now } end
+end
+
+-- Windfury Weapon's internal cooldown: after an extra attack, no other for this long (3 s since
+-- The Burning Crusade, which WoW Forever's imbues follow). Shown on its icon by a short swipe.
+local WINDFURY_ICD = 3
+local windfuryAt -- when it last gave an extra attack
+
+function ns:WindfuryProc()
+  local now = GetTime()
+  if windfuryAt and now - windfuryAt < WINDFURY_ICD then return end
+  windfuryAt = now
+  self:MarkIconsDirty()
+  C_Timer.After(WINDFURY_ICD, function() self:MarkIconsDirty() end)
+end
+
+local WINDFURY_KEY
+local function IsWindfury(key)
+  WINDFURY_KEY = WINDFURY_KEY or ImbueKeyOf(ns:SpellName(ns.WINDFURY_WEAPON)) or false
+  return WINDFURY_KEY and key == WINDFURY_KEY
+end
+ns.IsWindfuryKey = function(_, key) return IsWindfury(key) end
+
+-- A spell you cast, or one your weapon cast for you: an imbue cast (its enchantment to learn),
+-- or Windfury Weapon's extra attack (its proc, under another ID than the ranks you cast).
+function ns:SpellDone(spell)
+  local name = self:SpellName(spell)
+  if not name then return end
+  for _, rec in ipairs(self:CatalogRecords(spell, name)) do
+    if rec.kind == "IMBUE" then
+      local cast = false
+      for _, r in ipairs(rec.ranks) do if r[2] == spell or r[3] == spell then cast = true end end
+      local key = ImbueKeyOf(rec.name)
+      if cast then self:ImbueStarted(key) elseif IsWindfury(key) then self:WindfuryProc() end
+      return
+    end
+  end
+  if self.ItemSpellDone then self:ItemSpellDone(spell, name) end -- (consumables)
+end
+
+-- Forever's swing events: a second swing of the same hand much sooner than the weapon's speed
+-- is an extra attack; with Windfury Weapon on that hand, its proc.
+local EXTRA_ATTACK = .5 -- seconds at most
+local lastSwing, lastSpeed = {}, {}
+function ns:Swing(duration, kind)
+  if issecretvalue(kind) or (kind ~= 0 and kind ~= 1) then return end
+  local now, last, speed = GetTime(), lastSwing[kind], lastSpeed[kind]
+  lastSwing[kind], lastSpeed[kind] = now, Plain(duration)
+  if not last or now - last >= min(EXTRA_ATTACK, (speed or 2) * .4) then return end
+  local key = ImbueKeyOf(self:SpellName(self.WINDFURY_WEAPON))
+  if key and self:MatchEnchant(key, self:SpellIcon(self.WINDFURY_WEAPON), self:WeaponEnchants(), kind == 0 and 16 or 17) then
+    self:WindfuryProc()
+  end
+end
+
+-- An imbue's enchantment on the icon: its time left (or Windfury's cooldown, while it runs)
+-- and its charges.
+function Enchanted(slot, look, e)
+  local now = GetTime()
+  if IsWindfury(slot.imbue) and windfuryAt and now - windfuryAt < WINDFURY_ICD then
+    slot.cd:SetCooldown(windfuryAt, WINDFURY_ICD)
+  elseif e.left then
+    local full = ns.sv and ns.sv.enchantTimes and ns.sv.enchantTimes[e.id] or e.left
+    full = max(full, e.left)
+    slot.cd:SetReverse(look.reverse)
+    slot.cd:SetCooldown(now + e.left - full, full)
+  end
+  if e.charges and e.charges > 0 then slot.count:SetText(e.charges) end
 end
 
 ---------------------------------------------------------------------------
