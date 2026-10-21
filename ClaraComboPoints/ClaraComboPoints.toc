@@ -15,6 +15,7 @@ Items.lua
 Profiles.lua
 SpellCatalog.lua
 SpellNames.lua
+Consumables.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
