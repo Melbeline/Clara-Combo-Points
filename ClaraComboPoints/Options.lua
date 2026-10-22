@@ -1151,10 +1151,11 @@ local function Catalog(p)
     p:Refresh()
   end)
 
-  local Layout
+  local Layout, Unfold
   -- only the spells this character has in its spellbook (its race's and the General tab's too)
   local knownOnly = Check(f, Tr("CATALOG_KNOWN_ONLY"), function(on)
     ns.sv.catalog.knownOnly = on or nil
+    Unfold()
     f.scrollTo = editing
     Layout()
   end)
@@ -1353,7 +1354,10 @@ local function Catalog(p)
     end
     if #recs > 0 then
       local color = CLASS_COLORS[class.class] or GROUP_COLORS[class.class] or { GOLD_R, GOLD_G, GOLD_B }
-      Head(class.class, color, function() return L["CLASS_" .. class.class] or L["GROUP_" .. class.class] or class.class end, recs)
+      Head(class.class, color, function()
+        local race = class.class ~= "GENERAL" and L["GROUP_" .. class.class] -- (a race: its racial abilities)
+        return L["CLASS_" .. class.class] or (race and L.GROUP_RACIAL:format(race)) or L["GROUP_" .. class.class] or class.class
+      end, recs)
     end
   end
 
@@ -1393,25 +1397,45 @@ local function Catalog(p)
     return false
   end
 
+  -- The spells of a list the character knows (the Skyborne list of the other faction: none,
+  -- both knowing Walk on Air).
+  local function KnownOf(g)
+    local known = {}
+    local faction = UnitFactionGroup and UnitFactionGroup("player")
+    if g.class == (faction == "Alliance" and "SKYBORNE_HORDE" or faction == "Horde" and "SKYBORNE_ALLIANCE") then return known end
+    for _, rec in ipairs(g.recs) do if KnownRec(rec) then known[#known + 1] = rec end end
+    return known
+  end
+
+  -- Which lists are unfolded: the tab's class; known spells only, every list with a known spell.
+  function Unfold()
+    wipe(expanded)
+    if not ns.sv.catalog.knownOnly then
+      expanded[editing] = true
+      return
+    end
+    for _, g in ipairs(groups) do
+      if #KnownOf(g) > 0 then expanded[g.class] = true end
+    end
+  end
+
   -- The classes, each with its spells when unfolded. While searching: only the spells found,
-  -- in their classes, all unfolded. Known spells only: the others left out, and the lists left
-  -- empty with them.
+  -- in their classes, all unfolded. Known spells only: every list still there, a list with known
+  -- spells showing only those (unfolded by Unfold), the others all their spells (folded).
   function Layout()
     local y = 0
     local searching = query ~= ""
     local only = ns.sv.catalog.knownOnly
     knownOnly:Set(only)
-    -- known spells only: the Skyborne list of the character's faction alone (both know Walk on Air)
-    local faction = UnitFactionGroup and UnitFactionGroup("player")
-    local otherSkyborne = faction == "Alliance" and "SKYBORNE_HORDE" or faction == "Horde" and "SKYBORNE_ALLIANCE" or nil
     for _, g in ipairs(groups) do
-      local list, total = {}, 0
-      local skip = only and g.class == otherSkyborne
-      for _, rec in ipairs(g.recs) do
-        if not skip and (not only or KnownRec(rec)) then
-          total = total + 1
-          if not searching or ns:CatalogMatches(rec, query) then list[#list + 1] = rec end
-        end
+      local pool = g.recs
+      if only then
+        local known = KnownOf(g)
+        if #known > 0 then pool = known end
+      end
+      local list, total = {}, #pool
+      for _, rec in ipairs(pool) do
+        if not searching or ns:CatalogMatches(rec, query) then list[#list + 1] = rec end
       end
       table.sort(list, ByName)
       local visible = #list > 0
@@ -1449,7 +1473,7 @@ local function Catalog(p)
         end
       end
     end
-    noMatch:SetShown((searching or only) and y == 0)
+    noMatch:SetShown(searching and y == 0)
     child:SetHeight(max(y, 40))
     -- a new class on the tab: its spells at the top of the list
     if f.scrollTo and not searching then
@@ -1485,8 +1509,7 @@ local function Catalog(p)
     local want = onPage and not self.closed
     if not want then self.unfolded = nil end -- left the Icons page: back on the tab's class next time
     if want and self.unfolded ~= editing then
-      wipe(expanded)
-      expanded[editing] = true
+      Unfold()
       self.unfolded = editing
       self.scrollTo = editing
       if self:IsShown() then Layout() end
@@ -3299,7 +3322,9 @@ local function Build()
     p.qolActive = true
     specMenu:Hide()
     ClosePicker()
+    resetAll.armed = nil
     status:SetText("")
+    p.ClearProfileMessages() -- (an Export / Import box belongs to the class tab it was opened on)
     p:Refresh()
   end)
   qolTab:SetPoint("LEFT", tabs[#tabs], "RIGHT", 4, 0)

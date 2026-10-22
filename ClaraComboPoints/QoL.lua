@@ -178,8 +178,12 @@ if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOn
 end
 ns.qolPage = page
 
--- The game's options opened on a page (from a click: not in combat).
+-- The game's options opened on a page (from a click: not in combat). category: the page, or the
+-- name of another addon's page (found among the game's options; none found: nothing opens).
 function ns:OpenSettingsTo(category)
+  if type(category) == "string" then
+    category = SettingsPanel and SettingsPanel.GetCategory and SettingsPanel:GetCategory(category)
+  end
   if not category or InCombatLockdown() or not (Settings and Settings.OpenToCategory) then return end
   local id = category.GetID and category:GetID() or category
   Settings.OpenToCategory(id)
