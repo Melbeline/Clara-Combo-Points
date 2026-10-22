@@ -57,14 +57,23 @@ end
 ---------------------------------------------------------------------------
 local seenCat, seenBear -- a druid's Cat and Bear Form on the stance bar, as seen worn (energy, rage)
 
+-- Is a form of the stance bar one of these (by its ID, else by its name: the game may give the
+-- stance bar another ID than the spellbook's)?
+local function FormIs(id, name, forms)
+  if forms[id] then return true end
+  if not name then return false end
+  for form in pairs(forms) do if SpellName(form) == name then return true end end
+  return false
+end
+
 local function StanceBar()
   local bar = { names = {} }
   if not (GetNumShapeshiftForms and GetShapeshiftFormInfo and SpellName) then return bar end
   for i = 1, GetNumShapeshiftForms() or 0 do
     local _, _, _, id = GetShapeshiftFormInfo(i)
     local name = type(id) == "number" and SpellName(id) or nil
-    if type(name) == "string" and Plain(name) then bar.names[i] = name end
-    if CAT_FORMS[id] then bar.cat = i elseif BEAR_FORMS[id] then bar.bear = i end
+    if type(name) == "string" and Plain(name) then bar.names[i] = name else name = nil end
+    if FormIs(id, name, CAT_FORMS) then bar.cat = i elseif FormIs(id, name, BEAR_FORMS) then bar.bear = i end
   end
   -- a form of this client under another ID: known by the power it gives
   local form = GetShapeshiftForm and GetShapeshiftForm()
@@ -182,17 +191,25 @@ end
 -- The click of a spell that needs a form or stealth: the spell when all is there, else what
 -- is missing first (the form, then the stealth). Two forms on two lines: the left click's, and
 -- the right click's.
+-- (a form known only by its place on the stance bar, without a name to cast: no macro)
 local function InForms(forms, name, bar)
-  return ("/cast [form:%s] %s; %s"):format(table.concat(forms, "/"), name, bar.names[forms[1]])
+  local form = bar.names[forms[1]]
+  if not form then return end
+  return ("/cast [form:%s] %s; %s"):format(table.concat(forms, "/"), name, form)
 end
 local function FormMacro(spell, id, bar)
   local need = id and Needs(id, bar)
   if not need then return end
   local name = CastName(spell)
   if not name then return end
-  if need.second then return InForms(need.first, name, bar), InForms(need.second, name, bar) end
+  if need.second then
+    local left, right = InForms(need.first, name, bar), InForms(need.second, name, bar)
+    if left and right then return left, right end
+    return left or right
+  end
   if need.forms then
     local forms, form = table.concat(need.forms, "/"), bar.names[need.forms[1]]
+    if not form then return end
     if need.stealth then
       return ("/cast [form:%s,stealth] %s; [form:%s] %s; %s"):format(forms, name, forms, need.stealth, form)
     end
@@ -434,9 +451,10 @@ function ns:DebugClicks()
           how = ("  [tooltip: %d lines, requires: %s%s]"):format(read.lines,
             #read.requires > 0 and table.concat(read.requires, " / ") or "none", read.list and "; forms from the addon's list" or "")
         end
-        out[#out + 1] = ("click %d.%d: %s (%s) -> %s%s%s"):format(n, i, tostring(b.spell), tostring(b.spellID),
+        out[#out + 1] = ("click %d.%d: %s (%s) -> %s%s%s  [at %d,%d%s]"):format(n, i, tostring(b.spell), tostring(b.spellID),
           tostring(b:GetAttribute("macrotext") or b:GetAttribute("spell") or b:GetAttribute("item")),
-          right and (" | right: " .. right) or "", how)
+          right and (" | right: " .. right) or "", how, math.floor((b:GetLeft() or 0) + .5), math.floor((b:GetBottom() or 0) + .5),
+          layer:IsShown() and "" or ", layer hidden")
       end
     end
   end
@@ -444,7 +462,16 @@ function ns:DebugClicks()
   local forms = {}
   for i, name in pairs(bar.names) do forms[#forms + 1] = i .. "=" .. name end
   table.sort(forms)
-  out[#out + 1] = "stance bar: " .. (#forms > 0 and table.concat(forms, ", ") or "none")
+  out[#out + 1] = ("stance bar: %s; Cat Form %s, Bear Form %s; form now %s"):format(#forms > 0 and table.concat(forms, ", ") or "none",
+    tostring(bar.cat), tostring(bar.bear), tostring(GetShapeshiftForm and GetShapeshiftForm()))
+  -- where the icons are now (to compare with the buttons)
+  ns:ForEachIcon(function(slot)
+    if slot:IsVisible() and slot.spell ~= nil then
+      out[#out + 1] = ("icon %s %d.%d: %s at %d,%d"):format(slot.side, slot.k, slot.index or 0, tostring(slot.spell),
+        math.floor((slot:GetLeft() or 0) * slot:GetEffectiveScale() / UIParent:GetEffectiveScale() + .5),
+        math.floor((slot:GetBottom() or 0) * slot:GetEffectiveScale() / UIParent:GetEffectiveScale() + .5))
+    end
+  end)
   return out
 end
 
