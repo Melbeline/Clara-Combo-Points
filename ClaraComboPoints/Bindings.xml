@@ -25,4 +25,9 @@
 	<Binding name="CLICK LeaPlusGlobalFlare8:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
 	<Binding name="CLICK LeaPlusGlobalFlare9:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
 
+	<!-- NodeSight (embedded, or the standalone when it runs) -->
+	<Binding name="CLARA_NODESIGHT_SYMBOLS" category="BINDING_CATEGORY_CLARA_QOL">
+		if ClaraNodeSight_ToggleSymbols then ClaraNodeSight_ToggleSymbols() elseif NodeSight_ToggleSymbols then NodeSight_ToggleSymbols() end
+	</Binding>
+
 </Bindings>
