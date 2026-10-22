@@ -1,9 +1,12 @@
 -- Clara Combo Points - a click on an icon of the HUD casts its spell (icons locked), when the
 -- character knows that spell; the other icons (a debuff on the target, another class's aura...)
 -- take no click. An item's icon uses the item (one for a weapon: left click on the main hand,
--- right click on the off hand). A spell that needs a form the character is not in (Feral Charge: Bear or Cat
--- Form; Maul: Bear Form; a warrior's stance) or stealth (Sap: Stealth; Pounce: Cat Form, then
--- Prowl) takes that first: a next click casts the spell (one click, one action: the game's rule).
+-- right click on the off hand). A spell that needs a form the character is not in (Maul: Bear
+-- Form; a warrior's stance) or stealth (Sap: Stealth; Pounce: Cat Form, then Prowl) takes that
+-- first: a next click casts the spell (one click, one action: the game's rule). A spell its
+-- tooltip gives two forms for, one per line (Feral Charge: Bear Form, and Cat Form for its leap):
+-- left click the first (Bear Form, then the charge), right click the second (Cat Form, then the
+-- leap).
 -- Casting needs the game's secure action buttons, which addons can neither move, show nor hide
 -- in combat. They live in a layer of their own over the HUD (outside it, so that the HUD stays
 -- free to move and hide in combat), placed on the icons out of combat; in combat they stay where
@@ -91,20 +94,28 @@ local STEALTH_OPENERS = { 8676, 703, 1833, 6770, 921, 14183, 9005, 6785 }
 local STEALTH = { ROGUE = 1784, DRUID = 5215 }
 
 -- What a spell needs: { forms = the stance bar's forms it needs, the one to take first; stealth
--- = the stealth spell to cast first }, or false.
-local needs = {}
+-- = the stealth spell to cast first; first, second = the forms of each of two requirement lines,
+-- when the tooltip has two }, or false. A "nothing" is read again a while later: just
+-- after logging in, the game may not have the spell's tooltip or the stance bar yet.
+local needs, readAt = {}, {}
+local RECHECK = 5 -- seconds
 
 local function Needs(id, bar)
-  if needs[id] ~= nil then return needs[id] end
+  if needs[id] or (needs[id] == false and GetTime() - (readAt[id] or 0) < RECHECK) then return needs[id] end
   local _, class = UnitClass("player")
   local stealthName = STEALTH[class] and SpellName and SpellName(STEALTH[class])
   if not (type(stealthName) == "string" and Plain(stealthName)) then stealthName = nil end
   local stealthKey = stealthName and ns:SearchKey(stealthName)
   local keys = {}
   for i, name in pairs(bar.names) do keys[i] = ns:SearchKey(name) end
-  local found, order, stealth = {}, {}, false
+  local found, order, stealth, groups = {}, {}, false, {}
   local data = C_TooltipInfo and C_TooltipInfo.GetSpellByID and C_TooltipInfo.GetSpellByID(id)
-  for n, line in ipairs(type(data) == "table" and type(data.lines) == "table" and data.lines or {}) do
+  local lines = type(data) == "table" and type(data.lines) == "table" and data.lines or {}
+  if C_Spell and C_Spell.IsSpellDataCached and not C_Spell.IsSpellDataCached(id) then
+    if C_Spell.RequestLoadSpellData then C_Spell.RequestLoadSpellData(id) end
+    return false -- (not kept: read again at the next sync)
+  end
+  for n, line in ipairs(lines) do
     local text = line.leftText
     if type(text) == "string" and Plain(text) then
       local key = ns:SearchKey((text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")))
@@ -112,13 +123,16 @@ local function Needs(id, bar)
       for _, p in ipairs(REQUIRES) do if key:sub(1, #p) == p then requires = true break end end
       if requires then
         if stealthKey and key:find(stealthKey, 1, true) then stealth = true end
+        local group = {}
         for i, k in pairs(keys) do
           local at = k ~= "" and k ~= stealthKey and key:find(k, 1, true)
           if at and not found[i] then
             found[i] = n * 10000 + at -- in the order the tooltip names them
             order[#order + 1] = i
+            group[#group + 1] = i
           end
         end
+        if #group > 0 then groups[#groups + 1] = group end
       end
     end
   end
@@ -128,10 +142,13 @@ local function Needs(id, bar)
       if SpellName(opener) == name then stealth = true break end
     end
   end
-  table.sort(order, function(a, b) return found[a] < found[b] end)
+  local function ByPlace(a, b) return found[a] < found[b] end
+  table.sort(order, ByPlace)
+  for _, group in ipairs(groups) do table.sort(group, ByPlace) end
   local need = false
   if #order > 0 or stealth then need = { forms = #order > 0 and order or nil, stealth = stealth and stealthName or nil } end
-  needs[id] = need
+  if need and #groups >= 2 and not stealth then need.first, need.second = groups[1], groups[2] end
+  needs[id], readAt[id] = need, GetTime()
   return need
 end
 
@@ -146,12 +163,17 @@ local function CastName(spell)
 end
 
 -- The click of a spell that needs a form or stealth: the spell when all is there, else what
--- is missing first (the form, then the stealth).
+-- is missing first (the form, then the stealth). Two forms on two lines: the left click's, and
+-- the right click's.
+local function InForms(forms, name, bar)
+  return ("/cast [form:%s] %s; %s"):format(table.concat(forms, "/"), name, bar.names[forms[1]])
+end
 local function FormMacro(spell, id, bar)
   local need = id and Needs(id, bar)
   if not need then return end
   local name = CastName(spell)
   if not name then return end
+  if need.second then return InForms(need.first, name, bar), InForms(need.second, name, bar) end
   if need.forms then
     local forms, form = table.concat(need.forms, "/"), bar.names[need.forms[1]]
     if need.stealth then
@@ -227,7 +249,7 @@ local function Read(bar)
         w.macro2 = ("/use %s\n/use 17"):format(spell)
       end
     else
-      w.macro = FormMacro(spell, id, bar)
+      w.macro, w.macro2 = FormMacro(spell, id, bar)
     end
     list[#list + 1] = w
   end)
@@ -255,7 +277,6 @@ local function Place(n, list, driver)
   local layer = Layer(n)
   for i, w in ipairs(list) do
     local b = Button(layer, i)
-    b:SetAttribute("type2", w.macro2 and "macro" or nil)
     b:SetAttribute("macrotext2", w.macro2)
     b:SetAttribute("item", nil)
     if w.macro then
@@ -272,6 +293,9 @@ local function Place(n, list, driver)
       b:SetAttribute("spell", w.spell)
       b:SetAttribute("macrotext", nil)
     end
+    -- the right click: its own macro (a weapon's item on the off hand, a spell's second form),
+    -- else the same as the left one (its attributes: macrotext2, else macrotext...)
+    b:SetAttribute("type2", w.macro2 and "macro" or b:GetAttribute("type1"))
     b.spell, b.spellID, b.item = w.spell, w.id, w.item
     b:ClearAllPoints()
     b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", w.l, w.b)
@@ -378,6 +402,27 @@ function ns:SyncClickers()
     Place(1, main, catOnly and (#feral > 0 and ("[form:%s] show; hide"):format(table.concat(feral, "/")) or "hide") or nil)
     Place(2)
   end
+end
+
+-- What each click button does (/cl debug): its spell, and the macro or spell it casts.
+function ns:DebugClicks()
+  local out = {}
+  for n, layer in pairs(layers) do
+    for i, b in ipairs(layer.buttons) do
+      if b:IsShown() then
+        local right = b:GetAttribute("macrotext2")
+        out[#out + 1] = ("click %d.%d: %s (%s) -> %s%s"):format(n, i, tostring(b.spell), tostring(b.spellID),
+          tostring(b:GetAttribute("macrotext") or b:GetAttribute("spell") or b:GetAttribute("item")),
+          right and (" | right: " .. right) or "")
+      end
+    end
+  end
+  local bar = StanceBar()
+  local forms = {}
+  for i, name in pairs(bar.names) do forms[#forms + 1] = i .. "=" .. name end
+  table.sort(forms)
+  out[#out + 1] = "stance bar: " .. (#forms > 0 and table.concat(forms, ", ") or "none")
+  return out
 end
 
 -- The click buttons now (for the tests): the first layer's, it, and every layer.

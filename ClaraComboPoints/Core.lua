@@ -2295,6 +2295,7 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
     Print(L.HELP)
   elseif cmd == "debug" then
     for _, line in ipairs(ns:DebugIcons()) do Print(line) end
+    for _, line in ipairs(ns.DebugClicks and ns:DebugClicks() or {}) do Print(line) end
   else
     ns:ToggleOptions()
   end
