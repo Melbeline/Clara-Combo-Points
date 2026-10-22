@@ -6473,17 +6473,25 @@
 		----------------------------------------------------------------------
 
 		if LeaPlusLC["UseEasyChatResizing"] == "On" and not LeaLockList["UseEasyChatResizing"] then
+			-- (Clara Combo Points: saved only after a resize, once the frame's place is known: right
+			-- after StopMovingOrSizing it may not be yet, and the game's save function then errors)
+			local sizing
+			local function SaveChatPlace()
+				if ChatFrame1:GetLeft() and ChatFrame1:GetBottom() then FCF_SavePositionAndDimensions(ChatFrame1) end
+			end
 			ChatFrame1Tab:HookScript("OnMouseDown", function(self,arg1)
 				if arg1 == "LeftButton" then
 					if select(8, GetChatWindowInfo(1)) then
+						sizing = true
 						ChatFrame1:StartSizing("TOP")
 					end
 				end
 			end)
 			ChatFrame1Tab:SetScript("OnMouseUp", function(self,arg1)
-				if arg1 == "LeftButton" then
+				if arg1 == "LeftButton" and sizing then
+					sizing = nil
 					ChatFrame1:StopMovingOrSizing()
-					FCF_SavePositionAndDimensions(ChatFrame1)
+					if ChatFrame1:GetLeft() then SaveChatPlace() else C_Timer.After(0, SaveChatPlace) end
 				end
 			end)
 		end
