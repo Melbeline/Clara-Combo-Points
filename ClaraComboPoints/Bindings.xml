@@ -1,0 +1,28 @@
+<Bindings>
+
+	<!-- Leatrix Plus (embedded, or the standalone when it runs: both answer to SlashCmdList["Leatrix_Plus"]) -->
+	<Binding name="CLARA_LEAPLUS_TOGGLE" category="BINDING_CATEGORY_CLARA_QOL">
+		if SlashCmdList["Leatrix_Plus"] then SlashCmdList["Leatrix_Plus"]() end
+	</Binding>
+	<Binding name="CLARA_LEAPLUS_RARE" category="BINDING_CATEGORY_CLARA_QOL">
+		if SlashCmdList["Leatrix_Plus"] then SlashCmdList["Leatrix_Plus"]("ra") end
+	</Binding>
+	<Binding name="CLARA_LEAPLUS_MOUNTSPECIAL" category="BINDING_CATEGORY_CLARA_QOL">
+		if not C_RestrictedActions.IsAddOnRestrictionActive(Enum.AddOnRestrictionType.Chat) then
+			DoEmote('mountspecial')
+		end
+	</Binding>
+
+	<!-- Leatrix Plus flares: the buttons keep their names (one copy only creates them), so keys
+	     already bound to them keep working. Declared twice while the standalone is also enabled. -->
+	<Binding name="CLICK LeaPlusGlobalFlare1:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare2:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare3:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare4:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare5:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare6:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare7:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare8:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+	<Binding name="CLICK LeaPlusGlobalFlare9:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
+
+</Bindings>

@@ -1789,6 +1789,13 @@ local function InitDB()
     end
   end
   if sv.quietLogin ~= false then sv.quietLogin = nil end -- (on unless turned off: QuietLogin.lua)
+  -- the interface improvements turned off (QoL.lua): only "false" is kept
+  if type(sv.qol) == "table" then
+    for key, v in pairs(sv.qol) do if v ~= false or type(key) ~= "string" then sv.qol[key] = nil end end
+    if next(sv.qol) == nil then sv.qol = nil end
+  else
+    sv.qol = nil
+  end
   CleanWindow(sv)
   CleanCatalog(sv)
   CleanPortraits(sv)

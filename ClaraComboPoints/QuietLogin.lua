@@ -22,14 +22,15 @@ local function Quiet()
   return ns:QuietLogin()
 end
 
--- Did an addon write this line? (its file in the call stack; the game's addons and this one
--- aside)
+-- Did an addon write this line? (an addon's file in the call stack: the game's own addons
+-- aside, and this file, which reads it; the modules embedded in Clara Combo Points count)
 local function FromAddon()
   if not debugstack then return false end
   local ok, stack = pcall(debugstack, 2, 40, 0)
   if not ok or type(stack) ~= "string" then return false end
-  for name in stack:gmatch("AddOns[/\\]([^/\\%]]+)[/\\]") do
-    if not name:find("^Blizzard_") and name ~= ADDON then return true end
+  for line in stack:gmatch("[^\n]+") do
+    local name = line:match("AddOns[/\\]([^/\\%]]+)[/\\]")
+    if name and not name:find("^Blizzard_") and not line:find("QuietLogin.lua", 1, true) then return true end
   end
   return false
 end
