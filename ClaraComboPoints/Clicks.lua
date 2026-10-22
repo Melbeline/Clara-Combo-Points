@@ -35,20 +35,40 @@ end
 
 local function Plain(v) return not (issecretvalue and issecretvalue(v)) end
 
+-- The ID of a spell the character knows: the one given, or the spell it is a variant of (in
+-- Bear Form the game names Forever's Feral Charge by its Bear Form variant, which is not "known"
+-- itself).
+local GetBaseSpell = C_Spell and C_Spell.GetBaseSpell
+local function KnownID(id)
+  if type(id) ~= "number" or not Plain(id) then return end
+  if Known(id) then return id end
+  local base = GetBaseSpell and GetBaseSpell(id)
+  if type(base) == "number" and Plain(base) and base ~= id and Known(base) then return base end
+end
+
 -- What a click on an icon casts: the rank chosen for it, else its spell by name (the highest
--- rank the character has); nothing when the character does not know it. Also its spell ID.
+-- rank the character has); nothing when the character does not know it. Also its spell ID. A
+-- name once found known keeps its ID, for a form that gives the name to another spell.
+local knownByName = {}
 local function Castable(slot)
   local spell = slot.spell
   if spell == nil then return end
   if slot.item then return spell, nil end -- an item: used
   if slot.exact then
-    if type(spell) == "number" and Known(spell) then return spell, spell end
+    local id = KnownID(spell)
+    if id then return spell, id end
     return
   end
   local name = slot.name or (type(spell) == "string" and spell) or nil
   local info = name and GetSpellInfo and GetSpellInfo(name)
-  if info and type(info.spellID) == "number" and Known(info.spellID) then return name, info.spellID end
-  if type(spell) == "number" and Known(spell) then return spell, spell end
+  local id = info and KnownID(info.spellID)
+  if id then
+    knownByName[name] = id
+    return name, id
+  end
+  if name and knownByName[name] and Known(knownByName[name]) then return name, knownByName[name] end
+  id = KnownID(spell)
+  if id then return spell, id end
 end
 
 ---------------------------------------------------------------------------
