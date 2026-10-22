@@ -757,12 +757,19 @@ local function CellsOn()
   return on
 end
 
+local function AnyCellOn() -- (#CellsOn() > 0, without making a list: read often)
+  for i = 1, NUM_POINTS do
+    if not ns.db.disabled["cp" .. i] then return true end
+  end
+  return false
+end
+
 -- The bars of the class shown, unless turned off: the combo row (some cell on), the bar of the
 -- resource it shows now (energy or rage), the mana bar, the health bar. A bar turned off takes
 -- no room: the others close up.
 local function BarUsed(key)
   local class = ns.profileClass
-  if key == "combo" then return ns.COMBO_CLASSES[class] and #CellsOn() > 0 end
+  if key == "combo" then return ns.COMBO_CLASSES[class] and AnyCellOn() end
   if key == "power" then
     return ns.POWER_CLASSES[class] and not ns.db.disabled[WantedPowerType() == POWER_RAGE and "rage" or "energy"]
   end
@@ -793,8 +800,9 @@ end
 -- Situations the HUD can be hidden in: the group (none, a party, a raid group) and the
 -- instance (a dungeon, a raid of 10, 20 or 40 players - 25 counts as 20 -, a battleground).
 ns.HIDE_WHEN = { "solo", "party", "raid", "dungeon", "raid10", "raid20", "raid40", "battleground" }
-function ns:Situation()
-  local now = {}
+function ns:Situation(into) -- (into: a table to fill, instead of a new one)
+  local now = into or {}
+  if into then wipe(into) end
   if IsInRaid and IsInRaid() then
     now.raid = true
   elseif IsInGroup and IsInGroup() then
@@ -826,8 +834,10 @@ end
 
 -- Does a situation ticked in the options hide the HUD now? Also the situation as a key: the
 -- HUD shown by hand against the rule stays shown until the situation changes.
+local situation, situationKey = {}, {} -- (filled again each time: read often)
 local function RuleHides()
-  local now, hit, key = ns:Situation(), false, {}
+  local now, hit, key = ns:Situation(situation), false, situationKey
+  wipe(key)
   local rules = OwnProfile().hideWhen -- this character's class, whatever tab the options show
   for _, k in ipairs(ns.HIDE_WHEN) do
     if now[k] then

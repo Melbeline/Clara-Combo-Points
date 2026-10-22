@@ -61,6 +61,7 @@ function ns:EntryMine(entry) return type(entry) == "table" and entry.mine == tru
 local MINE = "|PLAYER" -- aura filter: cast by you
 
 local rows = { above = {}, below = {} }
+local NONE = {} -- (a row without spells, in loops that run often: nothing made each time)
 local dirty
 
 local function Plain(v)
@@ -68,8 +69,9 @@ local function Plain(v)
 end
 
 -- Lower case, accented capitals included (string.lower leaves "É" or "Ü" as they are).
+local function LowerAccent(c) return "\195" .. string.char(c:byte() + 32) end
 local function Fold(s)
-  return (s:lower():gsub("\195([\128-\158])", function(c) return "\195" .. string.char(c:byte() + 32) end))
+  return (s:lower():gsub("\195([\128-\158])", LowerAccent))
 end
 ns.Fold = function(_, s) return Fold(s) end
 
@@ -505,7 +507,7 @@ function ns:UpdateIcons()
   local enchants -- the weapons' enchantments, read once
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
-      for i = 1, #(row.spells or {}) do
+      for i = 1, #(row.spells or NONE) do
         local slot = row.slots[i]
         local aura, unit, otherRank, enchant
         if slot.imbue then
@@ -883,7 +885,7 @@ function ns:SyncAuraButtons()
   local look = self.db.icons
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
-      local n = row:IsShown() and #(row.spells or {}) or 0
+      local n = row:IsShown() and #(row.spells or NONE) or 0
       for i, slot in ipairs(row.slots) do
         local ids = i <= n and SecureIDs(slot)
         local wanted = {}
@@ -938,7 +940,7 @@ function ns:DebugIcons()
     tostring(containers.player and true or containers.player), tostring(containers.target and true or containers.target)))
   for _, side in ipairs(self.SIDES) do
     for k, row in pairs(rows[side]) do
-      for i = 1, #(row.spells or {}) do
+      for i = 1, #(row.spells or NONE) do
         local slot = row.slots[i]
         local ids = SecureIDs(slot)
         local buttons = {}
@@ -1256,7 +1258,7 @@ function ns:ForEachIcon(fn)
   for _, side in ipairs(self.SIDES) do
     for _, row in pairs(rows[side]) do
       if row:IsShown() then
-        for i = 1, #(row.spells or {}) do
+        for i = 1, #(row.spells or NONE) do
           if row.slots[i] then fn(row.slots[i]) end
         end
       end
@@ -1293,7 +1295,7 @@ local function PlaceAt(row, skip)
   skip = skip or hudDrag
   local x = Cursor(row)
   local at = 1
-  for i = 1, #(row.spells or {}) do
+  for i = 1, #(row.spells or NONE) do
     local slot = row.slots[i]
     if not (skip and skip.side == row.side and skip.k == row.k and skip.i == i) then
       local l, r = slot:GetLeft(), slot:GetRight()
@@ -1350,7 +1352,7 @@ local function Mark(row, at, skip)
   marker:SetShown(row ~= nil)
   if not row then return end
   local others = {}
-  for i = 1, #(row.spells or {}) do
+  for i = 1, #(row.spells or NONE) do
     if not (skip and skip.side == row.side and skip.k == row.k and skip.i == i) then others[#others + 1] = row.slots[i] end
   end
   marker:ClearAllPoints()
@@ -1489,7 +1491,7 @@ function ns:EditableRow(row)
     hit:EnableMouse(on)
     if not on then return end
     hit:SetSize(width, height)
-    hit.label:SetText(#(self.spells or {}) == 0 and L.DROP_HERE:format(RowName(self.side, self.k)) or "")
+    hit.label:SetText(#(self.spells or NONE) == 0 and L.DROP_HERE:format(RowName(self.side, self.k)) or "")
   end
 end
 

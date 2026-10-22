@@ -129,13 +129,18 @@ local FERAL_CHARGE = { 16979, 1238122 }
 
 -- What a spell needs: { forms = the stance bar's forms it needs, the one to take first; stealth
 -- = the stealth spell to cast first; first, second = the forms of each of two requirement lines,
--- when the tooltip has two }, or false. A "nothing" is read again a while later: just
--- after logging in, the game may not have the spell's tooltip or the stance bar yet.
-local needs, readAt, readOf = {}, {}, {}
-local RECHECK = 5 -- seconds
+-- when the tooltip has two }, or false. A "nothing" is read again every few seconds for a
+-- minute: just after logging in, the game may not have the spell's tooltip or the stance bar
+-- yet. (A new spell or form reads them all again: the events at the end.)
+local needs, readAt, firstAt, readOf = {}, {}, {}, {}
+local RECHECK, RECHECK_FOR = 5, 60 -- seconds
+local recheckUntil = 0 -- a "nothing" may still be read again until then
 
 local function Needs(id, bar)
-  if needs[id] or (needs[id] == false and GetTime() - (readAt[id] or 0) < RECHECK) then return needs[id] end
+  local now = GetTime()
+  if needs[id] or (needs[id] == false and (now - readAt[id] < RECHECK or now - firstAt[id] >= RECHECK_FOR)) then
+    return needs[id]
+  end
   local _, class = UnitClass("player")
   local stealthName = STEALTH[class] and SpellName and SpellName(STEALTH[class])
   if not (type(stealthName) == "string" and Plain(stealthName)) then stealthName = nil end
@@ -194,7 +199,9 @@ local function Needs(id, bar)
   local need = false
   if #order > 0 or stealth then need = { forms = #order > 0 and order or nil, stealth = stealth and stealthName or nil } end
   if need and #groups >= 2 and not stealth then need.first, need.second = groups[1], groups[2] end
-  needs[id], readAt[id], readOf[id] = need, GetTime(), read
+  firstAt[id] = firstAt[id] or now
+  needs[id], readAt[id], readOf[id] = need, now, read
+  if not need then recheckUntil = math.max(recheckUntil, firstAt[id] + RECHECK_FOR) end
   return need
 end
 
@@ -409,12 +416,77 @@ local function DruidLists(bar)
   return main, bear
 end
 
--- Puts the buttons on the icons (out of combat; in combat, nothing can move them).
+-- What the buttons depend on, besides the spells known, their tooltips and the stance bar
+-- (read again on their events, below): put in a list without making anything (the check runs
+-- often), to be compared with the list of the last time they were placed.
+local seenList, nowList, nowCount, seenCount = {}, {}, 0, -1
+local lastFull = 0 -- when they were last read in full
+local function Put(v) nowCount = nowCount + 1; nowList[nowCount] = v end
+local function PutTable(t) for k, v in pairs(t) do Put(k); Put(v) end end
+local function PutSlot(slot)
+  Put(slot); Put(slot:IsVisible()); Put(slot.spell); Put(slot.item); Put(slot.name); Put(slot.exact)
+  local l, b, w, h = slot:GetRect()
+  Put(l); Put(b); Put(w); Put(h); Put(slot:GetEffectiveScale())
+end
+-- (a druid's: the HUD's place and settings, which the layout in the other form depends on; the
+-- form and power, which tell the stance bar's Cat and Bear Form when it gives other IDs)
+local function PutDruid(db, shown)
+  local x, y = ns.hud:GetCenter()
+  Put(x); Put(y); Put(ns.hud:GetEffectiveScale())
+  for _, side in ipairs(ns.SIDES) do
+    for k = 1, ns.MAX_ROWS do
+      for _, entry in ipairs(db.rows[side][k]) do
+        Put(ns:EntrySpell(entry)); Put(type(entry) == "table" and entry.exact or nil)
+      end
+      Put("/")
+    end
+  end
+  PutTable(db.icons); PutTable(db.disabled)
+  PutTable(db.bars.combo); PutTable(db.bars.power); PutTable(db.bars.mana); PutTable(db.bars.health)
+  for _, key in ipairs(db.bars.order) do Put(key) end
+  Put(db.druidCatOnly); Put(db.bearIconsFixed)
+  local form = GetShapeshiftForm and GetShapeshiftForm()
+  local power = UnitPowerType and UnitPowerType("player")
+  Put(Plain(form) and form or nil); Put(Plain(power) and power or nil)
+  if not shown then Put(ns:ShownOutOfForm()) end
+end
+
+local function Unchanged(db, on, shown)
+  nowCount = 0
+  Put(db); Put(on); Put(shown); Put(ns.isDruid); Put(ns.iconsOnBar); Put(UIParent:GetEffectiveScale())
+  if shown then ns:ForEachIcon(PutSlot) end
+  if ns.isDruid and db then PutDruid(db, shown) end
+  if nowCount ~= seenCount then return false end
+  for i = 1, nowCount do
+    if nowList[i] ~= seenList[i] then return false end
+  end
+  return true
+end
+
+-- The buttons placed for what was read last (kept once they are).
+local function Placed()
+  seenList, nowList, seenCount = nowList, seenList, nowCount
+end
+
+local PlaceAll -- below
+
+-- Puts the buttons on the icons (out of combat; in combat, nothing can move them). Nothing is
+-- read again while nothing they depend on changed (but a "nothing" a tooltip gave, every few
+-- seconds for a while).
 function ns:SyncClickers()
   if syncing or not self.hud or InCombatLockdown() then return end
   local db = self.db
   local on = self.enabled and db and db.locked and not self:EditingIcons()
   local shown = on and self.hud:IsVisible() and self.iconLayer:IsVisible()
+  local t = GetTime()
+  if Unchanged(db, on, shown) and not (t < recheckUntil and t - lastFull >= RECHECK) then return end
+  lastFull = t
+  PlaceAll(self, db, on, shown)
+  Placed()
+end
+
+-- The places and clicks read in full, and the buttons placed when they changed.
+function PlaceAll(self, db, on, shown)
   local bar = StanceBar()
   if not self.isDruid then
     local list = shown and Read(bar) or {}
@@ -518,8 +590,10 @@ table.insert(ns.onEnable, function()
   ticker:SetScript("OnEvent", function(_, event)
     if event ~= "PLAYER_REGEN_DISABLED" then
       wipe(needs)
+      wipe(firstAt)
       placed = nil
     end
+    seenCount = -1 -- (read in full)
     ns:SyncClickers()
   end)
 end)
