@@ -132,11 +132,24 @@ local function Build()
   updates[#updates + 1] = function() quiet:SetChecked(ns:QuietLogin()) end
   page.quietLogin = quiet
 
+  -- /who by first name or surname (Who.lua)
+  local who = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+  who:SetSize(26, 26)
+  who:SetPoint("TOPLEFT", 10, -286)
+  local whoText = who.Text or who.text
+  labels[#labels + 1] = function() whoText:SetText(L.SP_WHO_NAMES) end
+  who:SetScript("OnClick", function(self)
+    Click()
+    ns:SetWhoNames(self:GetChecked())
+  end)
+  updates[#updates + 1] = function() who:SetChecked(ns:WhoNames()) end
+  page.whoNames = who
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -300)
+  how:SetPoint("TOPLEFT", 14, -324)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -322)
+  box:SetPoint("TOPLEFT", 10, -346)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)

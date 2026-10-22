@@ -1799,6 +1799,7 @@ local function InitDB()
     end
   end
   if sv.quietLogin ~= false then sv.quietLogin = nil end -- (on unless turned off: QuietLogin.lua)
+  if sv.whoNames ~= false then sv.whoNames = nil end -- (on unless turned off: Who.lua)
   if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
   if sv.cameraOff ~= true then sv.cameraOff = nil end -- (DynamicCam's camera turned off: Modules/DynamicCam/Glue.lua)
   -- the interface improvements turned off (QoL.lua): only "false" is kept
