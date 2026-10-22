@@ -1788,6 +1788,7 @@ local function InitDB()
       if type(id) ~= "number" or type(v) ~= kind then sv[key][id] = nil end
     end
   end
+  if sv.quietLogin ~= false then sv.quietLogin = nil end -- (on unless turned off: QuietLogin.lua)
   CleanWindow(sv)
   CleanCatalog(sv)
   CleanPortraits(sv)
@@ -2093,7 +2094,8 @@ end
 ---------------------------------------------------------------------------
 -- Portrait right-click menu: "Reload UI" in Other Options just above Edit Mode, and at the
 -- end a Clara Combo Points section: the HUD's opacity (a slider like the game's "Overall
--- opacity") between a box to show / hide the whole HUD and a box to lock the icons
+-- opacity") between a box to show / hide the whole HUD and a box to lock it, then a box to show
+-- or hide the game's damage meter
 ---------------------------------------------------------------------------
 local function ReloadInterface()
   if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
@@ -2202,6 +2204,20 @@ local function MenuLineDescription()
   return description
 end
 
+-- The game's own damage meter (12.x clients): shown or hidden by its setting.
+local METER_CVAR = "damageMeterEnabled"
+local function MeterSetting()
+  local Get = (C_CVar and C_CVar.GetCVar) or GetCVar
+  if not Get then return end
+  local ok, value = pcall(Get, METER_CVAR)
+  if ok then return value end
+end
+function ns:DamageMeterShown() return MeterSetting() == "1" end
+function ns:SetDamageMeterShown(on)
+  local Set = (C_CVar and C_CVar.SetCVar) or SetCVar
+  if Set then pcall(Set, METER_CVAR, on and "1" or "0") end
+end
+
 -- What this addon puts in the portrait's menu, each part turned off in the game's options
 -- (Esc > Options > AddOns): "Reload UI" just above Edit Mode, and its own section at the end.
 local function AddMenuEntries(_, root)
@@ -2225,6 +2241,10 @@ local function AddMenuEntries(_, root)
     root:CreateDivider()
     root:CreateTitle("Clara Combo Points")
     root:Insert(MenuLineDescription())
+    if MeterSetting() ~= nil then -- last: the game's damage meter
+      root:CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
+        function() ns:SetDamageMeterShown(not ns:DamageMeterShown()) end)
+    end
   end
 end
 

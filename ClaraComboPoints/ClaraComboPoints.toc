@@ -10,6 +10,7 @@
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
 Locales.lua
+QuietLogin.lua
 Core.lua
 Items.lua
 Profiles.lua

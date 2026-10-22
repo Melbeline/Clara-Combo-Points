@@ -119,11 +119,24 @@ local function Build()
   MenuCheck("SP_MENU_LINE", "line", -214)
   MenuCheck("SP_MENU_RELOAD", "reload", -238)
 
+  -- The chat quiet while logging in: the addons' messages of the first 10 seconds taken out
+  local quiet = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+  quiet:SetSize(26, 26)
+  quiet:SetPoint("TOPLEFT", 10, -262)
+  local quietText = quiet.Text or quiet.text
+  labels[#labels + 1] = function() quietText:SetText(L.SP_QUIET_LOGIN) end
+  quiet:SetScript("OnClick", function(self)
+    Click()
+    ns:SetQuietLogin(self:GetChecked())
+  end)
+  updates[#updates + 1] = function() quiet:SetChecked(ns:QuietLogin()) end
+  page.quietLogin = quiet
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -276)
+  how:SetPoint("TOPLEFT", 14, -300)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -298)
+  box:SetPoint("TOPLEFT", 10, -322)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)
