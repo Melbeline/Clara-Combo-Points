@@ -2103,8 +2103,8 @@ end
 ---------------------------------------------------------------------------
 -- Portrait right-click menu: "Reload UI" in Other Options just above Edit Mode, and at the
 -- end a Clara Combo Points section: the HUD's opacity (a slider like the game's "Overall
--- opacity") between a box to show / hide the whole HUD and a box to lock it, then a box to show
--- or hide the game's damage meter
+-- opacity"), then a box to lock the HUD and, at the right end, a box to show / hide it all; then
+-- a box to show or hide the game's damage meter
 ---------------------------------------------------------------------------
 local function ReloadInterface()
   if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
@@ -2149,13 +2149,13 @@ local function MenuLine()
   f.label:SetJustifyH("LEFT")
   f.value = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   f.value:SetPoint("TOPRIGHT", 0, -3)
-  -- shown / hidden on the left, the opacity, icons locked on the right
+  -- the opacity, then icons locked, then shown / hidden at the right end
   f.check = MenuBox(f, function(on) ns:SetHidden(not on) end)
-  f.check:SetPoint("BOTTOMLEFT", -3, 1)
+  f.check:SetPoint("BOTTOMRIGHT", 3, 1)
   f.lock = MenuBox(f, function(on) ns:SetIconsLocked(on) end)
-  f.lock:SetPoint("BOTTOMRIGHT", 3, 1)
+  f.lock:SetPoint("RIGHT", f.check, "LEFT", 0, 0)
   local slider = CreateFrame("Frame", nil, f, "MinimalSliderWithSteppersTemplate")
-  slider:SetPoint("LEFT", f.check, "RIGHT", 0, 0)
+  slider:SetPoint("LEFT", f, "BOTTOMLEFT", 0, 12) -- (level with the boxes' middle)
   slider:SetPoint("RIGHT", f.lock, "LEFT", 0, 0)
   slider:SetHeight(24) -- the template's 40 would reach over the entry below
   if slider.Slider then -- the arrows closer in, for a longer track
