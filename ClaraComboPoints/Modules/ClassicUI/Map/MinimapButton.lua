@@ -1,0 +1,349 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+local L = ns.L
+
+-- Buttons on the minimap ring, 1.x tracking-button style, dragged round it with their angle saved: our options button
+-- (gryphon) here, the addon button collector in MinimapCollector.lua.
+
+local SIZE = 32
+local FULL = { 0, 1, 0, 1 }
+
+-- Ring centre is at (20, 19) on its 64px sheet; the face's edge hides under the ring.
+local RING_SIZE = 54
+local CX, CY = RING_SIZE * 20 / 64, -RING_SIZE * 19 / 64
+local FACE = 24
+
+-- 8-value coords: centre (u, v), half span, turned counter-clockwise by degrees.
+local function Turned(u, v, half, degrees)
+    local c, s = math.cos(math.rad(degrees)) * half, math.sin(math.rad(degrees)) * half
+    return { u - c + s, v - s - c, u - c - s, v - s + c, u + c + s, v + s - c, u + c - s, v + s + c }
+end
+
+-- The art's gryphon sits low and leans forward: centre on its body, zoom in, stand it upright.
+local GRYPHON = { layer = "ARTWORK", coords = Turned(0.578, 0.586, 0.436, 22), w = FACE, h = FACE,
+    point = "CENTER", relPoint = "TOPLEFT", x = CX, y = CY }
+-- An icon file's face, cropped past its own border.
+local ICON_FACE = { layer = "ARTWORK", coords = { 0.08, 0.92, 0.08, 0.92 }, w = FACE, h = FACE,
+    point = "CENTER", relPoint = "TOPLEFT", x = CX, y = CY }
+ns.RING_ICON_FACE = ICON_FACE
+-- Black disc under it: the zoomed art's own disc no longer reaches the ring everywhere.
+local BACK = { layer = "BACKGROUND", w = FACE, h = FACE, point = "CENTER", relPoint = "TOPLEFT", x = CX, y = CY,
+    vertex = { 0, 0, 0 } }
+local RING = { layer = "OVERLAY", w = RING_SIZE, h = RING_SIZE, point = "TOPLEFT" }
+local HL_RING = { coords = FULL, fill = true, add = true, states = { "Highlight" } }
+
+local rings = {}
+
+-- The micro icons are the map's own pieces: off the map's own children, where button gatherers look for addon buttons.
+local pieceHost
+local function Home(ring)
+    if not ring.piece then return Minimap end
+    if not pieceHost then
+        pieceHost = CreateFrame("Frame", nil, Minimap)
+        pieceHost:SetAllPoints(Minimap)
+    end
+    return pieceHost
+end
+
+local function Radius()
+    local map = Minimap
+    return (map and map:GetWidth() or 140) / 2 + 5
+end
+
+-- Ring spots other pieces stand on by default (mail, day and night, tracking spell, tracking glass, zoom out, zoom in),
+-- the arcs the zone bar and the clock cover, and how far apart two 32 px buttons must be, all in degrees.
+local TAKEN = { 12, 34, 159, 186, 302, 322 }
+local COVERED = { { 60, 120 }, { 246, 294 } }
+local APART = 25
+
+local function Angle(ring)
+    if ring.ride then return ring.angle end
+    return ns.db and ns.db[ring.angleKey] or ring.freeAngle or ring.angle
+end
+
+local function Apart(a, b)
+    local d = math.abs(a - b) % 360
+    return d > 180 and 360 - d or d
+end
+
+-- A button in the addon bag leaves its ring spot empty.
+local function OnMap(ring)
+    return not ring.button or ring.button:GetParent() == Home(ring)
+end
+
+-- How far the nearest piece or button is from a spot; nil on a covered arc.
+local function Room(degrees, self)
+    for _, arc in ipairs(COVERED) do
+        if degrees >= arc[1] and degrees <= arc[2] then return nil end
+    end
+    local room = 360
+    for _, taken in ipairs(TAKEN) do room = math.min(room, Apart(degrees, taken)) end
+    for _, other in ipairs(rings) do
+        if other ~= self and other.active and OnMap(other) then room = math.min(room, Apart(degrees, Angle(other))) end
+    end
+    return room
+end
+
+-- A button with no place of its own (spec.free): the nearest clear spot to its own, kept while it stays clear; on a full
+-- ring the roomiest spot.
+local function FreeSpot(ring)
+    if ring.ride or not ring.free or (ns.db and ns.db[ring.angleKey]) then return end
+    if ring.freeAngle and (Room(ring.freeAngle, ring) or 0) >= APART then return end
+    local best, bestRoom = ring.angle, -1
+    for step = 0, 180 do
+        for sign = 1, -1, -2 do
+            local degrees = (ring.angle + sign * step) % 360
+            local room = Room(degrees, ring)
+            if room and room >= APART then
+                ring.freeAngle = degrees
+                return
+            elseif room and room > bestRoom then
+                best, bestRoom = degrees, room
+            end
+        end
+    end
+    ring.freeAngle = best
+end
+
+-- Only we move these buttons, so an unchanged angle, radius and size means no move.
+-- Not while collected into the addon button bag (another parent). Offsets count in the button's own size (edit mode's).
+local function Position(ring)
+    local button = ring.button
+    if not button or not Minimap or button:GetParent() ~= Home(ring) then return end
+    -- Riding another frame (the group finder icon on the game's queue eye, which edit mode places and sizes).
+    local host = ring.ride and ring.ride()
+    if host then
+        local own, theirs = ns.Safe(button:GetParent():GetEffectiveScale()), ns.Safe(host:GetEffectiveScale())
+        if own and theirs and own > 0 then ns.SetScaleIf(button, theirs / own, 0.001) end
+        ns.SetPointOnce(button, "CENTER", host, "CENTER", 0, 0)
+        return
+    end
+    local degrees = Angle(ring)
+    local r = Radius()
+    local k = button:GetEffectiveScale() / Minimap:GetEffectiveScale()
+    local square = ns.MM.Square()
+    if degrees == ring.placedAngle and r == ring.placedRadius and k == ring.placedScale and square == ring.placedSquare then
+        return
+    end
+    ring.placedAngle, ring.placedRadius, ring.placedScale, ring.placedSquare = degrees, r, k, square
+    ns.RingPoint(button, degrees, r, k)
+end
+
+local function PositionAll()
+    for i = 1, #rings do
+        if rings[i].active then Position(rings[i]) end
+    end
+end
+
+-- Where a ring button sits, or would while it is off (never built), by its edit mode entry key: its centre in
+-- UIParent units.
+function ns.RingButtonSpot(key)
+    if not Minimap then return nil end
+    for i = 1, #rings do
+        local ring = rings[i]
+        if ring.key == key then
+            local mx, my = Minimap:GetCenter()
+            if not mx or ns.AnySecret(mx, my) then return nil end
+            local a, r = math.rad(Angle(ring)), Radius()
+            local k = Minimap:GetEffectiveScale() / UIParent:GetEffectiveScale()
+            return (mx + math.cos(a) * r) * k, (my + math.sin(a) * r) * k
+        end
+    end
+end
+
+-- Edit mode's drag, reset and size steps, by its entry key (ns.LayPiece).
+function ns.PlaceRingButton(key)
+    for i = 1, #rings do
+        if rings[i].key == key and rings[i].active then Position(rings[i]) end
+    end
+end
+
+-- Last cursor and map per ring, to skip idle frames.
+local function OnDragUpdate(job)
+    local ring = job.ring
+    local mx, my = Minimap:GetCenter()
+    local scale = Minimap:GetEffectiveScale()
+    local cx, cy = GetCursorPosition()
+    if cx == ring.dragX and cy == ring.dragY and mx == ring.dragMX and my == ring.dragMY and scale == ring.dragScale then return end
+    ring.dragX, ring.dragY, ring.dragMX, ring.dragMY, ring.dragScale = cx, cy, mx, my, scale
+    -- A riding button moves only through what it rides (dragHost), never by its own angle.
+    if ring.ride then
+        if ring.dragHost then ring.dragHost(ns.MinimapCursorAngle()) end
+        return
+    end
+    ns.db[ring.angleKey] = ns.MinimapCursorAngle()
+    Position(ring)
+end
+
+-- HookMethod dedups per frame and method, so this Layout hook is dropped when Minimap.lua
+-- hooked first; the SetSize hook, fired by that Layout, does the repositioning.
+local hooked = false
+local function HookMap()
+    if hooked then return end
+    hooked = true
+    if MinimapCluster then ns.HookMethod(MinimapCluster, "Layout", PositionAll) end
+    ns.HookMethod(Minimap, "SetSize", PositionAll)
+end
+
+-- A ring button's look on a 32 square frame: the black disc, the face, the ring. offMap: a ring off the minimap keeps
+-- its border whatever Hide button borders says. Returns the face.
+function ns.RingLook(frame, face, name, offMap)
+    ns.DressNew(frame, "portraitMask", BACK)
+    -- Round mask first: RoundIcon sets its own crop, which the dress then replaces.
+    local icon = frame:CreateTexture(name)
+    ns.RoundIcon(icon)
+    face(icon)
+    local ring = ns.DressNew(frame, "trackingBorder", RING)
+    if not offMap then ns.MinimapButtonBorder(ring, "hideBorderIcons") end
+    return icon
+end
+ns.RING_HIGHLIGHT = HL_RING
+
+-- Era's minimap button press (MiniMapButtonTemplate): the face 1 right and 1 down while held, back on release.
+local faceOf = setmetatable({}, { __mode = "k" })   -- a pressable button -> its face
+local heldAt = setmetatable({}, { __mode = "k" })   -- a held face -> its point before the press
+-- A drag takes the mouse up from the button and from a pad over it: any release lets every held face go.
+local releaseWatch
+local function ReleaseAll(self)
+    self:UnregisterAllEvents()
+    for face, held in pairs(heldAt) do
+        heldAt[face] = nil
+        ns.SetPointOnce(face, held[1], held[2], held[3], held[4], held[5])
+    end
+end
+function ns.RingPress(button, down)
+    local face = faceOf[button]
+    local held = face and heldAt[face]
+    if down and face and not held then
+        local point, rel, relPoint, x, y = face:GetPoint(1)
+        if not point then return end
+        heldAt[face] = { point, rel, relPoint, x, y }
+        ns.SetPointOnce(face, point, rel, relPoint, x + 1, y - 1)
+        releaseWatch = releaseWatch or ns.EventFrame({}, ReleaseAll)
+        releaseWatch:RegisterEvent("GLOBAL_MOUSE_UP")
+    elseif not down and held then
+        heldAt[face] = nil
+        ns.SetPointOnce(face, held[1], held[2], held[3], held[4], held[5])
+    end
+end
+local function PressDown(self) ns.RingPress(self, true) end
+local function PressUp(self) ns.RingPress(self, false) end
+-- button's press moves face; a pad over it passes its press on (UI/SecurePad.lua). hideHost: ours, hidden with it.
+function ns.RingPressable(button, face, hideHost)
+    local hooked = faceOf[button] ~= nil
+    faceOf[button] = face
+    if hooked then return end
+    button:HookScript("OnMouseDown", PressDown)
+    button:HookScript("OnMouseUp", PressUp)
+    ns.HookScriptOnce(hideHost or button, "OnHide", function() ns.RingPress(button, false) end, "ringPress")
+end
+
+local function Build(ring)
+    local b = CreateFrame("Button", ring.name, Home(ring))
+    b:SetSize(SIZE, SIZE)
+    b:SetFrameStrata("MEDIUM")
+    b:SetFrameLevel((Minimap:GetFrameLevel() or 2) + 8)
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    -- A riding button moves with what it rides, never by its own drag.
+    if not ring.ride then b:RegisterForDrag("LeftButton") end
+    -- Pure child watcher, asleep until a drag starts.
+    local dragJob = ns.Sched.OnFrame(CreateFrame("Frame", nil, b),
+        { name = ring.name .. ".drag", every = 0, awake = false, fn = OnDragUpdate })
+    dragJob.ring = ring
+    b:SetMovable(true)
+    -- Named: a gatherer that takes the button shows its <name>Icon.
+    b.icon = ns.RingLook(b, ring.face, ring.name .. "Icon")
+    ns.RingPressable(b, b.icon)
+    ns.DressStates(b, nil, nil, nil, "zoomHighlight", HL_RING)
+    b:SetScript("OnClick", ring.onClick)
+    -- Shift-drag, or a plain one with Shift to drag off (ns.MinimapDragOK); a pad over the button hands its drag here
+    -- (UI/SecurePad.lua), and follows the button only out of a fight.
+    b:SetScript("OnDragStart", function()
+        if not ns.MinimapDragOK() then return end
+        ring.dragX = nil
+        dragJob:Wake()
+    end)
+    b:SetScript("OnDragStop", function()
+        dragJob:Sleep()
+        Position(ring)
+    end)
+    ns.AttachTip(b, ring.tip)
+    return b
+end
+
+-- spec: { name, key (edit mode entry), angleKey, angle (default degrees), free (nearest clear spot), show (on hover id),
+-- piece (the map's own), face(texture), onClick(button, mouse), tip, ride() (a frame it sits on, at its size),
+-- addonButton (one of Addon buttons, with a pick of its own over theirs, #194) }; returns show and hide.
+function ns.RingButton(spec)
+    rings[#rings + 1] = spec
+    local function Show()
+        FreeSpot(spec)
+        spec.active = true
+        if not Minimap then return end
+        if not spec.button then
+            spec.button = Build(spec)
+            -- Its edit mode size, now that the named frame exists.
+            if ns.PlaceSavedWindows then ns.PlaceSavedWindows() end
+        end
+        Position(spec)
+        spec.button:Show()
+        if spec.addonButton then
+            ns.MinimapShowAs(spec.button, ns.MM.AddonButtonState(spec.name))
+        else
+            ns.MinimapShow(spec.button, spec.show)
+        end
+        HookMap()
+    end
+    local function Hide()
+        spec.active = false
+        if spec.button then
+            ns.MinimapShow(spec.button, nil)
+            spec.button:Hide()
+        end
+    end
+    -- Shown, on hover or hidden picked in the options.
+    local id = spec.addonButton and "MinimapAddonButtons" or spec.show
+    ns.OnToggle(function(key)
+        if not spec.active then return end
+        if key == "show" .. id or key == "hover" .. id or key == "hide" .. id
+            or (spec.addonButton and key == "minimapButtonPicks") then
+            Show()
+        end
+    end)
+    return Show, Hide
+end
+
+local ShowOptions, HideOptions = ns.RingButton({
+    name = "ForeverClassicUIMinimapButton",
+    key = "minimapOptionsButton",
+    angleKey = "minimapButtonAngle",
+    angle = 213,   -- clear of the tracking glass (186) under the tracking spell
+    addonButton = true,
+    face = function(icon) ns.Dress(icon, "gryphonIcon", GRYPHON) end,
+    onClick = function(_, mouse)
+        if mouse == "RightButton" then
+            if ns.ShowWelcome then ns.ShowWelcome() end
+        else
+            ns.OpenOptions()
+        end
+    end,
+    tip = { anchor = "ANCHOR_LEFT", text = L["MAP_CLASSICUI_FOREVER"], r = 1, g = 1, b = 1, lines = {
+        { L["MAP_LEFT_CLICK_OPTIONS"], 0.8, 0.8, 0.8 },
+        { L["MAP_RIGHT_CLICK_WELCOME_NOTE"], 0.8, 0.8, 0.8 },
+        { L["MAP_DRAG_TO_MOVE_AROUND_THE"], 0.8, 0.8, 0.8 },
+    } },
+})
+
+ns.RegisterModule("minimapButton", { apply = ShowOptions, restore = HideOptions })
+
+-- The options button's default spot left the tracking glass (200 to 213): one never dragged follows, in the account and
+-- every profile. Runs before the defaults fill.
+function ns.FreeOptionsButton()
+    local db = ns.db
+    if db.minimapButtonAngle == 200 then db.minimapButtonAngle = nil end
+    for _, shot in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+        if type(shot) == "table" and shot.minimapButtonAngle == 200 then shot.minimapButtonAngle = nil end
+    end
+    db.dbVersion = 12
+end

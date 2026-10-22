@@ -1,0 +1,371 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+local B = ns.band
+
+-- Pins: the client's bottom/right bar pass (on target change, in fights too) sends "default" bars home but leaves
+-- ones the layout holds a spot for, so band bars are written in at band spots; told from a player drag by shape and
+-- per-layout record. Layout writes only as the session ends (ns.sessionEnding): mid-game one taints every piece.
+
+local PIN_NAMES, HAND_BACK, CAP_KEYS = B.PIN_NAMES, B.HAND_BACK, B.CAP_KEYS
+local InDefaultPosition = ns.InDefaultPosition
+
+-- Memoized per lane pass (B.inLane): nothing in a pass switches layouts; outside the lane every call asks.
+local memo = { name = nil, known = false }
+B.layoutMemo = memo
+local function ActiveLayoutName()
+    if memo.known then return memo.name end
+    local info = ns.ActiveLayoutInfo()
+    local name = info and info.layoutName or nil
+    if B.inLane then memo.name, memo.known = name, true end
+    return name
+end
+
+function B.ForgetLayout()
+    memo.name, memo.known = nil, false
+end
+
+local function PinnedByUs(frame, info)
+    local pins = ns.db and ns.db.barPins
+    local layout = pins and pins[ActiveLayoutName() or ""]
+    local name = frame.GetName and frame:GetName()
+    local pin = layout and name and layout[name]
+    if not info then return false end
+    local relativeTo = info.relativeTo
+    if type(relativeTo) == "table" then relativeTo = relativeTo.GetName and relativeTo:GetName() end
+    -- By shape too (records made before a layout reset may be gone): no edit mode drop, snap or nudge holds BOTTOMLEFT to
+    -- screen BOTTOM, or a right column's TOPRIGHT to the screen's BOTTOMRIGHT.
+    if relativeTo == "UIParent" and info.point == "BOTTOMLEFT" and info.relativePoint == "BOTTOM" then return true end
+    if relativeTo == "UIParent" and info.point == "TOPRIGHT" and info.relativePoint == "BOTTOMRIGHT" then return true end
+    if not pin then return false end
+    return info.point == pin.point and info.relativePoint == pin.relativePoint and relativeTo == "UIParent"
+        and math.abs((info.offsetX or 0) - (pin.offsetX or 0)) < 0.5
+        and math.abs((info.offsetY or 0) - (pin.offsetY or 0)) < 0.5
+end
+
+local function PresetAnchor(mgr, system, index)
+    return mgr and mgr:GetDefaultSystemAnchorInfo(system, index)
+end
+
+-- Whether edit mode holds this frame at a player's spot: not its default (layouts can carry a stale flag,
+-- so the spot is checked against the preset) and not our pin.
+local function SystemMoved(frame)
+    if not frame or type(frame.IsInDefaultPosition) ~= "function" then return false end
+    if not (frame.IsInitialized and frame:IsInitialized()) then return false end
+    local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
+    if not ok or isDefault then return false end
+    local info = frame.systemInfo and frame.systemInfo.anchorInfo
+    if PinnedByUs(frame, info) then return false end
+    local okDefault, preset = pcall(PresetAnchor, EditModePresetLayoutManager, frame.system, frame.systemIndex)
+    if not okDefault or not info or not preset then return true end
+    local same = info.point == preset.point and info.relativeTo == preset.relativeTo and info.relativePoint == preset.relativePoint
+        and math.abs((info.offsetX or 0) - (preset.offsetX or 0)) < 0.5 and math.abs((info.offsetY or 0) - (preset.offsetY or 0)) < 0.5
+    return not same
+end
+B.SystemMoved = SystemMoved
+ns.SystemMoved = SystemMoved
+
+-- Outside edit mode a bar the layout holds at its default spot is the game's: it re-stacks it at will (stance, target,
+-- fights) and nothing drawn rides it, so its frame stays where the game puts it and the game's own layout runs as without us.
+function B.GameHolds(bar)
+    return bar ~= nil and bar.actionButtons ~= nil and not ns.EditMode.Live() and InDefaultPosition(bar, true) == true
+end
+
+-- Band bars the active layout still holds as the client's own, into list; withPins adds ours (re-pinned for the band's current length).
+local function CollectBandBars(list, withPins)
+    if not B.active or not B.art then return list end
+    for _, name in ipairs(PIN_NAMES) do
+        local frame = _G[name]
+        if frame and frame.system and frame:IsShown() and type(frame.IsInDefaultPosition) == "function" then
+            local isDefault = InDefaultPosition(frame)
+            if withPins then
+                local info = frame.systemInfo and frame.systemInfo.anchorInfo
+                if isDefault ~= nil and (isDefault or PinnedByUs(frame, info)) then list[#list + 1] = frame end
+            elseif isDefault then
+                list[#list + 1] = frame
+            end
+        end
+    end
+    return list
+end
+
+function ns.BandBarsToUnpinned() return CollectBandBars({}, false) end
+
+-- Same, for the band's in-fight scan, into one reused list.
+local unpinned = {}
+function B.UnpinnedBars()
+    wipe(unpinned)
+    return CollectBandBars(unpinned, false)
+end
+
+function ns.BandBarsToPin() return CollectBandBars({}, true) end
+
+-- A frame's bottom-left relative to the screen's bottom-centre, in its own scale: how our pin holds it.
+local function PinSpot(frame)
+    local left, bottom = frame:GetLeft(), frame:GetBottom()
+    if not left or not bottom then return nil end
+    local ratio = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    if not ratio or ratio <= 0 then return nil end
+    return left - UIParent:GetWidth() / 2 / ratio, bottom
+end
+
+-- Anchor a bar's band spot to the screen, not the band: the layout is read before the band exists and outlives it.
+-- Right columns keep their hang from the screen's bottom-right corner: a spot from the screen's middle drifted off the
+-- edge whenever its width changed (UI scale), and the layout shows it as saved with the addon off.
+local function AnchorToScreen(frame)
+    local point, relativeTo, relativePoint = frame:GetPoint(1)
+    if relativeTo == UIParent and point == "BOTTOMLEFT" and relativePoint == "BOTTOM" then return true end
+    if relativeTo == UIParent and point == "TOPRIGHT" and relativePoint == "BOTTOMRIGHT" then return true end
+    local x, y = PinSpot(frame)
+    if not x then return false end
+    ns.SetPointOnce(frame, "BOTTOMLEFT", UIParent, "BOTTOM", x, y)
+    return true
+end
+
+-- Reset to default when edit mode holds it elsewhere and allow (if given) agrees; returns whether it moved.
+local function ResetIfMoved(frame, allow, arg)
+    if not (frame and frame.system and type(frame.IsInDefaultPosition) == "function"
+        and type(frame.ResetToDefaultPosition) == "function") then
+        return false
+    end
+    local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
+    if not ok or isDefault then return false end
+    if allow and not allow(frame, arg) then return false end
+    return pcall(frame.ResetToDefaultPosition, frame) and true or false
+end
+
+-- On Forever the client's gryphons are edit mode pieces snapped to the main bar; the client turns the snap into a fixed
+-- spot whenever the bar moves or hides, and a save keeps it (hidden under the band). Reset to default (the snap) before any save.
+local function ResetEndCaps()
+    local bar = ns.GetMainBar()
+    local caps = bar and bar.EndCaps
+    if not caps then return false end
+    local changed = false
+    for _, key in ipairs(CAP_KEYS) do
+        if ResetIfMoved(caps[key]) then changed = true end
+    end
+    return changed
+end
+
+-- A tracking bar holder on the band is drawn at band length, so its Width is written back to 100%.
+local function WidthsToBand(mgr)
+    local size = Enum and Enum.EditModeStatusTrackingBarSetting and Enum.EditModeStatusTrackingBarSetting.Size
+    if size == nil or not mgr.OnSystemSettingChange then return false end
+    local changed = false
+    for _, holder in ipairs(B.StatusPair()) do
+        if holder and holder.system and holder.GetSettingValue and not SystemMoved(holder) then
+            local ok, now = pcall(holder.GetSettingValue, holder, size)
+            -- 0 is a holder without the setting.
+            if ok and type(now) == "number" and now > 0 and now ~= 100
+                and pcall(mgr.OnSystemSettingChange, mgr, holder, size, 100) then
+                changed = true
+            end
+        end
+    end
+    return changed
+end
+
+-- Our Default Size buttons' layout jobs (bagsSize, eyeSize): Size back to 100, written as the session ends.
+local SIZE_JOBS = {
+    bagsSize = function() return BagsBar, Enum.EditModeBagsSetting and Enum.EditModeBagsSetting.Size end,
+    eyeSize = function()
+        return QueueStatusButton, Enum.EditModeGroupFinderSetting and Enum.EditModeGroupFinderSetting.Size
+    end,
+}
+
+function ns.ResetSizesNow(jobs)
+    local mgr = EditModeManagerFrame
+    if not ns.sessionEnding or not (mgr and mgr.OnSystemSettingChange and mgr.SaveLayouts) then return end
+    local changed = false
+    for key, get in pairs(SIZE_JOBS) do
+        if jobs[key] then
+            jobs[key] = nil
+            local system, setting = get()
+            if system and setting ~= nil and pcall(mgr.OnSystemSettingChange, mgr, system, setting, 100) then
+                changed = true
+            end
+        end
+    end
+    if changed then pcall(mgr.SaveLayouts, mgr) end
+end
+
+-- A preset's settings as { setting, value } pairs, whichever of its two shapes it has.
+local function PresetSettings(settings)
+    local list = {}
+    for key, entry in pairs(settings) do
+        if type(entry) == "table" then
+            if entry.setting ~= nil then list[#list + 1] = { entry.setting, entry.value } end
+        else
+            list[#list + 1] = { key, entry }
+        end
+    end
+    return list
+end
+
+-- The classic reset, as the session ends: piece settings back to the Classic preset's raw values on the layout data
+-- (every slot shown, twelve of them, as the game's presets have it), missing ones put back (one reads as 0: party
+-- frames at scale 0), bar 1's art shown.
+function ns.ResetLayoutSettingsNow()
+    local presetManager = EditModePresetLayoutManager
+    if not ns.sessionEnding or not presetManager then return false end
+    local active = ns.ActiveLayoutInfo()
+    local presets = presetManager:GetCopyOfPresetLayouts()
+    local base = presets and (presets[(Enum.EditModePresetLayouts and Enum.EditModePresetLayouts.Classic) or 2] or presets[1])
+    if not (active and type(active.systems) == "table" and base and type(base.systems) == "table") then return false end
+    local bar = Enum.EditModeActionBarSetting or {}
+    local trackerHeight = Enum.EditModeObjectiveTrackerSetting and Enum.EditModeObjectiveTrackerSetting.Height
+    local changed = false
+    for _, want in ipairs(base.systems) do
+        local have
+        for _, info in ipairs(active.systems) do
+            if info.system == want.system and info.systemIndex == want.systemIndex then
+                have = info
+                break
+            end
+        end
+        if have and type(want.settings) == "table" then
+            if type(have.settings) ~= "table" then have.settings = {} end
+            local actionBar = want.system == Enum.EditModeSystem.ActionBar
+            for _, pair in ipairs(PresetSettings(want.settings)) do
+                local setting, value = pair[1], pair[2]
+                if actionBar and setting == bar.HideBarArt then value = 0 end
+                if want.system == Enum.EditModeSystem.ObjectiveTracker and setting == trackerHeight then
+                    value = ns.ClassicTrackerHeightRaw()
+                end
+                local slot
+                for _, entry in ipairs(have.settings) do
+                    if entry.setting == setting then
+                        slot = entry
+                        break
+                    end
+                end
+                if not slot then
+                    have.settings[#have.settings + 1] = { setting = setting, value = value }
+                    changed = true
+                elseif slot.value ~= value then
+                    slot.value = value
+                    changed = true
+                end
+            end
+        end
+    end
+    return changed
+end
+
+-- Bar 1's art hidden in our layout's data though the player never ticked it (Bar/BandBare.lua): shown again there.
+local function ArtBackInLayout()
+    B.WatchArtTick(false)
+    if not ns.ClassicLayoutActive() or ns.db.barArtHidden or ns.db.barArtKeep then return false end
+    local entry = B.LayoutArtEntry()
+    if not (entry and entry.value == 1) then return false end
+    entry.value = 0
+    return true
+end
+
+-- Write band bars into the active layout at band spots (the client re-lays a "default" bar mid-fight), on layouts of
+-- ours only: a player's own is copied first (Options/LayoutCopy.lua). Player-placed bars are left alone. From the
+-- reload press (ns.BandLayoutStep), never at logout: edit mode is shut then and keeps nothing.
+function ns.PinBandBars()
+    if not ns.sessionEnding then return false end
+    if not B.active or not B.art or InCombatLockdown() then return false end
+    if not (ns.LayoutWritable() and ns.OurLayoutActive()) then return false end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.UpdateSystemAnchorInfo or not mgr.SaveLayouts then return false end
+    local layoutName = ActiveLayoutName()
+    if not layoutName then return false end
+    local changed = false
+    B.applying = true
+    -- Unstacked (sessionEnding) first, or the second holder would be pinned on the XP bar's home.
+    if B.LayoutStatusBars then pcall(B.LayoutStatusBars) end
+    -- Right columns at their corner spots as the rule sets them, not wherever the session left them.
+    if B.LayoutSideBars then pcall(B.LayoutSideBars) end
+    for _, frame in ipairs(ns.BandBarsToPin()) do
+        if AnchorToScreen(frame) then
+            local ok, did = pcall(mgr.UpdateSystemAnchorInfo, mgr, frame)
+            -- Read back from the layout: what the bar gets after the reload.
+            local held = mgr.GetActiveLayoutSystemInfo and mgr:GetActiveLayoutSystemInfo(frame.system, frame.systemIndex)
+            local info = (held and held.anchorInfo) or (frame.systemInfo and frame.systemInfo.anchorInfo)
+            if ok and did and info then
+                ns.DbTable("barPins")
+                ns.db.barPins[layoutName] = ns.db.barPins[layoutName] or {}
+                ns.db.barPins[layoutName][frame:GetName()] = {
+                    point = info.point, relativePoint = info.relativePoint,
+                    offsetX = info.offsetX, offsetY = info.offsetY,
+                }
+                changed = true
+            end
+        end
+    end
+    if WidthsToBand(mgr) then changed = true end
+    if ns.PlaceClassicSpots and ns.PlaceClassicSpots() then changed = true end
+    B.applying = false
+    if ResetEndCaps() then changed = true end
+    if ArtBackInLayout() then changed = true end
+    if changed then pcall(mgr.SaveLayouts, mgr) end
+    return changed
+end
+
+-- Band spot per bar as a layout anchor, touching no frame or layout: for a layout that is not live.
+function ns.BandPinAnchors()
+    local out = {}
+    for _, frame in ipairs(ns.BandBarsToPin()) do
+        local x, y = PinSpot(frame)
+        local scale = frame:GetScale()
+        if x and scale and scale > 0 then
+            out[#out + 1] = {
+                name = frame:GetName(), system = frame.system, systemIndex = frame.systemIndex,
+                anchorInfo = {
+                    point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOM",
+                    offsetX = x * scale, offsetY = y * scale,
+                },
+            }
+        end
+    end
+    return out
+end
+
+local function OursOrPinned(frame, ours)
+    return ours or PinnedByUs(frame, frame.systemInfo and frame.systemInfo.anchorInfo)
+end
+
+-- Turning the band off hands the bar region back whole: on the addon's layout every piece it placed goes to default
+-- (spots built around the stone bar); on a player's layout only our pins. Once per turn-off, so later moves are the player's.
+function ns.UnpinBandBars()
+    if not ns.sessionEnding then return false end
+    if InCombatLockdown() then return false end
+    if not (ns.LayoutWritable and ns.LayoutWritable()) then return false end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.SaveLayouts then return false end
+    local layoutName = ActiveLayoutName()
+    local ours = ns.ClassicLayoutActive and ns.ClassicLayoutActive()
+    local changed = false
+    for _, name in ipairs(HAND_BACK) do
+        if ResetIfMoved(_G[name], OursOrPinned, ours) then changed = true end
+    end
+    if ResetEndCaps() then changed = true end
+    if layoutName and ns.db.barPins then ns.db.barPins[layoutName] = nil end
+    ns.db.barDragged = false
+    ns.db.bandHandedBack = true
+    if changed then
+        -- Bars held as default again are the client's to stack.
+        if mgr.UpdateActionBarPositions then pcall(mgr.UpdateActionBarPositions, mgr) end
+        pcall(mgr.SaveLayouts, mgr)
+    end
+    return changed
+end
+
+-- Settings lost while the layout kept its pins make every pinned bar read as player-placed, so the band leaves them;
+-- on the addon's layout this takes them back: default, laid by the band, pinned afresh.
+function ns.AdoptBandBars()
+    if not ns.sessionEnding then return false end
+    if InCombatLockdown() or not B.active then return false end
+    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    local count = 0
+    for _, name in ipairs(PIN_NAMES) do
+        if ResetIfMoved(_G[name]) then count = count + 1 end
+    end
+    ns.db.barDragged = false
+    -- Laid at once; ReloadForLayout pins next.
+    ns.ApplyAll()
+    return count
+end

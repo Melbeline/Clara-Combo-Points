@@ -1,0 +1,410 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+
+-- Target and focus frames on 1.x art, their aura rows, and the ToT under the portrait.
+
+local UF = ns.UF
+local Busy, Keeper, Update = UF.Busy, UF.Keeper, UF.Update
+local Child, BarBg, BarTexts, AttachOverlays = UF.Child, UF.BarBg, UF.BarTexts, UF.AttachOverlays
+local BuildBars, PlaceName, PlaceLevel = UF.BuildBars, UF.PlaceName, UF.PlaceLevel
+local FadePvpPieces, OwnPvpIcon, HideOwnPvp, HideHost = UF.FadePvpPieces, UF.OwnPvpIcon, UF.HideOwnPvp, UF.HideHost
+local Dress, DressNew, FadeKeys = ns.Dress, ns.DressNew, ns.FadeKeys
+local SetPointIf, SetShownIf, IsSecret = ns.SetPointIf, ns.SetShownIf, ns.IsSecret
+
+local FRAME_W, FRAME_H, BAR_W = UF.FRAME_W, UF.FRAME_H, UF.BAR_W
+local HEALTH_Y, PORTRAIT, LEVEL_TEXT_Y = UF.HEALTH_Y, UF.PORTRAIT, UF.LEVEL_TEXT_Y
+local BAR_X, NAME_X, LEVEL_X = 27, 36, 199
+
+local FULL = { 0, 1, 0, 1 }
+local ELITE_FLASH, PLAIN_FLASH = { 0, 0.9453125, 0.181640625, 0.400390625 }, { 0, 0.9453125, 0, 0.181640625 }
+local CLASSIFICATION_ART = {
+    rareelite = { key = "targetingRareElite", flashCoords = ELITE_FLASH, flashSize = { 242, 112 }, flashPoint = { -2, 5 } },
+    elite = { key = "targetingElite", flashCoords = ELITE_FLASH, flashSize = { 242, 112 }, flashPoint = { -2, 5 } },
+    worldboss = { key = "targetingElite", flashCoords = ELITE_FLASH, flashSize = { 242, 112 }, flashPoint = { -2, 5 } },
+    rare = { key = "targetingRare", flashCoords = PLAIN_FLASH, flashSize = { 242, 93 }, flashPoint = { -4, -4 } },
+    minus = { key = "targetingMinus", flashCoords = FULL, flashSize = { 256, 128 }, flashPoint = { -4, -4 }, flashKey = "targetingMinusFlash" },
+    normal = { key = "targetingFrame", flashCoords = PLAIN_FLASH, flashSize = { 242, 93 }, flashPoint = { -4, -4 } },
+}
+-- The art in two: the game hangs its aura row 9 under its art texture's foot, the 1.x row sits 32 under the art's foot.
+-- The game's texture ends 23 short and our strip draws the rest, so every layout of the game's lands on the 1.x spot.
+local ART_FOOT = 23
+local ART_SPLIT = (FRAME_H - ART_FOOT) / 128
+local ART = { coords = { 0.09375, 1, 0, ART_SPLIT }, w = FRAME_W, h = FRAME_H - ART_FOOT, point = "TOPLEFT", x = 20, y = -4 }
+local ART_STRIP = { own = "artFoot", layer = "BACKGROUND", sublevel = 2, coords = { 0.09375, 1, ART_SPLIT, 0.78125 },
+    w = FRAME_W, h = ART_FOOT, point = "TOPLEFT", relPoint = "BOTTOMLEFT", show = true }
+-- Under the portrait and frame art, as in 1.x: Forever draws its threat glow over them (ARTWORK 1).
+local FLASH = { point = "TOPLEFT", layer = "BACKGROUND", sublevel = 0 }
+local MASK = { w = PORTRAIT, h = PORTRAIT, point = "TOPRIGHT", x = -22, y = -16 }
+
+-- A foe's level in Era's colours (same level: yellow, not the client's gold); the client rewrites it each update.
+local function EraLevel(text, unit)
+    if not (UnitExists(unit) and C_PlayerInfo and C_PlayerInfo.GetContentDifficultyCreatureForPlayer) then return end
+    local foe = UnitCanAttack("player", unit)
+    if IsSecret(foe) or not foe then return end
+    local difficulty = C_PlayerInfo.GetContentDifficultyCreatureForPlayer(unit)
+    if difficulty == nil or IsSecret(difficulty) then return end
+    local color = ns.EraLevelColor(GetDifficultyColor(difficulty))
+    if color then ns.SetVertexColorIf(text, color.r, color.g, color.b) end
+end
+local REPUTATION = { coords = FULL, w = BAR_W, h = 19, point = "TOPRIGHT", x = -86, y = -26 }
+local SKULL = { coords = FULL, w = 16, h = 16, point = "CENTER", relPoint = "TOPLEFT", x = 199, y = -70 }
+local LEADER = { coords = FULL, w = 16, h = 16, point = "TOPRIGHT", x = -24, y = -14 }
+local QUEST = { coords = FULL, w = 32, h = 32, point = "TOP", x = 32, y = -16 }
+local TOT_ART = { own = "art", layer = "ARTWORK", coords = { 0.015625, 0.7265625, 0, 0.703125 }, w = 93, h = 45, point = "TOPLEFT", show = true }
+local TEXTS = { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 }, { "CENTER", 0, 0 }, { "CENTER", 0, 0 } }
+local TOT_PIECES = { "FrameTexture", "HealthBar", "ManaBar" }
+local TOT_BARS = { "HealthBar", "ManaBar" }
+local TOT_DEBUFFS = { { -23, -8 }, { -10, -8 }, { -23, -21 }, { -10, -21 } }
+local TARGET_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED" }
+local UNIT_TARGET = { "UNIT_TARGET" }
+
+-- The game's own spot under the split art (ART_FOOT): kept on each re-lay trigger (UnitFrames.lua), so it only acts on
+-- drift; buffs on top still differ (the game's 6 down, ours 10).
+local AURA_X, AURA_Y = 5, 9
+-- Buffs On Top (edit mode): the row stands over the frame, its bottom this far down the art's top, growing upward.
+local AURA_TOP_X, AURA_TOP_Y = 5, -10
+-- The game's Buffs On Top, but ours alone on the small focus frame (Units/BuffsOnTop.lua): the game hides its own box
+-- there and keeps its value, so one ticked on the larger frame held the row on top whatever ours said.
+function UF.AurasOnTop(frame)
+    if frame == FocusFrame and frame.smallSize == true then return ns.db.focusBuffsOnTop == true end
+    return frame.buffsOnTop == true
+end
+
+-- The row's spot on the art: point, the art, its point, x, y (Units/BuffsOnTop.lua's edit mode preview stands there too).
+function UF.AuraSpot(frame)
+    local art = frame.TargetFrameContainer and frame.TargetFrameContainer.FrameTexture
+    if not art then return nil end
+    if UF.AurasOnTop(frame) then return "BOTTOMLEFT", art, "TOPLEFT", AURA_TOP_X, AURA_TOP_Y end
+    return "TOPLEFT", art, "BOTTOMLEFT", AURA_X, AURA_Y
+end
+
+local function KeepAuraRow(frame, force)
+    local auras = frame.GetAuraContainer and frame:GetAuraContainer()
+    if not auras then return end
+    if frame == FocusFrame and UF.FocusPreview then UF.FocusPreview() end
+    local want, art, wantRel, wantX, wantY = UF.AuraSpot(frame)
+    if not want then return end
+    local point, relativeTo, relativePoint, x, y = auras:GetPoint(1)
+    -- Secret in combat, never compared; a blind put re-lays the whole row, so only when forced.
+    local hidden = IsSecret(point) or IsSecret(x) or IsSecret(y) or IsSecret(relativePoint)
+    if hidden and not force then return end
+    if not hidden and point == want and relativeTo == art and relativePoint == wantRel
+        and math.abs((x or 0) - wantX) < 0.5 and math.abs((y or 0) - wantY) < 0.5 then
+        return
+    end
+    ns.SetPointOnce(auras, want, art, wantRel, wantX, wantY)
+end
+
+-- Elite frames (Target, Focus): the units picked under it (players by default, NPCs too if picked) wear the dragon;
+-- rares the rare elite one, the small frame stays small. A secret answer counts as an NPC.
+local FORCED = { normal = "elite", rare = "rareelite" }
+local ELITE_KEY = { target = "eliteFrameTarget", focus = "eliteFrameFocus" }
+local function ForcedElite(unit, classification)
+    local key = ELITE_KEY[unit]
+    if not (key and ns.db and ns.db.eliteFrames == true and ns.db[key] ~= false) then return classification end
+    local isPlayer = UnitIsPlayer(unit)
+    local kind = (not IsSecret(isPlayer) and isPlayer) and "eliteUnitPlayers" or "eliteUnitNPCs"
+    if ns.db[kind] ~= true then return classification end
+    return FORCED[classification] or classification
+end
+
+-- dbVersion 19: Elite frames forced the dragon on every target; on before, NPCs keep it (the account and every profile).
+function ns.KeepEliteNPCs()
+    local db = ns.db
+    local function Keep(t)
+        if t.eliteFrames == true and t.eliteUnitNPCs == nil then t.eliteUnitNPCs = true end
+    end
+    Keep(db)
+    for _, shot in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+        if type(shot) == "table" then Keep(shot) end
+    end
+end
+
+-- The game colours the name box only as the unit changes (its CheckFaction): grey on a tapped mob, else the unit's
+-- selection colour. Ours taken off puts that back at once.
+local classBoxed = setmetatable({}, { __mode = "k" })   -- frame -> its name box wears a class colour of ours
+local NAME_BOX = { target = "nameBoxTarget", focus = "nameBoxFocus" }
+local function GameBoxColor(box, unit)
+    local controlled, denied = UnitPlayerControlled(unit), UnitIsTapDenied(unit)
+    if ns.AnySecret(controlled, denied) then return end
+    if not controlled and denied then
+        ns.SetVertexColorIf(box, 0.5, 0.5, 0.5, 1)
+        return
+    end
+    local r, g, b = UnitSelectionColor(unit)
+    if r == nil or ns.AnySecret(r, g, b) then return end
+    ns.SetVertexColorIf(box, r, g, b, 1)
+end
+
+local function ApplyClassification(frame)
+    local entry = UF.frames[frame]
+    if not entry or not UF.active then return end
+    local container = frame.TargetFrameContainer
+    local classification = UnitClassification(entry.unit)
+    -- Secret in dungeons: never a table key.
+    if IsSecret(classification) or classification == nil then classification = "normal" end
+    classification = ForcedElite(entry.unit, classification)
+    local art = CLASSIFICATION_ART[classification] or CLASSIFICATION_ART.normal
+    local minus = classification == "minus"
+    local sheet = UF.ThickSheet(art.key, entry.unit)
+    Dress(container.FrameTexture, sheet, ART, frame)
+    DressNew(container, sheet, ART_STRIP, container.FrameTexture)
+    UF.DressGlow(container.Flash, art.flashKey or "targetingFlash", FLASH, frame, art.flashPoint[1], art.flashPoint[2],
+        art.flashSize[1], art.flashSize[2], art.flashCoords)
+    ns.Fade(container.BossPortraitFrameTexture)
+    local contextual = ns.Path(frame, "TargetFrameContent", "TargetFrameContentContextual")
+    if contextual then ns.Fade(contextual.BossIcon) end
+    local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
+    -- The small frame has no thick sheet: its bars stay 1.x.
+    local style = not minus and UF.Thick(entry.unit) or nil
+    UF.LayBars(frame, style)
+    if entry.power then entry.power:SetAlpha(minus and 0 or 1) end
+    if entry.bg and minus then entry.bg:SetSize(BAR_W, 12) end
+    if main then UF.NameFont(main.Name) end
+    local box = main and main.ReputationColor
+    local r, g, b = ns.NameBoxColor(entry.unit)
+    -- Unchecked under Name box color: plain, as the player frame's is, unless a class color of ours stands in it.
+    local plain = not r and ns.db[NAME_BOX[entry.unit]] == false
+    if box then SetShownIf(box, not minus and style ~= "name" and not plain) end
+    if box and r then
+        ns.SetVertexColorIf(box, r, g, b, 1)
+        classBoxed[frame] = true
+    elseif box and classBoxed[frame] then
+        classBoxed[frame] = nil
+        GameBoxColor(box, entry.unit)
+    end
+    -- CastBars reads this to drop the spell bar.
+    frame.haveElite = (classification == "elite" or classification == "worldboss" or classification == "rare" or classification == "rareelite") or nil
+end
+
+-- 1.x ToT: bottom right 35 in, 10 below the target art's; the art spot (20, -4, 232x100) is folded in
+-- because a protected frame cannot anchor to a texture. Out of combat, only when moved.
+local TOT_X, TOT_Y = 20 + 232 - 35 - 93, -4 - 100 - 10 + 45
+local function PlaceTot(frame)
+    local tot = frame and frame.totFrame
+    if not tot or InCombatLockdown() then return end
+    -- The small focus frame scales its ToT up over the cast bar: keep 1. Offsets are in the ToT's scale.
+    if frame.smallSize then ns.SetScaleIf(tot, 1, 0.01) end
+    local scale = tot:GetScale()
+    if not scale or scale <= 0 then scale = 1 end
+    local wantX, wantY = TOT_X / scale, TOT_Y / scale
+    if ns.IsAt(tot, "TOPLEFT", frame, "TOPLEFT", wantX, wantY, 0.5) then return end
+    ns.SetPointOnce(tot, "TOPLEFT", frame, "TOPLEFT", wantX, wantY)
+end
+
+-- The client refills its ToT bars every frame: they stay faded and ours fill from the unit.
+local function FillTot(tot, fallbackUnit)
+    local own = tot.fcui
+    if not own or not own.totHealth then return end
+    local unit = tot.unit or fallbackUnit
+    if not unit or not UnitExists(unit) then return end
+    ns.SetHealth(own.totHealth, unit)
+    ns.SetPower(own.totPower, unit)
+end
+
+-- No ToT health event: 0.1 s beat while shown (the holder's visibility edges), at once on show or unit change
+-- (ours are white until filled).
+local function WatchTot(holder, tot, fallbackUnit, unit)
+    local job = ns.Sched.Job({ name = "unitFrames.tot." .. unit, every = 0.1, awake = holder:IsVisible(), fn = function()
+        if UF.active then FillTot(tot, fallbackUnit) end
+    end })
+    local function Now() job:RunNow() end
+    -- Its show and hide re-configure the target's aura row (TargetOfTargetMixin OnShow/OnHide).
+    local function Relaid()
+        if UF.AuraHot then UF.AuraHot() end
+    end
+    holder:SetScript("OnShow", function()
+        job:Wake()
+        Now()
+        Relaid()
+    end)
+    holder:SetScript("OnHide", function()
+        job:Sleep()
+        Relaid()
+    end)
+    ns.RegisterEvents(holder, TARGET_EVENTS)
+    ns.RegisterEvents(holder, UNIT_TARGET, unit)
+    holder:SetScript("OnEvent", Now)
+end
+
+-- Corpse or untold level (-1, "Level ??"): the client shows its skull and leaves the last unit's number in the text.
+-- true then, false for a number it wrote, nil when secret.
+local function ClientHidesLevel(unit)
+    local isCorpse = _G.UnitIsCorpse
+    local corpse = isCorpse and isCorpse(unit)
+    if IsSecret(corpse) then return nil end
+    if corpse then return true end
+    local level = UnitEffectiveLevel(unit)
+    if IsSecret(level) then return nil end
+    if type(level) ~= "number" then return nil end
+    return level <= 0
+end
+
+-- The name's spot again as the threat percent shows or goes (ThreatNumber.lua). A text, not a frame: it moves in a
+-- fight too, as the keeper's level text does.
+function UF.PlaceTargetName(unit)
+    if not UF.active then return end
+    for frame, entry in pairs(UF.frames) do
+        local main = entry.unit == unit and ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
+        local host = frame.fcui and frame.fcui.host
+        if main and main.Name and host then
+            local point, y = UF.NameSpot(unit)
+            ns.SetPointOnce(main.Name, point, host, "TOPLEFT", NAME_X, y)
+        end
+    end
+end
+
+local function SkinTarget(frame, unit)
+    if Busy() then return end
+    if not frame then return end
+    local container = frame.TargetFrameContainer
+    local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
+    local contextual = ns.Path(frame, "TargetFrameContent", "TargetFrameContentContextual")
+    if not container or not main or not contextual then ns.MissingPiece(frame:GetName() .. " layout") return end
+    local healthContainer = main.HealthBarsContainer
+    local blizzHealth = healthContainer and healthContainer.HealthBar
+    local blizzMana = main.ManaBar
+
+    if container.Portrait then
+        container.Portrait:SetSize(PORTRAIT, PORTRAIT)
+        ns.SetPointOnce(container.Portrait, "TOPRIGHT", frame, "TOPRIGHT", -22, -16)
+    end
+    Dress(container.PortraitMask, "portraitMask", MASK, frame)
+
+    local host, health, power, bg = BuildBars(frame, container, contextual, BAR_X, 25, HEALTH_Y, unit, blizzHealth, blizzMana)
+
+    if blizzHealth then
+        ns.Fade(blizzHealth)
+        UF.HoldCover(healthContainer, health)
+        BarTexts(frame, contextual, health, { blizzHealth.TextString, healthContainer.LeftText, healthContainer.RightText,
+            healthContainer.DeadText, healthContainer.UnconsciousText }, TEXTS, blizzHealth, frame, unit, false)
+        AttachOverlays(blizzHealth, health, healthContainer.HealthBarMask)
+    end
+    if blizzMana then
+        ns.Fade(blizzMana)
+        local texts = { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText }
+        BarTexts(frame, contextual, power, texts, TEXTS, blizzMana, frame, unit, true)
+        UF.PowerTexts(frame, texts)
+    end
+
+    -- The reaction colour behind the name uses the old level strip.
+    PlaceName(main.Name, contextual, host, NAME_X, unit)
+    Dress(main.ReputationColor, "levelBackground", REPUTATION, frame)
+    PlaceLevel(main.LevelText, contextual, host, LEVEL_X)
+    ns.Fade(main.LevelBackgroundCircle)
+    ns.FadeCircles(main)
+    ns.FadeCircles(contextual)
+    Dress(contextual.HighLevelTexture, "skull", SKULL, host)
+    Dress(contextual.LeaderIcon, "leaderIcon", LEADER, frame)
+    if contextual.RaidTargetIcon and container.Portrait then
+        ns.SetPointOnce(contextual.RaidTargetIcon, "CENTER", container.Portrait, "TOP", 2, -2)
+    end
+    Dress(contextual.QuestIcon, "questBadge", QUEST, frame)
+    if contextual.NumericalThreat then
+        ns.SetPointOnce(contextual.NumericalThreat, "BOTTOM", frame, "TOP", -30, -26)
+    end
+    local function TargetPvp(beat)
+        if not UF.active then return end
+        FadePvpPieces(frame, contextual, beat, contextual, main)
+        OwnPvpIcon(frame, frame.fcui and frame.fcui.texts, frame.unit or unit, contextual.PvpIcon, "TOPRIGHT", 25, -22)
+    end
+    UF.frames[frame] = { unit = unit, frame = frame, health = health, power = power, bg = bg }
+    Update(UF.frames[frame])
+
+    -- The client rewrites these on its own passes; re-applied here.
+    Keeper(unit .. ".frame", function(beat)
+        if not UF.active or not UF.frames[frame] then return end
+        -- The client shows these frames in its target/focus handlers, before our event: a hidden one waits.
+        if beat and not frame:IsShown() then return end
+        TargetPvp(beat)
+        ApplyClassification(frame)
+        if main.LevelText then
+            SetPointIf(main.LevelText, "CENTER", host, "TOPLEFT", LEVEL_X, LEVEL_TEXT_Y)
+            -- 1.x drew a skull far above you. The hidden text keeps the last unit's level: show only one the client wrote.
+            local who = frame.unit or unit
+            local clientSkull = ClientHidesLevel(who)
+            local skull = clientSkull or ns.SkullLevel(UnitLevel(who), who)
+            if skull or clientSkull ~= nil then
+                SetShownIf(main.LevelText, not skull)
+                if contextual.HighLevelTexture then SetShownIf(contextual.HighLevelTexture, skull) end
+            end
+            if main.LevelText:IsShown() then EraLevel(main.LevelText, who) end
+        end
+        -- On the beat the aura job puts the row back.
+        if not beat then KeepAuraRow(frame, true) end
+        -- The client refills the ToT bars gray, in its own place, on a unit change.
+        local tot = frame.totFrame
+        if tot and tot:IsShown() then FadeKeys(tot, TOT_PIECES) end
+        PlaceTot(frame)
+    end)
+
+    -- ToT art on our frame above the bars (its slots cap the bar ends); pieces placed off the art's top left.
+    local tot = frame.totFrame
+    PlaceTot(frame)
+    if tot then
+        local top = math.max(tot.HealthBar and tot.HealthBar:GetFrameLevel() or 0,
+            tot.ManaBar and tot.ManaBar:GetFrameLevel() or 0, tot:GetFrameLevel()) + 1
+        local holder, isNew = Child(tot, "artHolder", top)
+        local totArt = DressNew(holder, "targetOfTarget", TOT_ART, tot)
+        ns.Fade(tot.FrameTexture)
+        if tot.Portrait then
+            tot.Portrait:SetSize(35, 35)
+            ns.SetPointOnce(tot.Portrait, "TOPLEFT", tot, "TOPLEFT", 5, -5)
+        end
+        if tot.Name then
+            tot.Name:SetParent(holder)
+            tot.Name:SetWidth(100)
+            -- Era's left edge; the client centers it.
+            tot.Name:SetJustifyH("LEFT")
+            ns.SetPointOnce(tot.Name, "BOTTOMLEFT", totArt, "BOTTOMLEFT", 42, 3)
+        end
+        BarBg(tot, nil, 46, 15, tot, 45, -15)
+        FadeKeys(tot, TOT_BARS)
+        local barHost = Child(tot, "barHost")
+        local totHealth = ns.CreateBar(barHost, "health", 46, 7)
+        ns.SetPointOnce(totHealth, "TOPLEFT", tot, "TOPLEFT", 45, -15)
+        local totPower = ns.CreateBar(barHost, "power", 46, 7)
+        ns.SetPointOnce(totPower, "TOPLEFT", tot, "TOPLEFT", 45, -23)
+        tot.fcui.totHealth, tot.fcui.totPower = totHealth, totPower
+        -- Above the bars: each sits a level over its host, and at equal level it drew over the art (square ends).
+        ns.SetLevelIf(holder, math.max(totHealth:GetFrameLevel(), totPower:GetFrameLevel(), holder:GetFrameLevel() - 2) + 2)
+        local fallbackUnit = (frame.unit or unit) .. "target"
+        if isNew then WatchTot(holder, tot, fallbackUnit, frame.unit or unit) end
+        -- Never white, even before a unit exists.
+        totHealth:SetStatusBarColor(0, 1, 0)
+        totPower:SetStatusBarColor(0, 0, 1)
+        FillTot(tot, fallbackUnit)
+        local totName = tot:GetName()
+        if totName then
+            for i = 1, 4 do
+                local debuff = _G[totName .. "Debuff" .. i]
+                if debuff then ns.SetPointOnce(debuff, "TOPLEFT", tot, "TOPRIGHT", TOT_DEBUFFS[i][1], TOT_DEBUFFS[i][2]) end
+            end
+        end
+    end
+end
+
+local function RestoreTargetLike(frame)
+    if not frame or not UF.frames[frame] then return end
+    UF.frames[frame] = nil
+    HideOwnPvp(frame)
+    local foot = frame.TargetFrameContainer and frame.TargetFrameContainer.fcui and frame.TargetFrameContainer.fcui.artFoot
+    if foot then foot:Hide() end
+    ns.Unfade(ns.Path(frame, "TargetFrameContent", "TargetFrameContentContextual", "PvpIcon"))
+    HideHost(frame)
+    local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
+    if main then
+        ns.Unfade(ns.Path(main, "HealthBarsContainer", "HealthBar"))
+        ns.Unfade(main.ManaBar)
+    end
+    local tot = frame.totFrame
+    if tot and tot.fcui then
+        if tot.fcui.artHolder then tot.fcui.artHolder:Hide() end
+        if tot.fcui.barHost then tot.fcui.barHost:Hide() end
+        FadeKeys(tot, TOT_PIECES, 1)
+    end
+    ns.needsReload = true
+end
+
+UF.KeepAuraRow, UF.SkinTarget, UF.RestoreTargetLike = KeepAuraRow, SkinTarget, RestoreTargetLike

@@ -3171,6 +3171,10 @@ function ns.QolTabLabel()
     L.QOL_TAB)
 end
 
+-- The modules' list: rows a little lower than the pages', so that all of them fit the window at
+-- its lowest (a name, and a description on two lines at most)
+local QOL_ROW_H = 50
+
 function ns.BuildQolView(p, OnRefresh)
   local view = CreateFrame("Frame", nil, p)
   view:SetPoint("TOPLEFT", 12, NAV_TOP)
@@ -3188,7 +3192,8 @@ function ns.BuildQolView(p, OnRefresh)
       p:Refresh()
     end)
     b.page = nil -- (not one of a class's pages)
-    b:SetPoint("TOPLEFT", list, "TOPLEFT", 4, -4 - (i - 1) * NAV_ROW_H)
+    b:SetHeight(QOL_ROW_H - 4)
+    b:SetPoint("TOPLEFT", list, "TOPLEFT", 4, -4 - (i - 1) * QOL_ROW_H)
     buttons[i] = b
     -- its page
     local sheet = CreateFrame("Frame", nil, view)

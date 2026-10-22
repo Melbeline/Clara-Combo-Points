@@ -1,0 +1,41 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+if ns.LOCALE ~= "itIT" then return end
+local L = ns.L
+
+-- Collections/: the classic Collections window, beside Locales/itIT.lua.
+L["COLL_PAGE"] = "Pagina %d / %d"
+L["COLL_ALL"] = "Tutto"
+L["COLL_COLLECTED"] = "Ottenuti"
+L["COLL_NOT_COLLECTED"] = "Non ottenuti"
+L["COLL_SEARCH"] = "Cerca"
+L["COLL_MOUNTS"] = "Cavalcature"
+L["COLL_MOUNT"] = "Cavalca"
+L["COLL_DISMOUNT"] = "Smonta"
+L["OPT_collectionsWindow"] = "Finestra delle collezioni"
+L["OPT_collectionsWindow_TIP"] = "Cavalcature, mascotte, giocattoli, cimeli e aspetti in una finestra classica, ognuno sulla sua scheda laterale, aperta dal pulsante Collezioni, dalla sua icona sulla minimappa e dal suo tasto."
+L["UI_COLLECTIONS"] = "Collezioni"
+L["CORE_COLLECTIONS_BUTTON_OPENS"] = "Il pulsante Collezioni riapre la finestra delle collezioni del gioco dopo il ricaricamento dell'interfaccia."
+L["COLL_PETS"] = "Mascotte"
+L["COLL_TOYS"] = "Scatola dei giocattoli"
+L["COLL_SUMMON"] = "Evoca"
+L["COLL_DISMISS"] = "Congeda"
+L["COLL_APPEARANCES"] = "Aspetti"
+L["COLL_FILTER"] = "Filtro"
+L["COLL_CHECK_ALL"] = "Seleziona tutto"
+L["COLL_UNCHECK_ALL"] = "Deseleziona tutto"
+L["COLL_SOURCES"] = "Fonti"
+L["COLL_CLASS"] = "Classe"
+L["COLL_CAMPSITES"] = "Accampamenti"
+L["COLL_FAVORITE"] = "Preferito"
+L["COLL_UNFAVORITE"] = "Rimuovi dai preferiti"
+L["COLL_TEAM"] = "Squadra da battaglia"
+L["OPT_showCollReset"] = "Pulsante di ripristino anteprima: visibile"
+L["OPT_hoverCollReset"] = "Pulsante di ripristino anteprima: al passaggio del mouse"
+L["OPT_hideCollReset"] = "Pulsante di ripristino anteprima: nascosto"
+L["OPT_collReset_TIP"] = "Il pulsante accanto alle frecce di rotazione dell'anteprima che riporta il modello com'era all'inizio."
+L["COLL_LEVEL"] = "Livello"
+L["COLL_HEIRLOOMS"] = "Cimeli"
+L["OPT_spellBookCollectionsTab"] = "Scheda Collezioni"
+L["OPT_spellBookCollectionsTab_TIP"] = "Una scheda Collezioni in fondo al libro degli incantesimi mentre il pulsante Collezioni è nascosto."

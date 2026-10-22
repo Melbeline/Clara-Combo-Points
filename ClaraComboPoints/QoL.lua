@@ -1,7 +1,8 @@
 -- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
 -- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
 -- DialogKey and XToLevel sit under "Interface improvements" in the game's options (Esc > Options
--- > AddOns), apart from Clara Combo Points; WeaponSwingTimer has its own entry there. Each module
+-- > AddOns), apart from Clara Combo Points; WeaponSwingTimer and ClassicUI Forever have their own
+-- entries there. Each module
 -- runs only in WoW Forever, and only if not turned off here. When its own addon is enabled, that
 -- one runs instead (its settings are carried over for the day it is turned off); DialogKey and
 -- XToLevel take over from theirs: it runs for that session, then it is turned off for the
@@ -23,6 +24,7 @@ ns.QOL_MODULES = {
   { key = "dynamiccam", name = "DynamicCam", standalone = "DynamicCam" },
   { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
   { key = "xtolevel", name = "XToLevel", standalone = "XToLevel", takeOver = true },
+  { key = "classicui", name = "ClassicUI Forever", standalone = "ClassicUIForever" },
 }
 
 -- WoW Forever builds are 160xx (the modules' own code is for them; the retail builds Clara's

@@ -1,0 +1,434 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+local L = ns.L
+
+-- Dialog kit: backdrops, header plate, drag, close X, popups, the client's popups, tooltips.
+-- Helpers from later files are looked up at call time.
+
+local EMPTY = ns.EMPTY
+local ART = ns.ART
+local ApplyColor = ns.ApplyColor
+local SetPointOnce = ns.SetPointOnce
+local type, pairs = type, pairs
+
+ns.BACKDROP_TEMPLATE = BackdropTemplateMixin and "BackdropTemplate" or nil
+
+local function Insets(l, r, t, b)
+    return { left = l, right = r, top = t, bottom = b }
+end
+
+-- Read only: SetBackdrop keeps these by reference (BronzeBackdrop copies).
+ns.BACKDROP = {
+    DIALOG = { bgFile = ART.DIALOG_BG, edgeFile = ART.DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
+        insets = Insets(11, 12, 12, 11) },
+    DIALOG_DARK = { bgFile = ART.DIALOG_BG_DARK, edgeFile = ART.DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
+        insets = Insets(11, 12, 12, 11) },
+    -- The 1.x bind on pickup box.
+    DIALOG_GOLD = { bgFile = ART.DIALOG_BG_GOLD, edgeFile = ART.DIALOG_BORDER_GOLD, tile = true, tileSize = 32, edgeSize = 32,
+        insets = Insets(11, 12, 12, 11) },
+    DIALOG_INSET8 = { bgFile = ART.DIALOG_BG, edgeFile = ART.DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
+        insets = Insets(8, 8, 8, 8) },
+    TIP12 = { bgFile = ART.TIP_BG, edgeFile = ART.TIP_BORDER, tile = true, tileSize = 16, edgeSize = 12,
+        insets = Insets(3, 3, 3, 3) },
+    TIP14 = { bgFile = ART.TIP_BG, edgeFile = ART.TIP_BORDER, tile = true, tileSize = 16, edgeSize = 14,
+        insets = Insets(3, 3, 3, 3) },
+    TIP16 = { bgFile = ART.TIP_BG, edgeFile = ART.TIP_BORDER, tile = true, tileSize = 16, edgeSize = 16,
+        insets = Insets(4, 4, 4, 4) },
+    FLAT12 = { bgFile = ART.WHITE, edgeFile = ART.TIP_BORDER, tile = false, edgeSize = 12, insets = Insets(3, 3, 3, 3) },
+}
+
+-- Border-only dialog backdrop, one table per edge size.
+local edges = {}
+function ns.DialogEdge(edge)
+    local info = edges[edge]
+    if not info then
+        local inset = edge / 4
+        info = { edgeFile = ART.DIALOG_BORDER, edgeSize = edge, insets = Insets(inset, inset, inset, inset) }
+        edges[edge] = info
+    end
+    return info
+end
+
+-- how: bronze = false stays silver, base = {r, g, b, a} border grey for BronzeBackdrop, grey = {r, g, b} its border
+-- with no theme, bg and border colours applied after it, bgFirst sets bg before it.
+function ns.Backdrop(frame, info, how)
+    if not frame or not frame.SetBackdrop then return false end
+    how = how or EMPTY
+    frame:SetBackdrop(info)
+    local bg = how.bg
+    if bg and how.bgFirst then ApplyColor(frame, "SetBackdropColor", bg) end
+    if how.bronze ~= false then
+        -- No base passes nil: BronzeBackdrop then keeps the frame's recorded grey.
+        local base = how.base or EMPTY
+        ns.BronzeBackdrop(frame, base[1], base[2], base[3], base[4], how.grey)
+    end
+    if bg and not how.bgFirst then ApplyColor(frame, "SetBackdropColor", bg) end
+    if how.border then ApplyColor(frame, "SetBackdropBorderColor", how.border) end
+    return true
+end
+
+-- The tooltip rim in nine pieces, the client backdrop's cuts of UI-Tooltip-Border with each edge one stretched cell,
+-- over the menu fill: no size maths, so a frame of secret size (a unit's menu in an instance) draws the same. At the
+-- host's level, outset by l, t, r, b; the metal takes the theme.
+local EDGE, INSET = 16, 4
+local S, E = 0.0625, 0.9375
+local RIM_PIECES = {
+    { "TOPLEFT", nil, 0.5078125, S, 0.5078125, E, 0.6171875, S, 0.6171875, E },
+    { "TOPRIGHT", nil, 0.6328125, S, 0.6328125, E, 0.7421875, S, 0.7421875, E },
+    { "BOTTOMLEFT", nil, 0.7578125, S, 0.7578125, E, 0.8671875, S, 0.8671875, E },
+    { "BOTTOMRIGHT", nil, 0.8828125, S, 0.8828125, E, 0.9921875, S, 0.9921875, E },
+    { "TOP", { 1, 2 }, 0.2578125, E, 0.3671875, E, 0.2578125, S, 0.3671875, S },
+    { "BOTTOM", { 3, 4 }, 0.3828125, E, 0.4921875, E, 0.3828125, S, 0.4921875, S },
+    { "LEFT", { 1, 3 }, 0.0078125, S, 0.0078125, E, 0.1171875, S, 0.1171875, E },
+    { "RIGHT", { 2, 4 }, 0.1328125, S, 0.1328125, E, 0.2421875, S, 0.2421875, E },
+}
+
+function ns.TipRim(host, l, t, r, b)
+    local rim = ns.NewFrame("Frame", nil, host)
+    rim:SetPoint("TOPLEFT", host, "TOPLEFT", l, t)
+    rim:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", r, b)
+    if rim.SetUsingParentLevel then rim:SetUsingParentLevel(true) else rim:SetFrameLevel(host:GetFrameLevel()) end
+    local bg = ns.MENU_LOOK.bg
+    local fill = rim:CreateTexture(nil, "BACKGROUND", nil, -8)
+    fill:SetColorTexture(bg[1], bg[2], bg[3], bg[4])
+    fill:SetPoint("TOPLEFT", rim, "TOPLEFT", INSET, -INSET)
+    fill:SetPoint("BOTTOMRIGHT", rim, "BOTTOMRIGHT", -INSET, INSET)
+    rim.fill = fill
+    local pieces = {}
+    for i, spec in ipairs(RIM_PIECES) do
+        local tex = rim:CreateTexture(nil, "BORDER")
+        tex:SetTexture(ns.ART.TIP_BORDER)
+        tex:SetTexCoord(spec[3], spec[4], spec[5], spec[6], spec[7], spec[8], spec[9], spec[10])
+        ns.BronzeTint(tex)
+        local between = spec[2]
+        if not between then
+            tex:SetSize(EDGE, EDGE)
+            tex:SetPoint(spec[1], rim, spec[1])
+        elseif spec[1] == "TOP" or spec[1] == "BOTTOM" then
+            tex:SetHeight(EDGE)
+            tex:SetPoint("LEFT", pieces[between[1]], "RIGHT")
+            tex:SetPoint("RIGHT", pieces[between[2]], "LEFT")
+        else
+            tex:SetWidth(EDGE)
+            tex:SetPoint("TOP", pieces[between[1]], "BOTTOM")
+            tex:SetPoint("BOTTOM", pieces[between[2]], "TOP")
+        end
+        pieces[i] = tex
+    end
+    return rim
+end
+
+-- Our backdrop frames skip the edge tiling while their size is secret (hung on a unit's menu in an instance).
+local function SafeCoords(self)
+    local w, h = self:GetSize()
+    if ns.AnySecret(w, h) then return end
+    BackdropTemplateMixin.SetupTextureCoordinates(self)
+end
+function ns.OwnBackdropFrame(parent)
+    local frame = ns.NewFrame("Frame", nil, parent, ns.BACKDROP_TEMPLATE)
+    if frame.SetupTextureCoordinates then frame.SetupTextureCoordinates = SafeCoords end
+    return frame
+end
+
+-- Backdrop on our own child, never on the client's frame.
+function ns.DialogBacking(host, info, how)
+    local backing = ns.OwnBackdropFrame(host)
+    ns.Backdrop(backing, info or ns.BACKDROP.DIALOG, how)
+    backing:SetAllPoints(host)
+    backing:SetFrameLevel(host:GetFrameLevel())
+    return backing
+end
+
+-- how: width, own (OwnTexture key on owner), layer, sublevel,
+-- restyle (font is the title, none made), fontObject, keepTitle (keep its anchor).
+function ns.DialogHeader(host, text, how, owner, font)
+    how = how or EMPTY
+    owner = owner or host
+    local layer, sublevel = how.layer or "ARTWORK", how.sublevel or 0
+    local plate
+    if how.own then
+        plate = ns.OwnTexture(owner, how.own, layer, sublevel)
+    else
+        plate = owner:CreateTexture(nil, layer, nil, sublevel)
+    end
+    ns.SetFile(plate, ART.DIALOG_HEADER)
+    plate:SetSize(how.width or 256, 64)
+    SetPointOnce(plate, "TOP", host, "TOP", 0, 12)
+    plate:Show()
+    local title
+    if how.restyle then
+        title = font
+        if not title then return plate, nil end
+        if how.fontObject then title:SetFontObject(how.fontObject) end
+        if not how.keepTitle then SetPointOnce(title, "TOP", plate, "TOP", 0, -14) end
+    else
+        title = host:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        title:SetPoint("TOP", plate, "TOP", 0, -14)
+    end
+    if text ~= nil then title:SetText(text) end
+    return plate, title
+end
+
+local weak = { __mode = "k" }
+local oldBorders = setmetatable({}, weak)  -- client DialogBorderTemplate -> our old dialog box
+local oldPlates = setmetatable({}, weak)   -- client DialogHeaderTemplate -> our old header plate
+local HEADER_BG = { "LeftBG", "RightBG", "CenterBG" }
+-- The old plate's ends beside the title; never narrower than the 1.x 256.
+local PLATE_PAD, PLATE_MIN = 160, 256
+
+-- Forever's diamond border and fill faded under our old dialog box; off puts them back.
+-- info: another backdrop for the first dress (ns.DialogEdge when the host's own fill stays).
+function ns.OldDialogBorder(border, on, info)
+    if not border then return end
+    local overlay = oldBorders[border]
+    if not overlay then
+        if not on then return end
+        overlay = ns.DialogBacking(border, info)
+        oldBorders[border] = overlay
+    end
+    overlay:SetShown(on)
+    ns.FadeTextures(border, on and 0 or 1)
+end
+
+local function PlateWidth(title)
+    local width = title and title:GetStringWidth()
+    if type(width) ~= "number" or ns.IsSecret(width) then width = 0 end
+    return math.max(PLATE_MIN, width + PLATE_PAD)
+end
+
+-- Forever's diamond header pieces faded under our old plate on host; the client's title stays.
+-- Each call with on refits the plate to the title, for hosts that retitle it.
+function ns.OldDialogHeader(header, host, on)
+    if not header then return end
+    local plate = oldPlates[header]
+    if not plate then
+        if not on then return end
+        plate = ns.DialogHeader(host, nil,
+            { layer = "BACKGROUND", restyle = true, keepTitle = true, width = PlateWidth(header.Text) },
+            header, header.Text)
+        oldPlates[header] = plate
+    elseif on then
+        local width = PlateWidth(header.Text)
+        if plate:GetWidth() ~= width then plate:SetWidth(width) end
+    end
+    plate:SetShown(on)
+    ns.FadeKeys(header, HEADER_BG, on and 0 or 1)
+end
+
+-- StartMoving drops every anchor of a frame move watchers hang on: they let go for the drag.
+local function DragStart(self)
+    ns.Sched.LetGo(self, true)
+    self:StartMoving()
+end
+
+-- StopMovingOrSizing leaves a frame others hang on with no anchor: read where it was drawn first and pin it there.
+local function DragStop(self)
+    local left, top = self:GetLeft(), self:GetTop()
+    self:StopMovingOrSizing()
+    if self:GetNumPoints() == 0 and left and top then
+        self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    end
+    ns.Sched.LetGo(self, false)
+    local after = self.fcuiDragStop
+    if after then after(self) end
+end
+
+-- Our own frames only; onStop(frame) runs after the move ends.
+function ns.MakeDraggable(frame, onStop)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame.fcuiDragStop = onStop
+    frame:SetScript("OnDragStart", DragStart)
+    frame:SetScript("OnDragStop", DragStop)
+    frame:SetClampedToScreen(true)
+end
+
+function ns.DialogClose(frame, onClick, x, y)
+    local close = ns.NewFrame("Button", nil, frame, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", x or -6, y or -6)
+    close:SetScript("OnClick", onClick)
+    if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
+    return close
+end
+
+-- A classic window's X: the old art at size, its centre off the window's top right, hiding the window; the lock finds it as
+-- frame.close (UI/WindowLocks.lua). A secure pad over it lets a fight's Escape binding go in the same click, unless hosted.
+function ns.WindowCloseX(frame, x, y, size, hosted)
+    local close = ns.NewFrame("Button", nil, frame)
+    -- Sized after the skin, which sets the stock 32.
+    ns.SkinCloseButton(close, true)
+    close:SetSize(size, size)
+    close:SetPoint("CENTER", frame, "TOPRIGHT", x, y)
+    close:SetScript("OnClick", function() frame:Hide() end)
+    frame.close = close
+    if ns.EscDisarmOnClick and not hosted then
+        ns.EscDisarmOnClick(ns.MapPad(close, "DIALOG", function() frame:Hide() end, ""))
+    end
+    return close
+end
+
+---------------------------------------------------------------- popups
+
+-- nil takes the default; false leaves the field off.
+local POPUP_DEFAULTS = { timeout = 0, whileDead = 1, hideOnEscape = 1, preferredIndex = 3 }
+
+-- Keep names: several files show these popups by name.
+function ns.Popup(name, def)
+    for field, value in pairs(POPUP_DEFAULTS) do
+        if def[field] == nil then
+            def[field] = value
+        elseif def[field] == false then
+            def[field] = nil
+        end
+    end
+    StaticPopupDialogs[name] = def
+    return def
+end
+
+-- A backed box of ours holding one checkbox and its label, for under client dialogs (never inside their layout).
+function ns.CheckPanel(width, text, onClick)
+    local panel = CreateFrame("Frame", nil, UIParent)
+    panel:SetSize(width, 38)
+    -- The client's edit mode dialogs are DIALOG strata throughout.
+    panel:SetFrameStrata("DIALOG")
+    ns.DialogBacking(panel)
+    local check = ns.NewFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    check:SetSize(26, 26)
+    check:SetPoint("LEFT", panel, "LEFT", 12, 0)
+    ns.SkinCheckbox(check)
+    local label = check:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label:SetPoint("LEFT", check, "RIGHT", 2, 0)
+    label:SetText(text)
+    check:SetScript("OnClick", onClick)
+    panel.check = check
+    panel:Hide()
+    return panel
+end
+
+-- A hasEditBox popup's box, under whichever name this client gives it.
+function ns.PopupEditBox(dialog)
+    return dialog.EditBox or dialog.editBox or (dialog.GetName and dialog:GetName() and _G[dialog:GetName() .. "EditBox"])
+end
+
+-- Late lookup: ReloadForLayout is defined after the popups.
+local function Reload() ns.ReloadForLayout() end
+
+function ns.ReloadPopup(name, text, button1, button2)
+    return ns.Popup(name, { text = text, button1 = button1 or L["OPTWIN_RELOAD_NOW"], button2 = button2 or L["UI_LATER"], OnAccept = Reload })
+end
+
+-------------------------------------------------------- client popups
+
+-- StaticPopup1-4 (logout box, our reload prompts) in the old dialog box, on the game menu toggle.
+-- Dressed at apply, never on their show path.
+-- Their Layout counts the backing like BG (same rect, no size change): keep it all-points, no layout fields.
+local POPUPS = { "StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4" }
+local POPUP_BUTTONS = { "Button1", "Button2", "Button3", "Button4" }
+local CLIENT_BUTTON = "Interface\\Buttons\\UI-DialogBox-Button-"
+local CLIENT_UP, CLIENT_DOWN = CLIENT_BUTTON .. "Up", CLIENT_BUTTON .. "Down"
+local CLIENT_OFF, CLIENT_GLOW = CLIENT_BUTTON .. "Disabled", CLIENT_BUTTON .. "Highlight"
+-- GameDialog.xml's art; a file with no bronze copy drops out of the theme repaint.
+local CLIENT_STATES = { set = "file", highlightSet = "raw", coords = { 0, 1, 0, 0.71875 }, fill = true, add = true }
+local popupBackings = {}
+local popupsDressed = false
+
+-- The game menu's red buttons (bronze copy with the theme); the client's user-scaled fonts stay.
+local function RedButton(button)
+    if button then ns.RedButtonArt(button, ns.RED_STATES) end
+end
+
+local function ClientButton(button)
+    if button then ns.DressStates(button, CLIENT_UP, CLIENT_DOWN, CLIENT_OFF, CLIENT_GLOW, CLIENT_STATES) end
+end
+
+local function PopupButtons(popup, dress)
+    local container = popup.ButtonContainer
+    if container then
+        for i = 1, #POPUP_BUTTONS do dress(container[POPUP_BUTTONS[i]]) end
+    end
+    dress(popup.ExtraButton)
+end
+
+local function DressPopup(popup)
+    local backing = popupBackings[popup]
+    if not backing then
+        backing = ns.DialogBacking(popup)
+        -- Fill under the client's progress bar (BACKGROUND -6, -5).
+        if backing.Center then backing.Center:SetDrawLayer("BACKGROUND", -8) end
+        popupBackings[popup] = backing
+    end
+    backing:Show()
+    -- Forever's bronze diamond border and dark fill; only OnLoad sets them.
+    ns.FadeTextures(popup.BG)
+    PopupButtons(popup, RedButton)
+end
+
+local function UndressPopup(popup)
+    local backing = popupBackings[popup]
+    if backing then backing:Hide() end
+    ns.FadeTextures(popup.BG, 1)
+    PopupButtons(popup, ClientButton)
+end
+
+local function EachPopup(fn)
+    for i = 1, #POPUPS do
+        local popup = _G[POPUPS[i]]
+        if popup then fn(popup) else ns.MissingPiece(POPUPS[i]) end
+    end
+end
+
+-- Every pass calls these: work only on a change.
+local function ApplyPopups()
+    if popupsDressed then return end
+    popupsDressed = true
+    EachPopup(DressPopup)
+end
+
+local function RestorePopups()
+    if not popupsDressed then return end
+    popupsDressed = false
+    EachPopup(UndressPopup)
+end
+
+ns.RegisterModule("gameMenu", { apply = ApplyPopups, restore = RestorePopups })
+
+-------------------------------------------------------------- tooltips
+
+local function HideTip() GameTooltip:Hide() end
+ns.HideTip = HideTip
+
+-- fcuiTip: { text or fn, r, g, b, anchor, when = fn, lines = { { text or fn, r, g, b, wrap } } }.
+-- A nil text or false when shows nothing; a nil line is skipped.
+local function ShowTip(self)
+    local spec = self.fcuiTip
+    if not spec or (spec.when and not spec.when(self)) then return end
+    local text = spec.text
+    if type(text) == "function" then text = text(self) end
+    if text == nil then return end
+    GameTooltip:SetOwner(self, spec.anchor or "ANCHOR_RIGHT")
+    if spec.r ~= nil then GameTooltip:SetText(text, spec.r, spec.g, spec.b) else GameTooltip:SetText(text) end
+    local lines = spec.lines
+    if lines then
+        for i = 1, #lines do
+            local line = lines[i]
+            local lineText = line[1]
+            if type(lineText) == "function" then lineText = lineText(self) end
+            if lineText ~= nil then GameTooltip:AddLine(lineText, line[2], line[3], line[4], line[5]) end
+        end
+    end
+    GameTooltip:Show()
+end
+ns.ShowTip = ShowTip
+
+-- Our own widgets only: replaces OnEnter and OnLeave.
+function ns.AttachTip(widget, spec)
+    widget.fcuiTip = spec
+    widget:SetScript("OnEnter", ShowTip)
+    widget:SetScript("OnLeave", HideTip)
+end
+
+function ns.SayNotInCombat()
+    if UIErrorsFrame and ERR_NOT_IN_COMBAT then UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1) end
+end

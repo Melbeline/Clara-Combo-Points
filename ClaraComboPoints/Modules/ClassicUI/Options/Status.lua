@@ -1,0 +1,206 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ADDON, ns = (...), ClaraNS.ClassicUIPrivate
+local L = ns.L
+
+-- Status report for bug reports: read fresh on each open, never saved; screenshot or copy.
+
+local O = ns.options
+
+-- Internal bookkeeping keys, not player choices; keep in step with DB_DEFAULTS by hand.
+local INTERNAL = {
+    dbVersion = true, previousLayout = true, layoutSelectPending = true, layoutSelectTries = true,
+    welcomed = true, layoutPrompted = true, textureSource = true, barDragged = true,
+    bandHandedBack = true, barSizeOffer = true, classicLookOffer = true, eraScaleOffer = true, barsLookNote = true, microHideMerged = true,
+}
+
+local HEADER = { width = 300 }
+
+local function Version()
+    return "0.36.0" -- (Clara Combo Points: the version built in)
+end
+ns.AddonVersion = Version
+
+local function OtherAddons()
+    local names = {}
+    local count = C_AddOns and C_AddOns.GetNumAddOns and C_AddOns.GetNumAddOns() or 0
+    for i = 1, count do
+        local name = C_AddOns.GetAddOnInfo(i)
+        local loaded = C_AddOns.IsAddOnLoaded(i)
+        if loaded and name and name ~= ADDON and not name:find("^Blizzard_") then
+            local ok, version = pcall(C_AddOns.GetAddOnMetadata, i, "Version")
+            names[#names + 1] = (ok and version and version ~= "") and (name .. " " .. version) or name
+        end
+    end
+    table.sort(names)
+    return names
+end
+
+-- Settings that differ from the shipped defaults.
+local function ChangedSettings()
+    local changed = {}
+    for key, default in pairs(ns.DB_DEFAULTS or {}) do
+        local kind = type(default)
+        if not INTERNAL[key] and (kind == "boolean" or kind == "number" or kind == "string") then
+            local value = ns.db and ns.db[key]
+            if value ~= nil and value ~= default then
+                changed[#changed + 1] = key .. "=" .. tostring(value)
+            end
+        end
+    end
+    -- A toggle with no default is on unless switched off.
+    for _, entry in ipairs(ns.TOGGLES or {}) do
+        local key = entry[1]
+        if ns.DB_DEFAULTS[key] == nil and ns.db and ns.db[key] == false then
+            changed[#changed + 1] = key .. "=false"
+        end
+    end
+    -- Addon buttons with a pick of their own.
+    local picks = ns.db and ns.db.minimapButtonPicks
+    if type(picks) == "table" then
+        for key, value in pairs(picks) do changed[#changed + 1] = "minimapButtonPicks." .. key .. "=" .. tostring(value) end
+    end
+    table.sort(changed)
+    return changed
+end
+
+-- The active edit mode layout: name, kind, and the band's bars it holds at the game's default spot (re-stacked in fights).
+local function LayoutLine()
+    local info = ns.ActiveLayoutInfo()
+    if not info then return "Edit mode layout: unreadable", nil end
+    local kind = "?"
+    for name, value in pairs(Enum.EditModeLayoutType or {}) do
+        if value == info.layoutType then kind = name:lower() end
+    end
+    if ns.ClassicLayoutActive() then kind = kind .. ", ours" end
+    local head = string.format("Edit mode layout: %s (%s)", tostring(info.layoutName), kind)
+    if not (ns.band and ns.band.active) then return head .. ", classic bar off", nil end
+    local names = {}
+    for _, bar in ipairs(ns.BandBarsToUnpinned()) do names[#names + 1] = bar:GetName() end
+    table.sort(names)
+    return head, names
+end
+
+local function Wrapped(label, items, none)
+    if #items == 0 then return { label .. none } end
+    local lines, line = {}, label
+    for i, item in ipairs(items) do
+        local piece = item .. (i < #items and ", " or "")
+        if #line + #piece > 78 and line ~= label then
+            lines[#lines + 1] = line
+            line = "    "
+        end
+        line = line .. piece
+    end
+    lines[#lines + 1] = line
+    return lines
+end
+
+local function StatusText()
+    local lines = {}
+    local function Add(text) lines[#lines + 1] = text end
+    local version, build, _, toc = GetBuildInfo()
+    Add("ClassicUI Forever " .. Version())
+    Add(string.format("Client: %s (%s), toc %s, %s", tostring(version), tostring(build), tostring(toc), GetLocale and GetLocale() or "?"))
+    local width, height = GetPhysicalScreenSize()
+    local windowed = ns.GetCVar("gxMaximize")
+    Add(string.format("Display: %sx%s%s, UI scale %.2f", tostring(width), tostring(height),
+        windowed == "0" and " windowed" or "", UIParent:GetEffectiveScale()))
+    local _, class = UnitClass("player")
+    local zone = GetRealZoneText and GetRealZoneText() or ""
+    Add(string.format("Character: %s %s, %s%s", tostring(class), tostring(UnitLevel("player")), zone,
+        InCombatLockdown() and ", in combat" or ""))
+    Add("Profile: " .. ns.ProfileName())
+    local layout, unpinned = LayoutLine()
+    Add(layout)
+    if unpinned then
+        for _, line in ipairs(Wrapped("Band bars at the game's default spot: ", unpinned, "none")) do Add(line) end
+    end
+    for _, line in ipairs(Wrapped("Settings changed: ", ChangedSettings(), "none, all as shipped")) do Add(line) end
+    local others = OtherAddons()
+    for _, line in ipairs(Wrapped("Other addons on (" .. #others .. "): ", others, "none")) do Add(line) end
+    local blocked = ns.blocked or {}
+    if #blocked == 0 then
+        Add("Blocked by the game this session: nothing")
+    else
+        Add("Blocked by the game this session:")
+        for _, hit in ipairs(blocked) do
+            Add(string.format("    %s %s %s%s%s", hit.when, hit.event == "ADDON_ACTION_FORBIDDEN" and "forbidden" or "blocked",
+                hit.func, hit.combat and " (in combat)" or "", hit.editMode and " (edit mode)" or ""))
+        end
+    end
+    if #ns.stopped == 0 then
+        Add("Stopped after errors this session: nothing")
+    else
+        Add("Stopped after errors this session:")
+        for _, hit in ipairs(ns.stopped) do Add(string.format("    %s %s: %s", hit.when, hit.name, hit.err)) end
+    end
+    return table.concat(lines, "\n")
+end
+
+local window
+
+local function Build()
+    local frame = O.DialogWindow("ForeverClassicUIStatus", 60)
+    frame:SetSize(560, 380)
+    ns.DialogHeader(frame, L["OPTWIN_STATUS_TITLE"], HEADER)
+
+    local how = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    how:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -32)
+    how:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -24, -32)
+    how:SetJustifyH("LEFT")
+    how:SetText(L["OPTWIN_REPORTING_A_BUG_TAKE_A"])
+
+    local edit, scroll = O.TextBox(frame, how, 500)
+    frame.edit = edit
+
+    local select = ns.PanelButton(frame, L["OPTWIN_SELECT_ALL"], 100)
+    select:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 22, 20)
+    select:SetScript("OnClick", function()
+        edit:SetFocus()
+        edit:HighlightText()
+    end)
+    local close = ns.PanelButton(frame, CLOSE or "Close", 100)
+    close:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -22, 20)
+    close:SetScript("OnClick", function() frame:Hide() end)
+    local github = ns.PanelButton(frame, L["OPTWIN_GITHUB_ISSUES"], 120)
+    github:SetPoint("RIGHT", close, "LEFT", -6, 0)
+    github:SetScript("OnClick", O.CopyGitHub)
+    local curse = ns.PanelButton(frame, L["OPTWIN_CURSEFORGE"], 120)
+    curse:SetPoint("RIGHT", github, "LEFT", -6, 0)
+    curse:SetScript("OnClick", O.CopyCurseForge)
+
+    frame:SetScript("OnShow", function(self)
+        self.text = StatusText()
+        edit:SetText(self.text)
+        edit:SetCursorPosition(0)
+        scroll:SetVerticalScroll(0)
+    end)
+    -- Escape through our own override; never UISpecialFrames (taints CloseWindows).
+    ns.CloseOnEscape(frame)
+    return frame
+end
+
+function ns.ShowStatus()
+    if not window then window = Build() end
+    -- Re-show while up so the text is read fresh.
+    if window:IsShown() then window:Hide() end
+    window:Show()
+end
+
+-- After a blocked action: one chat line per session offers the report; never auto-open a window, least of all in combat.
+local offered = false
+function ns.OfferStatus()
+    if offered then return end
+    offered = true
+    ns.Print(string.format(L["CHAT_17"], ns.ChatLink("status", L["CHAT_18"])))
+end
+
+-- Scheduler jobs stopped after repeated errors (Core/Scheduler.lua): a chat line each, the error's first line kept.
+ns.stopped = {}
+function ns.NoteStopped(name, err)
+    local text = ns.IsSecret(err) and "<protected value>" or tostring(err)
+    text = text:match("^[^\n]*"):gsub("^Interface/AddOns/", "")
+    ns.stopped[#ns.stopped + 1] = { name = tostring(name), err = text, when = date and date("%H:%M:%S") or "" }
+    ns.Print(string.format(L["CHAT_19"], tostring(name), ns.ChatLink("status", L["CHAT_18"])))
+end

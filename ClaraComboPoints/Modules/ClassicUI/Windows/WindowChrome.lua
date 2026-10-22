@@ -1,0 +1,366 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+
+-- Old window chrome on client panels: metal nine-slice, round portrait, small X,
+-- stone title strip. Panels.lua lists the windows.
+
+-- Shared by WindowChrome, Tabs, Loot, NpcWindows, PanelAfters and Panels.
+local P = {
+    active = false,
+    skinned = {},                                      -- window -> dressed; keeps an after from running twice
+    windowAfter = setmetatable({}, { __mode = "k" }),  -- window -> after, for the map's re-skin
+    after = {},                                        -- window name -> after, read by Panels' WINDOWS
+    windowOpts = setmetatable({}, { __mode = "k" }),   -- window -> SkinWindow opts, for Reborder's backing
+    BOTTOM_LIFT = 10,
+    MAP_LIFT = 5,   -- full lift cut the map's coordinate line, none left a gap
+    MAP_LEFT = -10, -- map's left corners (+ right): the line meets Forever's picture and title row, 2 in
+}
+ns.panels = P
+
+local CORNER, EDGE = 132, 128
+local METAL = "frameMetal"
+local FULL = { 0, 1, 0, 1 }
+
+-- Corner cuts from the UIFrameMetal sheet: portrait ring top left, or plain.
+local CORNERS = {
+    portrait = {
+        TopLeftCorner = { 0.263671875, 0.521484375, 0.263671875, 0.521484375 },
+        TopRightCorner = { 0.001953125, 0.259765625, 0.263671875, 0.521484375 },
+        BottomLeftCorner = { 0.001953125, 0.259765625, 0.001953125, 0.259765625 },
+        BottomRightCorner = { 0.263671875, 0.521484375, 0.001953125, 0.259765625 },
+    },
+    plain = {
+        TopLeftCorner = { 0.525390625, 0.783203125, 0.001953125, 0.259765625 },
+        TopRightCorner = { 0.001953125, 0.259765625, 0.263671875, 0.521484375 },
+        BottomLeftCorner = { 0.001953125, 0.259765625, 0.001953125, 0.259765625 },
+        BottomRightCorner = { 0.263671875, 0.521484375, 0.001953125, 0.259765625 },
+    },
+}
+local EDGES = {
+    -- 48 rows only: this client's sheet has a dark bar of other art ~55 rows in.
+    TopEdge = { key = "frameMetalH", coords = { 0, 1, 0.263671875, 0.263671875 + 48 / 512 }, w = EDGE, h = 48, tileH = true },
+    BottomEdge = { key = "frameMetalH", coords = { 0, 1, 0.001953125, 0.259765625 }, w = EDGE, h = CORNER, tileH = true },
+    LeftEdge = { key = "frameMetalV", coords = { 0.001953125, 0.259765625, 0, 1 }, w = CORNER, h = EDGE, tileV = true },
+    RightEdge = { key = "frameMetalV", coords = { 0.263671875, 0.521484375, 0, 1 }, w = CORNER, h = EDGE, tileV = true },
+}
+local CORNER_SIZE = { w = CORNER, h = CORNER }
+-- Metal line's opaque core, px in from each piece's outer edge (cols 12-14 / 125-127, rows 16-18 / 125-127 of 132).
+local LINE = { left = 13, top = 16, right = 6, bottom = 5 }
+
+-- x, y of a corner still hung by its own point from the slice.
+local function CornerAt(tex, point)
+    if not tex then return end
+    local p, _, _, x, y = tex:GetPoint(1)
+    if not ns.AnySecret(p, x, y) and p == point and type(x) == "number" and type(y) == "number" then return x, y end
+end
+
+-- Offsets from the frame's edges to the line on each side, from where the corners sit.
+local function Lines(slice)
+    local tlX, tlY = CornerAt(slice.TopLeftCorner, "TOPLEFT")
+    local trX = CornerAt(slice.TopRightCorner, "TOPRIGHT")
+    local _, blY = CornerAt(slice.BottomLeftCorner, "BOTTOMLEFT")
+    return {
+        left = (tlX or -13) + LINE.left,
+        top = (tlY or 16) - LINE.top,
+        right = (trX or 2) - LINE.right,
+        bottom = blY and blY + LINE.bottom or 0,
+    }
+end
+
+-- Forever hangs the standard metal's right corners 2 further in and its bottom ones at -8 (retail: 4 and -3). Every lift
+-- and list edge is measured from Forever's, so retail's corners start from the same spots.
+local FOREVER_CORNER = {
+    ["ui-frame-metal-cornertopright"] = { dx = -2 },
+    ["ui-frame-metal-cornertoprightdouble"] = { dx = -2 },
+    ["ui-frame-metal-cornerbottomleft"] = { y = -8 },
+    ["ui-frame-metal-cornerbottomright"] = { dx = -2, y = -8 },
+}
+local cornerHome = setmetatable({}, { __mode = "k" })
+
+-- A corner's own x and y, read once while it still wears the client's art.
+local function CornerHome(tex)
+    local home = cornerHome[tex]
+    if home then return home end
+    local point, _, _, x, y = tex:GetPoint(1)
+    if not point then return end
+    home = { x = x or 0, y = y or 0 }
+    local atlas = not ns.OnForever() and tex.GetAtlas and tex:GetAtlas()
+    local fix = type(atlas) == "string" and not ns.IsSecret(atlas) and FOREVER_CORNER[atlas:lower()]
+    if fix then
+        home.x = home.x + (fix.dx or 0)
+        home.y = fix.y or home.y
+    end
+    cornerHome[tex] = home
+    return home
+end
+
+-- Dresses the border; returns Lines() for it, or nil without a NineSlice.
+local function NineSlice(frame, style, lift, keepLeft, left)
+    local slice = frame.NineSlice
+    if not slice then return end
+    local corners = CORNERS[style] or CORNERS.portrait
+    for key, coords in pairs(corners) do
+        local tex = slice[key]
+        if tex then
+            local home = CornerHome(tex)
+            ns.Dress(tex, METAL, CORNER_SIZE, nil, nil, nil, nil, nil, coords)
+            if home and key == "TopRightCorner" then
+                local point, rel, relPoint, _, y = tex:GetPoint(1)
+                if point then tex:SetPoint(point, rel, relPoint, home.x, y or 0) end
+            end
+            -- Plain corner on a portrait layout: 8px out (or the window's left), not the portrait's 13; bottom left too.
+            if style == "plain" and not keepLeft and (key == "TopLeftCorner" or key == "BottomLeftCorner") then
+                local point, rel, relPoint, x, y = tex:GetPoint(1)
+                if point and x and (left or x < -8) then tex:SetPoint(point, rel, relPoint, left or -8, y) end
+            end
+            -- Client hangs bottom corners 3px low and the old metal's line sits at the
+            -- foot of a taller piece: lift them to the content (the bottom edge follows).
+            if key == "BottomLeftCorner" or key == "BottomRightCorner" then
+                local point, rel, relPoint, x = tex:GetPoint(1)
+                if point and home then
+                    if key == "BottomRightCorner" then x = home.x end
+                    tex:SetPoint(point, rel, relPoint, x or 0, home.y + (tonumber(lift) or P.BOTTOM_LIFT))
+                end
+            end
+        end
+    end
+    for key, edge in pairs(EDGES) do
+        local tex = slice[key]
+        if tex then
+            ns.SetTex(tex, edge.key, edge.tileH, edge.tileV)
+            tex:SetSize(edge.w, edge.h)
+            tex:SetTexCoord(unpack(edge.coords))
+        end
+    end
+    return Lines(slice)
+end
+
+-- The portrait corner's ring, for a second portrait (trade window).
+function P.PortraitRing(tex)
+    ns.Dress(tex, METAL, CORNER_SIZE, nil, nil, nil, nil, nil, CORNERS.portrait.TopLeftCorner)
+end
+
+-- Every game window's X (social, professions, bank, mail...): its top right from the corner art's, and its size.
+local GAME_WINDOW_CLOSE_X = 0.6
+local GAME_WINDOW_CLOSE_Y = -11
+local GAME_WINDOW_CLOSE_SIZE = 32
+P.CLOSE_SIZE = GAME_WINDOW_CLOSE_SIZE
+local CLOSE = { size = { GAME_WINDOW_CLOSE_SIZE, GAME_WINDOW_CLOSE_SIZE }, coords = FULL, fill = true, add = true }
+
+-- The X's socket is part of the top right corner art: anchor to it, whatever its offset.
+function P.PlaceInSocket(button, host)
+    local corner = host and host.NineSlice and host.NineSlice.TopRightCorner
+    button:ClearAllPoints()
+    if corner then
+        button:SetPoint("TOPRIGHT", corner, "TOPRIGHT", GAME_WINDOW_CLOSE_X, GAME_WINDOW_CLOSE_Y)
+    else
+        button:SetPoint("TOPRIGHT", host, "TOPRIGHT", 4.6, 5)
+    end
+end
+
+function ns.SkinCloseButton(button, keepPosition)
+    if not button then return end
+    ns.DressStates(button, "closeUp", "closeDown", "closeDisabled", "closeHighlight", CLOSE)
+    if not keepPosition then P.PlaceInSocket(button, button:GetParent()) end
+end
+
+local MAX_MIN = {
+    { "MaximizeButton", "biggerUp", "biggerDown", "biggerDisabled" },
+    { "MinimizeButton", "smallerUp", "smallerDown", "smallerDisabled" },
+}
+local MAX_MIN_STATES = { coords = FULL, fill = true, hit = { 5, 5, 5, 5 } }
+
+local function SkinMaxMin(button)
+    if not button or not button.MaximizeButton then return end
+    for i = 1, #MAX_MIN do
+        local b = MAX_MIN[i]
+        ns.DressStates(button[b[1]], b[2], b[3], b[4], "closeHighlight", MAX_MIN_STATES)
+    end
+end
+
+-- Size button beside the X.
+-- Each close button's size button beside it: the window's lock stands left of it (UI/WindowLocks.lua).
+local sizerBy = setmetatable({}, { __mode = "k" })
+function P.MaxMinBeside(sizer, close, x)
+    SkinMaxMin(sizer)
+    sizer:SetSize(32, 32)
+    if close then
+        ns.SetPointOnce(sizer, "RIGHT", close, "LEFT", x, 0)
+        sizerBy[close] = sizer
+    end
+end
+function ns.SizerBeside(close) return close and sizerBy[close] end
+
+-- Escape won't close a window an addon wrote on mid-fight: windows met in
+-- combat keep the client's art until it ends.
+local waiting = {}
+local waitWatch
+
+local function SkinLater(frame, opts)
+    waiting[frame] = opts or {}
+    if waitWatch then return end
+    waitWatch = ns.EventFrame("PLAYER_REGEN_ENABLED", function()
+        if InCombatLockdown() then return end
+        local held = waiting
+        waiting = {}
+        for held_frame, held_opts in pairs(held) do
+            ns.SafeCall(ns.SkinWindow, held_frame, held_opts)
+        end
+    end)
+end
+
+local ROCK = { coords = FULL }
+local STREAKS = { vert = false, coords = { 0, 1, 0.671875, 0.9609375 } }
+local MARBLE = { coords = FULL }
+local TITLE_STRIP = { vert = false, coords = { 0, 1, 0.2890625, 0.421875 } }
+
+local function SkinSystemTab(tab, lift)
+    tab.fcuiLift = lift
+    ns.SkinBottomTab(tab)
+end
+
+-- Title between the ring (or plain corner) and the X, stone strip under it; left: just inside a plain corner's line.
+-- span: { left, right } of the title line, where Era's window has its own.
+local function PlaceTitle(frame, plain, left, span)
+    local title = frame.TitleContainer
+    if title then
+        title:ClearAllPoints()
+        title:SetPoint("TOPLEFT", frame, "TOPLEFT", span and span[1] or plain and left or 58, 0)
+        title:SetPoint("TOPRIGHT", frame, "TOPRIGHT", span and span[2] or -58, 0)
+    end
+    local strip = frame.fcui and frame.fcui.titleStrip
+    if strip then
+        strip:ClearAllPoints()
+        strip:SetPoint("TOPLEFT", frame, "TOPLEFT", plain and left or 2, -3)
+        strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -25, -3)
+    end
+end
+
+-- Stone and streaks start at the metal line; opts.backingRight / backingBottom override those sides.
+local function PlaceBacking(frame, opts, lines)
+    local fcui = frame.fcui
+    local backing = fcui and fcui.backing
+    if not backing or opts.backing == false then return end
+    local right = tonumber(opts.backingRight)
+    backing:ClearAllPoints()
+    backing:SetPoint("TOPLEFT", frame, "TOPLEFT", lines.left, lines.top)
+    backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", right and -right or lines.right, tonumber(opts.backingBottom) or lines.bottom)
+    local streaks = fcui.streaks
+    if streaks then
+        streaks:ClearAllPoints()
+        streaks:SetPoint("TOPLEFT", frame, "TOPLEFT", lines.left, -21)
+        streaks:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -21)
+    end
+end
+
+-- Metal back after the client re-lays its border (sized windows); never mid-fight.
+-- Plain top left stays where the client puts it, in line with the bottom left.
+function P.Reborder(frame, plain, lift)
+    if not P.active or InCombatLockdown() then return false end
+    -- The window's own lift unless one is passed: a re-dress kept the default and raised the foot (Communities).
+    local opts = P.windowOpts[frame]
+    local lines = NineSlice(frame, plain and "plain" or "portrait", lift or (opts and opts.lift), true)
+    if not lines then return false end
+    PlaceTitle(frame, plain, lines.left + 1, opts and opts.titleSpan)
+    if opts then PlaceBacking(frame, opts, lines) end
+    return true
+end
+
+-- List marble a shade darker, as in 1.x: a black veil, since a vertex colour on the
+-- floor fights its bronze tint (grey at login, unshaded after a toggle).
+function P.ShadeFloor(frame)
+    local floor = frame.fcui and frame.fcui.insetFloor
+    if not floor then return end
+    local veil = ns.OwnTexture(frame, "insetVeil", "BACKGROUND", 0)
+    veil:SetColorTexture(0, 0, 0, 1 - ns.PANE_SHADE)
+    veil:SetAllPoints(floor)
+    veil:SetShown(floor:IsShown())
+end
+
+-- Border, ring, title strip, close button, tabs. opts (read only): portrait,
+-- backing, lift, left, tabLift, backingRight, backingBottom, topTabs, scrollBars, after.
+function ns.SkinWindow(frame, opts)
+    if not frame or not P.active then return end
+    opts = opts or {}
+    local name = frame:GetName()
+    if InCombatLockdown() and not (name and name:find("ForeverClassicUI", 1, true)) then
+        SkinLater(frame, opts)
+        return
+    end
+    -- A border over its content (the map) passes a smaller lift.
+    local lines = NineSlice(frame, opts.portrait == false and "plain" or "portrait", opts.lift, nil, opts.left)
+    if not lines then return end
+    P.windowOpts[frame] = opts
+    frame.fcui = frame.fcui or {}
+    local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait or (name and _G[name .. "Portrait"])
+    if portrait and opts.portrait ~= false then
+        portrait:SetSize(61, 61)
+        ns.SetPointOnce(portrait, "TOPLEFT", frame, "TOPLEFT", -6, 8)
+        ns.WatchPortrait(portrait)
+    end
+    -- Old ButtonFrameTemplate: rock out to the metal (client backing stops at its
+    -- thinner border), streaks under the title, marble in the inset. Not on the map.
+    if opts.backing ~= false then
+        local backing = ns.TileTex(ns.OwnTexture(frame, "backing", "BACKGROUND", -2), "rockBg", ROCK)
+        -- Client rock covers ours; parchment stays (registrar/charter gold text needs it).
+        local bg = frame.Bg or (frame:GetName() and _G[frame:GetName() .. "Bg"])
+        if bg and bg.SetAlpha and bg.IsObjectType and bg:IsObjectType("Texture") then
+            local atlas = bg.GetAtlas and bg:GetAtlas()
+            local file = bg.GetTexture and bg:GetTexture()
+            local parchment = (type(atlas) == "string" and not ns.IsSecret(atlas) and atlas:lower():find("parchment", 1, true) ~= nil)
+                or (type(file) == "string" and file:lower():find("parchment", 1, true) ~= nil)
+            if parchment then bg:SetAlpha(1) else bg:SetAlpha(0) end
+        end
+        if frame.TopTileStreaks then frame.TopTileStreaks:SetAlpha(0) end
+        backing:Show()
+        local streaks = ns.TileTex(ns.OwnTexture(frame, "streaks", "BACKGROUND", -1), "frameSheet", STREAKS)
+        streaks:SetHeight(37)
+        streaks:Show()
+        PlaceBacking(frame, opts, lines)
+        local inset = frame.Inset or (name and _G[name .. "Inset"])
+        -- Named after the window, laid on one of its pages: Forever's professions one, on its crafting page (#203).
+        if inset and inset ~= frame.Inset and inset.GetParent and inset:GetParent() ~= frame then inset = nil end
+        local floor = ns.OwnTexture(frame, "insetFloor", "BACKGROUND", -1)
+        if inset and inset.GetObjectType and inset:GetObjectType() == "Frame" then
+            -- The inset's thin border reads as a gap inside the metal.
+            if inset.NineSlice then ns.FadeTextures(inset.NineSlice) end
+            if inset.Bg and inset.Bg.SetAlpha then inset.Bg:SetAlpha(0) end
+            ns.TileTex(floor, "marbleBg", MARBLE)
+            floor:ClearAllPoints()
+            floor:SetPoint("TOPLEFT", inset, "TOPLEFT", 0, 0)
+            floor:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", 0, 0)
+            floor:Show()
+        else
+            floor:Hide()
+        end
+    elseif frame.fcui and frame.fcui.backing then
+        frame.fcui.backing:Hide()
+        if frame.fcui.streaks then frame.fcui.streaks:Hide() end
+        if frame.fcui.insetFloor then frame.fcui.insetFloor:Hide() end
+    end
+    local strip = ns.TileTex(ns.OwnTexture(frame, "titleStrip", "BACKGROUND"), "frameSheet", TITLE_STRIP)
+    strip:SetHeight(17)
+    PlaceTitle(frame, opts.portrait == false, lines.left + 1, opts.titleSpan)
+    strip:Show()
+    ns.SkinCloseButton(frame.CloseButton or (name and _G[name .. "CloseButton"]))
+    if frame.MaximizeMinimizeButton then
+        P.MaxMinBeside(frame.MaximizeMinimizeButton, frame.CloseButton or (name and _G[name .. "CloseButton"]), 8.5)
+    end
+    -- Tabs: a tab system, or the classic numbered globals.
+    if frame.TabSystem then ns.EachChild(frame.TabSystem, SkinSystemTab, opts.tabLift or opts.lift) end
+    if name then
+        -- Numbers can skip (social window: 1, 3, 4), so try each.
+        for i = 1, 10 do
+            local numbered = _G[name .. "Tab" .. i]
+            if numbered then
+                numbered.fcuiLift = opts.tabLift or opts.lift
+                if opts.topTabs then ns.SkinTopTab(numbered) else ns.SkinBottomTab(numbered) end
+            end
+        end
+    end
+    -- Old knob and arrows on the thin scroll bars inside; scrollBars = false: the after dresses them.
+    if opts.scrollBars ~= false then ns.SkinScrollBarsUnder(frame, 5) end
+    if opts.after then opts.after(frame) end
+    P.skinned[frame] = true
+end

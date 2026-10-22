@@ -1,0 +1,35 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+if ns.LOCALE ~= "itIT" then return end
+local L = ns.L
+
+-- Legacy/: the classic Legacy window, beside Locales/itIT.lua.
+L["CHAT_LEGACY"] = "  /fcui legacy - apre la finestra classica dell'Eredità"
+L["CHAT_LEGACY_NOT_HERE"] = "La finestra classica dell'Eredità richiede il sistema Eredità del gioco, che questo client di gioco non ha."
+L["CHAT_LEGACY_NO_GAMEPAD"] = "La finestra classica dell'Eredità non è disponibile mentre è attiva l'interfaccia del controller."
+L["LEGACY_TITLE"] = "Eredità"
+L["LEGACY_PROFESSIONS"] = "Professioni"
+L["LEGACY_ADVENTURE"] = "Avventura"
+L["LEGACY_RESOURCEFULNESS"] = "Intraprendenza"
+L["LEGACY_POINTS"] = "Punti Eredità: %s"
+L["LEGACY_LOCKED"] = "Completa una sfida dell'Eredità per ottenere il tuo primo punto Eredità e aprire gli alberi dell'Eredità."
+L["LEGACY_TREE_TAB"] = "Albero dell'Eredità"
+L["LEGACY_CHALLENGES"] = "Sfide"
+L["LEGACY_SHOW_COMPLETED"] = "Completate"
+L["LEGACY_SHOW_INCOMPLETE"] = "Incomplete"
+L["LEGACY_EARNED"] = "Punti Eredità ottenuti: %s / %s"
+L["LEGACY_COMPLETED_ON"] = "Completata il %s"
+L["LEGACY_NO_CHALLENGES"] = "Nessuna sfida corrisponde al filtro."
+L["LEGACY_REWARD_TRACK"] = "Ricompense"
+L["LEGACY_MILESTONE"] = "%s punti Eredità"
+L["LEGACY_NEXT_REWARD"] = "Prossima ricompensa a %s punti Eredità"
+L["LEGACY_ALL_EARNED"] = "Tutte le ricompense ottenute"
+L["LEGACY_TRACK_LOCKED"] = "Le ricompense dell'Eredità appaiono quando il tuo account ottiene il suo primo punto Eredità."
+L["OPT_legacyWindow"] = "Finestra dell'Eredità"
+L["OPT_legacyWindow_TIP"] = "Gli alberi, le sfide e le ricompense dell'Eredità nello stile della vecchia finestra dei talenti, aperta dal pulsante Eredità, dalla sua icona sulla minimappa e dal suo tasto."
+L["OPT_legacyThreePane"] = "Tre alberi affiancati"
+L["OPT_legacyThreePane_TIP"] = "La pagina degli alberi della finestra dell'Eredità mostra tutti e tre gli alberi insieme, ognuno come la finestra dei talenti della 1.x ne mostra uno. Disattivato è un albero per scheda."
+L["UI_LEGACY"] = "Eredità"
+L["CORE_LEGACY_BUTTON_OPENS_THE"] = "Il pulsante Eredità riapre la finestra dell'Eredità del gioco dopo il ricaricamento dell'interfaccia."
+L["CHAT_LEGACY_OFF"] = "La finestra classica dell'Eredità è disattivata. Attivala nelle opzioni (/fcui), in Personaggio e incantesimi."

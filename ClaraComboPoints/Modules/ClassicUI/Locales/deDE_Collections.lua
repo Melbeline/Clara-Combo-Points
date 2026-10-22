@@ -1,0 +1,41 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+if ns.LOCALE ~= "deDE" then return end
+local L = ns.L
+
+-- Collections/: the classic Collections window, beside Locales/deDE.lua.
+L["COLL_PAGE"] = "Seite %d / %d"
+L["COLL_ALL"] = "Alle"
+L["COLL_COLLECTED"] = "Gesammelt"
+L["COLL_NOT_COLLECTED"] = "Nicht gesammelt"
+L["COLL_SEARCH"] = "Suchen"
+L["COLL_MOUNTS"] = "Reittiere"
+L["COLL_MOUNT"] = "Aufsitzen"
+L["COLL_DISMOUNT"] = "Absitzen"
+L["OPT_collectionsWindow"] = "Sammlungsfenster"
+L["OPT_collectionsWindow_TIP"] = "Reittiere, Haustiere, Spielzeuge, Erbstücke und Vorlagen in einem klassischen Fenster, jede Sammlung auf eigenem Seitenreiter, geöffnet über die Sammlungstaste, ihr Minikartensymbol und ihre Taste."
+L["UI_COLLECTIONS"] = "Sammlungen"
+L["CORE_COLLECTIONS_BUTTON_OPENS"] = "Die Sammlungstaste öffnet nach dem Neuladen der Oberfläche wieder das Sammlungsfenster des Spiels."
+L["COLL_PETS"] = "Haustiere"
+L["COLL_TOYS"] = "Spielzeugkiste"
+L["COLL_SUMMON"] = "Herbeirufen"
+L["COLL_DISMISS"] = "Entlassen"
+L["COLL_APPEARANCES"] = "Vorlagen"
+L["COLL_FILTER"] = "Filter"
+L["COLL_CHECK_ALL"] = "Alle auswählen"
+L["COLL_UNCHECK_ALL"] = "Alle abwählen"
+L["COLL_SOURCES"] = "Quellen"
+L["COLL_CLASS"] = "Klasse"
+L["COLL_CAMPSITES"] = "Lagerplätze"
+L["COLL_FAVORITE"] = "Favorit"
+L["COLL_UNFAVORITE"] = "Kein Favorit"
+L["COLL_TEAM"] = "Kampfteam"
+L["OPT_showCollReset"] = "Zurücksetzen der Vorschau: angezeigt"
+L["OPT_hoverCollReset"] = "Zurücksetzen der Vorschau: bei Mauskontakt"
+L["OPT_hideCollReset"] = "Zurücksetzen der Vorschau: ausgeblendet"
+L["OPT_collReset_TIP"] = "Die Schaltfläche neben den Drehpfeilen der Vorschau, die das Modell wie anfangs zeigt."
+L["COLL_LEVEL"] = "Stufe"
+L["COLL_HEIRLOOMS"] = "Erbstücke"
+L["OPT_spellBookCollectionsTab"] = "Sammlungen-Reiter"
+L["OPT_spellBookCollectionsTab_TIP"] = "Ein Sammlungen-Reiter am Fuß des Zauberbuchs, solange die Sammlungen-Schaltfläche ausgeblendet ist."

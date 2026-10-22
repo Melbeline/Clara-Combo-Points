@@ -1,0 +1,35 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+if ns.LOCALE ~= "deDE" then return end
+local L = ns.L
+
+-- Legacy/: the classic Legacy window, beside Locales/deDE.lua.
+L["CHAT_LEGACY"] = "  /fcui legacy - das klassische Vermächtnisfenster öffnen"
+L["CHAT_LEGACY_NOT_HERE"] = "Das klassische Vermächtnisfenster braucht das Vermächtnissystem des Spiels, das dieser Spielclient nicht hat."
+L["CHAT_LEGACY_NO_GAMEPAD"] = "Das klassische Vermächtnisfenster ist nicht verfügbar, solange die Gamepad-Oberfläche aktiv ist."
+L["LEGACY_TITLE"] = "Vermächtnis"
+L["LEGACY_PROFESSIONS"] = "Berufe"
+L["LEGACY_ADVENTURE"] = "Abenteuer"
+L["LEGACY_RESOURCEFULNESS"] = "Einfallsreichtum"
+L["LEGACY_POINTS"] = "Vermächtnispunkte: %s"
+L["LEGACY_LOCKED"] = "Schließe eine Vermächtnisherausforderung ab, um deinen ersten Vermächtnispunkt zu erhalten und die Vermächtnisbäume zu öffnen."
+L["LEGACY_TREE_TAB"] = "Vermächtnisbaum"
+L["LEGACY_CHALLENGES"] = "Herausforderungen"
+L["LEGACY_SHOW_COMPLETED"] = "Abgeschlossen"
+L["LEGACY_SHOW_INCOMPLETE"] = "Unvollständig"
+L["LEGACY_EARNED"] = "Erhaltene Vermächtnispunkte: %s / %s"
+L["LEGACY_COMPLETED_ON"] = "Abgeschlossen am %s"
+L["LEGACY_NO_CHALLENGES"] = "Keine Herausforderung passt zum Filter."
+L["LEGACY_REWARD_TRACK"] = "Belohnungsleiste"
+L["LEGACY_MILESTONE"] = "%s Vermächtnispunkte"
+L["LEGACY_NEXT_REWARD"] = "Nächste Belohnung bei %s Vermächtnispunkten"
+L["LEGACY_ALL_EARNED"] = "Alle Belohnungen erhalten"
+L["LEGACY_TRACK_LOCKED"] = "Die Vermächtnisbelohnungen erscheinen, sobald dein Account seinen ersten Vermächtnispunkt erhält."
+L["OPT_legacyWindow"] = "Vermächtnisfenster"
+L["OPT_legacyWindow_TIP"] = "Die Vermächtnisbäume, Herausforderungen und die Belohnungsleiste im Stil des alten Talentfensters, geöffnet über die Vermächtnistaste, ihr Minikartensymbol und ihre Taste."
+L["OPT_legacyThreePane"] = "Drei Bäume nebeneinander"
+L["OPT_legacyThreePane_TIP"] = "Die Baumseite des Vermächtnisfensters zeigt alle drei Bäume auf einmal, jeden wie das 1.x-Talentfenster einen zeigt. Aus ist ein Baum pro Reiter."
+L["UI_LEGACY"] = "Vermächtnis"
+L["CORE_LEGACY_BUTTON_OPENS_THE"] = "Die Vermächtnistaste öffnet nach dem Neuladen der Oberfläche wieder das Vermächtnisfenster des Spiels."
+L["CHAT_LEGACY_OFF"] = "Das klassische Vermächtnisfenster ist aus. Schalte es in den Optionen (/fcui) unter Charakter und Zauber ein."

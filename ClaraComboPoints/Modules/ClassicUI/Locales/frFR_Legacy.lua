@@ -1,0 +1,35 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+if ns.LOCALE ~= "frFR" then return end
+local L = ns.L
+
+-- Legacy/: the classic Legacy window, beside Locales/frFR.lua.
+L["CHAT_LEGACY"] = "  /fcui legacy - ouvrir la fenêtre classique de l'Héritage"
+L["CHAT_LEGACY_NOT_HERE"] = "La fenêtre classique de l'Héritage a besoin du système d'Héritage du jeu, que ce client de jeu n'a pas."
+L["CHAT_LEGACY_NO_GAMEPAD"] = "La fenêtre classique de l'Héritage n'est pas disponible tant que l'interface manette est active."
+L["LEGACY_TITLE"] = "Héritage"
+L["LEGACY_PROFESSIONS"] = "Métiers"
+L["LEGACY_ADVENTURE"] = "Aventure"
+L["LEGACY_RESOURCEFULNESS"] = "Débrouillardise"
+L["LEGACY_POINTS"] = "Points d'Héritage : %s"
+L["LEGACY_LOCKED"] = "Accomplissez un défi d'Héritage pour gagner votre premier point d'Héritage et ouvrir les arbres d'Héritage."
+L["LEGACY_TREE_TAB"] = "Arbre de l'Héritage"
+L["LEGACY_CHALLENGES"] = "Défis"
+L["LEGACY_SHOW_COMPLETED"] = "Accomplis"
+L["LEGACY_SHOW_INCOMPLETE"] = "Inachevés"
+L["LEGACY_EARNED"] = "Points d'Héritage obtenus : %s / %s"
+L["LEGACY_COMPLETED_ON"] = "Accompli le %s"
+L["LEGACY_NO_CHALLENGES"] = "Aucun défi ne correspond au filtre."
+L["LEGACY_REWARD_TRACK"] = "Récompenses"
+L["LEGACY_MILESTONE"] = "%s points d'Héritage"
+L["LEGACY_NEXT_REWARD"] = "Prochaine récompense à %s points d'Héritage"
+L["LEGACY_ALL_EARNED"] = "Toutes les récompenses obtenues"
+L["LEGACY_TRACK_LOCKED"] = "Les récompenses d'Héritage apparaissent dès que votre compte gagne son premier point d'Héritage."
+L["OPT_legacyWindow"] = "Fenêtre de l'Héritage"
+L["OPT_legacyWindow_TIP"] = "Les arbres, défis et récompenses de l'Héritage dans le style de l'ancienne fenêtre des talents, ouverte par le bouton Héritage, son icône sur la minicarte et sa touche."
+L["OPT_legacyThreePane"] = "Trois arbres côte à côte"
+L["OPT_legacyThreePane_TIP"] = "La page des arbres de la fenêtre de l'Héritage affiche les trois arbres à la fois, chacun comme la fenêtre des talents de la 1.x en montre un. Désactivé, c'est un arbre par onglet."
+L["UI_LEGACY"] = "Héritage"
+L["CORE_LEGACY_BUTTON_OPENS_THE"] = "Le bouton Héritage rouvre la fenêtre de l'Héritage du jeu après le rechargement de l'interface."
+L["CHAT_LEGACY_OFF"] = "La fenêtre classique de l'Héritage est désactivée. Activez-la dans les options (/fcui), sous Personnage et sorts."

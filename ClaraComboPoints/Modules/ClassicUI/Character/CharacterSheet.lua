@@ -1,0 +1,782 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+
+-- 1.x character sheet over the client's frame; the client's slots and model keep their logic.
+-- Forever: stats pane kept shut, mode tab column unseen, own level line and bottom tabs (Pet over the client's pet tab).
+-- Loads last of the sheet files: the module registers after the unlearn popup exists.
+
+local T = ns.sheet
+local Take, Fade, TakeFaces = T.Take, T.Fade, T.TakeFaces
+local EMPTY = ns.EMPTY
+
+-- The doll's 1.x sheet stands 2 right and 1 down of the shared one (1.x drew the shared one at 2, -1 to meet it): the
+-- doll page moves this far instead, with everything on it, so the window border stands still between tabs.
+local DOLL_X = -2
+local DOLL_Y = 1
+-- The close button: its centre from the window's top right (plus the side panel's reach while open), and its size.
+local CLOSE_X = -47
+local CLOSE_Y = -25
+local CLOSE_SIZE = 34
+local DOLL_BG = { "BackgroundTopLeft", "BackgroundTopRight", "BackgroundBotLeft", "BackgroundBotRight", "BackgroundOverlay" }
+local INNER_BORDER = { "TopLeft", "TopRight", "BottomLeft", "BottomRight", "Left", "Right", "Top", "Bottom", "Bottom2" }
+local SIDE_PIECES = { "CharacterStatsPane", "CharacterStatsPaneScrollBox", "PaperDollSidebarTabs", "PaperDollLevelInfo",
+    "PaperDollPetLevelInfo" }
+
+-- Short labels so the tabs fit the 384px window.
+local TAB_LABELS = {
+    PaperDollFrame = CHARACTER or "Character", ReputationFrame = REPUTATION or "Reputation",
+    TokenFrame = CURRENCY or "Currency", PVPRankFrame = "PvP", SkillsFrame = SKILLS or "Skills",
+    StatisticsFrame = "Stats",
+}
+-- The dev addon's stand-in words (another client's), so a long language's tab row shows on this one.
+local function Label(text) return ns.DevLabel and ns.DevLabel(text) or text end
+
+-- The client's pet view (its pet side tab swaps the gear for the pet); read only.
+local function PetView()
+    return PaperDollFrame and PaperDollFrame:IsShown() and CharacterStatsPanePetScrollBox ~= nil
+        and PaperDollFrame.currentSideBar == CharacterStatsPanePetScrollBox or false
+end
+T.PetView = PetView
+local function PetWanted() return HasPetUI and HasPetUI() and true or false end
+
+-- "Level 20 Gnome Mage", gold, under the name as 1.x wrote it; in the pet view "Level 20 Wolf" and its loyalty.
+local function LevelLine(pet)
+    local level = UnitLevel(pet and "pet" or "player")
+    if ns.IsSecret(level) then level = "" end
+    if pet then
+        local line = string.format("%s %s %s", LEVEL or "Level", tostring(level), ns.Safe(UnitCreatureFamily("pet"), ""))
+        local loyalty = C_PetInfo and C_PetInfo.GetPetLoyalty and ns.Safe(C_PetInfo.GetPetLoyalty(), "") or ""
+        return loyalty ~= "" and (line .. "\n" .. loyalty) or line
+    end
+    local race = UnitRace("player") or ""
+    local class = UnitClass("player") or ""
+    return string.format("%s %s %s %s", LEVEL or "Level", tostring(level), race, class)
+end
+
+---------------------------------------------------------------- the tabs
+
+-- 1.x tab: caps and a stretched middle (32 tall inactive, 35 active); glow reuses them.
+local TAB_MAX_WIDTH = 106
+-- A tab's width is its label plus TAB_PAD; squeezed to fit, never below TAB_MIN_WIDTH (the two 20 px caps) nor its
+-- label plus TAB_TEXT_ROOM (the label's box is the tab less 20).
+local TAB_PAD = 30
+local TAB_TEXT_ROOM = 20
+local TAB_MIN_WIDTH = 44
+-- The first tab's left edge in the strip, and how far each tab tucks under the one before.
+local TAB_FIRST_X = 14
+local TAB_OVERLAP, HIT_INSET = 15, 7   -- tabs overlap; each click area stops halfway into it
+-- A row past the art's right edge (a long language): the whole foot from the portrait corner, tabs tucked 2 further,
+-- short tabs down to the bare caps.
+local SQUEEZE_OVERLAP, SQUEEZE_MIN_WIDTH = 17, 40
+-- A tab's drawn edges inside its frame: the art is clear for 8 px at the left, 10 at the right.
+local TAB_ART_LEFT, TAB_ART_RIGHT = 8, 10
+local labelWidth = setmetatable({}, { __mode = "k" })
+local picked = setmetatable({}, { __mode = "k" })
+-- Both sheets are 128 x 32; the faces take the shared spot and height (Windows/Tabs.lua).
+local TAB_COORDS = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } }
+local CHAR_TAB_RISE = 4   -- picked tab: its whole art this much higher, its opening on the strip's line (+ up)
+local CHAR_TAB_ON = { own = "ct", layer = "BACKGROUND", key = "tabActive", cap = 20, height = 32, oy = ns.TAB_PICKED_Y + CHAR_TAB_RISE,
+    coords = TAB_COORDS }
+local CHAR_TAB_OFF = { own = "ct", layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32, oy = ns.TAB_OFF_Y,
+    coords = TAB_COORDS }
+local function TabPieces(tab, selected)
+    local spec = selected and CHAR_TAB_ON or CHAR_TAB_OFF
+    tab.left, tab.middle, tab.right = ns.ThreeSlice(tab, nil, spec)
+    for i, piece in ipairs({ tab.left, tab.middle, tab.right }) do
+        ns.LengthenTabPiece(piece, TAB_COORDS[i][1], TAB_COORDS[i][2], (selected and ns.TAB_PICKED_Y + CHAR_TAB_RISE or ns.TAB_OFF_Y))
+    end
+    ns.TabGlow(tab, "glow", spec, tab.left, tab.middle, ns.TabPieceFoot(tab.right))
+end
+
+local function SetLabel(tab, text)
+    tab.text:SetWidth(0)
+    tab.text:SetText(text)
+    local label = math.ceil(tab.text:GetStringWidth())
+    labelWidth[tab] = label
+    local width = math.max(TAB_MIN_WIDTH, math.min(TAB_MAX_WIDTH, label + TAB_PAD))
+    tab:SetWidth(width)
+    tab.text:SetWidth(width - 20)
+end
+
+local function SetSelected(tab, selected)
+    picked[tab] = selected
+    if selected then tab:SetButtonState("NORMAL") end
+    TabPieces(tab, selected)
+    tab:SetNormalFontObject(selected and "GameFontHighlightSmall" or "GameFontNormalSmall")
+    -- The picked tab never glows (1.x disabled it).
+    local glow = tab.fcui and tab.fcui.glow
+    if glow then glow:SetShown(not selected) end
+end
+
+local function ClassicTab(parent, index)
+    local tab = ns.NewFrame("Button", "ForeverClassicUICharacterTab" .. index, parent)
+    tab:SetHeight(32)
+    tab.left, tab.middle, tab.right = ns.ThreeSlice(tab, nil, CHAR_TAB_OFF)
+    tab.text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- One spot, picked or not: the shared tab label height.
+    tab.text:SetPoint("CENTER", tab, "CENTER", 0, ns.TabTextY())
+    tab.text:SetWordWrap(false)
+    tab.text:SetJustifyH("CENTER")
+    -- The button's own label, so its hover (LockHighlight from the client tab over it) turns it white, as in 1.x.
+    tab:SetFontString(tab.text)
+    tab:SetNormalFontObject("GameFontNormalSmall")
+    tab:SetHighlightFontObject("GameFontHighlightSmall")
+    tab.SetLabel, tab.SetSelected = SetLabel, SetSelected
+    TabPieces(tab, false)
+    return tab
+end
+
+-- Client sidebar tabs that take our clicks: the side pane's quiet walk leaves their mouse on.
+local catchers = setmetatable({}, { __mode = "k" })
+
+-- A client tab (the mode tab unless given) kept over our drawn one; rechecked while up (the client re-lays it).
+local function OverTab(tab, catcher, under, far)
+    catcher = catcher or (tab and tab.mode)
+    if not catcher or not catcher.SetAllPoints then return end
+    -- A sidebar tab's mouse goes back with the quiet walk's mark.
+    Take(catcher, "points", "level", "hit")
+    if not catchers[catcher] then Take(catcher, "mouse") end
+    far = far or tab
+    local placed = false
+    if catcher:GetNumPoints() == 2 then
+        local _, r1 = catcher:GetPoint(1)
+        local _, r2 = catcher:GetPoint(2)
+        placed = (r1 == tab and r2 == far) or (r1 == far and r2 == tab)
+    end
+    if not placed then
+        catcher:ClearAllPoints()
+        catcher:SetPoint("TOPLEFT", tab, "TOPLEFT")
+        catcher:SetPoint("BOTTOMRIGHT", far, "BOTTOMRIGHT")
+    end
+    local floor = (under or tab):GetFrameLevel()
+    if catcher:GetFrameLevel() <= floor then catcher:SetFrameLevel(floor + 2) end
+    -- A short tab (Pet) lay under both neighbours' click areas.
+    local l, r, t, b = catcher:GetHitRectInsets()
+    if ns.AnySecret(l, r, t, b) or l ~= HIT_INSET or r ~= HIT_INSET or t ~= 0 or b ~= 0 then
+        catcher:SetHitRectInsets(HIT_INSET, HIT_INSET, 0, 0)
+    end
+    if not catcher:IsMouseEnabled() then catcher:EnableMouse(true) end
+end
+
+local function PlaceTab(tab, prev, strip)
+    tab:ClearAllPoints()
+    if prev then
+        tab:SetPoint("LEFT", prev, "RIGHT", -TAB_OVERLAP, 0)
+    else
+        tab:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", TAB_FIRST_X, 46)
+    end
+    return tab
+end
+
+local function TabFloor(tab, squeezed)
+    return math.max(squeezed and SQUEEZE_MIN_WIDTH or TAB_MIN_WIDTH, (labelWidth[tab] or 0) + TAB_TEXT_ROOM)
+end
+
+-- 1.x's bounds check: a row past the art's right edge is squeezed into the whole foot; tabs still too wide all narrow
+-- alike, one at its floor stops and the rest share what it could not give (an even cut alone crushed the short Pet
+-- tab). Whole pixels, the first tabs one more, so the row is cut by what it must and no more. True when squeezed.
+local function FitTabs(shown)
+    local n = #shown
+    local total = 0
+    local widths = {}
+    for i, tab in ipairs(shown) do
+        widths[i] = tab:GetWidth()
+        total = total + widths[i]
+    end
+    if n == 0 or TAB_FIRST_X + total - TAB_OVERLAP * (n - 1) <= T.ART_RIGHT_EDGE then return false end
+    for i = 2, n do ns.SetPointOnce(shown[i], "LEFT", shown[i - 1], "RIGHT", -SQUEEZE_OVERLAP, 0) end
+    local over = math.ceil(total - SQUEEZE_OVERLAP * (n - 1) - (T.ART_RIGHT_EDGE - T.ART_LEFT_EDGE))
+    for _ = 1, 50 do
+        local free = 0
+        for i, tab in ipairs(shown) do
+            if widths[i] > TabFloor(tab, true) then free = free + 1 end
+        end
+        if free == 0 or over <= 0 then break end
+        local share, extra = math.floor(over / free), over % free
+        for i, tab in ipairs(shown) do
+            local room = widths[i] - TabFloor(tab, true)
+            if room > 0 and over > 0 then
+                local take = share
+                if extra > 0 then
+                    take, extra = take + 1, extra - 1
+                end
+                take = math.min(take, room, over)
+                widths[i] = widths[i] - take
+                over = over - take
+            end
+        end
+    end
+    for i, tab in ipairs(shown) do
+        tab:SetWidth(widths[i])
+        tab.text:SetWidth(widths[i] - 20)
+    end
+    return true
+end
+
+-- A squeezed row, or one whose right gap is under its left, moves as one so its drawn ends stand the same distance
+-- inside the window's drawn edges at the foot (the body's border, the art's right edge).
+local function CenterTabs(shown, strip, squeezed)
+    local n = #shown
+    if n == 0 then return end
+    local total = -(squeezed and SQUEEZE_OVERLAP or TAB_OVERLAP) * (n - 1)
+    for _, tab in ipairs(shown) do total = total + tab:GetWidth() end
+    local x = TAB_FIRST_X
+    local left = TAB_FIRST_X + TAB_ART_LEFT - T.BODY_LEFT_EDGE
+    local right = T.ART_RIGHT_EDGE - (TAB_FIRST_X + total - TAB_ART_RIGHT)
+    if squeezed or right < left then
+        x = (T.BODY_LEFT_EDGE + T.ART_RIGHT_EDGE - total + TAB_ART_RIGHT - TAB_ART_LEFT) / 2
+    end
+    ns.SetPointOnce(shown[1], "BOTTOMLEFT", strip, "BOTTOMLEFT", x, 46)
+end
+
+-- Our glow on hover; its tooltip hidden only while the sheet is on, or the retail tabs lose their names.
+local function HookCatcher(tab, catcher)
+    if not (tab and catcher and catcher.HookScript) then return end
+    catcher:HookScript("OnEnter", function(self)
+        if not T.active then return end
+        tab:LockHighlight()
+        if GameTooltip and GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+    end)
+    catcher:HookScript("OnLeave", function() tab:UnlockHighlight() end)
+    -- Its press sinks our label, as the game's tabs do; the picked one stays put (1.x disabled it).
+    catcher:HookScript("OnMouseDown", function()
+        if T.active and not picked[tab] then tab:SetButtonState("PUSHED") end
+    end)
+    catcher:HookScript("OnMouseUp", function() tab:SetButtonState("NORMAL") end)
+end
+
+-- Picture only, the client's own tab unseen over it: our click opened the tab tainted, refused its numbers in combat.
+local function NewTab(frame, i, mode)
+    local tab = ClassicTab(frame, i)
+    tab:EnableMouse(false)
+    if mode and mode.GetPushedTextOffset then tab:SetPushedTextOffset(mode:GetPushedTextOffset()) end
+    HookCatcher(tab, mode)
+    return tab
+end
+
+-- 1.x's second tab while a pet is out; the client's pet side tab takes its clicks.
+local function PlacePetTab(frame, prev, strip, pet)
+    local catcher = T.PetSideTab()
+    if not catcher then return nil end
+    if not T.petTab then
+        T.petTab = NewTab(frame, "Pet", catcher)
+        HookCatcher(T.tabs and T.tabs[1], PaperDollSidebarTab1)
+        T.PetPad(T.petTab)
+    end
+    local tab = T.petTab
+    tab:SetShown(PetWanted())
+    if not tab:IsShown() then return nil end
+    tab:SetLabel(Label(PET or "Pet"))
+    tab:SetSelected(pet)
+    return PlaceTab(tab, prev, strip)
+end
+
+-- Client tabs over ours: each mode tab, the pet tab over Pet, and in the pet view its stats tab over Character.
+local function CatchTabs()
+    local tabs, petTab = T.tabs or EMPTY, T.petTab
+    local petUp = petTab and petTab:IsShown()
+    local doll = PaperDollFrame:IsShown()
+    for i, tab in ipairs(tabs) do
+        -- Off the doll page Pet opens the Character page, where the client's pet tab lives.
+        OverTab(tab, nil, nil, i == 1 and petUp and not doll and petTab or nil)
+    end
+    local petSide, tab1 = T.PetSideTab(), PaperDollSidebarTab1
+    if petUp and doll and petSide then
+        catchers[petSide] = true
+        OverTab(petTab, petSide)
+    elseif petSide and catchers[petSide] then
+        -- Left over the hidden Pet tab's spot it would take the next tab's clicks.
+        catchers[petSide] = nil
+        petSide:EnableMouse(false)
+    end
+    if not (tab1 and tabs[1]) then return end
+    if PetView() then
+        catchers[tab1] = true
+        OverTab(tabs[1], tab1, tabs[1].mode)
+    elseif catchers[tab1] then
+        catchers[tab1] = nil
+        tab1:EnableMouse(false)
+    end
+end
+
+------------------------------------------------------------- the window
+
+-- Title and close button follow the side panel's title bar.
+local function PlaceChrome()
+    local frame = CharacterFrame
+    local extra = ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0
+    T.PlaceGlow(frame, extra)
+    local title = frame.TitleContainer and frame.TitleContainer.TitleText
+    if title then
+        Take(title, "points")
+        ns.SetPointOnce(title, "CENTER", frame, "TOP", 6 + extra / 2, -24)
+    end
+    local close = frame.CloseButton
+    if close then
+        TakeFaces(close)
+        ns.SetSizeIf(close, CLOSE_SIZE, CLOSE_SIZE)
+        ns.SetPointOnce(close, "CENTER", frame, "TOPRIGHT", CLOSE_X + extra, CLOSE_Y)
+    end
+end
+
+function ns.PlaceSheetChrome()
+    if T.active and T.built then PlaceChrome() end
+end
+
+local function HideControls(self)
+    if T.active then self:Hide() end
+end
+
+-- The pet view and pet tab each layout drew, so the watch re-lays on a change.
+local laidPet, laidWanted = false, false
+
+-- The pet's name over the client's title (faded) in its view, as 1.x titled the pet page.
+local function PetTitle(title, pet)
+    -- The client's title is left alone until a pet view first shows.
+    if not (pet or T.petName) then return end
+    if not T.petName then
+        T.petName = CharacterFrame.TitleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        T.petName:SetPoint("CENTER", title, "CENTER")
+    end
+    T.petName:SetFontObject(title:GetFontObject() or "GameFontNormal")
+    T.petName:SetTextColor(title:GetTextColor())
+    T.petName:SetText(pet and ns.Safe(UnitName("pet"), "") or "")
+    T.petName:SetShown(pet)
+    Take(title, "alpha")
+    ns.SetAlphaIf(title, pet and 0 or 1)
+end
+
+-- 1.x's pet page is the plain sheet: the doll art's slot sockets go with the gear.
+local function DollArt(shown)
+    for _, tex in ipairs(T.doll) do ns.SetShownIf(tex, shown) end
+    if T.ringOver and T.ringOver.doll then ns.SetShownIf(T.ringOver.doll, shown) end
+end
+
+-- With the 2.x panes on, the pet's numbers still go in the 1.x boxes: the panes are the player's.
+local function PetStatBoxes(pet)
+    if not (ns.db and ns.db.statPanes) then return end
+    ns.SetShownIf(T.attrs, pet)
+    if ns.StatPanesSeen then ns.StatPanesSeen(not pet) end
+end
+
+-- Bottom strip tabs: label width (capped), overlapping by 15, the first 14 in; Pet second, as in 1.x.
+local function LayTabs(frame, pet)
+    local strip = T.general[3]
+    local tabPrev
+    if frame.ModeTabs and frame.ModeTabs.Tabs then
+        T.tabs = T.tabs or {}
+        local shown = {}
+        for i, mode in ipairs(frame.ModeTabs.Tabs) do
+            local tab = T.tabs[i]
+            if not tab then
+                tab = NewTab(frame, i, mode)
+                T.tabs[i] = tab
+            end
+            tab.mode = mode
+            tab.frameName = mode.frameName
+            tab:SetLabel(Label(TAB_LABELS[mode.frameName or ""] or mode.frameName or ""))
+            tab:SetSelected(mode.frameName == frame.activeSubframe and not (i == 1 and pet))
+            tab:SetShown(mode:IsShown())
+            if mode:IsShown() then
+                tabPrev = PlaceTab(tab, tabPrev, strip)
+                shown[#shown + 1] = tab
+            end
+            local petTab = i == 1 and PlacePetTab(frame, tabPrev, strip, pet)
+            if petTab then
+                tabPrev = petTab
+                shown[#shown + 1] = petTab
+            end
+        end
+        CenterTabs(shown, strip, FitTabs(shown))
+        CatchTabs()
+    else
+        for i = 1, 6 do
+            local tab = _G["CharacterFrameTab" .. i]
+            if tab and tab:IsShown() then
+                ns.SkinBottomTab(tab)
+                tabPrev = PlaceTab(tab, tabPrev, strip)
+            end
+        end
+    end
+end
+
+-- Runs after the client sizes or retabs the frame. Nothing here is protected, so combat opens lay out too.
+local function LayoutNow()
+    if not T.active or not T.built then return end
+    local frame, doll = CharacterFrame, PaperDollFrame
+    local pet = PetView()
+    laidPet, laidWanted = pet, PetWanted()
+    Take(frame, "size")
+    frame:SetSize(T.WIDTH, T.HEIGHT)
+    Take(doll, "points")
+    ns.SetTwoPointsIf(doll, "TOPLEFT", frame, "TOPLEFT", DOLL_X, DOLL_Y, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", DOLL_X, DOLL_Y)
+    -- Never a panel attribute: the manager reads it mid-pass and group frames then error on secrets all session.
+    Fade(frame.NineSlice)
+    Fade(frame.Bg)
+    Fade(frame.Background)   -- retail's dark fill over its inset
+    Fade(frame.TopTileStreaks)
+    Fade(frame.Inset)
+    Fade(frame.InsetRight)
+    ns.EachKey(doll, DOLL_BG, Fade)
+    ns.EachKey(CharacterModelScene, DOLL_BG, Fade)
+    -- Forever 70291: a rock strip over the model's top, across the left pane.
+    Fade(PaperDollFrame and PaperDollFrame.TopBackgroundStripHost)
+    -- Retail's thin frame round the model hangs on the faded inset, taller than the old window.
+    for _, name in ipairs(INNER_BORDER) do Fade(_G["PaperDollInnerBorder" .. name]) end
+    -- Client zoom/rotate controls give way to the old buttons; the client reshows them with the doll.
+    local controls = CharacterModelScene and CharacterModelScene.ControlFrame
+    if controls then
+        Take(controls, "mouse")
+        Fade(controls)
+        controls:Hide()
+        controls:EnableMouse(false)
+        ns.HookScriptOnce(controls, "OnShow", HideControls)
+    end
+    -- Forever: every tab hangs off the left pane, wider than the old window: squeezed into the art.
+    local pane = frame.LeftPaneHost
+    if pane then
+        Take(pane, "size", "points")
+        pane:ClearAllPoints()
+        pane:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -60)
+        pane:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -6, 82)
+        ns.EachTexture(pane, Fade)
+    end
+    -- Forever: stats pane, its toggle and the mode tab column; the tabs stay live under ours.
+    Fade(frame.RightPaneHost)
+    if frame.RightPaneToggleButton then
+        Take(frame.RightPaneToggleButton, "mouse")
+        Fade(frame.RightPaneToggleButton)
+        frame.RightPaneToggleButton:EnableMouse(false)
+    end
+    if frame.ModeTabs then
+        Take(frame.ModeTabs, "mouse")
+        Fade(frame.ModeTabs)
+        frame.ModeTabs:EnableMouse(false)
+    end
+
+    local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait
+    if portrait then
+        Take(portrait, "size", "points")
+        portrait:SetSize(62, 62)
+        ns.SetPointOnce(portrait, "TOPLEFT", frame, "TOPLEFT", 9, -6)
+        ns.WatchPortrait(portrait)
+        T.portrait = portrait
+    end
+    -- Skinned before it is placed and sized: the skin sets the stock size.
+    if frame.CloseButton then ns.SkinCloseButton(frame.CloseButton, true) end
+    PlaceChrome()
+    local title = frame.TitleContainer and frame.TitleContainer.TitleText
+    if title then
+        Take(title, "font")
+        title:SetFontObject("GameFontNormal")
+        -- On the title's frame, over the side panel's art.
+        if not T.level then
+            T.level = frame.TitleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        end
+        ns.SetPointOnce(T.level, "TOP", title, "BOTTOM", 0, -6)
+        T.level:SetText(LevelLine(pet))
+        T.level:Show()
+        if CharacterLevelText then Fade(CharacterLevelText) end
+        PetTitle(title, pet)
+    end
+
+    T.LaySlots(doll)
+
+    T.PlaceModel(doll, pet)
+
+    LayTabs(frame, pet)
+    PetStatBoxes(pet)
+    if ns.EquipmentPaneSync then ns.EquipmentPaneSync() end
+    DollArt(not pet)
+    -- One stat pane pass per layout: UpdateStats ran it unless the doll is hidden.
+    local panesDone = T.UpdateStats()
+    if ns.StatPanesHost then ns.StatPanesHost(doll) end
+    if not panesDone and ns.UpdateStatPanes then ns.UpdateStatPanes() end
+    -- Docked addons re-lay after us, synchronously.
+    if frame:IsShown() then ns.SignalSheetLaid() end
+end
+
+-- The client resizes the pane behind us; a nested pass would chase itself, so one at a time.
+local laying = false
+local function Layout()
+    if laying then return end
+    laying = true
+    ns.SafeCall(LayoutNow)
+    laying = false
+end
+
+local function Build()
+    T.built = true
+    local frame, doll = CharacterFrame, PaperDollFrame
+    T.BuildArt(frame, doll)
+    T.BuildStats(doll)
+    T.BuildRotate(doll)
+    T.WatchStats(doll)
+end
+
+------------------------------------------------------------ the side pane
+
+-- Alpha 0 and no mouse, never Hide: this runs inside client passes (RefreshRightPane) and a
+-- Hide runs the pieces' close code tainted (health text then compares a secret).
+-- A faction or skill click expands the pane for good.
+local quieted = {}
+local function QuietMouse(frame, depth)
+    -- Skip panes kept live (equipment manager, skill detail) and tabs taking our clicks.
+    if frame.fcuiKept or catchers[frame] then return end
+    if frame.IsMouseEnabled and frame:IsMouseEnabled() then
+        frame.fcuiMouseWas = true
+        pcall(frame.EnableMouse, frame, false)
+    end
+    -- The wheel too: the unseen stats list under the side panel took the set list's scrolls.
+    if frame.IsMouseWheelEnabled and frame:IsMouseWheelEnabled() then
+        frame.fcuiWheelWas = true
+        pcall(frame.EnableMouseWheel, frame, false)
+    end
+    if depth < 10 then ns.EachChild(frame, QuietMouse, depth + 1) end
+end
+local function LoudMouse(frame, depth)
+    if frame.fcuiMouseWas then
+        frame.fcuiMouseWas = nil
+        pcall(frame.EnableMouse, frame, true)
+    end
+    if frame.fcuiWheelWas then
+        frame.fcuiWheelWas = nil
+        pcall(frame.EnableMouseWheel, frame, true)
+    end
+    if depth < 10 then ns.EachChild(frame, LoudMouse, depth + 1) end
+end
+local function Quiet(frame)
+    if not frame or not frame.SetAlpha then return end
+    Take(frame, "alpha", "mouse")
+    frame.fcuiKept = nil
+    ns.SetAlphaIf(frame, 0, 0)
+    if not frame.fcuiQuiet or (frame.IsMouseEnabled and frame:IsMouseEnabled()) then
+        frame.fcuiQuiet = true
+        quieted[frame] = true
+        QuietMouse(frame, 0)
+    end
+end
+-- The stats list builds lines a beat after quieting, each taking the mouse unseen.
+local function Requiet()
+    for frame in pairs(quieted) do
+        if frame.fcuiQuiet and frame:IsShown() then QuietMouse(frame, 0) end
+    end
+end
+local function Loud(frame)
+    if not frame or not frame.fcuiQuiet then return end
+    frame.fcuiQuiet = nil
+    frame:SetAlpha(1)
+    LoudMouse(frame, 0)
+end
+-- Held open: visible and clickable, skipped by QuietMouse until quieted again.
+local function Keep(frame)
+    if not frame or not frame.SetAlpha then return end
+    if frame:GetAlpha() < 1 then
+        Take(frame, "alpha")
+        frame:SetAlpha(1)
+    end
+    if frame.fcuiKept and not frame.fcuiQuiet then return end
+    frame.fcuiKept = true
+    frame.fcuiQuiet = nil
+    quieted[frame] = true   -- so GiveBack clears the mark
+    -- A parent's walk may have taken its mouse without quieting it.
+    LoudMouse(frame, 0)
+end
+
+-- For a pane another file holds open (the side panel's equipment tab).
+function ns.KeepSidePane(frame)
+    if T.active then Keep(frame) end
+end
+
+local function HideSidePane(frame)
+    Quiet(frame.RightPaneHost)
+    for _, pane in ipairs(frame.SidePanes or EMPTY) do
+        -- The skill detail is ours while the skills tab is up.
+        local keep = SkillsFrame and pane == SkillsFrame.SkillDetailFrame and SkillsFrame:IsShown()
+        if keep then Keep(pane) else Quiet(pane) end
+    end
+    for _, name in ipairs(SIDE_PIECES) do Quiet(_G[name]) end
+    -- Retail's faction pane hangs on the reputation frame, not in the side panes: it opened beside our box.
+    if ReputationFrame then Quiet(ReputationFrame.ReputationDetailFrame) end
+    if type(GetPaperDollSideBarFrame) == "function" and type(PAPERDOLL_SIDEBARS) == "table" then
+        for i = 1, #PAPERDOLL_SIDEBARS do
+            local bar = GetPaperDollSideBarFrame(i)
+            -- The equipment manager stays while the side panel holds it.
+            local keep = bar == (PaperDollFrame and PaperDollFrame.EquipmentManagerPane) and ns.EquipmentPaneOpen and ns.EquipmentPaneOpen()
+            if bar then
+                if keep then Keep(bar) else Quiet(bar) end
+            end
+        end
+    end
+    -- The mode tab column stays up, unseen: its tabs take our clicks.
+    if frame.ModeTabs then
+        Take(frame.ModeTabs, "alpha", "shown")
+        frame.ModeTabs:SetAlpha(0)
+        if not frame.ModeTabs:IsShown() then frame.ModeTabs:Show() end
+    end
+    Quiet(frame.RightPaneToggleButton)
+    -- Expanded, the window outgrows the sheet; the bare part must pass clicks through.
+    if frame.SetHitRectInsets and frame.GetWidth then
+        local spare = math.max(0, math.floor((frame:GetWidth() or 0) - 384))
+        if frame.fcuiSpare ~= spare then
+            Take(frame, "hit")
+            frame.fcuiSpare = spare
+            frame:SetHitRectInsets(0, spare, 0, 0)
+        end
+    end
+end
+
+-- The client reshows side pane pieces by too many paths to follow, so poll while up.
+local Due = ns.Sched.Due
+local sideBeat = { since = 0 }
+local function SideWatch(_, elapsed)
+    if not T.active then return end
+    if Due(sideBeat, elapsed, 0.25) then
+        Requiet()
+        if T.built then T.PlaceGlow(CharacterFrame, ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0) end
+    end
+    local tabs = PaperDollSidebarTabs
+    local host = CharacterFrame.RightPaneHost
+    -- Only when visible: quieted pieces stay shown at alpha 0.
+    if (tabs and tabs:IsShown() and tabs:GetAlpha() > 0) or (host and host:IsShown() and host:GetAlpha() > 0) then
+        HideSidePane(CharacterFrame)
+    end
+    -- The pet tab's row stays up, unseen, like the mode tabs; the client hides it with the pane shut.
+    if tabs and T.petTab and T.petTab:IsShown() and PaperDollFrame:IsShown() and not tabs:IsShown() then
+        Take(tabs, "shown")
+        tabs:Show()
+    end
+    if PetView() ~= laidPet or PetWanted() ~= laidWanted then Layout() end
+    CatchTabs()
+end
+
+-- The stats pane follows the client's own collapsed flag: read here, never set.
+local function GiveBack()
+    if not T.dressed then return end
+    T.dressed = nil
+    local frame = CharacterFrame
+    for pane in pairs(quieted) do
+        pane.fcuiKept = nil
+        pcall(Loud, pane)
+    end
+    wipe(quieted)
+    T.PutAllBack(frame.CloseButton)
+    frame.fcuiSpare = nil
+    -- The client's width for the pane's current state.
+    local wide, narrow, tall = _G["CHARACTER_FRAME_WIDTH"], _G["CHARACTER_FRAME_COLLAPSED_WIDTH"], _G["CHARACTER_FRAME_HEIGHT"]
+    if wide and narrow and tall then frame:SetSize(frame.rightPaneCollapsed == true and narrow or wide, tall) end
+    -- Re-lay the mode tabs as the client does, hidden ones skipped: one shown under the sheet has no spot.
+    local tabs = frame.ModeTabs and frame.ModeTabs.Tabs
+    if type(tabs) == "table" then
+        local prev
+        for _, tab in ipairs(tabs) do
+            tab:ClearAllPoints()
+            if tab:IsShown() then
+                if prev then
+                    tab:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
+                else
+                    tab:SetPoint("TOPLEFT", frame.ModeTabs, "TOPLEFT")
+                end
+                prev = tab
+            end
+        end
+    end
+    T.ListsGiveBack()
+    if T.descBar then
+        T.KnobSeen(T.descBar, false)
+        T.descBar.fcuiSkinned = nil
+    end
+    ns.UnwatchPortrait(T.portrait)
+    T.UnfitModelCamera()
+    T.HideRepDetail()
+    if T.GiveBackCurrencyDetail then T.GiveBackCurrencyDetail() end
+    -- The player's pre-Apply stats pane cvar, back for the next login.
+    local was = ns.db and ns.db.cvarWas and ns.db.cvarWas.characterFrameCollapsed
+    if was ~= nil and not InCombatLockdown() and ns.WriteCVar("characterFrameCollapsed", was) then
+        ns.db.cvarWas.characterFrameCollapsed = nil
+    end
+end
+
+local function LayoutIfActive() if T.active then Layout() end end
+local function LayoutIfShown()
+    if T.active and CharacterFrame and CharacterFrame:IsShown() then Layout() end
+end
+local function HideSidePaneIfActive(self) if T.active then HideSidePane(self) end end
+local function LayoutNextFrame() if T.active then ns.Sched.NextFrame("sheet.layoutNext", Layout) end end
+
+local hooked = false
+local function Apply()
+    T.active = true
+    if not CharacterFrame or not PaperDollFrame then ns.MissingPiece("CharacterFrame") return end
+    if not T.built then Build() end
+    T.dressed = true
+    T.KeepShownLater()
+    if not hooked then
+        hooked = true
+        ns.HookMethod(CharacterFrame, "UpdateSize", Layout)
+        -- The client resizes the pane on its own (opening in combat): re-lay then and after the fight.
+        if PaperDollFrame then PaperDollFrame:HookScript("OnSizeChanged", LayoutIfActive) end
+        ns.EventFrame("PLAYER_REGEN_ENABLED", LayoutIfShown)
+        -- Put away the side panel's frames, never its state: writing the collapsed flag taints
+        -- the client's show path (status text then compares a secret).
+        ns.HookMethod(CharacterFrame, "Expand", HideSidePaneIfActive)
+        T.HookListTabs()
+        if CharacterFrame.RefreshRightPane then
+            ns.HookMethod(CharacterFrame, "RefreshRightPane", HideSidePaneIfActive)
+            ns.HookMethod(CharacterFrame, "ShowSubFrame", LayoutNextFrame)
+        end
+        if type(PaperDollFrame_UpdateSidebarTabs) == "function" then
+            ns.HookGlobal("PaperDollFrame_UpdateSidebarTabs", function() if T.active then HideSidePane(CharacterFrame) end end)
+        end
+        CharacterFrame:HookScript("OnShow", LayoutIfActive)
+        ns.Sched.OnFrame(ns.NewFrame("Frame", nil, CharacterFrame), { name = "sheet.side", every = 0, fn = SideWatch })
+        T.HookModel()
+        ns.CharacterCameraInfo = T.CameraInfo
+    end
+    HideSidePane(CharacterFrame)
+    if ns.EquipmentPaneApply then ns.EquipmentPaneApply() end
+    -- The client loads the pane collapsed next login, from its cvar.
+    ns.SetCVar("characterFrameCollapsed", "1")
+    T.SkinListTabs()
+    -- For addons that dock onto the character frame.
+    ForeverClassicUI_CharacterSheetActive = true
+    for _, tex in ipairs(T.general) do tex:Show() end
+    if T.ringOver then
+        T.ringOver:Show()
+        if T.ringOver.doll then T.ringOver.doll:Show() end
+    end
+    for _, tex in ipairs(T.doll) do tex:Show() end
+    -- The 2.x stat panes take this spot when toggled on.
+    T.attrs:SetShown(not (ns.db and ns.db.statPanes))
+    Layout()
+end
+
+local function Restore()
+    T.active = false
+    ForeverClassicUI_CharacterSheetActive = false
+    if not T.built then return end
+    if T.level then T.level:Hide() end
+    for _, tab in ipairs(T.tabs or EMPTY) do tab:Hide() end
+    if T.petTab then T.petTab:Hide() end
+    if T.petName then T.petName:Hide() end
+    wipe(catchers)
+    laidPet, laidWanted = false, false
+    if ns.StatPanesSeen then ns.StatPanesSeen(true) end
+    for _, tex in ipairs(T.general) do tex:Hide() end
+    if T.ringOver then
+        T.ringOver:Hide()
+        if T.ringOver.doll then T.ringOver.doll:Hide() end
+    end
+    for _, tex in ipairs(T.doll) do tex:Hide() end
+    T.attrs:Hide()
+    for _, row in ipairs(T.resistances) do row:Hide() end
+    if T.rotateLeft then T.rotateLeft:Hide() end
+    if T.rotateRight then T.rotateRight:Hide() end
+    if ns.EquipmentPaneRestore then ns.EquipmentPaneRestore() end
+    if PaperDollSidebarTabs then PaperDollSidebarTabs:SetAlpha(1) end
+    GiveBack()
+    ns.needsReload = true
+end
+
+ns.RegisterModule("characterSheet", { apply = Apply, restore = Restore })

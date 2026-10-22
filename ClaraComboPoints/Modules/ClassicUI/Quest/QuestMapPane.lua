@@ -1,0 +1,445 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+-- The map's quest pane in 1.x style. Client rows, pools and text stay
+-- theirs: their modern art is faded and ours laid under.
+local ns = ClaraNS.ClassicUIPrivate
+
+local INK_R, INK_G, INK_B = 0.18, 0.12, 0.06   -- parchment ink
+local CHECK_BOX = "Interface\\Buttons\\UI-CheckBox-Up"
+local CHECK_MARK = "Interface\\Buttons\\UI-CheckBox-Check"
+local CHECK_GLOW = "Interface\\Buttons\\UI-CheckBox-Highlight"
+local REWARD_ART = { "Top", "Bottom", "Background" }
+
+-- The quest pane's marble background (behind the quest list) edges from the pane's (x + right, y + up).
+local QUEST_PANE_BG_LEFT = 0
+local QUEST_PANE_BG_TOP = 0
+local QUEST_PANE_BG_RIGHT = -20
+local QUEST_PANE_BG_BOTTOM = 0
+-- The details parchment's edges from the details frame's, its top from the details scroll bar's top (7: level with
+-- its housing's top) (x + right, y + up).
+local QUEST_DETAILS_PARCHMENT_LEFT = 0
+local QUEST_DETAILS_PARCHMENT_TOP = 7
+local QUEST_DETAILS_PARCHMENT_RIGHT = 0
+local QUEST_DETAILS_PARCHMENT_BOTTOM = 0
+-- The Back button's band above the parchment, in the map's own rock: its edges from the details frame's (its foot is
+-- the parchment's top; 22 right covers the scroll column's head).
+local QUEST_DETAILS_HEADER_LEFT = 0
+local QUEST_DETAILS_HEADER_TOP = 0
+local QUEST_DETAILS_HEADER_RIGHT = 22
+-- The Back button: its top left from the details frame's, its size.
+local QUEST_DETAILS_BACK_BUTTON_X = 11
+local QUEST_DETAILS_BACK_BUTTON_Y = -21
+local QUEST_DETAILS_BACK_BUTTON_WIDTH = 90
+local QUEST_DETAILS_BACK_BUTTON_HEIGHT = 22
+-- Both scroll bars (list and details) share these: the housing (column art) left from the bar, its ends past the
+-- bar's (top up, foot down: its length is the bar's plus both); arrow nudges; the knob beside the arrows' line and
+-- its run past the track's ends.
+local QUEST_SCROLL_HOUSING_X = -15.5
+local QUEST_SCROLL_HOUSING_TOP = 7
+local QUEST_SCROLL_HOUSING_BOTTOM = -6
+local QUEST_SCROLL_UP_ARROW_X = -5
+local QUEST_SCROLL_UP_ARROW_Y = 2
+local QUEST_SCROLL_DOWN_ARROW_X = -5
+local QUEST_SCROLL_DOWN_ARROW_Y = -2
+local QUEST_SCROLL_KNOB_X = 1
+local QUEST_SCROLL_KNOB_TRAVEL = 7
+local QUEST_SCROLL = {
+    houseX = QUEST_SCROLL_HOUSING_X,
+    houseTop = QUEST_SCROLL_HOUSING_TOP,
+    houseFoot = QUEST_SCROLL_HOUSING_BOTTOM,
+    upX = QUEST_SCROLL_UP_ARROW_X,
+    upY = QUEST_SCROLL_UP_ARROW_Y,
+    downX = QUEST_SCROLL_DOWN_ARROW_X,
+    downY = QUEST_SCROLL_DOWN_ARROW_Y,
+    knobX = QUEST_SCROLL_KNOB_X,
+    knobReach = QUEST_SCROLL_KNOB_TRAVEL,
+}
+
+-- Rewards: at the text's end as Era's quest log, on the spacer the client sizes to them (x + right, y + up).
+local QUEST_REWARDS_X = -10
+local QUEST_REWARDS_Y = 0
+
+-- Parchment: the top-left 300x336 of the 512 sheet (the rest is dark).
+local PARCHMENT_U0, PARCHMENT_U1, PARCHMENT_V0, PARCHMENT_V1 = 8 / 512, 300 / 512, 4 / 512, 336 / 512
+
+-- The client's drawer spot (its XML), restored when the module is off.
+local CLIENT_DRAWER_X, CLIENT_DRAWER_Y = 0, 23
+
+-- UI-Background-Rock, the map window's backing; its coords run 0..size/1024 from its top left.
+local MAP_ROCK = 374155
+local ROCK_SPAN = 1024
+
+local active = false
+local built = false
+local floorTex, parchmentTex, headerTex
+
+------------------------------------------------------------------ list rows
+
+local function HeaderText(button)
+    return button.ButtonText or button:GetFontString()
+end
+
+local function Collapsed(button)
+    if button.info and button.info.isCollapsed ~= nil then return button.info.isCollapsed end
+    if button.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
+        local info = C_QuestLog.GetInfo(button.questLogIndex)
+        if info then return info.isCollapsed end
+    end
+    return false
+end
+
+-- The client grays the name on every update and mouse leave; Era's is gold, white under the mouse.
+local function GoldHeader(button)
+    if not active then return end
+    local text = HeaderText(button)
+    if text then text:SetTextColor(1, 0.82, 0) end
+end
+
+-- Header: 1.x plus/minus and yellow name; the client's bar and arrow faded.
+local function SkinHeader(button)
+    if ns.Once(button, "questHeader") then
+        ns.FadeTextures(button)
+        local normal = button:GetNormalTexture()
+        if normal then normal:SetAlpha(0) end
+        local hl = button:GetHighlightTexture()
+        if hl then hl:SetAlpha(0) end
+        if button.CollapseButton then
+            button.CollapseButton:SetAlpha(0)
+            button.CollapseButton:EnableMouse(false)
+        end
+        local icon = ns.OwnTexture(button, "collapseIcon", "ARTWORK")
+        icon:SetSize(16, 16)
+        icon:SetPoint("LEFT", button, "LEFT", 4, 0)
+        local glow = ns.OwnTexture(button, "collapseGlow", "HIGHLIGHT")
+        glow:SetTexture(ns.ART.PLUS_GLOW)
+        glow:SetBlendMode("ADD")
+        glow:SetSize(16, 16)
+        glow:SetPoint("LEFT", button, "LEFT", 4, 0)
+        local text = HeaderText(button)
+        if text then
+            text:SetFontObject("GameFontNormal")
+            text:ClearAllPoints()
+            text:SetPoint("LEFT", button, "LEFT", 24, 0)
+            text:SetPoint("RIGHT", button, "RIGHT", -4, 0)
+        end
+        button:SetNormalFontObject("GameFontNormal")
+        button:SetHighlightFontObject("GameFontHighlight")
+        button:HookScript("OnLeave", GoldHeader)
+    end
+    local icon = button.fcui and button.fcui.collapseIcon
+    if icon then
+        -- Only we write this texture, so the cached state is authoritative.
+        local shut = Collapsed(button) and true or false
+        if icon.fcuiShut ~= shut then
+            icon.fcuiShut = shut
+            ns.SetCollapseIcon(icon, shut)
+        end
+        icon:SetVertexColor(1, 1, 1)
+    end
+    GoldHeader(button)
+end
+
+-- 1.x difficulty color; gold when the level is unknown.
+local function TitleColor(button)
+    local level = button.info and button.info.difficultyLevel
+    if not level and button.questID and C_QuestLog and C_QuestLog.GetQuestDifficultyLevel then
+        level = C_QuestLog.GetQuestDifficultyLevel(button.questID)
+    end
+    if level then return ns.QuestLevelColor(level) end
+    return 1, 0.82, 0
+end
+
+local function ColorTitle(button)
+    if not active then return end
+    local r, g, b = TitleColor(button)
+    if button.Text then button.Text:SetTextColor(r, g, b) end
+    if button.TagText then button.TagText:SetTextColor(r, g, b) end
+end
+
+-- Retexture the client's check box regions with the 1.x check.
+local function DressCheckRegion(region, box)
+    if region == box.CheckMark then
+        region:SetTexture(CHECK_MARK)
+    elseif region:GetDrawLayer() == "HIGHLIGHT" then
+        region:SetTexture(CHECK_GLOW)
+        region:SetBlendMode("ADD")
+    else
+        region:SetTexture(CHECK_BOX)
+    end
+    region:SetTexCoord(0, 1, 0, 1)
+end
+
+-- Title hover: the settings list's picked gold (Era's options_list_active, 255 210 0).
+local TITLE_HOVER_R, TITLE_HOVER_G, TITLE_HOVER_B = 1, 0.82, 0
+
+-- 1.x row highlight and check box; storyline and task icons faded.
+local function SkinTitle(button)
+    if ns.Once(button, "questTitle") then
+        if button.StorylineTexture then button.StorylineTexture:SetAlpha(0) end
+        if button.TaskIcon then button.TaskIcon:SetAlpha(0) end
+        if button.HighlightTexture then
+            local hl = button.HighlightTexture
+            ns.SetTex(hl, "questLogHighlight")
+            hl:SetTexCoord(0, 1, 0, 1)
+            hl:SetBlendMode("ADD")
+            hl:SetVertexColor(TITLE_HOVER_R, TITLE_HOVER_G, TITLE_HOVER_B)
+            hl:ClearAllPoints()
+            hl:SetPoint("TOPLEFT", button, "TOPLEFT", 0, -2)
+            hl:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 2)
+        end
+        local box = button.Checkbox
+        if box then ns.EachTexture(box, DressCheckRegion, box) end
+        -- The client restores its own color on leave.
+        button:HookScript("OnLeave", ColorTitle)
+    end
+    ns.StripQuestLevel(button.Text)
+    ColorTitle(button)
+end
+
+local function SkinRows()
+    if not active or not QuestScrollFrame then return end
+    if QuestScrollFrame.headerFramePool then
+        for button in QuestScrollFrame.headerFramePool:EnumerateActive() do SkinHeader(button) end
+    end
+    if QuestScrollFrame.titleFramePool then
+        for button in QuestScrollFrame.titleFramePool:EnumerateActive() do SkinTitle(button) end
+    end
+end
+
+------------------------------------------------------------------ details
+
+-- Ink all quest text; buttons are skipped so reward item names keep their color.
+local InkFrame
+
+local function InkRegion(region)
+    if region:IsObjectType("FontString") then region:SetTextColor(ns.PageInk(INK_R, INK_G, INK_B)) end
+end
+
+local function InkChild(child)
+    if not child:IsObjectType("Button") then InkFrame(child) end
+end
+
+function InkFrame(frame)
+    if not frame then return end
+    ns.EachRegion(frame, InkRegion)
+    ns.EachChild(frame, InkChild)
+end
+
+local function SkinDetails()
+    if not active or not QuestMapFrame then return end
+    local details = QuestMapFrame.DetailsFrame
+    if not details then return end
+    local rewards = details.RewardsFrameContainer and details.RewardsFrameContainer.RewardsFrame
+    if ns.Once(details, "questDetails") then
+        if details.Bg then details.Bg:SetAlpha(0) end
+        -- The client's per-campaign backdrop (retail's Silvermoon sky) would draw over our parchment.
+        ns.Fade(details.SealMaterialBG)
+        ns.FadeTextures(details.BorderFrame)
+        ns.FadeTextures(details.BackFrame)
+        ns.FadeKeys(rewards, REWARD_ART)
+    end
+    if details.ScrollFrame then InkFrame(details.ScrollFrame.Contents) end
+    if rewards then InkFrame(rewards) end
+end
+
+local inkedID, seenAt = nil, 0
+
+-- A new quest, or details shown again after a gap, inks at once; the period catches the client's redraws.
+local function DetailsChanged()
+    local now = GetTime()
+    local reopened = now - seenAt > 0.2
+    seenAt = now
+    return reopened or QuestMapFrame.DetailsFrame.questID ~= inkedID
+end
+
+local function DetailsWatch()
+    inkedID = QuestMapFrame.DetailsFrame.questID
+    SkinDetails()
+end
+
+-- The page's ink follows the theme at once.
+ns.OnToggle(function(key)
+    local details = QuestMapFrame and QuestMapFrame.DetailsFrame
+    if ns.ThemeKey(key) and details and details:IsVisible() then SkinDetails() end
+end)
+
+------------------------------------------------------------------ header band
+
+local backWas   -- the client's point and size for the Back button, for Restore
+
+local function PlaceBack(on)
+    local details = QuestMapFrame.DetailsFrame
+    local back = details and details.BackFrame and details.BackFrame.BackButton
+    if not back then return end
+    if on then
+        backWas = backWas or { { back:GetPoint(1) }, back:GetWidth(), back:GetHeight() }
+        ns.SetPointIf(back, "TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_BACK_BUTTON_X,
+            QUEST_DETAILS_BACK_BUTTON_Y + ns.MapDetailsLift())
+        ns.SetSizeIf(back, QUEST_DETAILS_BACK_BUTTON_WIDTH, QUEST_DETAILS_BACK_BUTTON_HEIGHT)
+    elseif backWas then
+        ns.SetPointOnce(back, unpack(backWas[1]))
+        back:SetSize(backWas[2], backWas[3])
+        backWas = nil
+    end
+end
+
+-- The client's rewards drawer stays pinned over the text's foot; ours hang on the text's end spacer, and the drawer
+-- is only their window, clipped to the text's.
+local function PlaceRewards(on)
+    local details = QuestMapFrame.DetailsFrame
+    local box = details and details.RewardsFrameContainer
+    local rewards = box and box.RewardsFrame
+    local text = details and details.ScrollFrame
+    local spacer = _G.QuestInfoSpacerFrame
+    if not (rewards and text) then return end
+    if on and spacer then
+        ns.SetTwoPointsIf(box, "TOPLEFT", text, "TOPLEFT", 0, 0, "BOTTOMRIGHT", text, "BOTTOMRIGHT", 0, 0)
+        ns.SetPointIf(rewards, "TOPLEFT", spacer, "TOPLEFT", QUEST_REWARDS_X, QUEST_REWARDS_Y)
+    elseif not on then
+        ns.SetPointIf(box, "BOTTOMLEFT", details, "BOTTOMLEFT", CLIENT_DRAWER_X, CLIENT_DRAWER_Y)
+        ns.SetPointIf(rewards, "TOPLEFT", box, "TOPLEFT", 0, 0)
+    end
+end
+
+local mapRock   -- nil: not looked for yet; false: the map has none
+local function FindRock(region)
+    if mapRock or not region:IsObjectType("Texture") then return end
+    local file = region:GetTexture()
+    if file == MAP_ROCK or (type(file) == "string" and file:lower():find("ui%-background%-rock")) then mapRock = region end
+end
+
+local laid = {}   -- the last parchment drop and band coords set, so an unchanged look writes nothing
+
+-- The parchment's top by the scroll bar's; the band above it in the map's rock, cut where the map's own sits.
+local function LayHeader()
+    if not active then return end
+    local details = QuestMapFrame.DetailsFrame
+    local bar = details.ScrollFrame and details.ScrollFrame.ScrollBar
+    local top, left, right = details:GetTop(), details:GetLeft(), details:GetRight()
+    if not (bar and bar:GetTop() and top and left) then return end
+    local scale = details:GetEffectiveScale()
+    local drop = bar:GetTop() * bar:GetEffectiveScale() / scale - top + QUEST_DETAILS_PARCHMENT_TOP
+    ns.SetTwoPointsIf(parchmentTex, "TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_PARCHMENT_LEFT, drop,
+        "BOTTOMRIGHT", details, "BOTTOMRIGHT", QUEST_DETAILS_PARCHMENT_RIGHT, QUEST_DETAILS_PARCHMENT_BOTTOM)
+    ns.SetTwoPointsIf(headerTex, "TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_HEADER_LEFT, QUEST_DETAILS_HEADER_TOP,
+        "BOTTOMRIGHT", details, "TOPRIGHT", QUEST_DETAILS_HEADER_RIGHT, drop)
+    -- Lifted to the details' top (Era's map), the band has no room left.
+    ns.SetShownIf(headerTex, drop < QUEST_DETAILS_HEADER_TOP)
+    PlaceRewards(true)
+    PlaceBack(true)
+    if mapRock == nil then
+        mapRock = false
+        ns.EachRegion(WorldMapFrame, FindRock)
+    end
+    if not (mapRock and mapRock:GetLeft()) then return end
+    -- Band edges in the rock's own units, measured from its top left.
+    local k = scale / mapRock:GetEffectiveScale()
+    local rockLeft, rockTop = mapRock:GetLeft(), mapRock:GetTop()
+    local u0 = ((left + QUEST_DETAILS_HEADER_LEFT) * k - rockLeft) / ROCK_SPAN
+    local u1 = ((right + QUEST_DETAILS_HEADER_RIGHT) * k - rockLeft) / ROCK_SPAN
+    local v0 = (rockTop - (top + QUEST_DETAILS_HEADER_TOP) * k) / ROCK_SPAN
+    local v1 = (rockTop - (top + drop) * k) / ROCK_SPAN
+    if laid[1] == u0 and laid[2] == u1 and laid[3] == v0 and laid[4] == v1 then return end
+    laid[1], laid[2], laid[3], laid[4] = u0, u1, v0, v1
+    headerTex:SetTexCoord(u0, u1, v0, v1)
+end
+
+------------------------------------------------------------------ chrome
+
+-- Search line and quest count wear the input box's bronze trim; drained to silver like the who line.
+local function EachTrim(drain)
+    local scroll = QuestScrollFrame
+    if not scroll then return end
+    ns.DrainInput(scroll.SearchBox, drain)
+    ns.DrainInput(_G.QuestLogCount, drain)
+    if scroll.SettingsDropdown then ns.EachTexture(scroll.SettingsDropdown, drain or ns.DrainBronze) end
+end
+
+local function OldScrollBar(bar, spec)
+    if not (bar and bar.Track) then return end
+    ns.SkinMinimalScrollBar(bar)
+    ns.ScrollTrackArt(bar, spec)
+end
+
+local function DetailsShown()
+    DetailsWatch()
+    LayHeader()
+end
+
+-- The floor's right end: short of the scroll column on the game's frame (its border covers the rest), to the pane's
+-- edge on our classic frames, whose art under the pane showed behind the column and the gear.
+function ns.QuestPaneFloor(era)
+    if not floorTex then return end
+    ns.SetTwoPointsIf(floorTex, "TOPLEFT", QuestMapFrame, "TOPLEFT", QUEST_PANE_BG_LEFT, QUEST_PANE_BG_TOP, "BOTTOMRIGHT",
+        QuestMapFrame, "BOTTOMRIGHT", era and 0 or QUEST_PANE_BG_RIGHT, QUEST_PANE_BG_BOTTOM)
+end
+
+local function Build()
+    if built or not QuestMapFrame then return end
+    built = true
+    local quests = QuestMapFrame.QuestsFrame
+    local scroll = quests and quests.ScrollFrame
+    -- Dark marble floor at the other lists' shade.
+    floorTex = ns.OwnTexture(QuestMapFrame, "floor", "BACKGROUND", -3)
+    ns.TileTex(floorTex, "marbleBg", nil, ns.PANE_SHADE or 0.9)
+    ns.QuestPaneFloor(false)
+    if scroll then
+        if scroll.Background then scroll.Background:SetAlpha(0) end
+        if scroll.Edge then scroll.Edge:SetAlpha(0) end
+        ns.FadeTextures(scroll.BorderFrame)
+    end
+    local details = QuestMapFrame.DetailsFrame
+    -- The old scroll bar on the list and the details; its column follows their height as the map resizes.
+    OldScrollBar(scroll and scroll.ScrollBar, QUEST_SCROLL)
+    OldScrollBar(details and details.ScrollFrame and details.ScrollFrame.ScrollBar, QUEST_SCROLL)
+    if details then
+        parchmentTex = ns.OwnTexture(details, "parchment", "BACKGROUND", -2)
+        -- Parchment is the top-left 300x336 of the 512 sheet; the rest is dark.
+        parchmentTex:SetTexture(ns.TexPath("questParchment"))
+        parchmentTex:SetTexCoord(PARCHMENT_U0, PARCHMENT_U1, PARCHMENT_V0, PARCHMENT_V1)
+        ns.InkPage(parchmentTex)
+        parchmentTex:SetPoint("TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_PARCHMENT_LEFT, QUEST_DETAILS_PARCHMENT_TOP)
+        parchmentTex:SetPoint("BOTTOMRIGHT", details, "BOTTOMRIGHT", QUEST_DETAILS_PARCHMENT_RIGHT, QUEST_DETAILS_PARCHMENT_BOTTOM)
+        headerTex = ns.OwnTexture(details, "header", "BACKGROUND", -2)
+        headerTex:SetTexture(MAP_ROCK, "REPEAT", "REPEAT")
+        -- Watched while shown, never hooked: keeps our code out of the hidden pass the quest log's Share runs.
+        ns.Sched.Attach(details, { name = "questMap.details", every = 0.25, pre = DetailsChanged, fn = DetailsWatch })
+        -- The map resizes under a shown quest: the band is re-cut on each look.
+        ns.Sched.Attach(details, { name = "questMap.header", every = 0.25, fn = LayHeader })
+        -- Each showing is dressed before its first draw, not a beat later (the band was black until the first look).
+        ns.Sched.AfterShow(details, "questMap.shown", DetailsShown)
+    end
+    ns.HookGlobal("QuestLogQuests_Update", SkinRows)
+end
+
+-- The list's bottom shade (the game's gradient): the game sets its alpha on every scroll, so hidden, not faded.
+local function ListShadow() return _G.QuestScrollFrame and _G.QuestScrollFrame.BorderFrame and _G.QuestScrollFrame.BorderFrame.Shadow end
+
+local function Apply()
+    active = true
+    if not QuestMapFrame then ns.MissingPiece("QuestMapFrame") return end
+    Build()
+    if ListShadow() then ListShadow():Hide() end
+    if floorTex then floorTex:Show() end
+    if parchmentTex then parchmentTex:Show() end
+    if headerTex then headerTex:Show() end
+    PlaceBack(true)
+    EachTrim()
+    SkinRows()
+    if QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame:IsShown() then DetailsShown() end
+end
+
+local function Restore()
+    if not active then return end
+    active = false
+    if ListShadow() then ListShadow():Show() end
+    if floorTex then floorTex:Hide() end
+    if parchmentTex then parchmentTex:Hide() end
+    if headerTex then headerTex:Hide() end
+    PlaceBack(false)
+    PlaceRewards(false)
+    EachTrim(ns.UndrainBronze)
+    ns.needsReload = true
+end
+
+ns.RegisterModule("questMapPane", { apply = Apply, restore = Restore })

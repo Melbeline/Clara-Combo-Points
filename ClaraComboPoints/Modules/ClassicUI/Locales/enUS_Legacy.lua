@@ -1,0 +1,34 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+local L = ns.L
+
+-- Legacy/: the classic Legacy window, beside Locales/enUS.lua.
+L["CHAT_LEGACY"] = "  /fcui legacy - open the classic Legacy window"
+L["CHAT_LEGACY_NOT_HERE"] = "The classic Legacy window needs the game's Legacy system, which this game client does not have."
+L["CHAT_LEGACY_NO_GAMEPAD"] = "The classic Legacy window is not available while the gamepad interface is on."
+L["LEGACY_TITLE"] = "Legacy"
+L["LEGACY_PROFESSIONS"] = "Professions"
+L["LEGACY_ADVENTURE"] = "Adventure"
+L["LEGACY_RESOURCEFULNESS"] = "Resourcefulness"
+L["LEGACY_POINTS"] = "Legacy Points: %s"
+L["LEGACY_LOCKED"] = "Complete a Legacy challenge to earn your first Legacy Point and open the Legacy trees."
+L["LEGACY_TREE_TAB"] = "Legacy Tree"
+L["LEGACY_CHALLENGES"] = "Challenges"
+L["LEGACY_SHOW_COMPLETED"] = "Completed"
+L["LEGACY_SHOW_INCOMPLETE"] = "Incomplete"
+L["LEGACY_EARNED"] = "Legacy Points earned: %s / %s"
+L["LEGACY_COMPLETED_ON"] = "Completed %s"
+L["LEGACY_NO_CHALLENGES"] = "No challenges match the filter."
+L["LEGACY_REWARD_TRACK"] = "Reward Track"
+L["LEGACY_MILESTONE"] = "%s Legacy Points"
+L["LEGACY_NEXT_REWARD"] = "Next reward at %s Legacy Points"
+L["LEGACY_ALL_EARNED"] = "Every reward earned"
+L["LEGACY_TRACK_LOCKED"] = "The Legacy rewards show once your account earns its first Legacy Point."
+L["OPT_legacyWindow"] = "Legacy window"
+L["OPT_legacyWindow_TIP"] = "The Legacy trees, challenges and reward track in the old talent window's look, opened by the Legacy button, its minimap icon and key."
+L["OPT_legacyThreePane"] = "Three trees side by side"
+L["OPT_legacyThreePane_TIP"] = "The Legacy window's tree page shows all three trees at once, each as the 1.x talent window shows one. Off is one tree per tab."
+L["UI_LEGACY"] = "Legacy"
+L["CORE_LEGACY_BUTTON_OPENS_THE"] = "The Legacy button opens the game's own Legacy window again after the interface reloads."
+L["CHAT_LEGACY_OFF"] = "The classic Legacy window is off. Turn it on in the options (/fcui), under Character and spells."

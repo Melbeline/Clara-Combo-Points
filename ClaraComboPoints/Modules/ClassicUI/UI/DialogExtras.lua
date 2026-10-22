@@ -1,0 +1,188 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+
+-- Our settings under the client's edit mode dialog for its own systems (swing timers, resource display): a panel
+-- follows the dialog while one of those is picked. Our settings only; the client's are read, never written (a write
+-- from our code taints every edit mode system).
+
+-- FOOT: room under the last row, clear of the panel's border as the game's dialog keeps its own.
+local PANEL_W_PAD, ROW_H, FOOT = 26, 36, 22
+-- A row: its label, then the control to the value's column, which ends PANEL_W_PAD in (the panel takes the dialog's width).
+local LABEL_W, LABEL_GAP, VALUE_W, CONTROL_MIN = 130, 6, 52, 80
+local NOTE_H = 30   -- a note's room: two lines of the small font
+local specs = {}     -- { match(system), title, build(panel), fill(panel) }
+local panels = {}    -- spec -> its panel
+local watching = false
+
+local function Dialog() return _G.EditModeSystemSettingsDialog end
+
+local function Panel(spec)
+    local panel = panels[spec]
+    if panel then return panel end
+    local B = ns.band
+    -- On UIParent, never the dialog: the dialog sizes itself to its children, and one pinned to its width grew it without end.
+    panel = CreateFrame("Frame", nil, UIParent)
+    panel:SetFrameStrata("DIALOG")
+    panel:SetFrameLevel(200)
+    B.PanelBorder(panel)
+    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+    title:SetPoint("TOPLEFT", panel, "TOPLEFT", PANEL_W_PAD, -18)
+    title:SetText(spec.title)
+    panel.title = title
+    panel.rows = 0
+    spec.build(panel)
+    panel:SetHeight(40 + panel.rows * ROW_H + FOOT + (panel.extraH or 0))
+    -- Made hidden: Follow fills a panel as it shows, and a new frame is shown (its first open drew empty sliders).
+    panel:Hide()
+    panels[spec] = panel
+    return panel
+end
+
+-- Sliders and drop downs to this panel's width, as it shows.
+local function FitRows(panel)
+    local width = panel:GetWidth()
+    if not width or width <= 0 then return end
+    local room = math.max(CONTROL_MIN, width - 2 * PANEL_W_PAD - LABEL_W - LABEL_GAP - VALUE_W)
+    for _, slider in ipairs(panel.sliders or ns.EMPTY) do slider:SetWidth(room) end
+    for _, dropdown in ipairs(panel.dropdowns or ns.EMPTY) do dropdown:SetWidth(room + VALUE_W) end
+    for _, note in ipairs(panel.notes or ns.EMPTY) do note:SetWidth(width - 2 * PANEL_W_PAD) end
+end
+
+local function Follow()
+    local dialog = Dialog()
+    local system = dialog and dialog:IsShown() and dialog.attachedToSystem
+    for _, spec in ipairs(specs) do
+        local up = system and spec.match(system)
+        local panel = panels[spec]
+        if up then
+            panel = Panel(spec)
+            ns.SetPointOnce(panel, "TOPLEFT", dialog, "BOTTOMLEFT", 0, 6)
+            panel:SetPoint("TOPRIGHT", dialog, "BOTTOMRIGHT", 0, 6)
+            if not panel:IsShown() then
+                FitRows(panel)
+                spec.fill(panel)
+                panel:Show()
+            end
+        elseif panel and panel:IsShown() then
+            panel:Hide()
+        end
+    end
+end
+
+local function Watch()
+    local dialog = Dialog()
+    if watching or not dialog then return end
+    watching = true
+    -- Watchers on the dialog's border, out of its layout: a child of the dialog itself stretched it to the screen.
+    local host = dialog.Border or dialog
+    ns.Sched.Attach(host, { name = "dialogExtras.follow", every = 0.1, fn = Follow })
+    ns.Sched.OnVisible(host, "dialogExtras.shown", function(shown) if not shown then Follow() end end)
+end
+
+local function RowLabel(panel, label)
+    local text = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+    text:SetPoint("TOPLEFT", panel.title, "BOTTOMLEFT", 0, -14 - panel.rows * ROW_H)
+    text:SetWidth(LABEL_W)
+    text:SetJustifyH("LEFT")
+    text:SetText(label)
+    panel.rows = panel.rows + 1
+    return text
+end
+
+local function Whole(v) return tostring(math.floor(v + 0.5)) end
+
+-- A labelled stepper slider row: init() -> value, low, high, steps; onChange(value); format(value) -> its text.
+-- Returns its fill function and label.
+function ns.DialogExtraSlider(panel, label, init, onChange, format)
+    local B = ns.band
+    local text = RowLabel(panel, label)
+    local slider, formatters = B.StepperSlider(panel, 180, text, LABEL_GAP, format or Whole)
+    if not slider then return function() end, text end
+    panel.sliders = panel.sliders or {}
+    panel.sliders[#panel.sliders + 1] = slider
+    return B.GuardedSlider(slider, init, onChange, { formatters = formatters, owner = panel }), text
+end
+
+-- A labelled drop down row: options { value, text } each; get() -> value; set(value). Returns its fill function.
+function ns.DialogExtraDrop(panel, label, options, get, set)
+    local text = RowLabel(panel, label)
+    local dropdown = ns.NewFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+    dropdown:SetWidth(180)
+    dropdown:SetPoint("LEFT", text, "RIGHT", LABEL_GAP, 0)
+    panel.dropdowns = panel.dropdowns or {}
+    panel.dropdowns[#panel.dropdowns + 1] = dropdown
+    ns.SkinDropdown(dropdown)
+    dropdown:SetupMenu(function(_, root)
+        for _, option in ipairs(options) do
+            root:CreateRadio(option.text, function() return get() == option.value end, function() set(option.value) end)
+        end
+    end)
+    return function() dropdown:GenerateMenu() end
+end
+
+-- A check row as the client's dialog draws one: get() -> on; set(on). Returns its fill function.
+-- A gray note under the rows so far, up to two lines.
+function ns.DialogExtraNote(panel, text)
+    local note = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    note:SetPoint("TOPLEFT", panel.title, "BOTTOMLEFT", 0, -14 - panel.rows * ROW_H)
+    note:SetJustifyH("LEFT")
+    note:SetText(text)
+    panel.notes = panel.notes or {}
+    panel.notes[#panel.notes + 1] = note
+    panel.extraH = (panel.extraH or 0) + NOTE_H
+    return note
+end
+
+function ns.DialogExtraCheck(panel, label, get, set)
+    local check = ns.NewFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    check:SetSize(32, 32)
+    check:SetPoint("TOPLEFT", panel.title, "BOTTOMLEFT", -4, -10 - panel.rows * ROW_H)
+    ns.SkinCheckbox(check)
+    local text = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+    text:SetPoint("LEFT", check, "RIGHT", 6, 0)
+    text:SetText(label)
+    panel.rows = panel.rows + 1
+    check:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
+    return function() check:SetChecked(get() == true) end
+end
+
+-- The client's default for each setting of a system, from the Modern preset, as the dialog shows them.
+function ns.ClientDefaults(frame)
+    local presets = _G.EditModePresetLayoutManager
+    local ok, layouts = pcall(presets and presets.GetCopyOfPresetLayouts, presets)
+    local layout = ok and type(layouts) == "table" and layouts[1]
+    if not (layout and frame and frame.system) then return nil end
+    local map = frame.settingDisplayInfoMap or ns.EMPTY
+    for _, info in ipairs(layout.systems or ns.EMPTY) do
+        if info.system == frame.system and (info.systemIndex == nil or info.systemIndex == frame.systemIndex) then
+            local parts = {}
+            for _, setting in ipairs(info.settings or ns.EMPTY) do
+                local display = map[setting.setting]
+                if display and display.name then
+                    local value = setting.value
+                    if display.options then
+                        for _, option in ipairs(display.options) do
+                            if option.value == value then value = option.text break end
+                        end
+                    elseif display.minValue and display.ConvertValueForDisplay then
+                        local okShown, shown = pcall(display.ConvertValueForDisplay, display, value)
+                        if okShown and type(shown) == "number" then value = math.floor(shown * 100 + 0.5) / 100 end
+                    elseif value == 0 or value == 1 then
+                        value = value == 1 and "on" or "off"
+                    end
+                    parts[#parts + 1] = display.name .. " " .. tostring(value)
+                end
+            end
+            return table.concat(parts, ", ")
+        end
+    end
+end
+
+-- spec: { match(system), title, build(panel), fill(panel) }.
+function ns.DialogExtra(spec)
+    specs[#specs + 1] = spec
+    Watch()
+end
+
+ns.EventFrame("PLAYER_LOGIN", Watch)

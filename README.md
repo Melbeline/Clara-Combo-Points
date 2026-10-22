@@ -11,7 +11,7 @@ Pour **toutes les classes** de WoW Forever : voleur, druide (forme de félin et 
 - **Trois styles** : plat, **Classique** (les barres du jeu dans un fin cadre gris, comme celles du portrait) ou **Infobulle** (bordure des infobulles du jeu).
 - **Mana à consommer** : pendant l'incantation d'un sort, la mana qu'il va coûter est marquée sur la barre de mana.
 - **Objets et imprégnations d'arme** : tout objet qui a un effet « Utiliser » (potions, pierres de soins, bandages, poisons, huiles, pierres à aiguiser…) et les imprégnations du chaman (Arme Croque-roc, Arme Langue de feu, Arme de givre, Arme Furie-des-vents) sur les lignes d'icônes.
-- **Améliorations de l'interface** : BuyEmAll, Leatrix Plus (avec la capture d'écran de Cheese à chaque niveau), NodeSight, WeaponSwingTimer, DynamicCam, DialogKey et XToLevel intégrés, chacun réglable à part (voir plus bas).
+- **Améliorations de l'interface** : BuyEmAll, Leatrix Plus (avec la capture d'écran de Cheese à chaque niveau), NodeSight, WeaponSwingTimer, DynamicCam, DialogKey, XToLevel et ClassicUI Forever intégrés, chacun réglable à part (voir plus bas).
 - **/who par prénom ou nom de famille** : `/who lea` (ou la ligne de recherche de la fenêtre Qui) ne liste plus que les joueurs dont le prénom ou le nom de famille est « Lea », sans tenir compte des majuscules ni des accents (Lea, Léa, Lëa, Anna Lea, Lea-Marie… mais pas Leah ni Aleandra). Le jeu cherche aussi dans les guildes et les zones : quand aucun nom n'est ce mot (`/who hurlevent`, le nom d'une guilde), tous les résultats restent. Une recherche de plusieurs mots ou avec un filtre (`n-`, `g-`, `z-`, `c-`, `r-`, un niveau) n'est pas touchée. Marche avec la liste Qui du jeu comme avec celle de ClassicUI Forever.
 
 Dans la liste des addons du jeu (Échap > AddOns), l'addon se range dans la section **UI**.
@@ -127,7 +127,7 @@ Page **Profils** : chaque onglet de classe a sa propre liste de profils. Un prof
 
 ## Améliorations de l'interface
 
-Les fonctions de sept autres addons, intégrées à Clara Combo Points, **seulement dans WoW Forever** :
+Les fonctions de huit autres addons, intégrées à Clara Combo Points, **seulement dans WoW Forever** :
 
 | Module | Ce qu'il fait | Commande |
 |---|---|---|
@@ -137,11 +137,13 @@ Les fonctions de sept autres addons, intégrées à Clara Combo Points, **seulem
 | **WeaponSwingTimer** | Des barres de temps entre deux coups : main droite et main gauche, celles de ta cible, tirs à distance. Par défaut : seulement la barre de tir, et seulement pour les chasseurs. | `/wst` |
 | **DynamicCam** | Une caméra plus dynamique : zoom, décalage d'épaule, inclinaison et rotation qui changent selon ce que tu fais (combat, monture, ville, donjon…), zoom plus doux, interface masquée quand tu veux. Une case du menu du portrait coupe ou remet ses modifications de caméra en un clic. | `/dc` |
 | **DialogKey** | Une touche (**Espace** par défaut) clique sur le premier bouton d'une fenêtre de dialogue, accepte et rend les quêtes ; les **touches numériques** choisissent les options de dialogue et les récompenses de quête. Rien en combat. | `/dialogkey` (`/dk`) |
+| **ClassicUI Forever** | L'apparence Classic d'origine : la barre aux griffons, les boutons carrés, les cadres d'unités 1.x, les barres d'incantation, la minicarte, les barres de nom, le suivi des quêtes et les fenêtres, chaque partie activable dans ses propres options (sa fenêtre, et sa propre entrée dans les options du jeu). **Désactivé** (la case Intégré de l'onglet Améliorations, ou le bouton Désactiver de sa fenêtre d'options), il rend au rechargement la disposition et les réglages du jeu d'avant : l'interface native de WoW Forever revient. | `/fcui` |
 | **XToLevel** | Combien de monstres, de quêtes, de donjons et de champs de bataille il reste jusqu'au niveau suivant, d'après tes propres moyennes : dans une petite fenêtre (à glisser ; clic droit : ses options), un flux LibDataBroker et les infobulles. | `/xtl` |
 
 - **Onglet Améliorations** de la fenêtre d'options : la liste des modules à gauche ; pour chacun, où il en est, la case **Intégré** (prise en compte au prochain rechargement, avec un bouton pour recharger), ses principaux réglages tant qu'il tourne, et **Toutes ses options**.
-- **Échap > Options > AddOns > Améliorations de l'interface** (à part de Clara Combo Points) : les mêmes cases, et chaque module dans son **propre sous-menu** (BuyEmAll, Leatrix Plus, NodeSight et ses pages Flèche, Symboles, Étincelles, Bêta, DynamicCam, DialogKey, XToLevel et ses pages) ; WeaponSwingTimer a sa **propre entrée**.
+- **Échap > Options > AddOns > Améliorations de l'interface** (à part de Clara Combo Points) : les mêmes cases, et chaque module dans son **propre sous-menu** (BuyEmAll, Leatrix Plus, NodeSight et ses pages Flèche, Symboles, Étincelles, Bêta, DynamicCam, DialogKey, XToLevel et ses pages) ; WeaponSwingTimer et ClassicUI Forever ont leur **propre entrée**.
 - **Si l'addon d'origine est activé**, c'est lui qui tourne, et le module intégré ne fait rien (pas de doublon). Ses réglages sont **copiés** à chaque connexion et déconnexion : le jour où tu le désactives, la version intégrée reprend exactement tes réglages, rien à refaire. WeaponSwingTimer : une session avec l'addon d'origine activé suffit pour copier ses profils.
+- **ClassicUI Forever** : si l'original est activé, c'est lui qui tourne (jamais les deux à la fois), et ses réglages sont copiés comme pour les autres modules. Deux changements dans la version intégrée : l'**anneau de couleur des debuffs** (vert pour un poison…) autour du portrait des membres du groupe est de nouveau sur le portrait (le jeu le plaçait pour son propre portrait, 8 pixels plus haut) ; dans le **menu de la liste Qui** (la flèche de la colonne du milieu), un clic sur **Classe**, **Race** ou **Zone** trie tout de suite la liste (Race et Zone, comme la nouvelle ligne **Guilde**, deviennent aussi la colonne du milieu), leurs listes de filtres s'ouvrent au survol, et le sous-menu Colonne disparaît. Le module pèse environ 85 Mo (ses textures).
 - **DialogKey et XToLevel prennent le relais de leur addon d'origine** : s'il est activé, c'est lui qui tourne pour cette session (jamais les deux à la fois : chacun prendrait les mêmes touches), puis il est **désactivé pour ce personnage** et la version intégrée tourne **dès le prochain rechargement** (l'onglet Améliorations propose de recharger). Ses réglages, et pour XToLevel les données de ce personnage, sont repris à la déconnexion si la version intégrée n'en a pas encore. Si tu désactives le module dans Clara, l'addon d'origine est réactivé pour ce personnage.
 - Les raccourcis clavier de Leatrix Plus et de NodeSight sont dans **Échap > Options > Raccourcis > Améliorations de l'interface**.
 
@@ -181,4 +183,6 @@ Les polices de `Media/Fonts` viennent de Google Fonts, sous licence SIL Open Fon
 - **DialogKey (Numy Edition)** 1.2.62, de Numy (d'après Foxthorn, N01ch et FuriousProgrammer), sous licence GNU GPL v3 (voir `Modules/DialogKey/LICENSE`), avec ses bibliothèques (Ace3, NumyAceEvent-3.0) ; sa vérification de version (LibVersionCheck, qui annonce aux autres joueurs la version utilisée) est retirée.
 - **XToLevel** (XToLevelNG) 12.1.5, d'Atli Þór et Bjarke Istrup Pedersen (voir `Modules/XToLevel/LICENSE.txt`), avec ses bibliothèques (Ace3, LibDataBroker-1.1).
 
-Cheese, DynamicCam, DialogKey et XToLevel sont fournis avec leur fichier de licence ; les autres sont crédités ici à leurs auteurs.
+- **ClassicUI Forever** 0.36.0, de justawower, sous licence **« Tous droits réservés »** (voir `Modules/ClassicUI/LICENSE`) : sans l'accord écrit de son auteur, cette copie modifiée est **à usage personnel seulement** et ne doit être ni publiée ni distribuée (cette branche reste privée et n'est pas fusionnée dans main).
+
+Cheese, DynamicCam, DialogKey, XToLevel et ClassicUI Forever sont fournis avec leur fichier de licence ; les autres sont crédités ici à leurs auteurs.

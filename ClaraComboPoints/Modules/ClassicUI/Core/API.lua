@@ -1,0 +1,239 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+
+-- Public API for other addons (global ClassicUIForeverAPI): whether this addon's version of a window stands in for the
+-- client's right now, opening it the way its own key does, and its parts under stable names. version rises only when a
+-- call changes in a way that breaks callers.
+
+local API = { version = 1 }
+ClassicUIForeverAPI = API
+
+local function Shown(frame) return frame ~= nil and frame:IsShown() end
+
+-- "name:<n>" parts: the n in a number, or nil.
+local function Numbered(part, prefix)
+    local n = type(part) == "string" and part:match("^" .. prefix .. ":(%d+)$")
+    return n and tonumber(n)
+end
+
+-- Windows Open and GetFrame support: open(arg) -> shown now; frame() -> the window, nil until built; parts: name -> field;
+-- part(frame, part) for numbered parts (patterns lists them for Windows).
+local WINDOWS = {
+    guildRoster = {
+        open = function() return ns.OpenGuildRoster() end,
+        frame = function() return ns.guild and ns.guild.panel end,
+        parts = { list = "listBox", info = "info", control = "control", addMember = "add", showOffline = "offline",
+            motd = "motdBox", status = "status" },
+    },
+    questLog = {
+        -- arg: a quest ID to select.
+        open = function(questID)
+            ns.ShowQuestLog(questID)
+            return Shown(ns.QL.Frame())
+        end,
+        frame = function() return ns.QL and ns.QL.Frame() end,
+        parts = { abandon = "abandon", share = "share", close = "close" },
+    },
+    spellBook = {
+        -- arg: "pet" for the pet's book, or "spell:<spellID>" for the tab and page that show that spell (out of a fight).
+        open = function(which)
+            local id = Numbered(which, "spell")
+            if not (id and ns.SpellBookShowSpell(id)) then ns.ShowSpellBookBank(which == "pet") end
+            return Shown(_G.ForeverClassicUISpellBook)
+        end,
+        frame = function() return _G.ForeverClassicUISpellBook end,
+        parts = { search = "Search", prevPage = "PrevPage", nextPage = "NextPage" },
+        -- tab:<n> skill line tabs down the side, bookTab:<n> the foot tabs, spell:<id> the button showing that spell.
+        patterns = { "tab:<n>", "bookTab:<n>", "spell:<spellID>" },
+        part = function(frame, part)
+            local n = Numbered(part, "tab")
+            if n then return frame.SkillTabs[n] end
+            n = Numbered(part, "bookTab")
+            if n then return frame.BookTabs[n] end
+            n = Numbered(part, "spell")
+            if n then return ns.SpellBookButtonFor(n) end
+        end,
+    },
+    talents = {
+        -- arg: a tree tab number, or "talent:<spellID>" for the tab that holds that talent.
+        open = function(tab)
+            local id = Numbered(tab, "talent")
+            if id then return ns.ShowTalentSpell(id) end
+            return ns.ShowTalents(tab)
+        end,
+        frame = function() return _G.ClassicUIForeverTalents end,
+        parts = { learn = "learn", reset = "reset" },
+        -- tab:<n> the tree tabs, talent:<spellID> its button on the tab shown.
+        patterns = { "tab:<n>", "talent:<spellID>" },
+        part = function(frame, part)
+            local n = Numbered(part, "tab")
+            if n then return frame.tabs[n] end
+            n = Numbered(part, "talent")
+            if n then return ns.TalentWindowButtonFor(frame, n) end
+        end,
+    },
+    legacyWindow = {
+        -- arg: a page (rewards, challenges, tree) or its tab number.
+        open = function(page) return ns.ShowLegacy(page) end,
+        frame = function() return _G.ClassicUIForeverLegacy end,
+        parts = { learn = "learn", reset = "reset" },
+        -- tab:<n> the page tabs down the right edge, talent:<spellID> a button on the tree page.
+        patterns = { "tab:<n>", "talent:<spellID>" },
+        part = function(frame, part)
+            local n = Numbered(part, "tab")
+            if n then return ns.LegacyPageTab(n) end
+            n = Numbered(part, "talent")
+            if n then return ns.TalentWindowButtonFor(frame, n) end
+        end,
+    },
+    collectionsWindow = {
+        -- arg: a page (mounts, pets, toys, heirlooms, appearances).
+        open = function(page) return ns.ShowCollections(page) end,
+        frame = function() return _G.ClassicUIForeverCollections end,
+        parts = {},
+        -- tab:<n> the collection tabs down the right edge.
+        patterns = { "tab:<n>" },
+        part = function(_, part)
+            local n = Numbered(part, "tab")
+            if n then return ns.CollectionsPageTab(n) end
+        end,
+    },
+    tradeSkill = {
+        -- arg: "recipe:<recipeID>": picked in the window open now (unfolded, scrolled to). Opening a profession is the
+        -- game's protected call, refused to addons: the player's own click (its spell or button) opens it first.
+        open = function(arg)
+            local id, panel = Numbered(arg, "recipe"), ns.TradeSkillPanel()
+            if not (id and panel and panel:IsShown()) then return false end
+            ns.TradeSkillWant(id)
+            return true
+        end,
+        frame = function() return ns.TradeSkillPanel() end,
+        parts = { create = "create", createAll = "createAll", count = "count", search = "searchBox" },
+        -- recipe:<recipeID> its row, scrolled into view and its header unfolded.
+        patterns = { "recipe:<recipeID>" },
+        part = function(_, part)
+            local id = Numbered(part, "recipe")
+            if id then return ns.TradeSkillRowFor(id) end
+        end,
+    },
+    trainer = {
+        -- No open: a trainer's window opens at the trainer.
+        frame = function() return ns.TrainerPanel() end,
+        parts = { train = "train" },
+        -- service:<index> the row of the game's service index, scrolled into view and its header unfolded.
+        patterns = { "service:<index>" },
+        part = function(_, part)
+            local n = Numbered(part, "service")
+            if n then return ns.TrainerRowFor(n) end
+        end,
+    },
+    professionsBook = {
+        open = function() return ns.OpenProfessionsBook() end,
+        frame = function() return ns.prof and ns.prof.Page and ns.prof.Page() end,
+        parts = {},
+        -- primary:<n> (1-2) and secondary:<n> (1-3) a profession's card; its spell buttons are the game's own.
+        patterns = { "primary:<n>", "secondary:<n>" },
+        part = function(_, part)
+            local n = Numbered(part, "primary")
+            if n then return ns.prof.BookCard("primary", n) end
+            n = Numbered(part, "secondary")
+            if n then return ns.prof.BookCard("secondary", n) end
+        end,
+    },
+    microMenu = {
+        -- No window: a micro button by the game's name (CharacterMicroButton, ...) where it stands now, on the bar or as
+        -- its minimap icon; nil while neither shows.
+        frame = function() return _G.MicroMenu or UIParent end,
+        parts = {},
+        patterns = { "<micro button name>" },
+        part = function(_, part) return ns.MicroButtonNow(part) end,
+    },
+    worldMap = {
+        -- No open: the game's own key and button. The frame: the Era border drawn now, its right edge the art's outer
+        -- edge (the quest pane counted); nil in the game's own look.
+        frame = function() return ns.ClassicMapBorder() end,
+        parts = {},
+    },
+    questWatch = {
+        -- No open: the Era quest watch shows while picked and anything is in it. Room for a block: API.WatchRoom.
+        frame = function() return ns.QuestWatchFrame() end,
+        parts = {},
+    },
+    whoList = {
+        open = function() return ns.OpenWhoList() end,
+        frame = function() return ns.WhoPanel() end,
+        parts = { search = "query", list = "listBox", refresh = "refresh", addFriend = "add", invite = "invite" },
+    },
+}
+
+-- Whether the toggle name's replacement is in force now (a change still owed a reload counts as not made yet).
+function API.IsOn(name)
+    return type(name) == "string" and ns.ModuleInForce(name)
+end
+
+-- Opens this addon's version as its own key does. False when it is not in force, not supported, or can't open now
+-- (a window the client keeps shut in combat opens after it).
+function API.Open(name, arg)
+    local window = WINDOWS[name]
+    if not (window and window.open) or not API.IsOn(name) then return false end
+    local ok, shown = pcall(window.open, arg)
+    return ok and shown == true
+end
+
+-- The window (part nil) or one of its parts; nil when unknown or not built yet.
+function API.GetFrame(name, part)
+    local window = WINDOWS[name]
+    local frame = window and window.frame()
+    if not frame or part == nil then return frame end
+    local field = window.parts[part]
+    if field then return frame[field] end
+    return window.part and window.part(frame, part) or nil
+end
+
+-- The secure buttons that open these windows as their keys do; see API.SecureOpener.
+local OPENERS = { spellBook = "ForeverClassicUISpellBookBind", talents = "ClassicUIForeverTalentsBind",
+    legacyWindow = "ClassicUIForeverLegacyBind", questLog = "ForeverClassicUIQuestLogBind",
+    collectionsWindow = "ClassicUIForeverCollectionsBind" }
+
+-- The global name of the secure button that opens this window as its own key does, or nil. Pressed from another
+-- addon's secure button (a click in the player's name: type "click" with it as clickbutton, or "/click <name>"), it
+-- also closes the game's spell window first where that leaves ours no room, which a plain Open cannot. Toggles.
+function API.SecureOpener(name)
+    local opener = OPENERS[name]
+    if not opener or not API.IsOn(name) or not _G[opener] then return nil end
+    return opener
+end
+
+-- The spell a spellbook page button shows right now (nil once its page turned away, or for any other frame): the stable way
+-- to tell a button from GetFrame("spellBook", "spell:<id>") still shows that spell.
+function API.SpellOnButton(button)
+    return ns.SpellBookButtonSpell(button)
+end
+
+-- Another addon's round button wearing the game's minimap ring (MiniMap-TrackingBorder) where our scan of the map
+-- cannot see it (not a child of the map): our ring, its tint and Hide button borders, as the map's buttons get.
+-- Safe to call again each time the button repaints.
+function API.ThemeMinimapButton(button)
+    if button then ns.ThemeAddonRing(button) end
+end
+
+-- Room in the Era quest watch for another addon's block, above the quests (side "top") or under them ("bottom"), one
+-- block a side: height and width in the watch's scale, height nil gives it back. The block draws itself at
+-- GetFrame("questWatch")'s top left or bottom left; false while the watch is not the pick.
+function API.WatchRoom(side, height, width)
+    return ns.QuestWatchRoom(side, height, width)
+end
+
+-- The windows Open and GetFrame support, each with its part names.
+function API.Windows()
+    local list = {}
+    for name, window in pairs(WINDOWS) do
+        local parts = {}
+        for part in pairs(window.parts) do parts[#parts + 1] = part end
+        for _, pattern in ipairs(window.patterns or {}) do parts[#parts + 1] = pattern end
+        table.sort(parts)
+        list[name] = parts
+    end
+    return list
+end

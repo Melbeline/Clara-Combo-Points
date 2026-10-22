@@ -1,0 +1,146 @@
+local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
+if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
+local ns = ClaraNS.ClassicUIPrivate
+
+-- The row our windows stand in, from plain numbers (UI/Windows.lua gathers them; tools/tests run it alone): the game's
+-- windows stay where the game put them, ours stand past the last in the order opened, a held one where it is.
+
+local lefts, rights = {}, {}   -- blocks laid so far this pass: held ones first, then each placed
+local closed = {}              -- index -> true while left out to make room
+
+-- A game window across nearly the whole screen (the maximized map): nothing stands past it, so it is left out.
+local SCREEN_WIDE = 0.9
+
+-- Past the game's last window, but one it shares a place with or a screen-wide one. A window too big to share the
+-- screen with (Forever's spell window) still counts: the one past it is pulled back to the edge, over it.
+local function GameEnd(s, shares)
+    local x = s.start
+    for _, block in ipairs(s.game) do
+        local right = block[2]
+        if right > x and right - block[1] < s.screen * SCREEN_WIDE and not (shares and shares[block[3]]) then x = right end
+    end
+    return x
+end
+
+local function FirstFree(x, width, n)
+    local moved = true
+    while moved do
+        moved = false
+        for i = 1, n do
+            if x < rights[i] and lefts[i] < x + width then
+                x = rights[i]
+                moved = true
+            end
+        end
+    end
+    return x
+end
+
+-- One pass with the closed ones left out; returns the first placed one that runs off the screen.
+local function Lay(s, out)
+    local n = 0
+    for i, w in ipairs(s.ours) do
+        if w.held and not closed[i] then
+            n = n + 1
+            lefts[n], rights[n] = w.held, w.held + w.width
+        end
+    end
+    local cursor, over = s.start, nil
+    for i, w in ipairs(s.ours) do
+        local x
+        if w.held and not closed[i] then
+            x = w.held
+        elseif not closed[i] then
+            x = math.max(cursor, GameEnd(s, w.shares), w.keep or cursor)
+            -- Whole units, rounded up: a game window's fractional edge (a centering addon's) is never overlapped.
+            x = math.ceil(FirstFree(x, w.width, n) - 0.01)
+            n = n + 1
+            lefts[n], rights[n] = x, x + w.width
+            cursor = x + w.width
+            if not over and x + w.drawn > s.screen then over = i end
+        end
+        out.x[i] = x
+    end
+    return over
+end
+
+-- The oldest placed one standing before the one that ran off: closing it makes room. With a game window opened after all
+-- of ours (gameLast) the one that ran off may close too: the newest window is the game's. None in a stay pass.
+local function Oldest(s, over)
+    if s.stay then return nil end
+    for i = 1, s.gameLast and over or over - 1 do
+        if not closed[i] and not s.ours[i].held and not s.ours[i].locked then return i end
+    end
+end
+
+-- s: start, screen, stay (nothing closes), gameLast, game = { { left, right, name } }, ours = { { width, drawn, held,
+-- locked, shares, keep } } oldest first (locked: shut only in a fight's end). Fills out.x[i] (nil: closing), out.close.
+function ns.SolveWindowRow(s, out)
+    out.x, out.close = out.x or {}, out.close or {}
+    for i in pairs(out.x) do out.x[i] = nil end
+    for i in pairs(out.close) do out.close[i] = nil end
+    for i in pairs(closed) do closed[i] = nil end
+    while true do
+        local over = Lay(s, out)
+        if not over then break end
+        local oldest = Oldest(s, over)
+        if not oldest then
+            -- No room to make: back on the screen, over its neighbor.
+            for i, w in ipairs(s.ours) do
+                local x = out.x[i]
+                if x and not w.held and x + w.drawn > s.screen then out.x[i] = math.max(0, math.floor(s.screen - w.drawn)) end
+            end
+            break
+        end
+        closed[oldest] = true
+        out.close[#out.close + 1] = oldest
+    end
+    return out
+end
+
+-- Past everything in a solved row (the loot window on its own spot).
+function ns.WindowRowEnd(s, out)
+    local finish = GameEnd(s, nil)
+    for i, w in ipairs(s.ours) do
+        local x = out.x[i]
+        if x and x + w.width > finish then finish = x + w.width end
+    end
+    return finish
+end
+
+-- In a fight, the game's side windows as its manager lays them (UpdateUIPanelPositions): by pushable, then opening; each
+-- its spacing and x offset past the last, round fixed ones ({ left, right, gap }). members: { width, xoff, pushable,
+-- opened, shift, drawn } (the sheet: Era's step left, what the next stands past). Fills out[i], x before the shift.
+local byOrder, members = {}, nil
+local function Before(a, b)
+    local ma, mb = members[a], members[b]
+    if ma.pushable ~= mb.pushable then return ma.pushable < mb.pushable end
+    return ma.opened < mb.opened
+end
+
+function ns.LayFightWindows(f, out)
+    members = f.members
+    for i = 1, #members do byOrder[i] = i end
+    for i = #members + 1, #byOrder do byOrder[i] = nil end
+    table.sort(byOrder, Before)
+    local cursor
+    for _, i in ipairs(byOrder) do
+        local m = members[i]
+        local shift, span = m.shift or 0, m.drawn or m.width
+        local x = (cursor and cursor + f.gap or f.start) + m.xoff
+        local moved = true
+        while moved do
+            moved = false
+            for _, block in ipairs(f.fixed) do
+                if x + shift < block[2] and block[1] < x + shift + span then
+                    x, moved = block[2] + (block[3] or f.gap) - shift, true
+                end
+            end
+        end
+        if x + shift + span > f.screen then x = math.max(0, math.floor(f.screen - span)) - shift end
+        out[i] = x
+        cursor = x + shift + span
+    end
+    for i = #members + 1, #out do out[i] = nil end
+    return out
+end
