@@ -29,6 +29,7 @@ Moan.lua
 Options.lua
 SettingsPage.lua
 QoL.lua
+Modules\BuyEmAll\BuyEmAll.lua
 Modules\LeatrixPlus\Bootstrap.lua
 Modules\LeatrixPlus\Leatrix_Plus_Library.lua
 Modules\LeatrixPlus\Leatrix_Plus_Locale.lua

@@ -1789,6 +1789,7 @@ local function InitDB()
     end
   end
   if sv.quietLogin ~= false then sv.quietLogin = nil end -- (on unless turned off: QuietLogin.lua)
+  if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
   -- the interface improvements turned off (QoL.lua): only "false" is kept
   if type(sv.qol) == "table" then
     for key, v in pairs(sv.qol) do if v ~= false or type(key) ~= "string" then sv.qol[key] = nil end end
