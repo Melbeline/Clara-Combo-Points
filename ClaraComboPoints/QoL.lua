@@ -77,6 +77,12 @@ function ns:SetQolOpener(key, fn) openers[key] = fn end
 function ns:OpenQol(key)
   if openers[key] then return openers[key]() end
 end
+function ns:CanOpenQol(key) return openers[key] ~= nil end
+
+-- A module's main switches, on its page of the options window's Improvements tab:
+-- { { label = locale key, get = function, set = function(on) }, ... }
+ns.qolSwitches = {}
+function ns:SetQolSwitches(key, list) self.qolSwitches[key] = list end
 
 ---------------------------------------------------------------------------
 -- "Interface improvements" in the game's options: the modules, where each stands, a box to
@@ -90,7 +96,7 @@ local refreshers = {}
 
 function ns:RefreshQol()
   for _, fn in ipairs(refreshers) do fn() end
-  if self.RefreshQolTab then self:RefreshQolTab() end -- (the options window's tab)
+  if self.RefreshOptions then self:RefreshOptions() end -- (the options window's Improvements tab)
 end
 
 -- What a module's state says, in a line.

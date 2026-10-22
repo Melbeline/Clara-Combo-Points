@@ -2161,7 +2161,7 @@ local function IconsPage(p, icons, OnRefresh)
   ghost = DragGhost(p)
   catalog = Catalog(p)
   OnRefresh(function()
-    catalog:Sync(page == ICONS_PAGE)
+    catalog:Sync(page == ICONS_PAGE and not p.qolActive)
     catalogBtn:SetActive(catalog:IsShown())
   end)
 end
@@ -3217,6 +3217,97 @@ local function PortraitControls(p, portrait)
   return specMenu
 end
 
+---------------------------------------------------------------------------
+-- The Improvements tab: the interface improvements built in (QoL.lua), one page each, listed
+-- on the left like the pages of a class: where it stands, a box to turn it on or off (from the
+-- next reload), its main switches, and a button to its full options.
+---------------------------------------------------------------------------
+-- its name on its tab, in gold (the class tabs: in their class's colour)
+function ns.QolTabLabel()
+  return ("|cff%02x%02x%02x%s|r"):format(floor(GOLD_R * 255 + .5), floor(GOLD_G * 255 + .5), floor(GOLD_B * 255 + .5),
+    L.QOL_TAB)
+end
+
+function ns.BuildQolView(p, OnRefresh)
+  local view = CreateFrame("Frame", nil, p)
+  view:SetPoint("TOPLEFT", 12, NAV_TOP)
+  view:SetPoint("BOTTOMRIGHT", -12, 40)
+  view:Hide()
+  local list = Box(view)
+  list:SetPoint("TOPLEFT")
+  list:SetPoint("BOTTOMLEFT")
+  list:SetWidth(NAV_W - 16)
+  local shown = 1
+  local buttons, sheets = {}, {}
+  for i, m in ipairs(ns.QOL_MODULES) do
+    local b = NavButton(list, i, "QOL_NAV_" .. m.key:upper(), "QOL_NAVDESC_" .. m.key:upper(), function()
+      shown = i
+      p:Refresh()
+    end)
+    b.page = nil -- (not one of a class's pages)
+    b:SetPoint("TOPLEFT", list, "TOPLEFT", 4, -4 - (i - 1) * NAV_ROW_H)
+    buttons[i] = b
+    -- its page
+    local sheet = CreateFrame("Frame", nil, view)
+    sheet:SetPoint("TOPLEFT", list, "TOPRIGHT", 14, 0)
+    sheet:SetPoint("BOTTOMRIGHT")
+    sheet.back = CreateFrame("Frame", nil, sheet) -- its group box, under its widgets
+    sheet.back:SetAllPoints()
+    sheet.back:SetFrameLevel(sheet:GetFrameLevel())
+    sheet:SetFrameLevel(sheet.back:GetFrameLevel() + 4)
+    sheets[i] = sheet
+    local W = COL_W + 120
+    local box = Section(sheet, nil, LEFT, -8, W)
+    box.title:SetText(m.name)
+    local status = Wrapped(sheet, "", W)
+    status:SetPoint("TOPLEFT", LEFT, -32)
+    local about = Wrapped(sheet, Tr("QOL_ABOUT_" .. m.key:upper()), W)
+    about:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -8)
+    local on = Check(sheet, Tr("QOL_BUILT_IN"), function(v) ns:SetQolEnabled(m.key, v) end)
+    on:SetPoint("TOPLEFT", about, "BOTTOMLEFT", 2, -12)
+    local open = Button(sheet, Tr("QOL_OPEN_FULL"), 220, 22, function() ns:OpenQol(m.key) end)
+    open:SetPoint("TOPLEFT", on, "BOTTOMLEFT", -2, -12)
+    local reload = Button(sheet, Tr("RELOAD_UI"), 160, 22, function()
+      if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+    end)
+    reload:SetPoint("LEFT", open, "RIGHT", 8, 0)
+    -- its main switches (the module's own settings, set by the module: ns:SetQolSwitches)
+    local switches = {}
+    for n, sw in ipairs(ns.qolSwitches and ns.qolSwitches[m.key] or {}) do
+      local c = Check(sheet, Tr(sw.label), function(v) sw.set(v) p:Refresh() end)
+      c:SetPoint("TOPLEFT", open, "BOTTOMLEFT", 2, -16 - (n - 1) * 24)
+      switches[n] = { check = c, sw = sw }
+    end
+    OnRefresh(function()
+      if not p.qolActive then return end
+      local state = ns:QolState(m.key)
+      status:SetText(ns:QolStatusText(m))
+      on:Set(ns:QolEnabled(m.key))
+      on.check:SetEnabled(state ~= "unavailable")
+      open:SetEnabled((state == "on" or state == "standalone") and ns:CanOpenQol(m.key))
+      local pending = (state == "on") ~= ns:QolEnabled(m.key) and state ~= "standalone" and state ~= "unavailable"
+      reload:SetShown(pending)
+      for _, s in ipairs(switches) do
+        s.check:SetShown(state == "on")
+        if state == "on" then s.check:Set(s.sw.get()) end
+      end
+      -- the box down to the lowest widget: the buttons, or the last switch shown
+      local lowest = -32 - (status:GetStringHeight() or 14) - 8 - (about:GetStringHeight() or 14) - 12 - 14 - 12 - 22
+      if #switches > 0 and state == "on" then lowest = lowest - 16 - (#switches - 1) * 24 - 14 end
+      box:Fit(lowest)
+    end)
+  end
+  OnRefresh(function()
+    view:SetShown(p.qolActive == true)
+    for i, b in ipairs(buttons) do
+      b:SetActive(i == shown)
+      sheets[i]:SetShown(i == shown)
+    end
+  end)
+  p.qolView = view
+  return view
+end
+
 local function Build()
   relabels = {}
   local p = CreateFrame("Frame", "ClaraComboPointsOptions", UIParent, "PortraitFrameTemplate")
@@ -3260,6 +3351,7 @@ local function Build()
         L["TAB_" .. class])
     end, function()
       ns:EndTyping() -- (a number being typed belongs to the tab it was typed on)
+      p.qolActive = nil
       editing = class
       specMenu:Hide()
       ClosePicker()
@@ -3281,6 +3373,22 @@ local function Build()
     t:HookScript("OnEvent", Keep)
     tabs[i] = t
   end
+  -- last, the Improvements tab (the interface improvements, for every class)
+  local qolTab = Tab(p, ns.QolTabLabel, function()
+    ns:EndTyping()
+    p.qolActive = true
+    specMenu:Hide()
+    ClosePicker()
+    status:SetText("")
+    p:Refresh()
+  end)
+  qolTab:SetPoint("LEFT", tabs[#tabs], "RIGHT", 4, 0)
+  qolTab.isQol = true
+  local function KeepQol(self) if self.fixedWidth then PanelTemplates_TabResize(self, 0, self.fixedWidth) end end
+  qolTab:HookScript("OnShow", KeepQol)
+  qolTab:HookScript("OnEvent", KeepQol)
+  tabs[#tabs + 1] = qolTab
+  p.qolTab = qolTab
   -- all as wide as the widest if the row still fits; else each at its own width; if even that
   -- is too wide (a long language, a narrow window), all narrowed alike (the game's tab shortens
   -- its text)
@@ -3444,17 +3552,21 @@ local function Build()
   OnRefresh(function() opacity:Set(floor(ns.sv.window.alpha * 100 + .5)) end)
   p.grip = SizeGrip(p, WindowTarget)
   OnRefresh(function()
-    for _, t in ipairs(tabs) do t:SetActive(t.class == editing) end
+    for _, t in ipairs(tabs) do t:SetActive((t.isQol and p.qolActive) or (not p.qolActive and t.class == editing)) end
     for _, f in ipairs(flags) do f:SetActive(f.lang == ns.lang) end
     if portrait then portrait:SetTexture(PortraitIcon(editing)) end
   end)
   OnRefresh(function()
+    local classTab = not p.qolActive -- (the Improvements tab has its own pages)
+    nav:SetShown(classTab)
+    body:SetShown(classTab)
     for i, content in ipairs(pages) do
-      content:SetShown(i == page)
-      content.back:SetShown(i == page)
+      content:SetShown(classTab and i == page)
+      content.back:SetShown(classTab and i == page)
     end
     for _, b in ipairs(navButtons) do b:SetActive(b.page == page) end
   end)
+  ns.BuildQolView(p, OnRefresh)
 
   GeneralPage(p, pages[1], OnRefresh)
   BarsPage(p, pages[2], OnRefresh)
@@ -3527,6 +3639,7 @@ local function Build()
     PlaceWindow()
     self:SetAlpha(ns.sv.window.alpha)
     editing = ns.homeClass or "ROGUE"
+    self.qolActive = nil
     resetAll.armed = nil
     status:SetText("")
     self.ClearProfileMessages()

@@ -66,6 +66,53 @@ elseif ns:QolState("wst") == "standalone" then
   end)
 end
 
+-- Its main switches, on its page of Clara's options window (Improvements tab): the settings of
+-- this character's profile, as the module's own panel sets them
+if E.env then
+  local env = E.env
+  local function Settings(section) return env["character_" .. section .. "_settings"] end
+  local function Update(section)
+    local part = E.data[section]
+    if part and part.UpdateVisualsOnSettingsChange then part.UpdateVisualsOnSettingsChange() end
+  end
+  local function Switch(label, section, key, default)
+    return {
+      label = label,
+      get = function()
+        local t = Settings(section)
+        if not t then return false end
+        if t[key] == nil then return default end
+        return t[key] and true or false
+      end,
+      set = function(on)
+        local t = Settings(section)
+        if not t then return end
+        t[key] = on and true or false
+        Update(section)
+      end,
+    }
+  end
+  local LOCKED = { "player", "target", "hunter", "range", "castbar" }
+  ns:SetQolSwitches("wst", {
+    Switch("WST_SW_HUNTER", "hunter", "enabled", false),
+    Switch("WST_SW_HUNTERS_ONLY", "hunter", "hunters_only", true),
+    Switch("WST_SW_PLAYER", "player", "enabled", false),
+    Switch("WST_SW_TARGET", "target", "enabled", false),
+    {
+      label = "WST_SW_LOCKED",
+      get = function() local t = Settings("player"); return not t or t.is_locked ~= false end,
+      set = function(on) -- (as its panel's lock box: every bar)
+        for _, section in ipairs(LOCKED) do
+          local t = Settings(section)
+          if t then t.is_locked = on and true or false end
+          local part = E.data[section]
+          if part and part.frame then part.frame:EnableMouse(not on) end
+        end
+      end,
+    },
+  })
+end
+
 -- Its options: /wst, of whichever copy runs
 ns:SetQolOpener("wst", function()
   if SlashCmdList and SlashCmdList.WEAPONSWINGTIMER_CONFIG then SlashCmdList.WEAPONSWINGTIMER_CONFIG("") end
