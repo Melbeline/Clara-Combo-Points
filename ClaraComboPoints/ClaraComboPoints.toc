@@ -5,9 +5,9 @@
 ## Notes-deDE: Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen (WoW Forever). /clara, /cl, /ccp oder /cp
 ## Author: Melbeline
 ## Version: 1.6.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -36,6 +36,31 @@ Modules\NodeSight\Sparkles.lua
 Modules\NodeSight\FarSparkles.lua
 Modules\NodeSight\WhatsNew.lua
 Modules\NodeSight\Settings.lua
+Modules\DynamicCam\Bootstrap.lua
+Modules\DynamicCam\embeds.xml
+Modules\DynamicCam\UiHideModule.lua
+Modules\DynamicCam\Core.lua
+Modules\DynamicCam\Ui\Window.lua
+Modules\DynamicCam\MouseZoom.lua
+Modules\DynamicCam\SituationManager.lua
+Modules\DynamicCam\ZoomBasedSettings.lua
+Modules\DynamicCam\ZoomBasedEditor.lua
+Modules\DynamicCam\DefaultSettings.lua
+Modules\DynamicCam\Sharing.lua
+Modules\DynamicCam\Presets.lua
+Modules\DynamicCam\Options\Helpers.lua
+Modules\DynamicCam\Options\ControlFactories.lua
+Modules\DynamicCam\Options\Widgets.lua
+Modules\DynamicCam\Options\CvarMonitor.lua
+Modules\DynamicCam\Options\DetachFrame.lua
+Modules\DynamicCam\Options.lua
+Modules\DynamicCam\Ui\MainFrame.lua
+Modules\DynamicCam\Ui\Descriptor.lua
+Modules\DynamicCam\Ui\ActionsDescriptor.lua
+Modules\DynamicCam\Ui\Controls.lua
+Modules\DynamicCam\Ui\SettingsPage.lua
+Modules\DynamicCam\Ui\SituationsPage.lua
+Modules\DynamicCam\Glue.lua
 Modules\LeatrixPlus\Bootstrap.lua
 Modules\LeatrixPlus\Leatrix_Plus_Library.lua
 Modules\LeatrixPlus\Leatrix_Plus_Locale.lua

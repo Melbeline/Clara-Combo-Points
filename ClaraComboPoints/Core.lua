@@ -1790,6 +1790,7 @@ local function InitDB()
   end
   if sv.quietLogin ~= false then sv.quietLogin = nil end -- (on unless turned off: QuietLogin.lua)
   if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
+  if sv.cameraOff ~= true then sv.cameraOff = nil end -- (DynamicCam's camera turned off: Modules/DynamicCam/Glue.lua)
   -- the interface improvements turned off (QoL.lua): only "false" is kept
   if type(sv.qol) == "table" then
     for key, v in pairs(sv.qol) do if v ~= false or type(key) ~= "string" then sv.qol[key] = nil end end
@@ -2250,9 +2251,13 @@ local function AddMenuEntries(_, root)
   if menu.line ~= false and ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame
     and MenuUtil.CreateDivider and MenuUtil.CreateTitle and MenuUtil.CreateCheckbox then
     local section = { MenuUtil.CreateDivider(), MenuUtil.CreateTitle("Clara Combo Points"), MenuLineDescription() }
-    if MeterSetting() ~= nil then -- last: the game's damage meter
+    if MeterSetting() ~= nil then -- the game's damage meter
       section[#section + 1] = MenuUtil.CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
         function() ns:SetDamageMeterShown(not ns:DamageMeterShown()) end)
+    end
+    if ns.CameraAvailable and ns:CameraAvailable() then -- DynamicCam's camera (built in or standalone)
+      section[#section + 1] = MenuUtil.CreateCheckbox(L.MENU_CAMERA, function() return ns:CameraOn() end,
+        function() ns:SetCameraOn(not ns:CameraOn()) end)
     end
     local at, previous
     local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER

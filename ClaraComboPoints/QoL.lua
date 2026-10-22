@@ -16,6 +16,7 @@ ns.QOL_MODULES = {
   { key = "leatrix", name = "Leatrix Plus", standalone = "Leatrix_Plus" },
   { key = "nodesight", name = "NodeSight", standalone = "NodeSight" },
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
+  { key = "dynamiccam", name = "DynamicCam", standalone = "DynamicCam" },
 }
 
 -- WoW Forever builds are 160xx (the modules' own code is for them; the retail builds Clara's
