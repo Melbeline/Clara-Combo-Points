@@ -2227,7 +2227,9 @@ function ns:SetDamageMeterShown(on)
 end
 
 -- What this addon puts in the portrait's menu, each part turned off in the game's options
--- (Esc > Options > AddOns): "Reload UI" just above Edit Mode, and its own section at the end.
+-- (Esc > Options > AddOns): "Reload UI" just above Edit Mode, and its own section just above the
+-- game's "Other Options" (which stays last, Leave Party at the very bottom; no such part: at the
+-- end).
 local function AddMenuEntries(_, root)
   local menu = ns.sv and ns.sv.menu or {}
   if menu.reload ~= false then
@@ -2245,13 +2247,24 @@ local function AddMenuEntries(_, root)
     end
   end
   -- the section: the classes the HUD is for, in clients with the game's slider
-  if menu.line ~= false and ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame then
-    root:CreateDivider()
-    root:CreateTitle("Clara Combo Points")
-    root:Insert(MenuLineDescription())
+  if menu.line ~= false and ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame
+    and MenuUtil.CreateDivider and MenuUtil.CreateTitle and MenuUtil.CreateCheckbox then
+    local section = { MenuUtil.CreateDivider(), MenuUtil.CreateTitle("Clara Combo Points"), MenuLineDescription() }
     if MeterSetting() ~= nil then -- last: the game's damage meter
-      root:CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
+      section[#section + 1] = MenuUtil.CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
         function() ns:SetDamageMeterShown(not ns:DamageMeterShown()) end)
+    end
+    local at, previous
+    local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER
+    for index, description in root:EnumerateElementDescriptions() do
+      if other and MenuUtil.GetElementText(description) == other then
+        at = previous and MenuUtil.GetElementText(previous) == nil and index - 1 or index -- (its divider first)
+        break
+      end
+      previous = description
+    end
+    for i, description in ipairs(section) do
+      if at then root:Insert(description, at + i - 1) else root:Insert(description) end
     end
   end
 end
