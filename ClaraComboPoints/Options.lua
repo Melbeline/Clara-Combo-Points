@@ -3228,7 +3228,8 @@ function ns.BuildQolView(p, OnRefresh)
       on:Set(ns:QolEnabled(m.key))
       on.check:SetEnabled(state ~= "unavailable")
       open:SetEnabled((state == "on" or state == "standalone") and ns:CanOpenQol(m.key))
-      local pending = (state == "on") ~= ns:QolEnabled(m.key) and state ~= "standalone" and state ~= "unavailable"
+      local pending = ((state == "on") ~= ns:QolEnabled(m.key) and state ~= "standalone" and state ~= "unavailable")
+        or ns:QolTakesOver(m.key) -- (its own addon runs this session: the built-in one from the next reload)
       reload:SetShown(pending)
       for _, s in ipairs(switches) do
         s.check:SetShown(state == "on")

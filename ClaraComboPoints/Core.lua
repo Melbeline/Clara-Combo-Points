@@ -1808,6 +1808,20 @@ local function InitDB()
   else
     sv.qol = nil
   end
+  -- the modules' own addons turned off for a character when the module took over (QoL.lua)
+  if type(sv.qolTookOver) == "table" then
+    for key, chars in pairs(sv.qolTookOver) do
+      if type(key) ~= "string" or type(chars) ~= "table" then
+        sv.qolTookOver[key] = nil
+      else
+        for who, v in pairs(chars) do if type(who) ~= "string" or v ~= true then chars[who] = nil end end
+        if next(chars) == nil then sv.qolTookOver[key] = nil end
+      end
+    end
+    if next(sv.qolTookOver) == nil then sv.qolTookOver = nil end
+  else
+    sv.qolTookOver = nil
+  end
   CleanWindow(sv)
   CleanCatalog(sv)
   CleanPortraits(sv)

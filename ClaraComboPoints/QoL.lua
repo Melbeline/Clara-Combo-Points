@@ -1,22 +1,28 @@
 -- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
--- Leatrix Plus (with Cheese's level-up screenshot as one of its options) and NodeSight sit
--- under "Interface improvements" in the game's options (Esc > Options > AddOns), apart from
--- Clara Combo Points; WeaponSwingTimer has its own entry there. Each module runs only in WoW
--- Forever, only when its own addon is not enabled (that one runs instead, and its settings are
--- carried over for the day it is turned off), and only if not turned off here.
+-- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
+-- DialogKey and XToLevel sit under "Interface improvements" in the game's options (Esc > Options
+-- > AddOns), apart from Clara Combo Points; WeaponSwingTimer has its own entry there. Each module
+-- runs only in WoW Forever, and only if not turned off here. When its own addon is enabled, that
+-- one runs instead (its settings are carried over for the day it is turned off); DialogKey and
+-- XToLevel take over from theirs: it runs for that session, then it is turned off for the
+-- character, so that the built-in one runs from the next reload (and it is turned back on if the
+-- module is turned off here).
 -- Saved variables load before the files here (## LoadSavedVariablesFirst), so each module
 -- knows at once whether it runs.
 
 local ADDON, ns = ...
 local L = ns.L
 
--- The modules, in the order they are listed. standalone: the addon it comes from.
+-- The modules, in the order they are listed. standalone: the addon it comes from; takeOver: the
+-- built-in one runs instead of it (from the next reload: it is turned off for the character).
 ns.QOL_MODULES = {
   { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic" },
   { key = "leatrix", name = "Leatrix Plus", standalone = "Leatrix_Plus" },
   { key = "nodesight", name = "NodeSight", standalone = "NodeSight" },
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
   { key = "dynamiccam", name = "DynamicCam", standalone = "DynamicCam" },
+  { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
+  { key = "xtolevel", name = "XToLevel", standalone = "XToLevel", takeOver = true },
 }
 
 -- WoW Forever builds are 160xx (the modules' own code is for them; the retail builds Clara's
@@ -63,12 +69,69 @@ end
 function ns:QolState(key) return state[key] end
 function ns:QolRuns(key) return state[key] == "on" end
 
--- Turned on or off: from the next session (a module cannot be loaded or unloaded midway).
+local modules = {}
+for _, m in ipairs(ns.QOL_MODULES) do modules[m.key] = m end
+
+-- Its own addon runs this session, and the built-in one takes over from the next reload?
+function ns:QolTakesOver(key)
+  return modules[key].takeOver == true and state[key] == "standalone" and Wanted(key)
+end
+
+-- A module's own addon turned off (or back on) for this character, from the next reload; the
+-- ones turned off here are kept (sv.qolTookOver[key][character]), to be turned back on.
+local function Me()
+  local name = UnitName and UnitName("player")
+  return name, name and (name .. "-" .. tostring(GetRealmName and GetRealmName() or ""))
+end
+local function TookOver(key)
+  local _, me = Me()
+  local list = ns.sv and ns.sv.qolTookOver and ns.sv.qolTookOver[key]
+  return me ~= nil and list ~= nil and list[me] == true
+end
+local function StandaloneOn(m, on)
+  local A, name, me = C_AddOns, Me()
+  if not (A and A.EnableAddOn and A.DisableAddOn and name and ns.sv) then return end
+  if on then
+    if not TookOver(m.key) then return end -- (turned off by hand: left so)
+    A.EnableAddOn(m.standalone, name)
+    ns.sv.qolTookOver[m.key][me] = nil
+    if next(ns.sv.qolTookOver[m.key]) == nil then ns.sv.qolTookOver[m.key] = nil end
+    if next(ns.sv.qolTookOver) == nil then ns.sv.qolTookOver = nil end
+  else
+    A.DisableAddOn(m.standalone, name)
+    ns.sv.qolTookOver = ns.sv.qolTookOver or {}
+    ns.sv.qolTookOver[m.key] = ns.sv.qolTookOver[m.key] or {}
+    ns.sv.qolTookOver[m.key][me] = true
+  end
+  if A.SaveAddOns then A.SaveAddOns() end
+end
+
+-- At login: the own addons that run this session are turned off for the next ones.
+local takeOver = CreateFrame("Frame")
+takeOver:RegisterEvent("PLAYER_LOGIN")
+takeOver:SetScript("OnEvent", function(self)
+  self:UnregisterEvent("PLAYER_LOGIN")
+  for _, m in ipairs(ns.QOL_MODULES) do
+    if ns:QolTakesOver(m.key) then StandaloneOn(m, false) end
+  end
+end)
+
+-- Turned on or off: from the next session (a module cannot be loaded or unloaded midway). A
+-- module that takes over: its own addon turned off with it on (while that one runs), back on
+-- with it off.
 function ns:QolEnabled(key) return not (self.sv and self.sv.qol and self.sv.qol[key] == false) end
 function ns:SetQolEnabled(key, on)
   self.sv.qol = self.sv.qol or {}
   if on then self.sv.qol[key] = nil else self.sv.qol[key] = false end
   if next(self.sv.qol) == nil then self.sv.qol = nil end
+  local m = modules[key]
+  if m.takeOver and state[key] ~= "unavailable" then
+    if not on then
+      StandaloneOn(m, true)
+    elseif state[key] == "standalone" then
+      StandaloneOn(m, false)
+    end
+  end
   self:RefreshQol()
 end
 
@@ -105,6 +168,7 @@ function ns:QolStatusText(m)
   local now = state[m.key]
   local wanted = self:QolEnabled(m.key)
   if now == "unavailable" then return L.QOL_UNAVAILABLE end
+  if now == "standalone" and wanted and m.takeOver then return L.QOL_TAKEOVER:format(m.name, m.name) end
   if now == "standalone" then return L.QOL_STANDALONE:format(m.name) end
   if now == "on" and not wanted then return L.QOL_OFF_NEXT end
   if now == "off" and wanted then return L.QOL_ON_NEXT end
