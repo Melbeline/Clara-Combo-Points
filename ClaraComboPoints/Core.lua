@@ -1223,14 +1223,30 @@ function ns:ResetPosition()
   self:ApplyPosition()
 end
 
+-- One lock: unlocked, the bar moves (the one shown) and its icon rows are edited on it (every
+-- class's icons); locked again, every class's bar and icons are.
 function ns:SetLocked(locked)
-  self.db.locked = locked and true or false
+  locked = locked and true or false
+  self.db.locked = locked
+  for _, profile in pairs(self.sv.profiles) do
+    profile.iconsLocked = locked
+    if locked then profile.locked = true end
+  end
+  self:ApplyLock()
+end
+ns.SetIconsLocked = ns.SetLocked
+function ns:LockAll() self:SetLocked(true) end
+
+-- The lock of the profile shown, on the HUD and in the options.
+function ns:ApplyLock()
   hud:EnableMouse(not self.db.locked)
   mover:SetShown(not self.db.locked)
   self:UpdateVisibility()
+  self:LayoutIcons()
   self:ApplyFade()
   self:RefreshOptions()
   self:RefreshSettingsPage()
+  self:RefreshMenuLine()
 end
 
 -- A drag belongs to the profile it started in (the options can switch profile mid-drag).
@@ -1366,7 +1382,7 @@ function ns:ApplyAll()
   self:ApplyFont()
   self:UpdatePowerMode() -- colours and values too
   self:ApplyAlpha()
-  self:SetLocked(self.db.locked)
+  self:ApplyLock()
 end
 
 -- Out-of-combat fade (General > Opacity) back to its defaults (off, 20 % / 20 %).
@@ -1420,13 +1436,6 @@ function ns:ResetIcons()
   self:RefreshOptions()
 end
 
--- Every class's bar and icons locked (the ones shown, and the others for when they are shown).
-function ns:LockAll()
-  for _, profile in pairs(self.sv.profiles) do profile.locked, profile.iconsLocked = true, true end
-  self:SetIconsLocked(true)
-  self:SetLocked(true)
-end
-
 function ns:AllLocked()
   for _, profile in pairs(self.sv.profiles) do
     if not profile.locked or not profile.iconsLocked then return false end
@@ -1434,18 +1443,6 @@ function ns:AllLocked()
   return true
 end
 
--- Icons unlocked: every row shows on the HUD (the empty ones too) to drop spells from the
--- spellbook on, move icons around, or drag them off to remove them (Tracker.lua).
-function ns:SetIconsLocked(locked)
-  -- one state for every class: unlocking on one tab unlocks them all
-  for _, profile in pairs(self.sv.profiles) do profile.iconsLocked = locked and true or false end
-  self:UpdateVisibility()
-  self:LayoutIcons()
-  self:ApplyFade()
-  self:RefreshOptions()
-  self:RefreshSettingsPage()
-  self:RefreshMenuLine()
-end
 
 -- The options window's pages: General, Bars, Icons, Visibility, Profiles (Options.lua).
 ns.PAGE_COUNT = 5
@@ -1512,6 +1509,7 @@ function ns:SetActiveProfile(class)
     hud:StopMovingOrSizing()
     hud.dragProfile = nil
   end
+  profile.locked = self.db.locked -- (one lock: an unlocked bar stays unlocked on the next tab)
   self.db = profile
   self.profileClass = class
   self:ApplyAll()
@@ -1843,7 +1841,12 @@ function ns:PLAYER_LOGIN()
   self.homeClass = self.enabled and class or "ROGUE"
   self.profileClass = self.homeClass
   self.db = self.sv.profiles[self.homeClass]
-  for _, profile in pairs(self.sv.profiles) do profile.iconsLocked = self.db.iconsLocked end -- one lock for all
+  -- one lock for the bar and the icons (they were apart before 1.6: locked unless both were not)
+  local locked = self.db.locked or self.db.iconsLocked
+  for _, profile in pairs(self.sv.profiles) do
+    profile.iconsLocked = locked
+    if locked then profile.locked = true end
+  end
   local fighting = UnitAffectingCombat and UnitAffectingCombat("player")
   inCombat = (not issecretvalue(fighting) and fighting) and true or false
   self:ResolveSpells()

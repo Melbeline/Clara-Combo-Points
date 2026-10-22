@@ -3548,8 +3548,8 @@ local function Build()
     end
     ghost:Hide()
     if ns.preview then ns:SetPreview(false) end
+    ns:SetActiveProfile(ns.homeClass or "ROGUE") -- (the lock comes along: Core.lua)
     ns:LockOtherProfiles()
-    ns:SetActiveProfile(ns.homeClass or "ROGUE")
     ns:SetOptionsOpen(false)
   end)
 

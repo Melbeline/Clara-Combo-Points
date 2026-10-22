@@ -1,7 +1,7 @@
 -- Clara Combo Points - a spell just learned is taken from its chat line ("You have learned a new
 -- ability: [Stealth].") with the mouse: pressed on the spell's name, it comes on the cursor, to
--- put on an action bar or on the HUD. A spell taken from the spellbook, the same. While it is
--- held, the HUD's icon rows open for it, even locked; they close again once it is placed - 5
+-- put on an action bar or on the HUD. Any spell taken on the cursor (from the spellbook, an
+-- action bar...), the same. While it is held, the HUD's icon rows open for it, even locked; they close again once it is placed - 5
 -- seconds after it lands on the HUD, to move it if it went to the wrong place. Nothing to set:
 -- always on.
 
@@ -56,14 +56,12 @@ end
 local function EndChatDrop()
   if not ns.chatDrop then return end
   ns.chatDrop = nil
-  watcher:UnregisterEvent("CURSOR_CHANGED")
   Refresh()
 end
 
 -- The spell now on the cursor: the rows open for it.
 local function Hold(id)
   ns.chatDrop = { spell = id }
-  watcher:RegisterEvent("CURSOR_CHANGED")
   Refresh()
 end
 
@@ -117,15 +115,21 @@ watcher:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "LEARNED_SPELL_IN_SKILL_LINE" then
     if type(arg1) == "number" then learned[arg1] = true end
   elseif event == "CURSOR_CHANGED" then
-    -- let go: on an action bar, or nowhere (on the HUD, its grace runs)
-    local d = ns.chatDrop
-    if d and not d.placed and not HeldSpell() then EndChatDrop() end
+    -- a spell taken (the spellbook, an action bar...): the rows open for it; let go on an
+    -- action bar, or nowhere: they close (on the HUD, its grace runs)
+    local held, d = HeldSpell(), ns.chatDrop
+    if held and ns.db and (not d or d.placed or d.spell ~= held) then
+      Hold(held)
+    elseif not held and d and not d.placed then
+      EndChatDrop()
+    end
   end
 end)
 
 -- On for this character (Core.lua): the chat windows, and the lines that teach a spell.
 table.insert(ns.onEnable, function()
   watcher:RegisterEvent("CHAT_MSG_SYSTEM")
+  watcher:RegisterEvent("CURSOR_CHANGED")
   pcall(watcher.RegisterEvent, watcher, "LEARNED_SPELL_IN_SKILL_LINE") -- not in every client build
   for i = 1, NUM_CHAT_WINDOWS or 10 do HookChat(_G["ChatFrame" .. i]) end
   -- a click without the press (some chat windows): the same
