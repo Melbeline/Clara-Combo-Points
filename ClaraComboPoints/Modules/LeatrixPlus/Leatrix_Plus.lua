@@ -12513,8 +12513,8 @@
 		do
 			local raidTable = {L["Flare: Square"], L["Flare: Triangle"], L["Flare: Diamond"], L["Flare: Cross"], L["Flare: Star"], L["Flare: Circle"], L["Flare: Moon"], L["Flare: Skull"], L["Flare: Clear all"]}
 			for i = 1, 9 do
-				_G["BINDING_NAME_CLICK " .. "LeaPlusGlobalFlare" .. i ..":LeftButton"] = raidTable[i]
-				local btn = CreateFrame("Button", "LeaPlusGlobalFlare" .. i, nil, "SecureActionButtonTemplate")
+				_G["BINDING_NAME_CLICK " .. "ClaraLeaPlusFlare" .. i ..":LeftButton"] = raidTable[i]
+				local btn = CreateFrame("Button", "ClaraLeaPlusFlare" .. i, nil, "SecureActionButtonTemplate")
 				btn:SetAttribute("type", "macro")
 				if i == 9 then
 					btn:SetAttribute("macrotext", "/clearworldmarker 1\n/clearworldmarker 2\n/clearworldmarker 3\n/clearworldmarker 4\n/clearworldmarker 5\n/clearworldmarker 6\n/clearworldmarker 7\n/clearworldmarker 8")

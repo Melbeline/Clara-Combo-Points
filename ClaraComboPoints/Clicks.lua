@@ -93,11 +93,16 @@ end
 local STEALTH_OPENERS = { 8676, 703, 1833, 6770, 921, 14183, 9005, 6785 }
 local STEALTH = { ROGUE = 1784, DRUID = 5215 }
 
+-- Feral Charge (16979; WoW Forever's, 1238122: the charge in Bear Form, the leap in Cat Form),
+-- whatever its tooltip gives: in game, the tooltip of Forever's one has been seen to give no
+-- requirement line to addons.
+local FERAL_CHARGE = { 16979, 1238122 }
+
 -- What a spell needs: { forms = the stance bar's forms it needs, the one to take first; stealth
 -- = the stealth spell to cast first; first, second = the forms of each of two requirement lines,
 -- when the tooltip has two }, or false. A "nothing" is read again a while later: just
 -- after logging in, the game may not have the spell's tooltip or the stance bar yet.
-local needs, readAt = {}, {}
+local needs, readAt, readOf = {}, {}, {}
 local RECHECK = 5 -- seconds
 
 local function Needs(id, bar)
@@ -111,10 +116,10 @@ local function Needs(id, bar)
   local found, order, stealth, groups = {}, {}, false, {}
   local data = C_TooltipInfo and C_TooltipInfo.GetSpellByID and C_TooltipInfo.GetSpellByID(id)
   local lines = type(data) == "table" and type(data.lines) == "table" and data.lines or {}
-  if C_Spell and C_Spell.IsSpellDataCached and not C_Spell.IsSpellDataCached(id) then
-    if C_Spell.RequestLoadSpellData then C_Spell.RequestLoadSpellData(id) end
-    return false -- (not kept: read again at the next sync)
+  if C_Spell and C_Spell.IsSpellDataCached and not C_Spell.IsSpellDataCached(id) and C_Spell.RequestLoadSpellData then
+    C_Spell.RequestLoadSpellData(id) -- (what is read now is read again in a while if it gave nothing)
   end
+  local read = { lines = #lines, requires = {} } -- (for /cl debug)
   for n, line in ipairs(lines) do
     local text = line.leftText
     if type(text) == "string" and Plain(text) then
@@ -122,6 +127,7 @@ local function Needs(id, bar)
       local requires
       for _, p in ipairs(REQUIRES) do if key:sub(1, #p) == p then requires = true break end end
       if requires then
+        read.requires[#read.requires + 1] = text
         if stealthKey and key:find(stealthKey, 1, true) then stealth = true end
         local group = {}
         for i, k in pairs(keys) do
@@ -137,6 +143,17 @@ local function Needs(id, bar)
     end
   end
   local name = SpellName and SpellName(id)
+  -- Feral Charge: Bear Form, then Cat Form, if the tooltip named neither
+  if #order == 0 and type(name) == "string" and Plain(name) then
+    for _, fc in ipairs(FERAL_CHARGE) do
+      if SpellName(fc) == name then
+        if bar.bear then found[bar.bear] = 1; order[#order + 1] = bar.bear; groups[#groups + 1] = { bar.bear } end
+        if bar.cat then found[bar.cat] = 2; order[#order + 1] = bar.cat; groups[#groups + 1] = { bar.cat } end
+        read.list = #order > 0
+        break
+      end
+    end
+  end
   if stealthName and type(name) == "string" and Plain(name) then
     for _, opener in ipairs(STEALTH_OPENERS) do
       if SpellName(opener) == name then stealth = true break end
@@ -148,7 +165,7 @@ local function Needs(id, bar)
   local need = false
   if #order > 0 or stealth then need = { forms = #order > 0 and order or nil, stealth = stealth and stealthName or nil } end
   if need and #groups >= 2 and not stealth then need.first, need.second = groups[1], groups[2] end
-  needs[id], readAt[id] = need, GetTime()
+  needs[id], readAt[id], readOf[id] = need, GetTime(), read
   return need
 end
 
@@ -411,9 +428,15 @@ function ns:DebugClicks()
     for i, b in ipairs(layer.buttons) do
       if b:IsShown() then
         local right = b:GetAttribute("macrotext2")
-        out[#out + 1] = ("click %d.%d: %s (%s) -> %s%s"):format(n, i, tostring(b.spell), tostring(b.spellID),
+        local read = b.spellID and readOf[b.spellID]
+        local how = ""
+        if read and (read.list or #read.requires > 0) then
+          how = ("  [tooltip: %d lines, requires: %s%s]"):format(read.lines,
+            #read.requires > 0 and table.concat(read.requires, " / ") or "none", read.list and "; forms from the addon's list" or "")
+        end
+        out[#out + 1] = ("click %d.%d: %s (%s) -> %s%s%s"):format(n, i, tostring(b.spell), tostring(b.spellID),
           tostring(b:GetAttribute("macrotext") or b:GetAttribute("spell") or b:GetAttribute("item")),
-          right and (" | right: " .. right) or "")
+          right and (" | right: " .. right) or "", how)
       end
     end
   end
