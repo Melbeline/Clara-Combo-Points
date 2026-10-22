@@ -10,7 +10,7 @@ Pour **toutes les classes** de WoW Forever : voleur, druide (forme de félin et 
 - **Lignes d'icônes** en option : jusqu'à 3 au-dessus et 3 en dessous, 20 icônes chacune, pour toutes les classes.
 - **Trois styles** : plat, **Classique** (les barres du jeu dans un fin cadre gris, comme celles du portrait) ou **Infobulle** (bordure des infobulles du jeu).
 - **Mana à consommer** : pendant l'incantation d'un sort, la mana qu'il va coûter est marquée sur la barre de mana.
-- **Objets et imprégnations d'arme** : potions, pierres de soins, bandages, poisons, huiles, pierres à aiguiser et les imprégnations du chaman (Arme Croque-roc, Arme Langue de feu, Arme de givre, Arme Furie-des-vents) sur les lignes d'icônes.
+- **Objets et imprégnations d'arme** : tout objet qui a un effet « Utiliser » (potions, pierres de soins, bandages, poisons, huiles, pierres à aiguiser…) et les imprégnations du chaman (Arme Croque-roc, Arme Langue de feu, Arme de givre, Arme Furie-des-vents) sur les lignes d'icônes.
 - **Améliorations de l'interface** : BuyEmAll, Leatrix Plus (avec la capture d'écran de Cheese à chaque niveau), NodeSight et WeaponSwingTimer intégrés, chacun réglable à part (voir plus bas).
 
 Dans la liste des addons du jeu (Échap > AddOns), l'addon se range dans la section **UI**.
@@ -85,9 +85,9 @@ Verrouillée, **un sort sur le curseur** ou **tiré depuis le panneau des sorts 
 
 ### Objets et imprégnations d'arme
 
-Une icône peut aussi être un **objet** : glisse-le depuis tes sacs (barre déverrouillée) ou depuis les listes **Consommables** du panneau des sorts des classes (potions, autres — pierres de soins, gemmes de mana, runes, Thé de chardon —, bandages, et poisons, huiles et pierres). Son icône montre combien tu en portes (grisée sans), sa recharge, et s'allume pendant son buff ; un clic l'utilise, comme sur une barre d'action. Un objet qui enchante une arme (poison, huile, pierre) suit l'**enchantement de tes armes** avec son temps restant : clic gauche pour l'appliquer sur la main droite, clic droit sur la main gauche. Les rangs d'un même poison ou d'une même huile comptent comme un seul.
+Une icône peut aussi être un **objet** qui a un effet « Utiliser » : glisse-le depuis tes sacs, barre déverrouillée (un objet sans effet, comme du cuir ou une arme, n'est pas pris). Son icône montre combien tu en portes (grisée sans), sa recharge, et s'allume pendant son buff ; un clic l'utilise, comme sur une barre d'action. Un objet qui enchante une arme (poison, huile, pierre) suit l'**enchantement de tes armes** avec son temps restant : clic gauche pour l'appliquer sur la main droite, clic droit sur la main gauche.
 
-Les **imprégnations du chaman** (Arme Croque-roc, Arme Langue de feu, Arme de givre, Arme Furie-des-vents, dans le panneau des sorts du chaman) font de même : l'icône est allumée tant que l'arme est imprégnée, avec le temps restant (60 minutes dans Forever). L'enchantement que le jeu donne à chaque imprégnation est appris la première fois que tu la lances. Pour **Arme Furie-des-vents**, après une attaque supplémentaire, le balayage de l'icône montre son **temps de recharge interne** (3 secondes).
+Les **imprégnations du chaman** (Arme Croque-roc, Arme Langue de feu, Arme de givre, Arme Furie-des-vents, dans le panneau des sorts du chaman) font de même : l'icône est allumée tant que l'arme est imprégnée, avec le temps restant (60 minutes dans Forever). L'enchantement que le jeu donne à chaque imprégnation est appris la première fois que tu la lances. Pour **Arme Furie-des-vents**, après une attaque supplémentaire, le balayage de l'icône montre son **temps de recharge interne** (1,5 seconde).
 
 ### Panneau des sorts des classes
 

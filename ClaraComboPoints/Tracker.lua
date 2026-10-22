@@ -661,9 +661,9 @@ function ns:LearnEnchant(list)
   for _, e in ipairs(list) do lastEnchants[e.slot] = { id = e.id, left = e.left, at = now } end
 end
 
--- Windfury Weapon's internal cooldown: after an extra attack, no other for this long (3 s since
--- The Burning Crusade, which WoW Forever's imbues follow). Shown on its icon by a short swipe.
-local WINDFURY_ICD = 3
+-- Windfury Weapon's internal cooldown: after an extra attack, no other for this long (1.5 s in
+-- WoW Forever, as its players measured it). Shown on its icon by a short swipe.
+local WINDFURY_ICD = 1.5
 local windfuryAt -- when it last gave an extra attack
 
 function ns:WindfuryProc()

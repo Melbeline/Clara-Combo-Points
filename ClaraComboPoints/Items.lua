@@ -21,6 +21,7 @@ local CONSUMABLE_ENHANCEMENT = 6     -- consumable subclass: weapon enhancements
 
 local function Plain(v)
   if not issecretvalue(v) and v ~= nil then return v end
+  return nil -- (always a value: type(Plain(x)) must not get none)
 end
 
 -- The item ID of a row entry's "item:ID", else nil.
@@ -28,7 +29,8 @@ function ns:ItemOf(spell)
   return type(spell) == "string" and tonumber(spell:match("^item:(%d+)$")) or nil
 end
 
--- "item:ID" for an item the game knows, else nil.
+-- "item:ID" for an item the game knows that has a use (a potion, a poison, a hearthstone...),
+-- else nil: leather or a mace stays in the bags.
 function ns:ItemEntry(id)
   id = tonumber(id)
   if not id or id <= 0 or id ~= math.floor(id) then return end
@@ -36,6 +38,7 @@ function ns:ItemEntry(id)
     local ok, known = pcall(GetItemInfoInstant, id)
     if not ok or not known then return end
   end
+  if GetItemSpell and not self:ItemSpell(id) then return end
   return "item:" .. id
 end
 
@@ -111,28 +114,11 @@ function ns:ItemCooldown(id)
 end
 
 ---------------------------------------------------------------------------
--- Items that enchant a weapon: from the consumables' list (WEAPON), from their kind (weapon
--- enhancements), or learned when one was used and an enchantment showed up on a weapon. Each
--- has an imbue key (Tracker.lua): its family in the list (every rank of a poison, of an oil),
--- else the item itself.
+-- Items that enchant a weapon: from their kind (weapon enhancements), or learned when one was
+-- used and an enchantment showed up on a weapon. Each has an imbue key (Tracker.lua): the item
+-- itself.
 ---------------------------------------------------------------------------
-local familyOf -- item ID -> family key, from the consumables' list (Consumables.lua)
-local function Families()
-  if familyOf then return familyOf end
-  familyOf = {}
-  for _, group in ipairs(ns.CONSUMABLES or {}) do
-    for _, line in ipairs(group.items) do
-      if line[1] == "WEAPON" then
-        local key = "family:" .. line[2]
-        for i = 2, #line do familyOf[line[i]] = key end
-      end
-    end
-  end
-  return familyOf
-end
-
 function ns:IsWeaponItem(id)
-  if Families()[id] then return true end
   if self.sv and self.sv.enchantItems and self.sv.enchantItems[id] then return true end
   if GetItemInfoInstant then
     local ok, _, _, _, _, _, class, subclass = pcall(GetItemInfoInstant, id)
@@ -145,7 +131,7 @@ end
 function ns:ItemImbueKey(spell)
   local id = self:ItemOf(spell)
   if not id or not self:IsWeaponItem(id) then return end
-  return Families()[id] or ("item:" .. id)
+  return "item:" .. id
 end
 
 -- The items on the rows, by the name of the spell they cast (rebuilt with the layout).

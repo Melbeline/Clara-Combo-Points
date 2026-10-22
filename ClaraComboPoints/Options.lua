@@ -1063,7 +1063,6 @@ local KIND_ON = { BUFF = "self", DEBUFF = "enemy", SELFDEBUFF = "self", SPELL = 
 local GROUP_COLORS = { GENERAL = { GOLD_R, GOLD_G, GOLD_B } }
 for _, race in ipairs({ "HUMAN", "DWARF", "NIGHTELF", "GNOME", "SKYBORNE_ALLIANCE" }) do GROUP_COLORS[race] = { .35, .6, 1 } end
 for _, race in ipairs({ "ORC", "UNDEAD", "TAUREN", "TROLL", "SKYBORNE_HORDE" }) do GROUP_COLORS[race] = { 1, .35, .3 } end
-local CONSUMABLE_COLOR = { .4, .85, .75 } -- the consumables' lists
 local PICK_ON = { "self", "target", "enemy", "friend" }
 local PLUS, MINUS = "Interface\\Buttons\\UI-PlusButton-Up", "Interface\\Buttons\\UI-MinusButton-Up"
 
@@ -1317,58 +1316,6 @@ local function Catalog(p)
     return row
   end
 
-  -- An item of the consumables (Consumables.lua): its icon, its name, how many you carry; it
-  -- adds the item itself (nothing to choose).
-  local function ItemRow(rec)
-    local row = CreateFrame("Button", nil, child)
-    row:SetSize(CHILD_W, SIDE_ROW_H)
-    local hl = row:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, .06)
-    local icon = row:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(22, 22)
-    icon:SetPoint("LEFT", 4, 0)
-    icon:SetTexCoord(.08, .92, .08, .92)
-    local name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    name:SetPoint("LEFT", 32, 0)
-    name:SetJustifyH("LEFT")
-    name:SetWordWrap(true)
-    if name.SetMaxLines then name:SetMaxLines(2) end
-    local carried = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    carried:SetPoint("RIGHT", -6, 0)
-    function row:Place()
-      self:SetWidth(CHILD_W)
-      name:SetWidth(CHILD_W - 32 - 50)
-    end
-    row:RegisterForDrag("LeftButton")
-    row:SetScript("OnDragStart", function() StartDrag(rec.entry) end)
-    row:SetScript("OnDragStop", EndDrag)
-    row:SetScript("OnClick", function()
-      ClickSound()
-      ShowStatus(ns:AddIcon(selSide, selK, rec.entry))
-      p:Refresh()
-    end)
-    row:SetScript("OnEnter", function(self)
-      if not GameTooltip or drag then return end
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      if not (GameTooltip.SetItemByID and pcall(GameTooltip.SetItemByID, GameTooltip, rec.item)) then
-        GameTooltip:SetText(ns:ItemName(rec.item) or rec.entry)
-      end
-      GameTooltip:AddLine(L["KIND_" .. rec.kind] or "", .6, .6, .65)
-      GameTooltip:AddLine(L.CATALOG_ADD:format(ns:RowName(selSide, selK)), GOLD_R, GOLD_G, GOLD_B, true)
-      GameTooltip:Show()
-    end)
-    row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-    function row:Refresh()
-      icon:SetTexture(ns:EntryIcon(rec.entry))
-      name:SetText(ns:ItemName(rec.item) or ("item:" .. rec.item))
-      local n = ns:ItemCount(rec.item)
-      carried:SetText(n and n > 0 and ("x" .. n) or "")
-    end
-    row:Place()
-    return row
-  end
-
   -- A list's head: a click folds or unfolds it.
   local function Head(key, color, labelFn, recs)
     local head = CreateFrame("Button", nil, child)
@@ -1409,19 +1356,6 @@ local function Catalog(p)
       Head(class.class, color, function() return L["CLASS_" .. class.class] or L["GROUP_" .. class.class] or class.class end, recs)
     end
   end
-  -- the consumables, by kind (the items this client knows)
-  for _, cg in ipairs(ns.CONSUMABLES or {}) do
-    local recs = {}
-    for _, line in ipairs(cg.items) do
-      for i = 2, #line do
-        local entry = ns:ItemEntry(line[i])
-        if entry then recs[#recs + 1] = { kind = line[1], item = line[i], entry = entry, isItem = true } end
-      end
-    end
-    if #recs > 0 then
-      Head("CONS_" .. cg.group, CONSUMABLE_COLOR, function() return L["CONS_" .. cg.group] or cg.group end, recs)
-    end
-  end
 
   -- The panel's width (sv.catalog.w): the list, the search box and the columns follow it, the
   -- names taking the room past the default width.
@@ -1438,28 +1372,15 @@ local function Catalog(p)
     for _, row in pairs(rowOf) do row:Place() end
   end
 
-  -- alphabetical in the addon's language (an item: in the game's)
-  local function RecName(rec)
-    if rec.isItem then return ns:ItemName(rec.item) or rec.entry end
-    return ns:CatalogName(rec)
-  end
+  -- alphabetical in the addon's language
   local function ByName(a, b)
-    local ka, kb = SortKey(RecName(a)), SortKey(RecName(b))
+    local ka, kb = SortKey(ns:CatalogName(a)), SortKey(ns:CatalogName(b))
     if ka ~= kb then return ka < kb end
-    return (a.item or a.ranks[1][2]) < (b.item or b.ranks[1][2])
+    return a.ranks[1][2] < b.ranks[1][2]
   end
 
-  -- An item answers a search by its name (the game's language) or its ID.
-  local function ItemMatches(rec, q)
-    local id = tonumber(q)
-    if id then return rec.item == id end
-    local name = ns:ItemName(rec.item)
-    return name ~= nil and ns:SearchKey(name):find(q, 1, true) ~= nil
-  end
-
-  -- Does the character have this spell (a rank of it)? An item: some in the bags.
+  -- Does the character have this spell (a rank of it)?
   local function KnownRec(rec)
-    if rec.isItem then return (ns:ItemCount(rec.item) or 0) > 0 end
     for _, r in ipairs(rec.ranks) do
       for n = 2, 3 do
         local id = r[n]
@@ -1489,8 +1410,7 @@ local function Catalog(p)
       for _, rec in ipairs(g.recs) do
         if not skip and (not only or KnownRec(rec)) then
           total = total + 1
-          local found = not searching or (rec.isItem and ItemMatches(rec, query)) or (not rec.isItem and ns:CatalogMatches(rec, query))
-          if found then list[#list + 1] = rec end
+          if not searching or ns:CatalogMatches(rec, query) then list[#list + 1] = rec end
         end
       end
       table.sort(list, ByName)
@@ -1509,7 +1429,7 @@ local function Catalog(p)
       g.rows = {} -- (the group's rows: shown ones first, in their order)
       if open then
         for _, rec in ipairs(list) do
-          local row = rowOf[rec] or (rec.isItem and ItemRow(rec)) or SpellRow(rec)
+          local row = rowOf[rec] or SpellRow(rec)
           rowOf[rec] = row
           row:ClearAllPoints()
           row:SetPoint("TOPLEFT", 0, -y)
