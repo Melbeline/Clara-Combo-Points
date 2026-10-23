@@ -551,6 +551,13 @@ local STATS_SCROLL_KNOB_X = 1
 local STATS_SCROLL_KNOB_TRAVEL = 7
 local folded = {}
 local list
+-- (Clara Combo Points) The sections' order, per class (db.statListOrder[class]: their keys), dragged by their heads:
+-- while dragged, the list shows it where it would land; dropped, that order is kept. By default the client's, with
+-- Spell under Attributes for mages, warlocks and priests and Ranged for hunters.
+local CLASS_FIRST = { MAGE = "section4", WARLOCK = "section4", PRIEST = "section4", HUNTER = "section7" }
+local DRAG_ALPHA, DRAG_SCROLL = 0.6, 240   -- the dragged box's alpha; the view's run past its ends, per second
+local preview                              -- the boxes in the order shown while one is dragged
+function ns.StatListState() return list end -- (for the tests)
 
 -- The side panel's scroll bar, the stat page's and the equipment page's alike (same spot): on page (either page frame,
 -- both laid the same), dressed as the old bar, every number above.
@@ -576,7 +583,7 @@ local function LayoutList()
     local width = list.scroll:GetWidth()
     if width and width > 0 then list.child:SetWidth(width) end
     local y = 0
-    for _, box in ipairs(list.boxes) do
+    for _, box in ipairs(preview or list.boxes) do
         local open = not folded[box.section.key]
         ns.SetCollapseIcon(box.head.icon, not open)
         local n = 0
@@ -605,6 +612,124 @@ local function LayoutList()
     list.laid = true
 end
 
+local function ClassKey()
+    local _, class = UnitClass("player")
+    return class or "?"
+end
+
+-- The client's order, the class's own section moved under Attributes.
+local function DefaultKeys()
+    local keys = {}
+    for _, box in ipairs(list.all) do keys[#keys + 1] = box.section.key end
+    local first = CLASS_FIRST[ClassKey()]
+    if not first then return keys end
+    for i, key in ipairs(keys) do
+        if key == first then
+            table.remove(keys, i)
+            break
+        end
+    end
+    for i, key in ipairs(keys) do
+        if key == "section2" then
+            table.insert(keys, i + 1, first)
+            return keys
+        end
+    end
+    keys[#keys + 1] = first
+    return keys
+end
+
+-- The boxes in the saved order (else the default); one the order does not name keeps the end.
+local function Arrange()
+    local byKey, order, placed = {}, {}, {}
+    for _, box in ipairs(list.all) do byKey[box.section.key] = box end
+    local saved = ns.db and type(ns.db.statListOrder) == "table" and ns.db.statListOrder[ClassKey()]
+    for _, key in ipairs(type(saved) == "table" and saved or DefaultKeys()) do
+        local box = byKey[key]
+        if box and not placed[box] then
+            order[#order + 1] = box
+            placed[box] = true
+        end
+    end
+    for _, box in ipairs(list.all) do
+        if not placed[box] then order[#order + 1] = box end
+    end
+    list.boxes = order
+end
+
+-- The cursor's depth under the list's top, in its units.
+local function CursorDepth()
+    local top = list.child:GetTop()
+    if not top then return nil end
+    local _, y = GetCursorPosition()
+    return top - y / list.child:GetEffectiveScale()
+end
+
+-- While a box is dragged: the view runs past its ends, and the list shows the box where it would land (before the first
+-- other box whose middle is under the cursor).
+local function DragUpdate(_, elapsed)
+    local dragged = list.dragging
+    local depth = dragged and CursorDepth()
+    if not depth then return end
+    local scroll = list.scroll
+    local view, height = scroll:GetVerticalScroll(), scroll:GetHeight() or 0
+    local step = (depth < view and -1) or (depth > view + height and 1) or 0
+    if step ~= 0 then
+        local over = math.max(0, list.child:GetHeight() - height)
+        scroll:SetVerticalScroll(math.max(0, math.min(over, view + step * DRAG_SCROLL * elapsed)))
+    end
+    local order, y, placed = {}, 0, false
+    for _, box in ipairs(list.boxes) do
+        if box ~= dragged then
+            local tall = box:GetHeight() or 0
+            if not placed and depth < y + tall / 2 then
+                order[#order + 1] = dragged
+                placed = true
+            end
+            order[#order + 1] = box
+            y = y + tall + LIST_GAP
+        end
+    end
+    if not placed then order[#order + 1] = dragged end
+    local same = preview ~= nil and #preview == #order
+    for i = 1, same and #order or 0 do
+        if preview[i] ~= order[i] then same = false end
+    end
+    if not same then
+        preview = order
+        LayoutList()
+    end
+end
+
+local function StartDrag(box)
+    if list.dragging then return end
+    list.dragging = box
+    preview = nil
+    box:SetAlpha(DRAG_ALPHA)
+    PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+    list.dragger:SetScript("OnUpdate", DragUpdate)
+end
+
+-- Dropped: the order shown is the order, kept for the class.
+local function StopDrag()
+    local box = list.dragging
+    if not box then return end
+    list.dragging = nil
+    list.dragger:SetScript("OnUpdate", nil)
+    box:SetAlpha(1)
+    if preview then list.boxes = preview end
+    preview = nil
+    if ns.db then
+        local keys = {}
+        for _, each in ipairs(list.boxes) do keys[#keys + 1] = each.section.key end
+        ns.db.statListOrder = type(ns.db.statListOrder) == "table" and ns.db.statListOrder or {}
+        ns.db.statListOrder[ClassKey()] = keys
+    end
+    list.justDragged = true
+    C_Timer.After(0, function() list.justDragged = nil end)
+    LayoutList()
+end
+
 local function ListBox(section)
     local box = ns.NewFrame("Frame", nil, list.child, ns.BACKDROP_TEMPLATE)
     ns.Backdrop(box, ns.BACKDROP.TIP12, LIST_BOX)
@@ -624,11 +749,15 @@ local function ListBox(section)
     head.text:SetPoint("LEFT", head.icon, "RIGHT", 4, 0)
     head.text:SetText(section.label)
     head:SetScript("OnClick", function()
+        if list.justDragged then return end
         folded[section.key] = not folded[section.key] or nil
         PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
         LayoutList()
     end)
     box.head, box.section, box.rows = head, section, {}
+    head:RegisterForDrag("LeftButton")
+    head:SetScript("OnDragStart", function() StartDrag(box) end)
+    head:SetScript("OnDragStop", StopDrag)
     for i = 1, #section.stats do box.rows[i] = Line(box) end
     return box
 end
@@ -678,10 +807,12 @@ function ns.StatList(parent)
             self:SetVerticalScroll(math.max(0, math.min(over, self:GetVerticalScroll() - delta * LIST_ROW * 3)))
         end)
     end
-    list = { frame = frame, scroll = scroll, child = child, boxes = {} }
+    list = { frame = frame, scroll = scroll, child = child, boxes = {}, all = {}, dragger = ns.NewFrame("Frame", nil, frame) }
     for _, section in ipairs(Sections()) do
-        if not section.resistances then list.boxes[#list.boxes + 1] = ListBox(section) end
+        if not section.resistances then list.all[#list.all + 1] = ListBox(section) end
     end
+    Arrange()
+    frame:SetScript("OnHide", StopDrag)
     scroll:SetScript("OnSizeChanged", LayoutList)
     frame:SetScript("OnShow", function() ns.UpdateStatList() end)
     return frame
