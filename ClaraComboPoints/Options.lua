@@ -1383,8 +1383,9 @@ local function Catalog(p)
     return a.ranks[1][2] < b.ranks[1][2]
   end
 
-  -- Does the character have this spell (a rank of it)?
+  -- Does the character have this spell (a rank of it)? (Well Fed: every character)
   local function KnownRec(rec)
+    if rec.everyone then return true end
     for _, r in ipairs(rec.ranks) do
       for n = 2, 3 do
         local id = r[n]

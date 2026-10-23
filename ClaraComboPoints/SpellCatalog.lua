@@ -4,7 +4,8 @@
 --   kind: BUFF (helpful), DEBUFF (on enemies), SELFDEBUFF (harmful, on yourself or your allies:
 --   Weakened Soul, Forbearance...), SPELL (a spell to cast, no aura), IMBUE (a weapon
 --   imbue: its icon watches the enchantment on your weapons). alt: the same ranks under a second ID, as WoW Forever has
---   some spells twice (false: none for that rank).
+--   some spells twice (false: none for that rank). everyone: every character has it (Well Fed): listed with
+--   Show only known spells too.
 -- Names are read from the game, in its language; spells the game does not know are left out.
 -- Sources: LibClassicDurations, Classic Era spell data (checked rank by rank), and WoW Forever's
 -- own spell and trainer tables (build 1.60.1) for its second IDs, its extra ranks and its spells.
@@ -418,13 +419,15 @@ ns.SPELL_CATALOG = {
   } },
   -- the spells of the spellbook's General tab, then each race's (WoW Forever's own: Elune's
   -- Light, Will to Survive, Eureka!, Read Leyline, Walk on Air, Shatter Curse, Rapid
-  -- Regeneration, Skysight). SPELL: no aura of its own, its icon shows its cooldown.
+  -- Regeneration, Skysight). SPELL: no aura of its own, its icon shows its cooldown. Well Fed: the
+  -- buff of every food, whatever its spell (found by its name, which they all share).
   { class = "GENERAL", spells = {
     { "SPELL", 6603 }, -- Attack
     { "SPELL", 75 }, -- Auto Shot
     { "BUFF", 2383 }, -- Find Herbs
     { "BUFF", 2580 }, -- Find Minerals
     { "SPELL", 5019 }, -- Shoot
+    { "BUFF", 19705, alt = { 24799 }, everyone = true }, -- Well Fed
   } },
   { class = "HUMAN", spells = {
     { "BUFF", 20600 }, -- Perception
