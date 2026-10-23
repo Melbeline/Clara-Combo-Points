@@ -86,11 +86,21 @@ end
 -- The client sizes a bar's fill once, as a share of the width it had then; ours can be re-anchored wider after (the skill
 -- detail bar), so the share is kept and the fill sized from it against the width now.
 local fillShare = setmetatable({}, { __mode = "k" })
+-- A texture sized 0 wide takes its file's own width (a full bar, or one past its border: a reputation at 0/6000), so an
+-- empty fill is hidden instead; and none is wider than its bar.
+local function SizeFill(bar, width)
+    local room = math.max(0, bar:GetWidth() - (bar.fcuiInset or 0))
+    width = math.min(type(width) == "number" and width or 0, room)
+    if width < 0.5 then
+        bar.Fill:Hide()
+    else
+        bar.Fill:SetWidth(width)
+        bar.Fill:Show()
+    end
+end
 local function FitFill(bar)
     local share = fillShare[bar]
-    if share and bar.Fill then
-        bar.Fill:SetWidth(math.max(0, share * (bar:GetWidth() - (bar.fcuiInset or 0))))
-    end
+    if share and bar.Fill then SizeFill(bar, share * (bar:GetWidth() - (bar.fcuiInset or 0))) end
 end
 T.FitFill = FitFill
 
@@ -150,7 +160,12 @@ local function SkinListEntry(row, barKey)
     -- Old gradient fill under the art, in the client's colour or skill blue.
     local fill = bar.Fill
     if fill then
-        Take(fill, "art", "layer", "size", "points", "masks")
+        -- A row first dressed after the client's update: the share it gave, from the fill it cropped to it (0, p, 1, 0).
+        if not skills and fillShare[bar] == nil then
+            local left, top, _, _, right = fill:GetTexCoord()
+            if left == 0 and top == 1 and type(right) == "number" and right >= 0 and right <= 1 then fillShare[bar] = right end
+        end
+        Take(fill, "art", "layer", "size", "points", "masks", "shown")
         if bar.Mask and fill.RemoveMaskTexture then pcall(fill.RemoveMaskTexture, fill, bar.Mask) end
         ns.SetTex(fill, "skillsBar")
         fill:SetDrawLayer("BACKGROUND", 0)
@@ -174,7 +189,7 @@ local function SkinListEntry(row, barKey)
             hooksecurefunc(bar, "SetFillWidth", function(self, width)
                 if not T.active then return end
                 if fillShare[self] then return FitFill(self) end
-                self.Fill:SetWidth(math.max(0, math.min(width, self:GetWidth() - (self.fcuiInset or 0))))
+                SizeFill(self, width)
             end)
             hooksecurefunc(bar, "SetFillTextureByColorType", function(self)
                 if not T.active then return end
@@ -205,7 +220,7 @@ local function SkinListEntry(row, barKey)
         end
         fill:SetTexCoord(unpack(bar.fcuiCoords))
         if skills then fill:SetVertexColor(SKILL_BLUE[1], SKILL_BLUE[2], SKILL_BLUE[3]) end
-        fill:SetWidth(math.max(0, math.min(fill:GetWidth(), bar:GetWidth() - bar.fcuiInset)))
+        if fillShare[bar] then FitFill(bar) else SizeFill(bar, fill:GetWidth()) end
     end
     local name = Own(ns.OwnFontString(bar, "name", "OVERLAY", skills and "GameFontNormalSmall" or "GameFontHighlightSmall"))
     name:SetFontObject(skills and "GameFontNormalSmall" or "GameFontHighlightSmall")
