@@ -14,8 +14,8 @@
 <!-- Main frame -->
 <Frame name="ClaraXToLevel_AverageFrame_Classic_Template" virtual="true" frameStrata="LOW" enableMouse="true" resizable="false" movable="true" clampedToScreen="true" hidden="false">
 	<Anchors>
-		<Anchor point="TOPLEFT" relativeTo="WorldFrame" relativePoint="TOPLEFT">
-			<Offset x="25" y="-100" />
+		<Anchor point="TOP" relativeTo="UIParent" relativePoint="TOP"> <!-- (Clara Combo Points: the top's middle) -->
+			<Offset x="0" y="-1" />
 		</Anchor>
     </Anchors>
 	<Scripts>

@@ -294,8 +294,8 @@
         <AbsDimension x="254" y="56" />
     </Size>
     <Anchors>
-        <Anchor point="TOPLEFT" relativeTo="WorldFrame" relativePoint="TOPLEFT">
-            <Offset x="25" y="-100" />
+        <Anchor point="TOP" relativeTo="UIParent" relativePoint="TOP"> <!-- (Clara Combo Points: the top's middle) -->
+            <Offset x="0" y="-1" />
         </Anchor>
     </Anchors>
     <Scripts>
