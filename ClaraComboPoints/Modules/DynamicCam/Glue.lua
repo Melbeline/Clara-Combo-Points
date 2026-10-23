@@ -5,6 +5,8 @@
 -- ticked, 2 unticked). Set in its standard settings, and in the situations that set them
 -- themselves; the box shows its standard settings (ticked when both are on). DynamicCam itself
 -- keeps running.
+-- The max camera distance set in the game's options (or by another addon): DynamicCam takes it as
+-- its own Maximum Camera Distance, rather than putting its own back at the next zoom.
 
 local ADDON, ns = ...
 
@@ -51,6 +53,15 @@ local function Keep(sv, on, standard, situations)
   sv[KEPT[on]] = kept
 end
 
+-- its options, if open: the new values
+local function Notify()
+  local registry = LibStub("AceConfigRegistry-3.0", true)
+  if registry then
+    pcall(registry.NotifyChange, registry, "DynamicCam")
+    pcall(registry.NotifyChange, registry, "DynamicCam_Detached")
+  end
+end
+
 function ns:CameraAvailable() return Standard(Cam()) ~= nil end
 function ns:CameraOn()
   local standard = Standard(Cam())
@@ -77,11 +88,7 @@ function ns:SetCameraOn(on)
     end
   end
   if cam:IsEnabled() and cam.ApplySettings then cam:ApplySettings() end
-  local registry = LibStub("AceConfigRegistry-3.0", true) -- (its options, if open: the new values)
-  if registry then
-    pcall(registry.NotifyChange, registry, "DynamicCam")
-    pcall(registry.NotifyChange, registry, "DynamicCam_Detached")
-  end
+  Notify()
   if self.RefreshQol then self:RefreshQol() end
 end
 
@@ -92,4 +99,28 @@ ns:SetQolSwitches("dynamiccam", {
 ns:SetQolOpener("dynamiccam", function()
   local cam = Cam()
   if cam and cam.OpenMenu then cam:OpenMenu() end
+end)
+
+-- The max camera distance changed outside DynamicCam (the game's options, another addon): its
+-- Maximum Camera Distance from now on (the current situation's, if it sets its own). DynamicCam's own
+-- changes set the value it has, or are a transition or a zoom-based curve of it: left alone.
+local MAX_DISTANCE = "cameraDistanceMaxZoomFactor"
+local watch = CreateFrame("Frame")
+if Cam() then watch:RegisterEvent("CVAR_UPDATE") end -- (a DynamicCam there: built in, or the standalone loaded before)
+watch:SetScript("OnEvent", function(_, _, cvar, value)
+  if cvar ~= MAX_DISTANCE then return end
+  value = tonumber(value)
+  local cam = Cam()
+  local standard, profile = Standard(cam)
+  if not (value and standard and cam:IsEnabled()) then return end
+  if cam.IsCvarBeingEased and cam:IsCvarBeingEased(MAX_DISTANCE) then return end
+  local sid = cam.currentSituationID
+  if cam.IsEffectivelyCvarZoomBased and cam:IsEffectivelyCvarZoomBased(sid, MAX_DISTANCE) then return end
+  local situation = sid and type(profile.situations) == "table" and profile.situations[sid]
+  local own = type(situation) == "table" and situation.situationSettings
+  local settings = (type(own) == "table" and type(own.cvars) == "table" and own.cvars[MAX_DISTANCE] ~= nil) and own or standard
+  local now = tonumber(settings.cvars[MAX_DISTANCE])
+  if now and math.abs(now - value) < 1e-4 then return end
+  settings.cvars[MAX_DISTANCE] = value
+  Notify()
 end)
