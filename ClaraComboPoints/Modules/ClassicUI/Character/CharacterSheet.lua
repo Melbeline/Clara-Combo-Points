@@ -40,6 +40,18 @@ end
 T.PetView = PetView
 local function PetWanted() return HasPetUI and HasPetUI() and true or false end
 
+-- The pet's loyalty with its rank, "Loyalty rank 5 - Faithful": the rank from the name the client gives (its six
+-- names in order, PET_LOYALTY_LEVELS); a name not among them is shown as it is.
+local function LoyaltyLine(name)
+    local key = name:lower()
+    local rank = 0
+    for level in tostring(ns.L["PET_LOYALTY_LEVELS"] or ""):gmatch("[^|]+") do
+        rank = rank + 1
+        if level:lower() == key then return ns.L["PET_LOYALTY_RANK"]:format(rank, name) end
+    end
+    return name
+end
+
 -- "Level 20 Gnome Mage", gold, under the name as 1.x wrote it; in the pet view "Level 20 Wolf" and its loyalty.
 local function LevelLine(pet)
     local level = UnitLevel(pet and "pet" or "player")
@@ -47,7 +59,7 @@ local function LevelLine(pet)
     if pet then
         local line = string.format("%s %s %s", LEVEL or "Level", tostring(level), ns.Safe(UnitCreatureFamily("pet"), ""))
         local loyalty = C_PetInfo and C_PetInfo.GetPetLoyalty and ns.Safe(C_PetInfo.GetPetLoyalty(), "") or ""
-        return loyalty ~= "" and (line .. "\n" .. loyalty) or line
+        return loyalty ~= "" and (line .. "\n" .. LoyaltyLine(loyalty)) or line
     end
     local race = UnitRace("player") or ""
     local class = UnitClass("player") or ""

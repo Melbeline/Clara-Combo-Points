@@ -798,3 +798,6 @@ L["OPTWIN_TAB_PROFILES"] = "Profiles"
 L["OPTWIN_TAB_FAQ"] = "FAQ"
 L["OPTWIN_TAB_SUPPORT"] = "Support"
 L["WHO_COLUMN"] = "Column"
+-- Character/CharacterSheet.lua: the pet's loyalty, its rank first; the client's six loyalty names, in order
+L["PET_LOYALTY_RANK"] = "Loyalty rank %d - %s"
+L["PET_LOYALTY_LEVELS"] = "Rebellious|Unruly|Submissive|Dependable|Faithful|Best Friend"
