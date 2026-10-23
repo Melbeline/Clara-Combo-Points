@@ -1251,12 +1251,12 @@ function XToLevel.Config:GetDefaults()
                 header = true,
 		        tooltip = true,
 		        combineTooltip = false,
-		        orientation = 'v',
+		        orientation = 'h', -- (Clara Combo Points: in a row)
 		        playerKills = true,
 		        playerQuests = true,
                 playerPetBattles = true,
-		        playerDungeons = true,
-		        playerBGs = true,
+		        playerDungeons = false, -- (Clara Combo Points: these two off)
+		        playerBGs = false,
 		        playerBGOs = false,
                 playerGathering = true,
                 playerDigs = true,
