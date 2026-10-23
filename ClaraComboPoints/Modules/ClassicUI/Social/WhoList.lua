@@ -240,7 +240,9 @@ local function FilterEntries(header)
     class.pick = function() sort.field, sort.reverse = "class", false Refresh() end
     race.radio, race.pick = ColumnRadio("race"), function() Column("race") end
     zone.radio, zone.pick = ColumnRadio("zone"), function() Column("zone") end
-    entries[#entries + 1] = { GUILD or "Guild", radio = ColumnRadio("guild"), pick = function() Column("guild") end }
+    entries[#entries + 1] = { GUILD or "Guild", radio = ColumnRadio("guild"), pick = function() Column("guild") end,
+        close = true }
+    class.close, race.close, zone.close = true, true, true -- (Clara Combo Points: the list sorted, the menu shut)
     entries[#entries + 1] = { WHO_SORT_LABEL or "Sort By", sub = {
         SortRow(NAME or "Name", "name"), SortRow(CLASS or "Class", "class"), SortRow(LEVEL or "Level", "level"),
         { divider = true },
