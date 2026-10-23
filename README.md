@@ -1,4 +1,4 @@
-# Clara-Combo-Points
+# Clara-Combo-Points Light
 
 Addon autonome pour **World of Warcraft: Forever** (bêta 1.60.1, Interface 16001), portage du WeakAura Classic « Complete Rogue » de Faineantt (https://wago.io/WouewStiD).
 
