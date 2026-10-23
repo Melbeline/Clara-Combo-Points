@@ -6138,7 +6138,7 @@
 			cButton:SetFrameLevel(100)
 
 			-- (Clara Combo Points: a gold D on it rather than its arrow, apart from the arrow that opens and shuts the
-			-- side panel; with ClassicUI Forever's sheet, left of that arrow and its size)
+			-- side panel; with ClassicUI Forever's sheet, between that arrow and the ammo slot, at the arrow's size)
 			local cover = cButton:CreateTexture(nil, "ARTWORK", nil, 7)
 			cover:SetPoint("TOPLEFT", 4, -6)
 			cover:SetPoint("BOTTOMRIGHT", -5, 6)
@@ -6151,7 +6151,7 @@
 				self:ClearAllPoints()
 				if arrow and arrow:IsShown() then
 					self:SetSize(arrow:GetSize())
-					self:SetPoint("RIGHT", arrow, "LEFT", -3, 0)
+					self:SetPoint("RIGHT", arrow, "LEFT", 2, 0) -- (its rim as far from the arrow's as from the ammo slot)
 				else
 					self:SetSize(28, 28)
 					self:SetPoint("BOTTOMRIGHT", CharacterFrameLeftPaneHost, "BOTTOMRIGHT", -6, 6)
