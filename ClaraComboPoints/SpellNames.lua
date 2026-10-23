@@ -429,6 +429,7 @@ ns.SPELL_NAMES = {
   [2383] = { "Find Herbs", "Découverte d'herbes", "Kräutersuche" },
   [2580] = { "Find Minerals", "Découverte de gisements", "Mineraliensuche" },
   [5019] = { "Shoot", "Tir", "Schießen" },
+  [19705] = { "Well Fed", "Bien nourri", nil },
   [20600] = { "Perception", "Perception", "Wahrnehmung" },
   [1259718] = { "Will to Survive", nil, nil },
   [3481] = { "Find Treasure", "Découverte de trésors", "Schatzsuche" },

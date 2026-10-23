@@ -1093,7 +1093,8 @@ local function CatalogIndex()
   catalogIndex, catalogByName, catalogList, entryRec = {}, {}, {}, {}
   for _, class in ipairs(ns.SPELL_CATALOG or {}) do
     for _, spell in ipairs(class.spells) do
-      local rec = { kind = spell[1], class = class.class, ranks = {}, names = ns.SPELL_NAMES and ns.SPELL_NAMES[spell[2]] }
+      local rec = { kind = spell[1], class = class.class, ranks = {}, names = ns.SPELL_NAMES and ns.SPELL_NAMES[spell[2]],
+        everyone = spell.everyone }
       for r = 2, #spell do
         local id, alt = spell[r], spell.alt and spell.alt[r - 1] or nil
         if not ns:SpellName(id) then id, alt = alt, nil end
