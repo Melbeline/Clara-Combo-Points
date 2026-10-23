@@ -658,6 +658,11 @@ end
 
 -- The main update function that applies all cvar values (both eased transitions and zoom-based curves)
 local function CvarUpdateFunction(self, elapsed)
+  -- (Clara Combo Points: nothing while DynamicCam is off; all applied again once on)
+  if not DynamicCam:IsEnabled() then
+    lastAppliedZoom = nil
+    return
+  end
   -- Skip if temporarily disabled
   if DynamicCam.shoulderOffsetZoomTmpDisable then return end
   

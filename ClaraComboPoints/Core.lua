@@ -1802,6 +1802,13 @@ local function InitDB()
   if sv.whoNames ~= false then sv.whoNames = nil end -- (on unless turned off: Who.lua)
   if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
   if sv.cameraOff ~= true then sv.cameraOff = nil end -- (DynamicCam's camera turned off: Modules/DynamicCam/Glue.lua)
+  if type(sv.cameraWas) == "table" then -- (the game's camera values before DynamicCam: the same)
+    for cvar, value in pairs(sv.cameraWas) do
+      if type(cvar) ~= "string" or type(value) ~= "string" then sv.cameraWas[cvar] = nil end
+    end
+  else
+    sv.cameraWas = nil
+  end
   -- the interface improvements turned off (QoL.lua): only "false" is kept
   if type(sv.qol) == "table" then
     for key, v in pairs(sv.qol) do if v ~= false or type(key) ~= "string" then sv.qol[key] = nil end end
