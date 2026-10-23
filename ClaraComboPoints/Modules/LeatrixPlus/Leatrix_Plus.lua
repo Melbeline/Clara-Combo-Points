@@ -6137,6 +6137,27 @@
 			cButton:SetSize(28, 28)
 			cButton:SetFrameLevel(100)
 
+			-- (Clara Combo Points: a gold D on it rather than its arrow, apart from the arrow that opens and shuts the
+			-- side panel; with ClassicUI Forever's sheet, left of that arrow and its size)
+			local cover = cButton:CreateTexture(nil, "ARTWORK", nil, 7)
+			cover:SetPoint("TOPLEFT", 4, -6)
+			cover:SetPoint("BOTTOMRIGHT", -5, 6)
+			cover:SetColorTexture(0.02, 0.02, 0.02, 1)
+			local letter = cButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+			letter:SetPoint("CENTER", -1, 0)
+			letter:SetText("D")
+			cButton:HookScript("OnShow", function(self)
+				local arrow = _G.ForeverClassicUIEquipmentToggle
+				self:ClearAllPoints()
+				if arrow and arrow:IsShown() then
+					self:SetSize(arrow:GetSize())
+					self:SetPoint("RIGHT", arrow, "LEFT", -3, 0)
+				else
+					self:SetSize(28, 28)
+					self:SetPoint("BOTTOMRIGHT", CharacterFrameLeftPaneHost, "BOTTOMRIGHT", -6, 6)
+				end
+			end)
+
 			-- Create durability tables
 			local Slots = {"HeadSlot", "ShoulderSlot", "ChestSlot", "WristSlot", "HandsSlot", "WaistSlot", "LegsSlot", "FeetSlot", "MainHandSlot", "SecondaryHandSlot"}
 			local SlotsFriendly = {INVTYPE_HEAD, INVTYPE_SHOULDER, INVTYPE_CHEST, INVTYPE_WRIST, INVTYPE_HAND, INVTYPE_WAIST, INVTYPE_LEGS, INVTYPE_FEET, INVTYPE_WEAPONMAINHAND, INVTYPE_WEAPONOFFHAND}
