@@ -50,7 +50,7 @@ local TABS_Y, TAB_GAP = -40, 4
 local LIST_MID = (INNER_W - LIST_BAR) / 2
 -- The arrow: in the sheet's bottom strip, under the right column of slots.
 local ARROW_SIZE = 26
-local ARROW_X, ARROW_Y = 324, -416
+local ARROW_X, ARROW_Y = 329, -416 -- (Clara Combo Points: 5 right, Leatrix Plus's durability button left of it)
 
 local STATS, EQUIPMENT = 1, 2
 -- The client's own sidebar tabs: the stats tab is the player's portrait.
