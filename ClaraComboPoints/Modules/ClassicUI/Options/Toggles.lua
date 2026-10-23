@@ -156,6 +156,11 @@ ns.TOGGLES = {
     { "unitFrameFocus", L["OPT_unitFrameFocus"], L["OPT_unitFrameFocus_TIP"], parent = "unitFrames", checks = "unitFrameList", drop = true },
     { "unitFramePet", L["OPT_unitFramePet"], L["OPT_unitFramePet_TIP"], parent = "unitFrames", checks = "unitFrameList", drop = true },
     { "unitFrameParty", L["OPT_unitFrameParty"], L["OPT_unitFrameParty_TIP"], parent = "unitFrames", checks = "unitFrameList", drop = true },
+    -- (Clara Combo Points: the hunter's pet icons, Units/PetIcons.lua)
+    { "petFeedIcon", L["OPT_petFeedIcon"], L["OPT_petFeedIcon_TIP"], parent = "unitFrames", needs = "unitFramePet",
+        search = "hunter pet feed food happiness timer buff" },
+    { "petIconsUnlocked", L["OPT_petIconsUnlocked"], L["OPT_petIconsUnlocked_TIP"], parent = "unitFrames", needs = "unitFramePet",
+        search = "hunter pet move drag happiness face feed icon lock" },
     { "eliteFrames", L["OPT_eliteFrames"], L["OPT_eliteFrames_TIP"], parent = "unitFrames" },
     { "eliteFramePlayer", L["OPT_eliteFramePlayer"], L["OPT_eliteFramePlayer_TIP"], parent = "eliteFrames", checks = "eliteFrameList", drop = true, dropLabel = L["OPT_DROP_FRAMES"], dropTip = L["OPT_eliteFrames_TIP"] },
     { "eliteFrameTarget", L["OPT_eliteFrameTarget"], L["OPT_eliteFrameTarget_TIP"], parent = "eliteFrames", checks = "eliteFrameList", drop = true },

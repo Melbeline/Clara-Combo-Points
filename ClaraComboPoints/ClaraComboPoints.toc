@@ -217,6 +217,7 @@ Modules\ClassicUI\Units\UnitFrames.lua
 Modules\ClassicUI\Units\BuffArrow.lua
 Modules\ClassicUI\Units\CastBars.lua
 Modules\ClassicUI\Units\BuffsOnTop.lua
+Modules\ClassicUI\Units\PetIcons.lua
 Modules\ClassicUI\Units\SwingTimers.lua
 Modules\ClassicUI\Units\ResourceDisplay.lua
 Modules\ClassicUI\Units\StatusFont.lua
