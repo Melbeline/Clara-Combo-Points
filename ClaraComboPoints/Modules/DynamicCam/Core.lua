@@ -763,6 +763,7 @@ function DynamicCam:Shutdown()
   self:ApplySettings()
 
   self:ReactiveZoomOff()
+  if not self:IsEnabled() then self:NativeZoom() end -- (Clara Combo Points: turned off, not a profile change)
 
   constantlyRunningFrame:SetScript("OnUpdate", nil)
 

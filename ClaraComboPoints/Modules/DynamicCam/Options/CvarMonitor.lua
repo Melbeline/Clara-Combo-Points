@@ -31,9 +31,10 @@ hooksecurefunc(SettingsPanel.Container.SettingsList.ScrollBox, "Update", functio
 
   local foundMouseLookSpeedSlider = false
   local foundMotionSicknessElement = false
+  local on = DynamicCam:IsEnabled() -- (Clara Combo Points: the game's settings left alone while off)
 
   -- ###################### Mouse ######################
-  if SettingsPanel.Container.SettingsList.Header.Title:GetText() == CONTROLS_LABEL then
+  if on and SettingsPanel.Container.SettingsList.Header.Title:GetText() == CONTROLS_LABEL then
 
     local children = { SettingsPanel.Container.SettingsList.ScrollBox.ScrollTarget:GetChildren() }
     for i, child in ipairs(children) do
@@ -81,7 +82,7 @@ hooksecurefunc(SettingsPanel.Container.SettingsList.ScrollBox, "Update", functio
 
 
   -- ###################### Motion Sickness ######################
-  elseif SettingsPanel.Container.SettingsList.Header.Title:GetText() == ACCESSIBILITY_GENERAL_LABEL then
+  elseif on and SettingsPanel.Container.SettingsList.Header.Title:GetText() == ACCESSIBILITY_GENERAL_LABEL then
 
     -- Retail got rid of the drop down and only uses a single checkbox now.
 
@@ -143,9 +144,9 @@ hooksecurefunc(SettingsPanel.Container.SettingsList.ScrollBox, "Update", functio
     if not mouseLookSpeedSlider.Slider:IsEnabled() then
       -- Function name "SetEnabled" introduced in 11.0.0.
       if mouseLookSpeedSlider.SetEnabled then
-        mouseLookSpeedSlider:SetEnabled(false)
+        mouseLookSpeedSlider:SetEnabled(true)
       else
-        mouseLookSpeedSlider:SetEnabled_(false)
+        mouseLookSpeedSlider:SetEnabled_(true)
       end
     end
     mouseLookSpeedSlider = nil
@@ -191,13 +192,14 @@ local validValuesCameraView = {[1] = true, [2] = true, [3] = true, [4] = true, [
 -- of them is in use. Both of them have to be taken into account when restoring it, or else
 -- switching one off restores a setting the other one still needs suppressed.
 local function ShoulderOffsetInUse()
-  if not DynamicCam.db then return false end
+  if not DynamicCam.db or not DynamicCam:IsEnabled() then return false end -- (Clara Combo Points: not while off)
   -- We check the configured value instead of the current cvar, because with
   -- "according to zoom level" the cvar may momentarily be 0.
   return DynamicCam:GetSettingsValue(DynamicCam.currentSituationID, "cvars", "test_cameraOverShoulder") ~= 0
 end
 
 local function DynamicPitchInUse()
+  if not DynamicCam:IsEnabled() then return false end -- (Clara Combo Points: not while off)
   return tonumber(GetCVar("test_cameraDynamicPitch")) == 1
 end
 
@@ -313,7 +315,7 @@ hooksecurefunc("SetCVar", function(cvar, value, flag)
     SetCVar("cameraView", GetCVarDefault("cameraView"), "DynamicCam")
 
   -- Switch to a default view, if user switches to cameraSmoothStyle.
-  elseif cvar == "cameraSmoothStyle" and numericValue ~= 0 then
+  elseif cvar == "cameraSmoothStyle" and numericValue ~= 0 and DynamicCam:IsEnabled() then
     -- The order (first reset then set) is important, because if you are already
     -- in view 1 and do a reset, it also sets the view. If this is followed by
     -- another setView, you get an undesired instant view switch.

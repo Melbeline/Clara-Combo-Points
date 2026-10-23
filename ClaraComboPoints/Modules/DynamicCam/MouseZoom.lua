@@ -280,6 +280,14 @@ function DynamicCam:ReactiveZoomOff()
 end
 
 
+-- (Clara Combo Points: the game's own zoom again, DynamicCam turned off)
+function DynamicCam:NativeZoom()
+  CameraZoomIn = OldCameraZoomIn
+  CameraZoomOut = OldCameraZoomOut
+  reactiveZoomTarget = nil
+  reactiveZoomTargetCorrectionFrame:SetScript("OnUpdate", nil)
+end
+
 function DynamicCam:ReactiveZoomIsOn()
   return CameraZoomIn == ReactiveZoomIn
 end
