@@ -1,10 +1,10 @@
--- Clara Combo Points - /who by first name or surname: after a one-word search (/who lea, the
--- Who window's search line), the Who list shows only the players whose first name or surname
--- (WoW Forever's names: "First Surname") is that word, without case or accents: "lea" finds
--- Lea, Léa and Lëa, not Leah. The game searches names, guilds and zones: when no name is the
--- word (/who stormwind, a guild's name), every result shows as before. A search of several
--- words or with a filter (n-, g-, z-, c-, r-, a level) is left alone. On unless turned off
--- (Esc > Options > AddOns > Clara Combo Points).
+-- Clara Combo Points - /who by first name or surname: after a search of one word in quotes
+-- (/who "lea", or n-"lea"; in the Who window's search line too), the Who list shows only the
+-- players whose first name or surname (WoW Forever's names: "First Surname") is that word, without
+-- case or accents: "lea" finds Lea, Léa and Lëa, not Leah nor Leafrunner. Without the quotes (/who
+-- lea), the search is the game's own: every name with lea in it. A search of several words or
+-- with a filter (g-, z-, c-, r-, a level) is left alone. On unless turned off (Esc > Options >
+-- AddOns > Clara Combo Points).
 -- Any Who list reads its results from the game the same way (the game's own, ClassicUI Forever's,
 -- others): the two functions it reads them with give the matching ones only, in their order.
 
@@ -20,15 +20,15 @@ end
 local F = C_FriendList
 if not (F and F.GetNumWhoResults and F.GetWhoInfo and F.SendWho) then return end
 
--- The word searched: one word of letters (accents, apostrophes and hyphens in it too), quoted
--- or not, or a name filter (n-word); else nothing.
+-- The word searched: one word of letters (accents, apostrophes and hyphens in it too) in quotes,
+-- possibly as a name filter (n-"word"); else nothing (the game's own search).
 local function Word(text)
   if type(text) ~= "string" or issecretvalue(text) then return end
   text = text:gsub("^%s+", ""):gsub("%s+$", "")
   text = text:gsub("^[nN]%-", "")
-  text = text:gsub('^"(.*)"$', "%1")
-  -- one word: no space, digit or quote, a hyphen only inside it; not one of the game's filters
-  if text == "" or text:find('[%s%d"]') or text:find("^%-") or text:find("%-$") or text:find("^%a%-") then return end
+  text = text:match('^"(.*)"$')
+  -- one word: no space, digit or quote, a hyphen only inside it
+  if not text or text == "" or text:find('[%s%d"]') or text:find("^%-") or text:find("%-$") then return end
   local key = ns:SearchKey(text) -- (lower case, accents off; "Anne-Lea" is two words)
   if key == "" or key:find(" ") then return end
   return key
@@ -49,7 +49,7 @@ local word -- the word of the last search (nil: no name search)
 local map  -- the results that match, by their place in the filtered list (nil: all of them)
 
 -- Read again each time a list asks how many there are (its update): the game's results change
--- with each search and each sort.
+-- with each search and each sort. (No name is the word: none shown.)
 local function Matches(count)
   map = nil
   if not word or not ns:WhoNames() or type(count) ~= "number" or issecretvalue(count) then return end
@@ -58,7 +58,7 @@ local function Matches(count)
     local ok, info = pcall(GetInfo, i)
     if ok and type(info) == "table" and NameHas(info.fullName, word) then found[#found + 1] = i end
   end
-  if #found > 0 then map = found end -- (no name is the word: a guild, a zone... all shown)
+  map = found
 end
 
 F.GetNumWhoResults = function(...)
