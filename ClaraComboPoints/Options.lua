@@ -3402,6 +3402,7 @@ local function Build()
     navButtons[i] = NavButton(nav, i, def[1], def[2], function()
       if page ~= i then body:SetVerticalScroll(0) end -- another page: from its top
       page = i
+      if i == ICONS_PAGE and catalog then catalog.closed = nil end -- (the class spells panel shut by hand: open again)
       p:Refresh()
     end)
   end
