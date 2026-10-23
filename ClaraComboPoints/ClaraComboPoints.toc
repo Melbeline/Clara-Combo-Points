@@ -23,6 +23,7 @@ Profiles.lua
 SpellCatalog.lua
 SpellNames.lua
 Who.lua
+Flyout.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
