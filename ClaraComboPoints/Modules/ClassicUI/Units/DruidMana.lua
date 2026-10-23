@@ -64,6 +64,11 @@ local function Build(power)
         hovered = over
         Update()
     end)
+    -- (Clara Combo Points: the character sheet opened or shut, its numbers in or out)
+    if CharacterFrame then
+        ns.HookScriptOnce(CharacterFrame, "OnShow", function() Update() end, "druidMana")
+        ns.HookScriptOnce(CharacterFrame, "OnHide", function() Update() end, "druidMana")
+    end
     bar:Hide()
 end
 
@@ -75,6 +80,13 @@ local function Percent()
     return _G.UnitPowerPercent("player", MANA, false, _G.CurveConstants and _G.CurveConstants.ScaleTo100)
 end
 
+-- The character sheet open: the game's player bars in numbers, current / max, whatever the Status Text setting or the
+-- hover (its showNumeric on them); ours as they are (Clara Combo Points).
+local function SheetNumbers()
+    local game = _G.PlayerFrame_GetManaBar and _G.PlayerFrame_GetManaBar()
+    return type(game) == "table" and game.showNumeric == true
+end
+
 -- The Status Text setting: numeric, percent, both (percent left, value right) or none (numbers on hover only); with
 -- both numbers on hover (the option), numeric and percent show both while the mouse is over the bar.
 local function Numbers(now, most)
@@ -83,6 +95,7 @@ local function Numbers(now, most)
     if ns.GetCVar("statusText") ~= "1" and not hovered then mode = "NONE" end
     if mode == "NONE" and hovered then mode = "NUMERIC" end
     if hovered and ns.db.hoverBothNumbers ~= false and (mode == "NUMERIC" or mode == "PERCENT") then mode = "BOTH" end
+    if SheetNumbers() then mode = "NUMERIC" end -- (Clara Combo Points)
     local font = GamePowerText()
     font = font and font:GetFontObject()
     for _, fs in ipairs({ bar.center, bar.left, bar.right }) do
