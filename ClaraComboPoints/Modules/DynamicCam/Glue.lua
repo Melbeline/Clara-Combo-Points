@@ -1,9 +1,10 @@
 -- Clara Combo Points - DynamicCam's camera in one click (the portrait's menu, the Improvements
 -- tab), in the copy that runs (built in, or the standalone DynamicCam): ticked, its Vertical Pitch
--- and Head Tracking on and its Zoom Increments back to the player's (kept when unticked: 0.2 yards
--- a wheel tick the first time); unticked, both off and 2 yards a tick. Set in its standard
--- settings, and in the situations that set them themselves; the box shows its standard settings
--- (ticked when both are on). DynamicCam itself keeps running.
+-- and Head Tracking on; unticked, both off. Its Zoom Increments: the player's for each (kept when
+-- the box leaves it, given back when it comes back to it; the first time 0.2 yards a wheel tick
+-- ticked, 2 unticked). Set in its standard settings, and in the situations that set them
+-- themselves; the box shows its standard settings (ticked when both are on). DynamicCam itself
+-- keeps running.
 
 local ADDON, ns = ...
 
@@ -14,8 +15,10 @@ local function Cam()
 end
 
 local FEATURES = { "test_cameraDynamicPitch", "test_cameraHeadMovementStrength" } -- (Vertical Pitch, Head Tracking: 1 on, 0 off)
--- Zoom Increments, as its slider shows them (kept as that minus 1): unticked, and ticked the first time
-local OFF_INCREMENTS, FIRST_INCREMENTS = 2 - 1, 0.2 - 1
+-- Zoom Increments, as its slider shows them (kept as that minus 1), the first time ticked and unticked;
+-- the player's own for each, kept in Clara's settings (the standard one and the situations' own)
+local FIRST_INCREMENTS = { [true] = 0.2 - 1, [false] = 2 - 1 }
+local KEPT = { [true] = "cameraZoom", [false] = "cameraZoomOff" }
 
 local function Standard(cam)
   local profile = cam and cam.db and cam.db.profile
@@ -23,25 +26,21 @@ local function Standard(cam)
   if type(standard) == "table" and type(standard.cvars) == "table" then return standard, profile end
 end
 
--- the box's values in a settings table (the standard ones: all; a situation's: those it sets itself).
--- Ticked: the Zoom Increments kept (if they are at the unticked 2: one set by hand is left).
-local function Put(settings, on, all, kept)
+-- the box's values in a settings table (the standard ones: all; a situation's: those it sets itself;
+-- increments nil: its Zoom Increments left)
+local function Put(settings, on, all, increments)
   local cvars = type(settings) == "table" and settings.cvars
   if type(cvars) ~= "table" then return end
   for _, cvar in ipairs(FEATURES) do
     if all or cvars[cvar] ~= nil then cvars[cvar] = on and 1 or 0 end
   end
-  local now = settings.reactiveZoomAddIncrementsAlways
-  if not (all or now ~= nil) then return end
-  if not on then
-    settings.reactiveZoomAddIncrementsAlways = OFF_INCREMENTS
-  elseif type(now) ~= "number" or math.abs(now - OFF_INCREMENTS) < 1e-6 then
-    settings.reactiveZoomAddIncrementsAlways = kept or FIRST_INCREMENTS
+  if increments and (all or settings.reactiveZoomAddIncrementsAlways ~= nil) then
+    settings.reactiveZoomAddIncrementsAlways = increments
   end
 end
 
--- Unticked: the player's Zoom Increments kept (sv.cameraZoom: the standard one, the situations' own).
-local function Keep(sv, standard, situations)
+-- The player's Zoom Increments as they are, kept for the box's state it leaves.
+local function Keep(sv, on, standard, situations)
   local kept = { standard = tonumber(standard.reactiveZoomAddIncrementsAlways), situations = {} }
   for id, situation in pairs(situations) do
     local own = type(situation) == "table" and situation.situationSettings
@@ -49,7 +48,7 @@ local function Keep(sv, standard, situations)
       kept.situations[id] = own.reactiveZoomAddIncrementsAlways
     end
   end
-  sv.cameraZoom = kept
+  sv[KEPT[on]] = kept
 end
 
 function ns:CameraAvailable() return Standard(Cam()) ~= nil end
@@ -67,12 +66,15 @@ function ns:SetCameraOn(on)
   if not standard then return end
   on = on and true or false
   local situations = type(profile.situations) == "table" and profile.situations or {}
-  if not on and self.sv and self:CameraOn() then Keep(self.sv, standard, situations) end
-  local kept = on and self.sv and type(self.sv.cameraZoom) == "table" and self.sv.cameraZoom or {}
+  local switch = self:CameraOn() ~= on -- (already in that state: the Zoom Increments left as they are)
+  if switch and self.sv then Keep(self.sv, not on, standard, situations) end
+  local kept = self.sv and type(self.sv[KEPT[on]]) == "table" and self.sv[KEPT[on]] or {}
   local keptSituations = type(kept.situations) == "table" and kept.situations or {}
-  Put(standard, on, true, tonumber(kept.standard))
+  Put(standard, on, true, switch and (tonumber(kept.standard) or FIRST_INCREMENTS[on]) or nil)
   for id, situation in pairs(situations) do
-    if type(situation) == "table" then Put(situation.situationSettings, on, false, tonumber(keptSituations[id])) end
+    if type(situation) == "table" then
+      Put(situation.situationSettings, on, false, switch and (tonumber(keptSituations[id]) or FIRST_INCREMENTS[on]) or nil)
+    end
   end
   if cam:IsEnabled() and cam.ApplySettings then cam:ApplySettings() end
   local registry = LibStub("AceConfigRegistry-3.0", true) -- (its options, if open: the new values)

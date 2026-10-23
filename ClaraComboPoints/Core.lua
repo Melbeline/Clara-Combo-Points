@@ -1802,17 +1802,19 @@ local function InitDB()
   if sv.whoNames ~= false then sv.whoNames = nil end -- (on unless turned off: Who.lua)
   if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
   sv.cameraOff, sv.cameraWas = nil, nil -- (an earlier DynamicCam box's, no longer used: Modules/DynamicCam/Glue.lua)
-  -- the player's DynamicCam Zoom Increments, kept while the Dynamic camera box is unticked (the same)
-  if type(sv.cameraZoom) == "table" then
-    local kept = sv.cameraZoom
-    if type(kept.standard) ~= "number" then kept.standard = nil end
-    if type(kept.situations) == "table" then
-      for id, v in pairs(kept.situations) do if type(v) ~= "number" then kept.situations[id] = nil end end
+  -- the player's DynamicCam Zoom Increments with the Dynamic camera box ticked, and unticked (the same)
+  for _, key in ipairs({ "cameraZoom", "cameraZoomOff" }) do
+    local kept = sv[key]
+    if type(kept) == "table" then
+      if type(kept.standard) ~= "number" then kept.standard = nil end
+      if type(kept.situations) == "table" then
+        for id, v in pairs(kept.situations) do if type(v) ~= "number" then kept.situations[id] = nil end end
+      else
+        kept.situations = nil
+      end
     else
-      kept.situations = nil
+      sv[key] = nil
     end
-  else
-    sv.cameraZoom = nil
   end
   -- the interface improvements turned off (QoL.lua): only "false" is kept
   if type(sv.qol) == "table" then
