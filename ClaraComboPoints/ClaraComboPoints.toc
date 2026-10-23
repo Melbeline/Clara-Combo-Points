@@ -7,9 +7,10 @@
 ## Version: 1.6.0
 ## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, ElvUI, EasyFrames, Glass
+## OptionalDeps: WeaponSwingTimer, BuyEmAllClassic, DialogKey_Numy, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
+# (ClaraLeaPlusDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraXToLevelDB: not built in here, kept for the full version)
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
@@ -30,70 +31,12 @@ Options.lua
 SettingsPage.lua
 QoL.lua
 Modules\BuyEmAll\BuyEmAll.lua
-Modules\NodeSight\Bootstrap.lua
-Modules\NodeSight\Names.lua
-Modules\NodeSight\NodeSight.lua
-Modules\NodeSight\Sparkles.lua
-Modules\NodeSight\FarSparkles.lua
-Modules\NodeSight\WhatsNew.lua
-Modules\NodeSight\Settings.lua
-Modules\DynamicCam\Bootstrap.lua
-Modules\DynamicCam\embeds.xml
-Modules\DynamicCam\UiHideModule.lua
-Modules\DynamicCam\Core.lua
-Modules\DynamicCam\Ui\Window.lua
-Modules\DynamicCam\MouseZoom.lua
-Modules\DynamicCam\SituationManager.lua
-Modules\DynamicCam\ZoomBasedSettings.lua
-Modules\DynamicCam\ZoomBasedEditor.lua
-Modules\DynamicCam\DefaultSettings.lua
-Modules\DynamicCam\Sharing.lua
-Modules\DynamicCam\Presets.lua
-Modules\DynamicCam\Options\Helpers.lua
-Modules\DynamicCam\Options\ControlFactories.lua
-Modules\DynamicCam\Options\Widgets.lua
-Modules\DynamicCam\Options\CvarMonitor.lua
-Modules\DynamicCam\Options\DetachFrame.lua
-Modules\DynamicCam\Options.lua
-Modules\DynamicCam\Ui\MainFrame.lua
-Modules\DynamicCam\Ui\Descriptor.lua
-Modules\DynamicCam\Ui\ActionsDescriptor.lua
-Modules\DynamicCam\Ui\Controls.lua
-Modules\DynamicCam\Ui\SettingsPage.lua
-Modules\DynamicCam\Ui\SituationsPage.lua
-Modules\DynamicCam\Glue.lua
 Modules\DialogKey\Bootstrap.lua
 Modules\DialogKey\embeds.xml
 Modules\DialogKey\api.lua
 Modules\DialogKey\options.lua
 Modules\DialogKey\main.lua
 Modules\DialogKey\Glue.lua
-Modules\XToLevel\Bootstrap.lua
-Modules\XToLevel\embeds.xml
-Modules\XToLevel\locale\locale.xml
-Modules\XToLevel\Main.lua
-Modules\XToLevel\Tables.lua
-Modules\XToLevel\Libs.lua
-Modules\XToLevel\Config.lua
-Modules\XToLevel\objects\Messages.lua
-Modules\XToLevel\objects\LDB.lua
-Modules\XToLevel\objects\Tooltip.lua
-Modules\XToLevel\objects\Average.lua
-Modules\XToLevel\objects\Player.lua
-Modules\XToLevel\frames\GlobalTemplates.xml
-Modules\XToLevel\frames\AverageFrame_Classic.xml
-Modules\XToLevel\frames\AverageFrame_Blocky.xml
-Modules\XToLevel\Glue.lua
-Modules\LeatrixPlus\Bootstrap.lua
-Modules\LeatrixPlus\Leatrix_Plus_Library.lua
-Modules\LeatrixPlus\Leatrix_Plus_Locale.lua
-Modules\LeatrixPlus\Leatrix_Plus_Media.lua
-Modules\LeatrixPlus\Leatrix_Plus_Flight_Alliance.lua
-Modules\LeatrixPlus\Leatrix_Plus_Flight_Horde.lua
-Modules\LeatrixPlus\Leatrix_Plus_Mute.lua
-Modules\LeatrixPlus\Leatrix_Plus_Minimap.lua
-Modules\LeatrixPlus\Leatrix_Plus.xml
-Modules\LeatrixPlus\Leatrix_Plus.lua
 Modules\WeaponSwingTimer\Env.lua
 Modules\WeaponSwingTimer\localization.lua
 Modules\WeaponSwingTimer\WeaponSwingTimer_ranged_base_speed.lua

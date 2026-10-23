@@ -11,7 +11,7 @@ Pour **toutes les classes** de WoW Forever : voleur, druide (forme de félin et 
 - **Trois styles** : plat, **Classique** (les barres du jeu dans un fin cadre gris, comme celles du portrait) ou **Infobulle** (bordure des infobulles du jeu).
 - **Mana à consommer** : pendant l'incantation d'un sort, la mana qu'il va coûter est marquée sur la barre de mana.
 - **Objets et imprégnations d'arme** : tout objet qui a un effet « Utiliser » (potions, pierres de soins, bandages, poisons, huiles, pierres à aiguiser…) et les imprégnations du chaman (Arme Croque-roc, Arme Langue de feu, Arme de givre, Arme Furie-des-vents) sur les lignes d'icônes.
-- **Améliorations de l'interface** : BuyEmAll, Leatrix Plus (avec la capture d'écran de Cheese à chaque niveau), NodeSight, WeaponSwingTimer, DynamicCam, DialogKey et XToLevel intégrés, chacun réglable à part (voir plus bas).
+- **Améliorations de l'interface** : BuyEmAll, WeaponSwingTimer et DialogKey intégrés, chacun réglable à part (voir plus bas).
 - **/who par prénom ou nom de famille** : `/who lea` reste la recherche du jeu (tous les noms qui contiennent « lea » : Leah, Leafrunner…). Entre guillemets, `/who "lea"` (ou `n-"lea"`, aussi dans la ligne de recherche de la fenêtre Qui) ne liste que les joueurs dont le prénom ou le nom de famille est « Lea », sans tenir compte des majuscules ni des accents (Lea, Léa, Lëa, Anna Lea, Lea-Marie… mais pas Leah, Aleandra ni Leafrunner) ; personne si aucun ne l'est. Une recherche de plusieurs mots ou avec un autre filtre (`g-`, `z-`, `c-`, `r-`, un niveau) n'est pas touchée. Marche avec la liste Qui du jeu comme avec celle de ClassicUI Forever.
 
 Dans la liste des addons du jeu (Échap > AddOns), l'addon se range dans la section **UI**.
@@ -54,7 +54,7 @@ Commandes rapides : `/cl lock`, `/cl unlock`, `/cl hide` / `/cl show` (cacher / 
 **Menu du portrait** (clic droit sur le portrait de ton personnage) :
 
 - **Recharger l'interface**, dans « Other Options », juste au-dessus de « Edit Mode » (comme `/reload`).
-- Juste au-dessus de la section du jeu « Other Options » (qui reste en bas du menu, « Leave Party » tout en bas), une section **Clara Combo Points**, aussi étroite que les entrées du jeu pour que le menu garde sa largeur : **Opacité** avec sa valeur, puis le même curseur que « Overall opacity » du jeu (avec ses flèches, 5 % par cran ; c'est le même réglage que l'opacité de la page Général), suivi de deux cases : **barre et icônes verrouillées** (décochée : comme Déverrouiller sur la ligne Position, pour toutes les classes), puis tout à droite **afficher / cacher** tout l'addon en un clic (cochée = affiché). Dessous, **Compteur de dégâts** : montre ou cache le compteur de dégâts du jeu ; puis **Caméra dynamique** (quand DynamicCam est là, intégré ou d'origine) : coupe ou remet ses modifications de caméra en un clic (coupées, DynamicCam ne touche plus à rien, même en zoomant : la caméra reprend le zoom du jeu et les réglages qu'elle avait quand tu as coché la case — ceux par défaut du jeu la première fois ; les cases Enable de DynamicCam ne bougent pas, elles reprennent effet quand tu recoches ; le choix est gardé d'une session à l'autre).
+- Juste au-dessus de la section du jeu « Other Options » (qui reste en bas du menu, « Leave Party » tout en bas), une section **Clara Combo Points**, aussi étroite que les entrées du jeu pour que le menu garde sa largeur : **Opacité** avec sa valeur, puis le même curseur que « Overall opacity » du jeu (avec ses flèches, 5 % par cran ; c'est le même réglage que l'opacité de la page Général), suivi de deux cases : **barre et icônes verrouillées** (décochée : comme Déverrouiller sur la ligne Position, pour toutes les classes), puis tout à droite **afficher / cacher** tout l'addon en un clic (cochée = affiché). Dessous, **Compteur de dégâts** : montre ou cache le compteur de dégâts du jeu.
 - Cacher l'addon à la main est le choix de ton personnage (enregistré dans le profil de sa classe, pas dans les profils sauvegardés) et reste valable même options ouvertes. Si une règle « Le cacher quand » le cache, cocher la case (ou `/cl show`) l'affiche quand même, jusqu'à ce que la situation change (groupe, zone).
 - La section et « Recharger l'interface » peuvent être retirées du menu dans les options du jeu (plus bas).
 
@@ -127,23 +127,19 @@ Page **Profils** : chaque onglet de classe a sa propre liste de profils. Un prof
 
 ## Améliorations de l'interface
 
-Les fonctions de sept autres addons, intégrées à Clara Combo Points, **seulement dans WoW Forever** :
+Les fonctions de trois autres addons, intégrées à Clara Combo Points, **seulement dans WoW Forever** :
 
 | Module | Ce qu'il fait | Commande |
 |---|---|---|
 | **BuyEmAll** | Chez un marchand, **Maj + clic** sur un objet : une petite fenêtre pour acheter la quantité voulue (flèches, chiffres tapés au clavier, **Pile** jusqu'à la prochaine pile pleine — clic droit : une pile de moins —, **Max** : autant que tes sacs en contiennent, que tu peux payer, en or ou en jetons, et que le marchand en a). Au-delà d'une pile, l'achat demande confirmation (une case l'enlève). L'achat se fait une pile par demi-seconde et s'arrête si le marchand se ferme. | `/buyemall confirm` |
-| **Leatrix Plus** | Des dizaines de petites améliorations au choix (réparations et vente des objets gris automatiques, ramassage rapide, quêtes, chat, minicarte…). Avec **Cheese** : une capture d'écran à chaque niveau, avec le temps de jeu du niveau dans le chat (page Automatisation, « Capture d'écran au niveau supérieur »). | `/ltp` |
-| **NodeSight** | Ce qu'est chaque herbe et chaque minerai sur la minicarte, une flèche vers le plus proche, des étincelles dorées dessus quand tu es tout près. | — |
 | **WeaponSwingTimer** | Des barres de temps entre deux coups : main droite et main gauche, celles de ta cible, tirs à distance. Par défaut : seulement la barre de tir, et seulement pour les chasseurs. | `/wst` |
-| **DynamicCam** | Une caméra plus dynamique : zoom, décalage d'épaule, inclinaison et rotation qui changent selon ce que tu fais (combat, monture, ville, donjon…), zoom plus doux, interface masquée quand tu veux. Une case du menu du portrait coupe ou remet ses modifications de caméra en un clic. | `/dc` |
 | **DialogKey** | Une touche (**Espace** par défaut) clique sur le premier bouton d'une fenêtre de dialogue, accepte et rend les quêtes ; les **touches numériques** choisissent les options de dialogue et les récompenses de quête. Rien en combat. | `/dialogkey` (`/dk`) |
-| **XToLevel** | Combien de monstres, de quêtes, de donjons et de champs de bataille il reste jusqu'au niveau suivant, d'après tes propres moyennes : dans une petite fenêtre (à glisser ; clic droit : ses options), un flux LibDataBroker et les infobulles. | `/xtl` |
 
 - **Onglet Améliorations** de la fenêtre d'options : la liste des modules à gauche ; pour chacun, où il en est, la case **Intégré** (prise en compte au prochain rechargement, avec un bouton pour recharger), ses principaux réglages tant qu'il tourne, et **Toutes ses options**.
-- **Échap > Options > AddOns > Améliorations de l'interface** (à part de Clara Combo Points) : les mêmes cases, et chaque module dans son **propre sous-menu** (BuyEmAll, Leatrix Plus, NodeSight et ses pages Flèche, Symboles, Étincelles, Bêta, DynamicCam, DialogKey, XToLevel et ses pages) ; WeaponSwingTimer a sa **propre entrée**.
+- **Échap > Options > AddOns > Améliorations de l'interface** (à part de Clara Combo Points) : les mêmes cases, et chaque module dans son **propre sous-menu** (BuyEmAll, DialogKey) ; WeaponSwingTimer a sa **propre entrée**.
 - **Si l'addon d'origine est activé**, c'est lui qui tourne, et le module intégré ne fait rien (pas de doublon). Ses réglages sont **copiés** à chaque connexion et déconnexion : le jour où tu le désactives, la version intégrée reprend exactement tes réglages, rien à refaire. WeaponSwingTimer : une session avec l'addon d'origine activé suffit pour copier ses profils.
-- **DialogKey et XToLevel prennent le relais de leur addon d'origine** : s'il est activé, c'est lui qui tourne pour cette session (jamais les deux à la fois : chacun prendrait les mêmes touches), puis il est **désactivé pour ce personnage** et la version intégrée tourne **dès le prochain rechargement** (l'onglet Améliorations propose de recharger). Ses réglages, et pour XToLevel les données de ce personnage, sont repris à la déconnexion si la version intégrée n'en a pas encore. Si tu désactives le module dans Clara, l'addon d'origine est réactivé pour ce personnage.
-- Les raccourcis clavier de Leatrix Plus et de NodeSight sont dans **Échap > Options > Raccourcis > Améliorations de l'interface**.
+- **DialogKey prend le relais de son addon d'origine** : s'il est activé, c'est lui qui tourne pour cette session (jamais les deux à la fois : ils prendraient les mêmes touches), puis il est **désactivé pour ce personnage** et la version intégrée tourne **dès le prochain rechargement** (l'onglet Améliorations propose de recharger). Ses réglages sont repris à la déconnexion si la version intégrée n'en a pas encore. Si tu désactives le module dans Clara, l'addon d'origine est réactivé pour ce personnage.
+- **XToLevel n'est plus intégré dans cette version** : s'il avait pris le relais de ton addon XToLevel, celui-ci est réactivé pour chaque personnage à sa prochaine connexion (il tourne après un `/rl`).
 
 ## Rage qui va être consommée
 
@@ -164,7 +160,7 @@ Les techniques instantanées dépensent leur rage tout de suite : rien à prévo
 - **Guerrier** : pas de points de combo, la barre de rage seule, avec la ligne d'icônes posée dessus.
 - **Langues** : l'addon ne dépend jamais de la langue du client (classes, ressources, événements et sorts sont lus par leurs identifiants internes), il marche donc sur tous les clients. Seuls les textes affichés changent avec le drapeau choisi.
 - **Mise à jour** : tes anciens réglages sont gardés (depuis 1.0 / 1.1, ils sont copiés dans les profils voleur et druide). Le profil guerrier démarre avec les réglages par défaut.
-- **Léger** : Clara Combo Points lui-même n'utilise aucune bibliothèque (LibStub, CallbackHandler et AceDB sont là pour WeaponSwingTimer) et aucune texture à charger. Tant que la barre est cachée (druide hors félin et ours), l'addon ne lit plus rien : il se remet à jour d'un coup quand elle réapparaît, et les boutons d'aura du jeu montrent aussitôt les auras en cours (une Récupération lancée en forme humanoïde en combat est bien affichée en revenant en félin). Les icônes ne sont relues que quand une aura ou la cible change, une fois par image au plus. Sur une classe qui n'a pas de barre, l'addon reste inactif : aucun événement, aucune mise à jour.
+- **Léger** : Clara Combo Points lui-même n'utilise aucune bibliothèque (LibStub, CallbackHandler et AceDB sont là pour WeaponSwingTimer et DialogKey) et aucune texture à charger. Tant que la barre est cachée (druide hors félin et ours), l'addon ne lit plus rien : il se remet à jour d'un coup quand elle réapparaît, et les boutons d'aura du jeu montrent aussitôt les auras en cours (une Récupération lancée en forme humanoïde en combat est bien affichée en revenant en félin). Les icônes ne sont relues que quand une aura ou la cible change, une fois par image au plus. Sur une classe qui n'a pas de barre, l'addon reste inactif : aucun événement, aucune mise à jour.
 
 ## Licences des polices
 
@@ -173,12 +169,7 @@ Les polices de `Media/Fonts` viennent de Google Fonts, sous licence SIL Open Fon
 ## Addons intégrés
 
 - **BuyEmAll Classic** 1.0.4, de Jordy141 (réécrit pour le code des marchands de WoW Forever).
-- **Leatrix Plus** 1.60.21 (version Forever), de Leatrix.
-- **Cheese!**, de Jademalo, sous licence MIT (voir `Modules/LeatrixPlus/Cheese-LICENSE.txt`).
-- **NodeSight** 1.4.0, de Krelock.
 - **WeaponSwingTimer** 1.60.1 (version Forever), de WatchYourSixx, avec les bibliothèques Ace3 (LibStub, CallbackHandler-1.0, AceDB-3.0).
-- **DynamicCam** 2.21.5, de mpstark et LudiusMaximus, sous licence MIT (voir `Modules/DynamicCam/LICENSE`), avec ses bibliothèques (Ace3, LibCamera, LibEasing, LibHideUI, LibMountInfo, LibCompress : voir `Modules/DynamicCam/Libs/LICENSE.md`).
 - **DialogKey (Numy Edition)** 1.2.62, de Numy (d'après Foxthorn, N01ch et FuriousProgrammer), sous licence GNU GPL v3 (voir `Modules/DialogKey/LICENSE`), avec ses bibliothèques (Ace3, NumyAceEvent-3.0) ; sa vérification de version (LibVersionCheck, qui annonce aux autres joueurs la version utilisée) est retirée.
-- **XToLevel** (XToLevelNG) 12.1.5, d'Atli Þór et Bjarke Istrup Pedersen (voir `Modules/XToLevel/LICENSE.txt`), avec ses bibliothèques (Ace3, LibDataBroker-1.1).
 
-Cheese, DynamicCam, DialogKey et XToLevel sont fournis avec leur fichier de licence ; les autres sont crédités ici à leurs auteurs.
+DialogKey est fourni avec son fichier de licence ; les autres sont crédités ici à leurs auteurs.

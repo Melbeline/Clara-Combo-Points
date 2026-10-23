@@ -1,12 +1,11 @@
--- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
--- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
--- DialogKey and XToLevel sit under "Interface improvements" in the game's options (Esc > Options
--- > AddOns), apart from Clara Combo Points; WeaponSwingTimer has its own entry there. Each module
--- runs only in WoW Forever, and only if not turned off here. When its own addon is enabled, that
--- one runs instead (its settings are carried over for the day it is turned off); DialogKey and
--- XToLevel take over from theirs: it runs for that session, then it is turned off for the
--- character, so that the built-in one runs from the next reload (and it is turned back on if the
--- module is turned off here).
+-- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll and
+-- DialogKey sit under "Interface improvements" in the game's options (Esc > Options > AddOns),
+-- apart from Clara Combo Points; WeaponSwingTimer has its own entry there. Each module runs only
+-- in WoW Forever, and only if not turned off here. When its own addon is enabled, that one runs
+-- instead (its settings are carried over for the day it is turned off); DialogKey takes over from
+-- its own: that one runs for that session, then it is turned off for the character, so that the
+-- built-in one runs from the next reload (and it is turned back on if the module is turned off
+-- here).
 -- Saved variables load before the files here (## LoadSavedVariablesFirst), so each module
 -- knows at once whether it runs.
 
@@ -17,13 +16,12 @@ local L = ns.L
 -- built-in one runs instead of it (from the next reload: it is turned off for the character).
 ns.QOL_MODULES = {
   { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic" },
-  { key = "leatrix", name = "Leatrix Plus", standalone = "Leatrix_Plus" },
-  { key = "nodesight", name = "NodeSight", standalone = "NodeSight" },
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
-  { key = "dynamiccam", name = "DynamicCam", standalone = "DynamicCam" },
   { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
-  { key = "xtolevel", name = "XToLevel", standalone = "XToLevel", takeOver = true },
 }
+-- Modules no longer built in that took over from their own addon: that one is turned back on for
+-- the characters it was turned off for (at their next login; it runs from the next reload).
+local RETIRED = { { key = "xtolevel", standalone = "XToLevel" } }
 
 -- WoW Forever builds are 160xx (the modules' own code is for them; the retail builds Clara's
 -- TOC also lists are not)
@@ -114,6 +112,7 @@ takeOver:SetScript("OnEvent", function(self)
   for _, m in ipairs(ns.QOL_MODULES) do
     if ns:QolTakesOver(m.key) then StandaloneOn(m, false) end
   end
+  for _, m in ipairs(RETIRED) do StandaloneOn(m, true) end
 end)
 
 -- Turned on or off: from the next session (a module cannot be loaded or unloaded midway). A
