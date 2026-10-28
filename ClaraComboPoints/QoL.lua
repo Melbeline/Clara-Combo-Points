@@ -24,6 +24,7 @@ ns.QOL_MODULES = {
   { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
   { key = "xtolevel", name = "XToLevel", standalone = "XToLevel", takeOver = true },
   { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", takeOver = true },
+  { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
   { key = "classicui", name = "ClassicUI Forever", standalone = "ClassicUIForever" },
 }
 
@@ -36,7 +37,7 @@ ns.FOREVER = type(toc) == "number" and toc >= 16000 and toc < 20000
 -- enabled, it has loaded before Clara Combo Points)
 function ns:StandaloneRuns(name)
   local A = C_AddOns
-  if not A then return false end
+  if not (A and name) then return false end
   if A.IsAddOnLoaded and A.IsAddOnLoaded(name) then return true end
   if A.DoesAddOnExist and not A.DoesAddOnExist(name) then return false end
   if not (A.GetAddOnEnableState and A.IsAddOnLoadable) then return false end

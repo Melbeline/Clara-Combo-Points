@@ -90,7 +90,10 @@ local function WinW() return ns.sv.window.w or PANEL_W end
 local function WinH() return ns.sv.window.h or PANEL_H end
 local function CatW() return ns.sv.catalog.w or SIDE_W end
 local function CatH() return ns.sv.catalog.h or WinH() end
-local function OnRelabel(fn) relabels[#relabels + 1] = fn; fn() end
+local function OnRelabel(fn)
+  if relabels then relabels[#relabels + 1] = fn end -- (none before the window: the mail module's export box)
+  fn()
+end
 
 local function ClickSound()
   if SOUNDKIT and PlaySound then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
@@ -1633,6 +1636,7 @@ local function TextDialog(p)
   end
   return f
 end
+ns.TextDialog = TextDialog -- (the mail module's export / import too)
 
 ---------------------------------------------------------------------------
 -- Bars page: the bars of the tab's class, top to bottom (drag one to move it, its box shows it
