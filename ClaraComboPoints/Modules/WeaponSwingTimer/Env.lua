@@ -98,6 +98,11 @@ if E.env then
     Switch("WST_SW_HUNTERS_ONLY", "hunter", "hunters_only", true),
     Switch("WST_SW_PLAYER", "player", "enabled", false),
     Switch("WST_SW_TARGET", "target", "enabled", false),
+    { -- the distance box on the target and focus frames (UnitBoxes.lua): a hunter's by default
+      label = "WST_SW_RANGE_BOX",
+      get = function() local r = E.data.range; return r and r.FrameBoxOn and r.FrameBoxOn() or false end,
+      set = function(on) local r = E.data.range; if r and r.SetFrameBox then r.SetFrameBox(on) end end,
+    },
     {
       label = "WST_SW_LOCKED",
       get = function() local t = Settings("player"); return not t or t.is_locked ~= false end,
