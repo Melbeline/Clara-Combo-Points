@@ -21,6 +21,7 @@ ns.QOL_MODULES = {
   { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", takeOver = true },
   { key = "tullarange", name = "tullaRange", standalone = "tullaRange", takeOver = true },
   { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
+  { key = "tooltipanchor", name = "Tooltip Anchor" }, -- (Clara's own)
 }
 -- Modules no longer built in that took over from their own addon: that one is turned back on for
 -- the characters it was turned off for (at their next login; it runs from the next reload).
