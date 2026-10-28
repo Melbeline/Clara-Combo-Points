@@ -158,11 +158,24 @@ local function Build()
   updates[#updates + 1] = function() blink:SetChecked(ns:NoBlink()) end
   page.noBlink = blink
 
+  -- The threat percent over the game's target and focus frames (UnitBoxes.lua)
+  local threat = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+  threat:SetSize(26, 26)
+  threat:SetPoint("TOPLEFT", 10, -334)
+  local threatText = threat.Text or threat.text
+  labels[#labels + 1] = function() threatText:SetText(L.SP_THREAT_BOX) end
+  threat:SetScript("OnClick", function(self)
+    Click()
+    ns:SetThreatBox(self:GetChecked())
+  end)
+  updates[#updates + 1] = function() threat:SetChecked(ns:ThreatBox()) end
+  page.threatBox = threat
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -348)
+  how:SetPoint("TOPLEFT", 14, -372)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -370)
+  box:SetPoint("TOPLEFT", 10, -394)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)
