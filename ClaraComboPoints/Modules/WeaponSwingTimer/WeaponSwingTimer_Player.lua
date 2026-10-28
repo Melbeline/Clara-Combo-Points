@@ -283,7 +283,7 @@ addon_data.player.UpdateVisualsOnUpdate = function()
         -- Update the main bars width
         local main_width = math.min(settings.width - (settings.width * (main_timer / main_speed)), settings.width)
 		local pala_blood_width, pala_command_width = 0, 0
-		local _, _, class = UnitClass("player")
+		local _, class = addon_data.utils.PlayerClass()
 		if class == 2 -- paladin
 		then
 			pala_blood_width = math.floor(math.min(settings.width - (settings.width * ( 0.4 / main_speed)), settings.width)+0.5) -- 0.4s for seal twist

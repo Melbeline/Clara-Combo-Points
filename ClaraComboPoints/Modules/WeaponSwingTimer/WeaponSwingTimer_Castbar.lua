@@ -317,7 +317,7 @@ addon_data.castbar.UpdateCastTimer = function(elapsed)
 end
 
 addon_data.castbar.OnUpdate = function(elapsed)
-	local _, class, _ = UnitClass("player")
+	local class = addon_data.utils.PlayerClass()
     if character_castbar_settings.enabled and (class == "HUNTER") then
 		local curr_time = GetTime()
         -- Update the cast bar timers
