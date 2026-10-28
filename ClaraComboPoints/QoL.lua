@@ -1,8 +1,8 @@
 -- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
 -- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
 -- DialogKey, XToLevel and MinimapDrawer sit under "Interface improvements" in the game's options
--- (Esc > Options > AddOns), apart from Clara Combo Points; WeaponSwingTimer, tullaRange and ClassicUI
--- Forever have their own entries there. Each module runs only in WoW Forever, and only if not
+-- (Esc > Options > AddOns), apart from Clara Combo Points; WeaponSwingTimer, tullaRange, Names and
+-- ClassicUI Forever have their own entries there. Each module runs only in WoW Forever, and only if not
 -- turned off here. When its own addon is enabled, that one runs instead (its settings are carried
 -- over for the day it is turned off); DialogKey, XToLevel, MinimapDrawer and tullaRange take over
 -- from theirs: it runs for that session, then it is turned off for the character, so that the
@@ -27,6 +27,7 @@ ns.QOL_MODULES = {
   { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", takeOver = true },
   { key = "tullarange", name = "tullaRange", standalone = "tullaRange", takeOver = true },
   { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
+  { key = "names", name = "Names" }, -- (Clara's own: its own entry in the game's options)
   { key = "classicui", name = "ClassicUI Forever", standalone = "ClassicUIForever" },
 }
 
