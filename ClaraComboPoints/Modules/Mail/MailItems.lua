@@ -3,7 +3,7 @@
 -- small menu by it: the categories that have characters (a category of several: which of them), and
 -- Reset. Dropped on a name of the recipients window, an item goes to that character. Once a character
 -- is chosen (a click on its name, or its name typed in To, then Enter or Tab), its items in the bags
--- are attached, once. A stack taken off the mail (right-click on it) is not attached again until the
+-- are attached, once (more than the mail holds: the rest in its extra slots, MailExtra.lua). A stack taken off the mail (right-click on it) is not attached again until the
 -- mail is sent or the mailbox shut (that stack: its bag slot; the others of the item still are). An item whose category is gone, or no longer the character's,
 -- keeps it but does nothing. The bag item's tooltip says where it goes.
 
@@ -201,10 +201,12 @@ local function Step()
   local id, locked = SlotInfo(job.bag, job.slot)
   if id == job.id and not locked and not (GetCursorInfo and GetCursorInfo()) then
     local index = FreeAttachment(job.taken)
-    if not index then -- (the mail full)
+    if not index then -- (the mail full: this one and the rest to the extra slots, MailExtra.lua)
       running = false
+      local rest = { job }
+      for _, j in ipairs(queue) do rest[#rest + 1] = j end
       wipe(queue)
-      if M.Overflow then M.Overflow(job) end
+      if M.Overflow then M.Overflow(rest) end
       return
     end
     job.taken[index] = true
@@ -222,7 +224,8 @@ function M.Chosen(name)
   for _, bag in ipairs(Bags()) do
     for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
       local id, locked = SlotInfo(bag, slot)
-      if id and not locked and not skipped[Where(bag, slot)] and M.ItemGoesTo(M.db.items[id], name) then
+      if id and not locked and not skipped[Where(bag, slot)] and not (M.Queued and M.Queued(bag, slot))
+        and M.ItemGoesTo(M.db.items[id], name) then
         queue[#queue + 1] = { bag = bag, slot = slot, id = id, taken = taken, to = name }
         found = found + 1
       end
@@ -234,6 +237,10 @@ function M.Chosen(name)
   end
   return found
 end
+
+-- (for MailExtra.lua)
+M.Bags, M.SlotInfo, M.Notice = Bags, SlotInfo, Notice
+function M.Skip(bag, slot) skipped[Where(bag, slot)] = true end
 
 -- the To field: Enter or Tab on a name
 local function Typed(box)
