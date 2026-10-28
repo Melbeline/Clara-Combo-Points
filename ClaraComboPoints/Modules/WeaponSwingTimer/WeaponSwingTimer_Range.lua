@@ -80,8 +80,11 @@ local function NormalizeRangeResult(result)
     return nil
 end
 
-local function SpellBookSpellInRange(spell_identifier)
-    if not UnitExists("target") then
+-- (Clara Combo Points: every check takes the unit, the target by default; the focus too for the
+-- distance box on its frame, UnitBoxes.lua)
+local function SpellBookSpellInRange(spell_identifier, unit)
+    unit = unit or "target"
+    if not UnitExists(unit) then
         return nil
     end
 
@@ -99,7 +102,7 @@ local function SpellBookSpellInRange(spell_identifier)
                 C_SpellBook.IsSpellBookItemInRange,
                 slot_index,
                 spell_bank,
-                "target"
+                unit
             )
 
             if range_ok then
@@ -117,7 +120,7 @@ local function SpellBookSpellInRange(spell_identifier)
         end
 
         if spell_name then
-            local ok, result = pcall(IsSpellInRange, spell_name, "target")
+            local ok, result = pcall(IsSpellInRange, spell_name, unit)
             if ok then
                 return NormalizeRangeResult(result)
             end
@@ -140,7 +143,7 @@ local function HasSpellBookSpell(spell_identifier)
     return ok and slot_index ~= nil
 end
 
-local function NativeMeleeInRange()
+local function NativeMeleeInRange(unit)
     -- Raptor Strike is intentionally NOT used here. On Forever its range API
     -- reports true outside actual melee range, so it is not a valid 5-yard
     -- breakpoint. Wing Clip is the reliable Hunter melee-range check.
@@ -148,11 +151,14 @@ local function NativeMeleeInRange()
         return nil
     end
 
-    return SpellBookSpellInRange("Wing Clip")
+    return SpellBookSpellInRange("Wing Clip", unit)
 end
 
-local function NativeRangedInRange()
-    if C_SwingTimer and C_SwingTimer.IsTargetWithinSwingRange and
+local function NativeRangedInRange(unit)
+    unit = unit or "target"
+    -- (the swing timer's own check knows the target only)
+    if (unit == "target" or UnitIsUnit(unit, "target")) and
+       C_SwingTimer and C_SwingTimer.IsTargetWithinSwingRange and
        Enum and Enum.PlayerSwingType and Enum.PlayerSwingType.Ranged then
         local ok, result = pcall(
             C_SwingTimer.IsTargetWithinSwingRange,
@@ -163,10 +169,11 @@ local function NativeRangedInRange()
         end
     end
 
-    return SpellBookSpellInRange("Auto Shot")
+    return SpellBookSpellInRange("Auto Shot", unit)
 end
 
-local function IsCloseFallback()
+local function IsCloseFallback(unit)
+    unit = unit or "target"
     if not CheckInteractDistance then
         return false
     end
@@ -179,12 +186,12 @@ local function IsCloseFallback()
     --
     -- Index 1 is also ~28 yd on current clients, so use it as a fallback
     -- in case index 4 is unavailable/unreliable on a particular build.
-    local ok4, result4 = pcall(CheckInteractDistance, "target", 4)
+    local ok4, result4 = pcall(CheckInteractDistance, unit, 4)
     if ok4 and (result4 == true or result4 == 1) then
         return true
     end
 
-    local ok1, result1 = pcall(CheckInteractDistance, "target", 1)
+    local ok1, result1 = pcall(CheckInteractDistance, unit, 1)
     if ok1 and (result1 == true or result1 == 1) then
         return true
     end
@@ -232,7 +239,11 @@ local function RangeKeyFromMax(max_range)
     return "far"
 end
 
-local function GetGenericClassRangeBand(class)
+-- (Clara Combo Points: each band also in short, its distances only, "8-15", for the box on the
+-- target and focus frames; nil when no distance is known)
+local function Span(low, high) return string.format("%d-%d", low, high) end
+
+local function GetGenericClassRangeBand(class, unit)
     local probes = CLASS_RANGE_PROBES[class]
     if not probes then
         return L["NO CLASS RANGE PROBE"], "unknown"
@@ -242,7 +253,7 @@ local function GetGenericClassRangeBand(class)
 
     for _, spell_name in ipairs(probes) do
         if HasSpellBookSpell(spell_name) then
-            local in_range = SpellBookSpellInRange(spell_name)
+            local in_range = SpellBookSpellInRange(spell_name, unit)
             local min_range, max_range, resolved_name =
                 GetSpellRangeInfo(spell_name)
 
@@ -270,18 +281,17 @@ local function GetGenericClassRangeBand(class)
             local max_range = probe.max_range
 
             if max_range and max_range > 0 then
+                local high = math.floor(max_range + 0.5)
                 -- If this is the first/closest known probe, use it directly.
                 if i == 1 then
                     if min_range > 0 then
-                        return string.format(L["%s: %d-%d yd"], probe.name,
-                               math.floor(min_range + 0.5),
-                               math.floor(max_range + 0.5)),
-                               RangeKeyFromMax(max_range)
+                        local low = math.floor(min_range + 0.5)
+                        return string.format(L["%s: %d-%d yd"], probe.name, low, high),
+                               RangeKeyFromMax(max_range), Span(low, high)
                     end
 
-                    return string.format(L["%s: 0-%d yd"], probe.name,
-                           math.floor(max_range + 0.5)),
-                           RangeKeyFromMax(max_range)
+                    return string.format(L["%s: 0-%d yd"], probe.name, high),
+                           RangeKeyFromMax(max_range), Span(0, high)
                 end
 
                 -- Missing a closer breakpoint? Merge upward into this broader
@@ -295,9 +305,8 @@ local function GetGenericClassRangeBand(class)
                     lower = math.floor(min_range + 0.5)
                 end
 
-                return string.format(L["%d-%d yd"], lower,
-                       math.floor(max_range + 0.5)),
-                       RangeKeyFromMax(max_range)
+                return string.format(L["%d-%d yd"], lower, high),
+                       RangeKeyFromMax(max_range), Span(lower, high)
             end
 
             return string.format(L["%s: IN RANGE"], probe.name), "unknown"
@@ -314,51 +323,54 @@ local function GetGenericClassRangeBand(class)
         end
     end
 
+    local broadest = known[#known]
     if all_false then
-        return L["OUT OF TESTED ABILITY RANGE"], "out"
+        local beyond = broadest and broadest.max_range and
+            string.format("%d+", math.floor(broadest.max_range + 0.5)) or nil
+        return L["OUT OF TESTED ABILITY RANGE"], "out", beyond
     end
 
     -- One or more range APIs are unavailable/nil. Fall back to the broadest
     -- known breakpoint rather than showing a fake intermediate band.
-    local broadest = known[#known]
     if broadest and broadest.max_range then
-        return string.format(L["0-%d yd"],
-               math.floor(broadest.max_range + 0.5)),
-               RangeKeyFromMax(broadest.max_range)
+        local high = math.floor(broadest.max_range + 0.5)
+        return string.format(L["0-%d yd"], high),
+               RangeKeyFromMax(broadest.max_range), Span(0, high)
     end
 
     return L["RANGE UNAVAILABLE"], "unknown"
 end
 
-addon_data.range.GetRangeBand = function()
-    if not UnitExists("target") or UnitIsDead("target") then
+addon_data.range.GetRangeBand = function(unit)
+    unit = unit or "target"
+    if not UnitExists(unit) or UnitIsDead(unit) then
         return nil, "none"
     end
 
-    if not UnitCanAttack("player", "target") then
+    if not UnitCanAttack("player", unit) then
         return nil, "none"
     end
 
-    local _, class = UnitClass("player")
+    local class = addon_data.utils.PlayerClass()
     if class ~= "HUNTER" then
-        return GetGenericClassRangeBand(class)
+        return GetGenericClassRangeBand(class, unit)
     end
 
     -- Hunter melee breakpoint: Wing Clip only.
     local has_melee_check = HasSpellBookSpell("Wing Clip")
-    local melee = NativeMeleeInRange()
+    local melee = NativeMeleeInRange(unit)
     if melee == true then
-        return L["0-5 yd  •  MELEE"], "melee"
+        return L["0-5 yd  •  MELEE"], "melee", "0-5"
     end
 
-    local scatter = SpellBookSpellInRange("Scatter Shot")
-    local ranged = NativeRangedInRange()
-    local mark = SpellBookSpellInRange("Hunter's Mark")
+    local scatter = SpellBookSpellInRange("Scatter Shot", unit)
+    local ranged = NativeRangedInRange(unit)
+    local mark = SpellBookSpellInRange("Hunter's Mark", unit)
 
     -- Auto Shot has an 8 yd minimum. If we're not in melee, Auto Shot is
     -- unavailable, and Scatter is still in range, this is the dead zone.
     if ranged == false and scatter == true then
-        return L["5-8 yd  •  DEAD ZONE"], "deadzone"
+        return L["5-8 yd  •  DEAD ZONE"], "deadzone", "5-8"
     end
 
     if ranged == true then
@@ -366,13 +378,13 @@ addon_data.range.GetRangeBand = function()
 
         if HasSpellBookSpell("Scatter Shot") then
             if scatter == true then
-                return L["8-15 yd"], "close"
+                return L["8-15 yd"], "close", "8-15"
             end
-            return string.format(L["15-%d yd"], max_range), "ranged"
+            return string.format(L["15-%d yd"], max_range), "ranged", Span(15, max_range)
         end
 
         -- Without Scatter Shot there is no reliable 15-yard breakpoint.
-        return string.format(L["8-%d yd"], max_range), "ranged"
+        return string.format(L["8-%d yd"], max_range), "ranged", Span(8, max_range)
     end
 
     -- If the native ranged check says false, distinguish "too close" from
@@ -380,35 +392,60 @@ addon_data.range.GetRangeBand = function()
     -- that covers the small transition area even when Scatter Shot isn't learned
     -- or its spell ID is unavailable on the current Forever build.
     if ranged == false then
-        if IsCloseFallback() then
+        if IsCloseFallback(unit) then
             if has_melee_check then
-                return L["5-8 yd  •  DEAD ZONE"], "deadzone"
+                return L["5-8 yd  •  DEAD ZONE"], "deadzone", "5-8"
             end
-            return L["<8 yd"], "deadzone"
+            return L["<8 yd"], "deadzone", "<8"
         end
 
         if mark == true then
-            return L["35-100 yd"], "far"
+            return L["35-100 yd"], "far", "35-100"
         elseif mark == false then
-            return L["100+ yd  •  OUT OF RANGE"], "out"
+            return L["100+ yd  •  OUT OF RANGE"], "out", "100+"
         end
 
-        return L["OUT OF SHOT RANGE"], "out"
+        return L["OUT OF SHOT RANGE"], "out", string.format("%d+", GetAutoShotMaxRange())
     end
 
     -- Native range can briefly be nil during target transitions. Use the spell
     -- ladder instead of flashing "out of range".
     if scatter == true then
-        return L["5-15 yd"], "close"
+        return L["5-15 yd"], "close", "5-15"
     end
 
     if mark == true then
-        return L["Within 100 yd"], "unknown"
+        return L["Within 100 yd"], "unknown", "<100"
     elseif mark == false then
-        return L["100+ yd  •  OUT OF RANGE"], "out"
+        return L["100+ yd  •  OUT OF RANGE"], "out", "100+"
     end
 
     return L["Range unavailable"], "unknown"
+end
+
+-- (Clara Combo Points: the distance box on the target and focus frames, UnitBoxes.lua. On by
+-- default for a hunter only; ticked or unticked here or in Clara's options, for every class.)
+addon_data.range.FrameBoxOn = function()
+    local settings = character_range_settings
+    local on = settings and settings.frame_box
+    if on == nil then on = addon_data.utils.PlayerClass() == "HUNTER" end
+    return on and true or false
+end
+
+addon_data.range.SetFrameBox = function(on)
+    if not character_range_settings then return end
+    character_range_settings.frame_box = on and true or false
+    if E.OnRangeBoxChanged then E.OnRangeBoxChanged() end
+end
+
+-- The unit's band in short, its key and the key's color (WeaponSwingTimer's range colors)
+E.RangeBoxOn = addon_data.range.FrameBoxOn
+E.SetRangeBox = addon_data.range.SetFrameBox
+E.RangeBand = function(unit)
+    local _, key, short = addon_data.range.GetRangeBand(unit)
+    if not short then return nil end
+    local c = GetRangeColor(character_range_settings or {}, key)
+    return short, key, c[1], c[2], c[3]
 end
 
 
@@ -744,6 +781,7 @@ addon_data.range.UpdateConfigPanelValues = function()
     panel.show_border_checkbox:SetChecked(settings.show_border)
     panel.classic_bars_checkbox:SetChecked(settings.classic_bars)
     panel.show_text_checkbox:SetChecked(settings.show_text)
+    if panel.frame_box_checkbox then panel.frame_box_checkbox:SetChecked(addon_data.range.FrameBoxOn()) end
 
     panel.width_editbox:SetText(tostring(settings.width))
     panel.width_editbox:SetCursorPosition(0)
@@ -791,6 +829,10 @@ addon_data.range.UpdateConfigPanelValues = function()
             )
         end
     end
+end
+
+addon_data.range.FrameBoxCheckBoxOnClick = function(self)
+    addon_data.range.SetFrameBox(self:GetChecked())
 end
 
 addon_data.range.EnabledCheckBoxOnClick = function(self)
@@ -943,6 +985,16 @@ addon_data.range.CreateConfigPanel = function(parent_panel)
     )
     panel.show_text_checkbox:SetPoint("TOPLEFT", 10, -130)
 
+    -- (Clara Combo Points: the distance box on the target and focus frames, UnitBoxes.lua)
+    panel.frame_box_checkbox = addon_data.config.CheckBoxFactory(
+        "RangeFrameBoxCheckBox",
+        panel,
+        ClaraNS.L.WST_SW_RANGE_BOX,
+        ClaraNS.L.WST_SW_RANGE_BOX_TIP,
+        addon_data.range.FrameBoxCheckBoxOnClick
+    )
+    panel.frame_box_checkbox:SetPoint("TOPLEFT", 10, -205)
+
     panel.width_editbox = addon_data.config.EditBoxFactory(
         "RangeWidthEditBox", panel, L["Bar Width"], 75, 25,
         addon_data.range.WidthEditBoxOnEnter
@@ -984,7 +1036,7 @@ addon_data.range.CreateConfigPanel = function(parent_panel)
     panel.y_offset_editbox:SetFont("Fonts/FRIZQT__.ttf", 12, "OUTLINE")
 
     panel.alpha_text = addon_data.config.TextFactory(panel, L["Alpha Settings"], 16)
-    panel.alpha_text:SetPoint("TOPLEFT", 10, -225)
+    panel.alpha_text:SetPoint("TOPLEFT", 10, -250)
     panel.alpha_text:SetTextColor(1, 0.82, 0, 1)
 
     panel.in_combat_alpha_slider = addon_data.config.SliderFactory(
@@ -994,7 +1046,7 @@ addon_data.range.CreateConfigPanel = function(parent_panel)
         0, 1, 0.05,
         addon_data.range.CombatAlphaOnValChange
     )
-    panel.in_combat_alpha_slider:SetPoint("TOPLEFT", 20, -262)
+    panel.in_combat_alpha_slider:SetPoint("TOPLEFT", 20, -287)
     if panel.in_combat_alpha_slider.editbox then
         panel.in_combat_alpha_slider.editbox:SetTextColor(1, 1, 1, 1)
         panel.in_combat_alpha_slider.editbox:SetFont("Fonts/FRIZQT__.ttf", 12, "OUTLINE")
@@ -1007,7 +1059,7 @@ addon_data.range.CreateConfigPanel = function(parent_panel)
         0, 1, 0.05,
         addon_data.range.OOCAlphaOnValChange
     )
-    panel.ooc_alpha_slider:SetPoint("TOPLEFT", 205, -262)
+    panel.ooc_alpha_slider:SetPoint("TOPLEFT", 205, -287)
     if panel.ooc_alpha_slider.editbox then
         panel.ooc_alpha_slider.editbox:SetTextColor(1, 1, 1, 1)
         panel.ooc_alpha_slider.editbox:SetFont("Fonts/FRIZQT__.ttf", 12, "OUTLINE")
@@ -1020,14 +1072,14 @@ addon_data.range.CreateConfigPanel = function(parent_panel)
         0, 1, 0.05,
         addon_data.range.BackplaneAlphaOnValChange
     )
-    panel.backplane_alpha_slider:SetPoint("TOPLEFT", 390, -262)
+    panel.backplane_alpha_slider:SetPoint("TOPLEFT", 390, -287)
     if panel.backplane_alpha_slider.editbox then
         panel.backplane_alpha_slider.editbox:SetTextColor(1, 1, 1, 1)
         panel.backplane_alpha_slider.editbox:SetFont("Fonts/FRIZQT__.ttf", 12, "OUTLINE")
     end
 
     panel.colors_text = addon_data.config.TextFactory(panel, L["Range Colors"], 16)
-    panel.colors_text:SetPoint("TOPLEFT", 10, -330)
+    panel.colors_text:SetPoint("TOPLEFT", 10, -355)
     panel.colors_text:SetTextColor(1, 0.82, 0, 1)
 
     local function MakeRangeColorPicker(field, key, label, x, y)
@@ -1047,31 +1099,31 @@ addon_data.range.CreateConfigPanel = function(parent_panel)
     end
 
     panel.melee_color_picker =
-        MakeRangeColorPicker("RangeMeleeColor", "melee", L["0-5 Melee"], 20, -365)
+        MakeRangeColorPicker("RangeMeleeColor", "melee", L["0-5 Melee"], 20, -390)
     panel.deadzone_color_picker =
-        MakeRangeColorPicker("RangeDeadzoneColor", "deadzone", L["5-8 Dead Zone"], 300, -365)
+        MakeRangeColorPicker("RangeDeadzoneColor", "deadzone", L["5-8 Dead Zone"], 300, -390)
     panel.close_color_picker =
-        MakeRangeColorPicker("RangeCloseColor", "close", L["8-15 Close"], 20, -400)
+        MakeRangeColorPicker("RangeCloseColor", "close", L["8-15 Close"], 20, -425)
 
     panel.ranged_color_picker =
-        MakeRangeColorPicker("RangeRangedColor", "ranged", L["Ranged (8-35 / 15-35)"], 300, -400)
+        MakeRangeColorPicker("RangeRangedColor", "ranged", L["Ranged (8-35 / 15-35)"], 300, -425)
     panel.far_color_picker =
-        MakeRangeColorPicker("RangeFarColor", "far", L["35-100 Far"], 20, -435)
+        MakeRangeColorPicker("RangeFarColor", "far", L["35-100 Far"], 20, -460)
     panel.out_color_picker =
-        MakeRangeColorPicker("RangeOutColor", "out", L["Out of Range"], 300, -435)
+        MakeRangeColorPicker("RangeOutColor", "out", L["Out of Range"], 300, -460)
 
     panel.unknown_color_picker =
-        MakeRangeColorPicker("RangeUnknownColor", "unknown", L["No Target / Unknown"], 20, -470)
+        MakeRangeColorPicker("RangeUnknownColor", "unknown", L["No Target / Unknown"], 20, -495)
 
     panel.info = addon_data.config.TextFactory(
         panel,
         L["Hunter bands: 0-5 melee • 5-8 dead zone • 8-35 ranged • Scatter adds an 8-15 breakpoint • 35-100 far"],
         11
     )
-    panel.info:SetPoint("TOPLEFT", 10, -510)
+    panel.info:SetPoint("TOPLEFT", 10, -535)
     panel.info:SetJustifyH("LEFT")
 
-    panel:SetSize(620, 545)
+    panel:SetSize(620, 570)
 
     -- Settings canvas can create/show this panel after its initial construction.
     -- Refresh the values every time it becomes visible so the edit boxes and

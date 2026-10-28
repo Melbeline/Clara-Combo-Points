@@ -25,6 +25,7 @@ SpellNames.lua
 Who.lua
 Flyout.lua
 GameFixes.lua
+UnitBoxes.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
