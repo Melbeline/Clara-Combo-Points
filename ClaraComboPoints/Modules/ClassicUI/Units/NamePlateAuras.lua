@@ -33,6 +33,30 @@ local function TintAll()
     ns.NP.EachPlate(TintPlate)
 end
 
+-- (Clara Combo Points: only the plates whose auras changed, not every plate on screen at each aura event of one; all of
+-- them on a client without the lookup by unit)
+local changed, unknown = {}, false
+
+local function TintChanged()
+    if unknown then
+        unknown = false
+        wipe(changed)
+        return TintAll()
+    end
+    for unit in pairs(changed) do
+        changed[unit] = nil
+        local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+        local unitFrame = ok and plate and plate.UnitFrame
+        if unitFrame and not ns.IsForbidden(unitFrame) then TintPlate(unitFrame) end
+    end
+end
+
 ns.EventFrame(RING_EVENTS, function(_, _, unit)
-    if type(unit) == "string" and unit:find("^nameplate") then ns.Sched.NextFrame("namePlates.auraRings", TintAll) end
+    if (issecretvalue and issecretvalue(unit)) or type(unit) ~= "string" or not unit:find("^nameplate") then return end
+    if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then
+        unknown = true
+    else
+        changed[unit] = true
+    end
+    ns.Sched.NextFrame("namePlates.auraRings", TintChanged)
 end)
