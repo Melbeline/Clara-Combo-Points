@@ -20,6 +20,7 @@ QuietLogin.lua
 Core.lua
 Items.lua
 Profiles.lua
+AltSetup.lua
 SpellCatalog.lua
 SpellNames.lua
 Who.lua

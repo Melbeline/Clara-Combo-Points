@@ -22,7 +22,10 @@ local SCROLL_W = 22               -- right of the pages: their scroll bar, when 
 local PANEL_W, PANEL_H = NAV_W + BODY_W + SCROLL_W, 720 -- the window's default size
 local TABS_X, FLAG_STEP = 14, 30 -- first tab; flags, one every 30
 local TABS_Y = -84               -- bottom of the row of class tabs (each tab is 32 tall)
-local HEADER_X, HEADER_Y = 64, -37 -- the position's line, between the title and the tabs
+local HEADER_X, HEADER_Y = 60, -37 -- the header's line (position, alts), between the title and the tabs
+local HEADER_BOX_H, HEADER_BTN_H = 26, 20 -- a group of the header (its thin frame); its buttons
+local HEADER_PAD, HEADER_GAP = 5, 8 -- inside a group; between the two groups
+local HEADER_PICK_W = 150           -- the alts' profile list, at its widest
 local FOOTER_RIGHT = 28          -- footer, clear of the scale grip
 local CONTENT_TOP = -40          -- pages start under the class tabs (their first group at -96)
 local VIEW_TOP = -86             -- the pages' view, under the class tabs (it scrolls them)
@@ -3110,8 +3113,142 @@ local function SpecMenu(p, anchor)
   return m
 end
 
+---------------------------------------------------------------------------
+-- The header's groups, and the game's settings kept for alts (AltSetup.lua): a profile holds a
+-- character's action bars, game options and Edit Mode layout; the one picked goes to each new
+-- character. The list (right of the button) picks it, and makes, applies, exports, imports or
+-- deletes one.
+---------------------------------------------------------------------------
+local function HeaderGroup(p)
+  local box = CreateFrame("Frame", nil, p)
+  box:SetHeight(HEADER_BOX_H)
+  box:SetFrameLevel(p:GetFrameLevel() + 1)
+  local fill = box:CreateTexture(nil, "BACKGROUND")
+  fill:SetAllPoints()
+  fill:SetColorTexture(0, 0, 0, .25)
+  AddBorder(box, .72, .58, .34, .85) -- (the groups' bronze, one pixel)
+  return box
+end
+
+local function Later(fn)
+  if C_Timer and C_Timer.After then C_Timer.After(0, fn) else fn() end -- (once the dialog asking is gone)
+end
+
+-- This character's settings into a profile; what it holds, once, in the chat.
+local function AltsSave(name)
+  if not ns:SaveAltProfile(name) then return end
+  local lines = ns:AltSummary(name) or {}
+  ns.Print(L.ALTS_SAVED:format(name) .. " " .. table.concat(lines, " · ", 1, min(2, #lines)))
+end
+
+-- The header's button: into the profile shown on its right (none yet: a first one).
+local function AltsAskSave()
+  local name = ns:AltDefault() or L.ALTS_FIRST_NAME
+  ns:Ask(L.ALTS_SAVE_ASK:format(name), false, { L.ALTS_SAVE, function() AltsSave(name) end }, { L.CANCEL })
+end
+
+local function AltsPicker(p, textBox)
+  local function New()
+    ns:AskText(L.ALTS_NEW_ASK, UnitName and UnitName("player") or "", L.ALTS_SAVE, function(typed)
+      local name = ns:AltProfileName(typed)
+      if not name then return end
+      if not ns:AltProfile(name) then return AltsSave(name) end
+      Later(function()
+        ns:Ask(L.PROFILE_OVERWRITE_ASK:format(name), false, { L.PROFILE_OVERWRITE, function() AltsSave(name) end }, { L.CANCEL })
+      end)
+    end)
+  end
+  local function Apply(name)
+    ns:Ask(L.ALTS_APPLY_ASK:format(name), false, { L.ALTS_APPLY, function() ns:ApplyAltProfile(name, true) end }, { L.CANCEL })
+  end
+  local function Export(name)
+    textBox:Open(L.PROFILE_EXPORT_TITLE:format(name), L.ALTS_EXPORT_HINT, ns:ExportAltProfile(name), L.SELECT_ALL,
+      function() textBox:SelectAll() end)
+  end
+  local function Import()
+    textBox:Open(L.ALTS_IMPORT_TITLE, L.ALTS_IMPORT_HINT, nil, L.PROFILE_IMPORT, function(text)
+      local ok, result = ns:ImportAltProfile(text)
+      if not ok then
+        textBox:ShowStatus(false, result)
+        return
+      end
+      textBox:Hide()
+      ns.Print(L.ALTS_IMPORTED_AS:format(result))
+    end)
+  end
+  local function Delete(name)
+    ns:Ask(L.PROFILE_DELETE_ASK:format(name), true, { L.PROFILE_DELETE, function() ns:DeleteAltProfile(name) end }, { L.CANCEL })
+  end
+
+  local b = CreateFrame("Button", nil, p)
+  b:SetSize(HEADER_PICK_W, HEADER_BTN_H)
+  local bg = b:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(0, 0, 0, .5)
+  AddBorder(b, .4, .4, .45, 1)
+  local hl = b:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints()
+  hl:SetColorTexture(1, 1, 1, .1)
+  local arrow = b:CreateTexture(nil, "ARTWORK")
+  arrow:SetSize(18, 18)
+  arrow:SetPoint("RIGHT", 1, 0)
+  arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.text:SetPoint("LEFT", 5, 0)
+  b.text:SetPoint("RIGHT", arrow, "LEFT", 0, 0)
+  b.text:SetJustifyH("LEFT")
+  b.text:SetWordWrap(false)
+  function b:Refresh()
+    local name = ns:AltDefault()
+    self.text:SetText(name or L.ALTS_NONE)
+    if name then self.text:SetTextColor(1, 1, 1) else self.text:SetTextColor(.6, .6, .65) end
+  end
+  b:SetScript("OnEnter", function(self)
+    if not GameTooltip or MenuOpen(self) then return end
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:SetText(L.ALTS_PICK_TITLE)
+    local name = ns:AltDefault()
+    if name then
+      GameTooltip:AddLine(name, 1, 1, 1)
+      for _, line in ipairs(ns:AltSummary(name) or {}) do GameTooltip:AddLine(line, .8, .8, .8, true) end
+    else
+      GameTooltip:AddLine(L.ALTS_PICK_NONE, .8, .8, .8, true)
+    end
+    GameTooltip:AddLine(L.ALTS_PICK_TIP, .4, 1, .4, true)
+    GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  b:SetScript("OnClick", function(self)
+    ClickSound()
+    if GameTooltip then GameTooltip:Hide() end
+    local names, now = ns:AltProfileNames(), ns:AltDefault()
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then -- no menus in this client: the next profile, then none
+      local n = 1
+      for i, name in ipairs(names) do if name == now then n = i + 1 end end
+      ns:SetAltDefault(names[n])
+      return
+    end
+    ToggleMenu(self, function(_, root)
+      if root.CreateTitle then root:CreateTitle(L.ALTS_PICK_TITLE) end
+      for _, name in ipairs(names) do
+        root:CreateRadio(name, function() return ns:AltDefault() == name end, function() ns:SetAltDefault(name) end)
+      end
+      root:CreateRadio(L.ALTS_NONE, function() return ns:AltDefault() == nil end, function() ns:SetAltDefault(nil) end)
+      if root.CreateDivider then root:CreateDivider() end
+      root:CreateButton(L.ALTS_NEW, New)
+      if now then
+        root:CreateButton(L.ALTS_APPLY_NOW:format(now), function() Apply(now) end)
+        root:CreateButton(L.ALTS_EXPORT:format(now), function() Export(now) end)
+      end
+      root:CreateButton(L.ALTS_IMPORT, Import)
+      if now then root:CreateButton(L.ALTS_DELETE:format(now), function() Delete(now) end) end
+    end)
+  end)
+  return b
+end
+
 -- The portrait: a right-click picks the tab's icon among its class's specialisations (the
--- window still moves when dragged by it); beside it, the HUD's position. Returns the menu.
+-- window still moves when dragged by it); beside it, the header. Returns the menu.
 local function PortraitControls(p, portrait)
   -- The portrait: a right-click picks the tab's icon among its class's specialisations; the
   -- window still moves when dragged by it.
@@ -3146,17 +3283,74 @@ local function PortraitControls(p, portrait)
   portraitButton:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   p.portraitButton, p.specMenu = portraitButton, specMenu
 
-  -- The HUD's position, above the class tabs: it moves every bar at once (the tab's class)
+  -- The header, between the title and the class tabs: two groups, each in a thin frame. The
+  -- HUD's position (it moves every bar at once, the tab's class); the game's settings kept for
+  -- alts (AltSetup.lua): the button saves this character's in the profile shown on its right.
+  local posBox, altsBox = HeaderGroup(p), HeaderGroup(p)
   local posLabel = Text(p, Tr("POSITION"), "GameFontNormal")
-  posLabel:SetPoint("LEFT", p, "TOPLEFT", HEADER_X, HEADER_Y)
-  local lockBtn = Button(p, "", 140, 22, function() ns:SetLocked(not ns.db.locked) end)
-  lockBtn:SetPoint("LEFT", posLabel, "RIGHT", 10, 0)
-  local resetPos = Button(p, Tr("DEFAULT_POS"), 140, 22, function() ns:ResetPosition() end)
-  resetPos:SetPoint("LEFT", lockBtn, "RIGHT", 8, 0)
-  p.lockButton, p.resetPosButton = lockBtn, resetPos
-  function p.RefreshPosition()
+  local lockBtn = Button(p, "", 120, HEADER_BTN_H, function() ns:SetLocked(not ns.db.locked) end)
+  local resetPos = Button(p, Tr("DEFAULT_POS"), 120, HEADER_BTN_H, function() ns:ResetPosition() end)
+  local altsText = TextDialog(p)
+  OnRelabel(function() altsText:Hide() end)
+  local saveBtn = Button(p, Tr("ALTS_SAVE_BUTTON"), 220, HEADER_BTN_H, function() AltsAskSave() end)
+  local picker = AltsPicker(p, altsText)
+  posBox:SetPoint("LEFT", p, "TOPLEFT", HEADER_X, HEADER_Y)
+  posLabel:SetPoint("LEFT", posBox, "LEFT", HEADER_PAD + 2, 0)
+  lockBtn:SetPoint("LEFT", posLabel, "RIGHT", 8, 0)
+  resetPos:SetPoint("LEFT", lockBtn, "RIGHT", 6, 0)
+  altsBox:SetPoint("LEFT", posBox, "RIGHT", HEADER_GAP, 0)
+  saveBtn:SetPoint("LEFT", altsBox, "LEFT", HEADER_PAD, 0)
+  picker:SetPoint("LEFT", saveBtn, "RIGHT", 6, 0)
+  for _, f in ipairs({ lockBtn, resetPos, saveBtn, picker }) do f:SetFrameLevel(posBox:GetFrameLevel() + 2) end
+  p.lockButton, p.resetPosButton, p.altsSaveButton, p.altsPicker, p.altsText = lockBtn, resetPos, saveBtn, picker, altsText
+  p.headerGroups = { posBox, altsBox }
+  saveBtn:SetScript("OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:SetText(L.ALTS_SAVE_BUTTON)
+    GameTooltip:AddLine(L.ALTS_SAVE_TIP, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  saveBtn:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+
+  -- Its widths: as the labels need, narrower when the window is (the profile's list first).
+  local measure = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  measure:Hide()
+  local function Wide(s)
+    measure:SetText(s or "")
+    return ceil(measure:GetStringWidth() or 0)
+  end
+  function p.FitHeader()
+    local labelW = ceil(posLabel:GetStringWidth() or 0)
+    local posW = min(130, max(90, max(Wide(L.LOCK), Wide(L.UNLOCK), Wide(L.DEFAULT_POS)) + 24))
+    local saveW = min(250, max(140, Wide(L.ALTS_SAVE_BUTTON) + 24))
+    local pickW = HEADER_PICK_W
+    local posFixed = HEADER_PAD + 2 + labelW + 8 + 6 + HEADER_PAD
+    local altsFixed = HEADER_PAD + 6 + HEADER_PAD
+    local over = HEADER_X + posFixed + HEADER_GAP + altsFixed + 2 * posW + saveW + pickW + 14 - p:GetWidth()
+    local function Cut(v, low, n)
+      n = n or 1
+      local cut = max(0, min(over, (v - low) * n))
+      over = over - cut
+      return v - ceil(cut / n)
+    end
+    pickW = Cut(pickW, 100)
+    saveW = Cut(saveW, 140)
+    posW = Cut(posW, 70, 2)
+    pickW = Cut(pickW, 60)
+    saveW = Cut(saveW, 90)
+    lockBtn:SetWidth(posW)
+    resetPos:SetWidth(posW)
+    saveBtn:SetWidth(saveW)
+    picker:SetWidth(pickW)
+    posBox:SetWidth(posFixed + 2 * posW)
+    altsBox:SetWidth(altsFixed + saveW + pickW)
+  end
+  OnRelabel(p.FitHeader)
+  function p.RefreshHeader()
     lockBtn:SetLabel(ns.db.locked and L.UNLOCK or L.LOCK)
     lockBtn:SetActive(not ns.db.locked)
+    picker:Refresh()
   end
   return specMenu
 end
@@ -3290,7 +3484,7 @@ local function Build()
   local refreshers = {}
   local function OnRefresh(fn) refreshers[#refreshers + 1] = fn end
   local resetAll
-  OnRefresh(p.RefreshPosition)
+  OnRefresh(p.RefreshHeader)
 
   -- Class tabs, in one row, each name in its class's colour ---------------------------
   local tabs = {}
@@ -3577,6 +3771,7 @@ local function Build()
   function p:Resize()
     self:SetSize(WinW(), WinH())
     FitTabs()
+    if self.FitHeader then self.FitHeader() end
     if self.FitCommands then self.FitCommands() end
     self:Reflow()
   end
