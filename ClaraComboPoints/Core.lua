@@ -1827,6 +1827,7 @@ local function InitDB()
   CleanPortraits(sv)
   CleanMenu(sv)
   ns:InitProfiles(sv) -- Profiles.lua: the profiles saved on each class tab
+  ns:InitAlts(sv) -- AltSetup.lua: the game's settings kept for alts
   -- 1.6 made the icons 55 tall by default (25 before): the profiles still at the old default
   -- (each class's, and those saved) move up to it, once
   if sv.iconsVersion ~= ICONS_VERSION then
@@ -1885,6 +1886,7 @@ function ns:PLAYER_LOGIN()
   inCombat = (not issecretvalue(fighting) and fighting) and true or false
   self:ResolveSpells()
   self:ApplyAll()
+  self:AltsAtLogin() -- AltSetup.lua: a new character gets the alts' game settings
   if not self.enabled then return end -- dormant on a class it has no tab for: no events, no updates
 
   events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -2115,6 +2117,45 @@ function ns:Ask(text, alert, ...)
   info.showAlert = alert and true or nil
   StaticPopupDialogs[ASK] = info
   return StaticPopup_Show(ASK, text, nil, buttons) ~= nil
+end
+
+-- A question with a line to type (a name) in the game's dialog box: fn(text) on its first button
+-- or Enter; Cancel and Escape close it.
+local ASK_TEXT = "CLARACOMBOPOINTS_ASK_TEXT"
+
+local function TypedBox(dialog)
+  return dialog and (dialog.editBox or dialog.EditBox or (dialog.GetEditBox and dialog:GetEditBox()))
+end
+
+function ns:AskText(text, typed, okLabel, fn)
+  if not (StaticPopupDialogs and StaticPopup_Show) then return false end
+  local info = StaticPopupDialogs[ASK_TEXT] or {
+    text = "%s", hasEditBox = true, maxLetters = 32,
+    timeout = 0, whileDead = true, hideOnEscape = true,
+    OnShow = function(self, data)
+      local box = TypedBox(self)
+      if not box then return end
+      box:SetText(data and data.typed or "")
+      box:HighlightText()
+      box:SetFocus()
+    end,
+    OnAccept = function(self, data)
+      local box = TypedBox(self)
+      if data and data.fn then data.fn(box and box:GetText() or "") end
+    end,
+    EditBoxOnEnterPressed = function(box, data)
+      local dialog = box:GetParent()
+      if data and data.fn then data.fn(box:GetText() or "") end
+      if dialog then dialog:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(box)
+      local dialog = box:GetParent()
+      if dialog then dialog:Hide() end
+    end,
+  }
+  info.button1, info.button2 = okLabel, L.CANCEL
+  StaticPopupDialogs[ASK_TEXT] = info
+  return StaticPopup_Show(ASK_TEXT, text, nil, { typed = typed, fn = fn }) ~= nil
 end
 
 -- /cl reset, and the game's AddOns options: everything back to the defaults, once confirmed.
