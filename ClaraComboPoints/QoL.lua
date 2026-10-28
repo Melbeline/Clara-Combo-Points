@@ -19,6 +19,7 @@ ns.QOL_MODULES = {
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
   { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
   { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", takeOver = true },
+  { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
 }
 -- Modules no longer built in that took over from their own addon: that one is turned back on for
 -- the characters it was turned off for (at their next login; it runs from the next reload).
@@ -33,7 +34,7 @@ ns.FOREVER = type(toc) == "number" and toc >= 16000 and toc < 20000
 -- enabled, it has loaded before Clara Combo Points)
 function ns:StandaloneRuns(name)
   local A = C_AddOns
-  if not A then return false end
+  if not (A and name) then return false end
   if A.IsAddOnLoaded and A.IsAddOnLoaded(name) then return true end
   if A.DoesAddOnExist and not A.DoesAddOnExist(name) then return false end
   if not (A.GetAddOnEnableState and A.IsAddOnLoadable) then return false end
