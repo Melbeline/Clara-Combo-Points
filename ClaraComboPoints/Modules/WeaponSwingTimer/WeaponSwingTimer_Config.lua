@@ -85,6 +85,16 @@ addon_data.config.InitializeVisuals = function()
         panel.config_range_panel.name
     )
 
+    -- (Clara Combo Points) the boxes over the target and focus frames, a boss's swing timer
+    panel.config_frames_panel = CreateFrame("Frame", nil, panel)
+    panel.config_frames_panel:SetSize(620, 440)
+    panel.config_frames_panel.frames_panel = addon_data.frames.CreateConfigPanel(panel.config_frames_panel)
+    panel.config_frames_panel.frames_panel:SetPoint("TOPLEFT", 0, 0)
+    panel.config_frames_panel.name = ClaraNS.L.WST_TAB_FRAMES
+    panel.config_frames_panel.parent = panel.name
+    panel.config_frames_panel.default = addon_data.config.OnDefault
+    Settings.RegisterCanvasLayoutSubcategory(category, panel.config_frames_panel, panel.config_frames_panel.name)
+
     -- Add the profiles panel
     panel.config_profiles_panel = CreateFrame("Frame", nil, panel)
     panel.config_profiles_panel:SetSize(1, 1)

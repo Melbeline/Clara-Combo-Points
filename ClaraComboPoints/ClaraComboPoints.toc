@@ -50,6 +50,7 @@ Modules\WeaponSwingTimer\WeaponSwingTimer_Target.lua
 Modules\WeaponSwingTimer\WeaponSwingTimer_Castbar.lua
 Modules\WeaponSwingTimer\WeaponSwingTimer_Hunter.lua
 Modules\WeaponSwingTimer\WeaponSwingTimer_Range.lua
+Modules\WeaponSwingTimer\WeaponSwingTimer_Frames.lua
 Modules\WeaponSwingTimer\WeaponSwingTimer_Config.lua
 Modules\WeaponSwingTimer\WeaponSwingTimer_Core.lua
 Modules\MinimapDrawer\Bootstrap.lua
