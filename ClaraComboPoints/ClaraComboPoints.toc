@@ -221,6 +221,7 @@ Modules\ClassicUI\Units\HoverNumbers.lua
 Modules\ClassicUI\Units\PlayerFrame.lua
 Modules\ClassicUI\Units\TargetFrame.lua
 Modules\ClassicUI\Units\ThreatNumber.lua
+Modules\ClassicUI\Units\ClaraUnitBoxes.lua
 Modules\ClassicUI\Units\DruidMana.lua
 Modules\ClassicUI\Units\PartyPetFrames.lua
 Modules\ClassicUI\Units\RaidManager.lua

@@ -27,6 +27,9 @@ local driver, focusDriver
 -- Over a thick bar the name steps up while the box shows, its foot 1 over the box's top (UnitFrameCore.lua).
 UF.THREAT_BOX_TOP = BOX_Y + BOX_H
 function UF.ThreatShown(unit) return shown[unit] == true end
+-- (Clara Combo Points: Units/ClaraUnitBoxes.lua sets the box beside its distance box, the two over the name box)
+UF.THREAT_BOX_X, UF.THREAT_BOX_Y = BOX_X, BOX_Y
+function UF.ThreatBox(unit) return boxes[unit] end
 
 local function GameNumber(frame)
     return ns.Path(frame, "TargetFrameContent", "TargetFrameContentContextual", "NumericalThreat")
