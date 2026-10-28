@@ -27,6 +27,7 @@ ns.QOL_MODULES = {
   { key = "tullarange", name = "tullaRange", standalone = "tullaRange", takeOver = true },
   { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
   { key = "names", name = "Names" }, -- (Clara's own: its own entry in the game's options)
+  { key = "tooltipanchor", name = "Tooltip Anchor" }, -- (Clara's own)
 }
 
 -- WoW Forever builds are 160xx (the modules' own code is for them; the retail builds Clara's

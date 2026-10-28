@@ -11642,7 +11642,8 @@
 
 			-- Position general tooltip
 			hooksecurefunc("GameTooltip_SetDefaultAnchor", function(tooltip, parent)
-				if LeaPlusLC["TooltipAnchorMenu"] ~= 1 then
+				-- (Clara Combo Points: not while its Tooltip Anchor places the tooltips)
+				if LeaPlusLC["TooltipAnchorMenu"] ~= 1 and not (ClaraNS.TooltipAnchorActive and ClaraNS.TooltipAnchorActive()) then
 					if (not tooltip or not parent) then
 						return
 					end
