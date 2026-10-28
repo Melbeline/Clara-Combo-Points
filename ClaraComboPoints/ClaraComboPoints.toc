@@ -263,6 +263,7 @@ Modules\ClassicUI\Windows\PanelAfters.lua
 Modules\ClassicUI\Windows\PageInk.lua
 Modules\ClassicUI\Windows\EraCoins.lua
 Modules\ClassicUI\Windows\Panels.lua
+Modules\ClassicUI\Windows\ClaraMail.lua
 Modules\ClassicUI\Windows\Bank.lua
 Modules\ClassicUI\Social\SocialWindow.lua
 Modules\ClassicUI\Social\SocialOpener.lua
