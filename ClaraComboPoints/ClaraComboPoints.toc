@@ -33,6 +33,13 @@ Moan.lua
 Options.lua
 SettingsPage.lua
 QoL.lua
+Libs\AceShared.lua
+Libs\AceDB-3.0-39\AceDB-3.0.lua
+Libs\AceAddon-3.0\AceAddon-3.0.xml
+Libs\AceGUI-3.0\AceGUI-3.0.xml
+Libs\AceConfig-3.0\AceConfig-3.0.xml
+Libs\AceDBOptions-3.0\AceDBOptions-3.0.xml
+Libs\AceTimer-3.0\AceTimer-3.0.xml
 Modules\BuyEmAll\BuyEmAll.lua
 Modules\NodeSight\Bootstrap.lua
 Modules\NodeSight\Names.lua

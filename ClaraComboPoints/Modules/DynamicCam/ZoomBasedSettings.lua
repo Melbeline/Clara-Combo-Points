@@ -656,6 +656,10 @@ function DynamicCam:IsCvarToggleControlled(cvarName)
 end
 
 
+-- (Clara Combo Points: the two lists of a pass, emptied each time rather than made again every
+-- frame of a zoom or a transition)
+local cvarsToCheck, toggleGroupDisabled = {}, {}
+
 -- The main update function that applies all cvar values (both eased transitions and zoom-based curves)
 local function CvarUpdateFunction(self, elapsed)
   -- (Clara Combo Points: nothing while DynamicCam is off; all applied again once on)
@@ -710,7 +714,7 @@ local function CvarUpdateFunction(self, elapsed)
   
   -- Process each cvar
   -- Collect all cvars we might need to apply
-  local cvarsToCheck = {}
+  wipe(cvarsToCheck)
   for cvarName, _ in pairs(DynamicCam.db.profile.standardSettings.cvars) do
     cvarsToCheck[cvarName] = true
   end
@@ -733,7 +737,7 @@ local function CvarUpdateFunction(self, elapsed)
   -- Determine which toggle groups are currently disabled (once per frame).
   -- Sub-cvars of a disabled toggle have no visual effect, so we can skip them
   -- to avoid unnecessary zoom-based interpolation and SetCVar calls.
-  local toggleGroupDisabled = {}
+  wipe(toggleGroupDisabled)
   for toggleCvar, _ in pairs(TOGGLE_SUB_CVARS) do
     if not activeCvarEasings[toggleCvar] and not toggleControlledCvars[toggleCvar] and not pendingToggles[toggleCvar] then
       local toggleValue = tonumber(_G.GetCVar(toggleCvar)) or 0
