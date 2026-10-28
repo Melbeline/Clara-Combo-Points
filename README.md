@@ -11,7 +11,7 @@ Pour **toutes les classes** de WoW Forever : voleur, druide (forme de félin et 
 - **Trois styles** : plat, **Classique** (les barres du jeu dans un fin cadre gris, comme celles du portrait) ou **Infobulle** (bordure des infobulles du jeu).
 - **Mana à consommer** : pendant l'incantation d'un sort, la mana qu'il va coûter est marquée sur la barre de mana.
 - **Objets et imprégnations d'arme** : tout objet qui a un effet « Utiliser » (potions, pierres de soins, bandages, poisons, huiles, pierres à aiguiser…) et les imprégnations du chaman (Arme Croque-roc, Arme Langue de feu, Arme de givre, Arme Furie-des-vents) sur les lignes d'icônes.
-- **Améliorations de l'interface** : BuyEmAll, WeaponSwingTimer, DialogKey et MinimapDrawer intégrés, chacun réglable à part (voir plus bas).
+- **Améliorations de l'interface** : BuyEmAll, WeaponSwingTimer, DialogKey, MinimapDrawer et tullaRange intégrés, chacun réglable à part (voir plus bas).
 - **/who par prénom ou nom de famille** : `/who lea` reste la recherche du jeu (tous les noms qui contiennent « lea » : Leah, Leafrunner…). Entre guillemets, `/who "lea"` (ou `n-"lea"`, aussi dans la ligne de recherche de la fenêtre Qui) ne liste que les joueurs dont le prénom ou le nom de famille est « Lea », sans tenir compte des majuscules ni des accents (Lea, Léa, Lëa, Anna Lea, Lea-Marie… mais pas Leah, Aleandra ni Leafrunner) ; personne si aucun ne l'est. Une recherche de plusieurs mots ou avec un autre filtre (`g-`, `z-`, `c-`, `r-`, un niveau) n'est pas touchée. Marche avec la liste Qui du jeu comme avec celle de ClassicUI Forever.
 - **Menu de l'equipment manager** (Alt sur un slot de la fenêtre du personnage, ou sa flèche) : pour la colonne de droite (gants, ceinture, jambes, pieds, anneaux, bijoux), il s'ouvre à droite du slot, comme pour la colonne de gauche, au lieu de passer sur le personnage ; pour les armes (main droite, main gauche, distance), il s'ouvre en dessous au lieu d'au-dessus. Sa première case (ranger dans les sacs) est alignée sur le slot survolé ; les objets et leur ordre restent ceux du jeu. Avec la fenêtre du jeu comme avec ClassicUI Forever.
 
@@ -168,7 +168,7 @@ Tout se règle dans l'onglet **Cadres de la cible et du focus** des options de W
 
 ## Améliorations de l'interface
 
-Les fonctions de trois autres addons, intégrées à Clara Combo Points, **seulement dans WoW Forever** :
+Les fonctions d'autres addons, intégrées à Clara Combo Points, **seulement dans WoW Forever** :
 
 | Module | Ce qu'il fait | Commande |
 |---|---|---|
@@ -176,11 +176,12 @@ Les fonctions de trois autres addons, intégrées à Clara Combo Points, **seule
 | **WeaponSwingTimer** | Des barres de temps entre deux coups : main droite et main gauche, celles de ta cible, tirs à distance. Par défaut : seulement la barre de tir, et seulement pour les chasseurs. | `/wst` |
 | **DialogKey** | Une touche (**Espace** par défaut) clique sur le premier bouton d'une fenêtre de dialogue, accepte et rend les quêtes ; les **touches numériques** choisissent les options de dialogue et les récompenses de quête. Rien en combat. | `/dialogkey` (`/dk`) |
 | **MinimapDrawer** | Les boutons d'addons de la minicarte rassemblés dans un tiroir qui s'ouvre depuis le **cercle de ton niveau** (survol d'un instant, ou clic ; avec l'interface du jeu comme avec ClassicUI). Une icône glissée hors du tiroir se place où tu veux ; lâchée sur le tiroir ouvert, elle y revient ; glissée sur une autre, elle change l'ordre. Le cadenas du tiroir déplace le tiroir et le cercle. Deux cases dans l'onglet Améliorations : ouverture au survol, double clic molette sur le portrait pour recharger l'interface. | `/mmd` |
+| **tullaRange** | Les icônes de tes boutons d'action (et de la barre du familier) colorées quand leur action est **hors de portée** (rouge à 75 % d'opacité, désaturé), **sans assez de mana** (bleu, désactivé par défaut) ou **inutilisable** (gris). Dans **Échap > Options > AddOns > tullaRange**, comme dans l'addon d'origine : pour chacun, une case pour l'activer ou le désactiver (désactivé : l'aspect du jeu), Rouge, Vert, Bleu et Opacité de 0 à 100, Désaturer, un aperçu sur une icône de ton grimoire (un clic en montre une autre), et un bouton Par défaut. Les trois cases aussi dans l'onglet Améliorations. Avec l'interface du jeu comme avec ClassicUI. | — |
 
 - **Onglet Améliorations** de la fenêtre d'options : la liste des modules à gauche ; pour chacun, où il en est, la case **Intégré** (prise en compte au prochain rechargement, avec un bouton pour recharger), ses principaux réglages tant qu'il tourne, et **Toutes ses options**.
-- **Échap > Options > AddOns > Améliorations de l'interface** (à part de Clara Combo Points) : les mêmes cases, et chaque module dans son **propre sous-menu** (BuyEmAll, DialogKey) ; WeaponSwingTimer a sa **propre entrée**.
+- **Échap > Options > AddOns > Améliorations de l'interface** (à part de Clara Combo Points) : les mêmes cases, et chaque module dans son **propre sous-menu** (BuyEmAll, DialogKey) ; WeaponSwingTimer et tullaRange ont leur **propre entrée**.
 - **Si l'addon d'origine est activé**, c'est lui qui tourne, et le module intégré ne fait rien (pas de doublon). Ses réglages sont **copiés** à chaque connexion et déconnexion : le jour où tu le désactives, la version intégrée reprend exactement tes réglages, rien à refaire. WeaponSwingTimer : une session avec l'addon d'origine activé suffit pour copier ses profils.
-- **DialogKey et MinimapDrawer prennent le relais de leur addon d'origine** : s'il est activé, c'est lui qui tourne pour cette session (jamais les deux à la fois), puis il est **désactivé pour ce personnage** et la version intégrée tourne **dès le prochain rechargement** (l'onglet Améliorations propose de recharger). Ses réglages sont repris à la déconnexion si la version intégrée n'en a pas encore. Si tu désactives le module dans Clara, l'addon d'origine est réactivé pour ce personnage.
+- **DialogKey, MinimapDrawer et tullaRange prennent le relais de leur addon d'origine** : s'il est activé, c'est lui qui tourne pour cette session (jamais les deux à la fois), puis il est **désactivé pour ce personnage** et la version intégrée tourne **dès le prochain rechargement** (l'onglet Améliorations propose de recharger). Ses réglages sont repris à la déconnexion si la version intégrée n'en a pas encore. Si tu désactives le module dans Clara, l'addon d'origine est réactivé pour ce personnage.
 - **XToLevel n'est plus intégré dans cette version** : s'il avait pris le relais de ton addon XToLevel, celui-ci est réactivé pour chaque personnage à sa prochaine connexion (il tourne après un `/rl`).
 
 ## Rage qui va être consommée
@@ -214,5 +215,6 @@ Les polices de `Media/Fonts` viennent de Google Fonts, sous licence SIL Open Fon
 - **WeaponSwingTimer** 1.60.1 (version Forever), de WatchYourSixx, avec les bibliothèques Ace3 (LibStub, CallbackHandler-1.0, AceDB-3.0).
 - **DialogKey (Numy Edition)** 1.2.62, de Numy (d'après Foxthorn, N01ch et FuriousProgrammer), sous licence GNU GPL v3 (voir `Modules/DialogKey/LICENSE`), avec ses bibliothèques (Ace3, NumyAceEvent-3.0) ; sa vérification de version (LibVersionCheck, qui annonce aux autres joueurs la version utilisée) est retirée.
 - **MinimapDrawer** 1.10.0 (fourni par Melbeline).
+- **tullaRange** 11.1.0, de Tuller (Jason Greer), sous licence MIT (voir `Modules/TullaRange/LICENSE`) ; sa version Vanilla ne démarre pas dans WoW Forever (son moteur n'est pas dans ce TOC) : la version intégrée suit les boutons d'action de Forever.
 
-DialogKey est fourni avec son fichier de licence ; les autres sont crédités ici à leurs auteurs.
+DialogKey et tullaRange sont fournis avec leur fichier de licence ; les autres sont crédités ici à leurs auteurs.
