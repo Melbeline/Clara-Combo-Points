@@ -1382,6 +1382,8 @@ local function TrackDrag()
   Mark(row, hudDrag.at, hudDrag)
 end
 
+local watcher -- (below: runs while a drag lasts)
+
 -- The drag is over: the ghost goes, the dragged icon is lit again.
 local function StopDrag()
   local d = hudDrag
@@ -1434,6 +1436,7 @@ local function StartDrag(slot)
   if GameTooltip then GameTooltip:Hide() end
   Ghost()
   hudDrag = { side = slot.side, k = slot.k, i = slot.index, entry = entry, profile = ns.db }
+  watcher:Show()
   ghost.tex:SetTexture(slot.spellIcon)
   slot:SetAlpha(.3)
   ghost:Show()
@@ -1549,10 +1552,12 @@ end
 function ns:HUDDropDone() Mark(nil) end
 
 -- Drags end with the button let go (also when the icon went away meanwhile); they are
--- called off when the icons are locked again or the HUD shows another profile.
-local watcher = CreateFrame("Frame")
-watcher:SetScript("OnUpdate", function()
-  if not hudDrag then return end
+-- called off when the icons are locked again or the HUD shows another profile. (Only while
+-- one lasts: hidden otherwise.)
+watcher = CreateFrame("Frame")
+watcher:Hide()
+watcher:SetScript("OnUpdate", function(self)
+  if not hudDrag then return self:Hide() end
   if not DragValid(hudDrag) then
     CancelDrag()
   elseif IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then

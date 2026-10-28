@@ -12,6 +12,15 @@ addon_data.utils.PrintMsg = function(msg)
 	DEFAULT_CHAT_FRAME:AddMessage(chat_msg)
 end
 
+-- The player's class (file name, ID): read once, it never changes (asked every frame).
+local playerClass, playerClassID
+addon_data.utils.PlayerClass = function()
+    if playerClass then return playerClass, playerClassID end
+    local _, file, id = UnitClass("player")
+    if type(file) == "string" then playerClass, playerClassID = file, id end
+    return file, id
+end
+
 -- Rounds the given number to the given step.
 -- If num was 1.17 and step was 0.1 then this would return 1.1
 addon_data.utils.SimpleRound = function(num, step)
