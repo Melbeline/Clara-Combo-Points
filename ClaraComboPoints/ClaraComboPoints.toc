@@ -25,6 +25,7 @@ SpellCatalog.lua
 SpellNames.lua
 Who.lua
 Flyout.lua
+GameFixes.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua

@@ -145,11 +145,24 @@ local function Build()
   updates[#updates + 1] = function() who:SetChecked(ns:WhoNames()) end
   page.whoNames = who
 
+  -- The game's icon in the taskbar not flashing (GameFixes.lua)
+  local blink = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+  blink:SetSize(26, 26)
+  blink:SetPoint("TOPLEFT", 10, -310)
+  local blinkText = blink.Text or blink.text
+  labels[#labels + 1] = function() blinkText:SetText(L.SP_NO_BLINK) end
+  blink:SetScript("OnClick", function(self)
+    Click()
+    ns:SetNoBlink(self:GetChecked())
+  end)
+  updates[#updates + 1] = function() blink:SetChecked(ns:NoBlink()) end
+  page.noBlink = blink
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -324)
+  how:SetPoint("TOPLEFT", 14, -348)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -346)
+  box:SetPoint("TOPLEFT", 10, -370)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)
