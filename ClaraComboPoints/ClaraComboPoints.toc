@@ -57,3 +57,4 @@ Modules\MinimapDrawer\Glue.lua
 Modules\Mail\MailData.lua
 Modules\Mail\MailUI.lua
 Modules\Mail\MailItems.lua
+Modules\Mail\MailExtra.lua
