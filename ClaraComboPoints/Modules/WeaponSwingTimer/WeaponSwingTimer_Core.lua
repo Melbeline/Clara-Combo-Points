@@ -448,9 +448,9 @@ local function WST_ApplyParryHaste(unit)
 end
 
 local function CoreFrame_OnEvent(self, event, ...)
-    local args = {...}
+    local arg1, arg2, arg3, arg4 = ... -- (no table a call: some come often in combat)
     if event == "ADDON_LOADED" then
-        if args[1] == E.ADDON then
+        if arg1 == E.ADDON then
             OnAddonLoaded()
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
@@ -501,37 +501,37 @@ local function CoreFrame_OnEvent(self, event, ...)
         -- UNIT_SPELLCAST_SENT: unit, target, castGUID, spellID
         if addon_data.castbar.OnUnitSpellCastSent then
             addon_data.castbar.OnUnitSpellCastSent(
-                args[1], args[2], args[3], args[4]
+                arg1, arg2, arg3, arg4
             )
         end
     elseif event == "UNIT_SPELLCAST_DELAYED" then
         -- UNIT_SPELLCAST_DELAYED: unit, castGUID, spellID, castBarID
         if addon_data.castbar.OnUnitSpellCastDelayed then
             addon_data.castbar.OnUnitSpellCastDelayed(
-                args[1], args[2], args[3], args[4]
+                arg1, arg2, arg3, arg4
             )
         end
     elseif event == "UNIT_SPELLCAST_START" then
-        addon_data.core.HandlePlayerSwingResetSpell(args[1], args[3], "START")
+        addon_data.core.HandlePlayerSwingResetSpell(arg1, arg3, "START")
         if addon_data.hunter.OnUnitSpellCastStart then
-            addon_data.hunter.OnUnitSpellCastStart(args[1], args[3])
+            addon_data.hunter.OnUnitSpellCastStart(arg1, arg3)
         end
         if addon_data.castbar.OnUnitSpellCastStart then
-            addon_data.castbar.OnUnitSpellCastStart(args[1], args[3])
+            addon_data.castbar.OnUnitSpellCastStart(arg1, arg3)
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
-        addon_data.core.HandlePlayerSwingResetSpell(args[1], args[3], "CHANNEL_START")
+        addon_data.core.HandlePlayerSwingResetSpell(arg1, arg3, "CHANNEL_START")
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        addon_data.core.HandlePlayerSwingResetSpell(args[1], args[3], "SUCCEEDED")
-        addon_data.hunter.OnUnitSpellCastSucceeded(args[1], args[3])
-		addon_data.castbar.OnUnitSpellCastSucceeded(args[1], args[3])
+        addon_data.core.HandlePlayerSwingResetSpell(arg1, arg3, "SUCCEEDED")
+        addon_data.hunter.OnUnitSpellCastSucceeded(arg1, arg3)
+		addon_data.castbar.OnUnitSpellCastSucceeded(arg1, arg3)
     elseif event == "UNIT_SPELLCAST_FAILED" then
-		addon_data.castbar.OnUnitSpellCastFailed(args[1], args[3])
+		addon_data.castbar.OnUnitSpellCastFailed(arg1, arg3)
     elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
-		addon_data.hunter.OnUnitSpellCastInterrupted(args[1], args[3])
-		addon_data.castbar.OnUnitSpellCastInterrupted(args[1], args[3])
+		addon_data.hunter.OnUnitSpellCastInterrupted(arg1, arg3)
+		addon_data.castbar.OnUnitSpellCastInterrupted(arg1, arg3)
     elseif event == "UNIT_SPELLCAST_FAILED_QUIET" then
-        addon_data.hunter.OnUnitSpellCastFailedQuiet(args[1], args[3])
+        addon_data.hunter.OnUnitSpellCastFailedQuiet(arg1, arg3)
     end
 end
 

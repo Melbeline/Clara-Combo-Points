@@ -574,7 +574,8 @@ function ns:ClickButtons()
 end
 
 -- Out of combat the buttons follow the icons (moved, resized, shown or hidden); the last chance
--- is the moment combat starts. A new spell or form: what each spell needs is read again.
+-- is the moment combat starts (the ticker rests in combat). A new spell or form: what each spell
+-- needs is read again.
 local ticker = CreateFrame("Frame")
 local wait = 0
 table.insert(ns.onEnable, function()
@@ -585,9 +586,15 @@ table.insert(ns.onEnable, function()
     if not InCombatLockdown() then ns:SyncClickers() end
   end)
   ticker:RegisterEvent("PLAYER_REGEN_DISABLED")
+  ticker:RegisterEvent("PLAYER_REGEN_ENABLED")
   ticker:RegisterEvent("SPELLS_CHANGED")
   pcall(ticker.RegisterEvent, ticker, "UPDATE_SHAPESHIFT_FORMS")
-  ticker:SetScript("OnEvent", function(_, event)
+  ticker:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_ENABLED" then
+      wait = 0
+      return self:Show()
+    end
+    if event == "PLAYER_REGEN_DISABLED" then self:Hide() end
     if event ~= "PLAYER_REGEN_DISABLED" then
       wipe(needs)
       wipe(firstAt)

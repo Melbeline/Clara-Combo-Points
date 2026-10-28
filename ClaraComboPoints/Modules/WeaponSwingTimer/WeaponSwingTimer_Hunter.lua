@@ -91,7 +91,7 @@ addon_data.hunter.IsShown = function()
     local settings = character_hunter_settings
     if not (settings and settings.enabled) then return false end
     if settings.hunters_only == false then return true end
-    local _, class = UnitClass("player")
+    local class = addon_data.utils.PlayerClass()
     return class == "HUNTER"
 end
 --- Initializing variables for calculations and function calls
