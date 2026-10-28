@@ -63,13 +63,22 @@ local function PlaceFeed()
     ns.SetPointIf(feed, "TOPLEFT", PetFrame, "TOPLEFT", x or FEED_X, y or FEED_Y)
 end
 
+-- The game hides auras from addons in a fight (and in some places): asking then is an error, not an answer.
+local function AurasSecret()
+    local should = C_Secrets and C_Secrets.ShouldAurasBeSecret
+    if not should then return false end
+    local ok, secret = pcall(should)
+    return not ok or ns.AnySecret(secret) or secret == true
+end
+
 -- The Feed Pet Effect on the pet: its aura, false with none, nil when it cannot be told (secret, in a fight).
 local function FeedAura()
     local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
-    if not get then return nil end
+    if not get or AurasSecret() then return nil end
     local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(FEED_SPELL)
     for i = 1, 40 do
-        local aura = get("pet", i, "HELPFUL")
+        local ok, aura = pcall(get, "pet", i, "HELPFUL")
+        if not ok then return nil end
         if not aura then return false end
         local id, auraName = aura.spellId, aura.name
         if ns.AnySecret(id, auraName) then return nil end
@@ -216,7 +225,7 @@ local function Build()
     if face then Mover(face, FACE_KEYS, PlaceFace) end
 end
 
-local auraEvents, petEvents
+local auraEvents, petEvents, fightEvents
 local function Apply()
     if not (Hunter() and PetFrame and ns.db) then return end
     active = ns.ModuleInForce("unitFramePet") == true
@@ -232,10 +241,12 @@ local function Apply()
             PlaceFace()
             UpdateFeed()
         end, "player")
+        fightEvents = ns.EventFrame({ "PLAYER_REGEN_ENABLED" }, UpdateFeed) -- (its auras readable again)
     elseif not active and auraEvents then
         auraEvents:UnregisterAllEvents()
         petEvents:UnregisterAllEvents()
-        auraEvents, petEvents = nil, nil
+        fightEvents:UnregisterAllEvents()
+        auraEvents, petEvents, fightEvents = nil, nil, nil
     end
 end
 ns.PetIconsApply = Apply -- (for the tests)
