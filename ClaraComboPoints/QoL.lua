@@ -1,11 +1,11 @@
--- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll and
--- DialogKey sit under "Interface improvements" in the game's options (Esc > Options > AddOns),
--- apart from Clara Combo Points; WeaponSwingTimer has its own entry there. Each module runs only
--- in WoW Forever, and only if not turned off here. When its own addon is enabled, that one runs
--- instead (its settings are carried over for the day it is turned off); DialogKey takes over from
--- its own: that one runs for that session, then it is turned off for the character, so that the
--- built-in one runs from the next reload (and it is turned back on if the module is turned off
--- here).
+-- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
+-- DialogKey and MinimapDrawer sit under "Interface improvements" in the game's options (Esc >
+-- Options > AddOns), apart from Clara Combo Points; WeaponSwingTimer has its own entry there. Each
+-- module runs only in WoW Forever, and only if not turned off here. When its own addon is enabled,
+-- that one runs instead (its settings are carried over for the day it is turned off); DialogKey and
+-- MinimapDrawer take over from theirs: it runs for that session, then it is turned off for the
+-- character, so that the built-in one runs from the next reload (and it is turned back on if the
+-- module is turned off here).
 -- Saved variables load before the files here (## LoadSavedVariablesFirst), so each module
 -- knows at once whether it runs.
 
@@ -18,6 +18,7 @@ ns.QOL_MODULES = {
   { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic" },
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
   { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
+  { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", takeOver = true },
 }
 -- Modules no longer built in that took over from their own addon: that one is turned back on for
 -- the characters it was turned off for (at their next login; it runs from the next reload).
