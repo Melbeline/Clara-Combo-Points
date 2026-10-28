@@ -103,6 +103,16 @@ if E.env then
       get = function() local r = E.data.range; return r and r.FrameBoxOn and r.FrameBoxOn() or false end,
       set = function(on) local r = E.data.range; if r and r.SetFrameBox then r.SetFrameBox(on) end end,
     },
+    { -- the target's attack speed (WeaponSwingTimer_Frames.lua): a hunter's by default
+      label = "WST_SW_SPEED_BOX",
+      get = function() return E.SpeedBoxOn and E.SpeedBoxOn() or false end,
+      set = function(on) if E.SetSpeedBox then E.SetSpeedBox(on) end end,
+    },
+    { -- a boss's swing timer on its name bar
+      label = "WST_SW_BOSS_SWING",
+      get = function() return E.BossSwing and (E.BossSwing()) or false end,
+      set = function(on) if E.SetBossSwing then E.SetBossSwing(on) end end,
+    },
     {
       label = "WST_SW_LOCKED",
       get = function() local t = Settings("player"); return not t or t.is_locked ~= false end,

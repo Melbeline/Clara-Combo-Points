@@ -436,6 +436,7 @@ addon_data.range.SetFrameBox = function(on)
     if not character_range_settings then return end
     character_range_settings.frame_box = on and true or false
     if E.OnRangeBoxChanged then E.OnRangeBoxChanged() end
+    if addon_data.frames and addon_data.frames.UpdatePanel then addon_data.frames.UpdatePanel() end
 end
 
 -- The unit's band in short, its key and the key's color (WeaponSwingTimer's range colors)
