@@ -90,10 +90,11 @@ local function Range()
   if wst and wst.RangeBand and wst.RangeBoxOn and wst.RangeBoxOn() then return wst end
 end
 
--- ClassicUI's distance box, when that frame is its (it shows the threat percent itself)
+-- ClassicUI's distance box, when that frame is its (it shows the threat percent itself, placed
+-- beside the distance while that is on)
 local function ClassicBox(unit)
   local cui = ns.ClassicUIPrivate
-  return cui and cui.ClaraRangeBox and cui.ClaraRangeBox(unit)
+  return cui and cui.ClaraRangeBox and cui.ClaraRangeBox(unit, Range() ~= nil)
 end
 
 local function SetShown(box, show)
