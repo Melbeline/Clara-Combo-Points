@@ -5,7 +5,7 @@
 -- categories (several at once). Sort by: the newest first, or a category's characters first, in a
 -- framed block. Add/remove categories: add one, delete one, reset them, or reset everything. Export /
 -- Import (title bar): the whole of it as a line of text, for another account. The game's own window
--- look; ClassicUI's when it runs (ns.ClassicMailSkin, set by it).
+-- look; ClassicUI's when it runs (its ClaraMailSkin: Modules/ClassicUI/Windows/ClaraMail.lua).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -25,7 +25,8 @@ local first = 0 -- rows scrolled past
 local textBox
 
 local function Skin(kind, frame)
-  if ns.ClassicMailSkin then ns.ClassicMailSkin(kind, frame) end
+  local classic = ns.ClassicUIPrivate -- (ClassicUI built in, running)
+  if classic and classic.ClaraMailSkin then classic.ClaraMailSkin(kind, frame) end
 end
 
 local function ClickSound()
