@@ -101,6 +101,11 @@ local function NameTooltip(self)
   else
     GameTooltip:AddLine(L.MAIL_NO_CATEGORY, .6, .6, .65, true)
   end
+  local items = 0 -- (the items that go to it: MailItems.lua)
+  if M.ItemGoesTo then
+    for _, a in pairs(M.db.items) do if M.ItemGoesTo(a, r.name) then items = items + 1 end end
+  end
+  if items > 0 then GameTooltip:AddLine(L.MAIL_NAME_ITEMS:format(items), .4, .78, 1, true) end
   GameTooltip:AddLine(L.MAIL_NAME_TIP, .4, 1, .4, true)
   GameTooltip:Show()
 end
@@ -141,6 +146,7 @@ local function Cell(parent, i)
   b:SetScript("OnClick", function(self, button)
     ClickSound()
     if GameTooltip then GameTooltip:Hide() end
+    if M.Dropped and M.Dropped(self.entry) then return end -- (an item held: given to that character)
     if button == "RightButton" then NameMenu(self) else Choose(self.entry) end
   end)
   b:SetScript("OnEnter", NameTooltip)
