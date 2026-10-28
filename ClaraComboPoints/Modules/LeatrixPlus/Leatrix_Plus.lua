@@ -2572,7 +2572,8 @@
 		-- Show range coloring
 		----------------------------------------------------------------------
 
-		if LeaPlusLC["ShowRangeColoring"] == "On" then
+		-- (Clara Combo Points: not while its tullaRange runs, which colors the same icons)
+		if LeaPlusLC["ShowRangeColoring"] == "On" and not ClaraNS:QolRuns("tullarange") then
 
 			-- Colors
 			local colorNormal	= {1.0, 1.0, 1.0}		-- Usable
