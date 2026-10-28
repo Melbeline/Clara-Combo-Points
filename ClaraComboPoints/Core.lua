@@ -1800,6 +1800,7 @@ local function InitDB()
   end
   if sv.quietLogin ~= false then sv.quietLogin = nil end -- (on unless turned off: QuietLogin.lua)
   if sv.whoNames ~= false then sv.whoNames = nil end -- (on unless turned off: Who.lua)
+  if sv.noBlink ~= false then sv.noBlink = nil end -- (on unless turned off: GameFixes.lua)
   if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
   sv.cameraOff, sv.cameraWas = nil, nil -- (an earlier DynamicCam box's, no longer used: Modules/DynamicCam/Glue.lua)
   -- the player's DynamicCam Zoom Increments with the Dynamic camera box ticked, and unticked (the same)
