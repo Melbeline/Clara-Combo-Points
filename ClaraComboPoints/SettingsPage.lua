@@ -171,11 +171,24 @@ local function Build()
   updates[#updates + 1] = function() threat:SetChecked(ns:ThreatBox()) end
   page.threatBox = threat
 
+  -- Alt + left click in the bags: Disenchant (Disenchant.lua)
+  local disenchant = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+  disenchant:SetSize(26, 26)
+  disenchant:SetPoint("TOPLEFT", 10, -358)
+  local disenchantText = disenchant.Text or disenchant.text
+  labels[#labels + 1] = function() disenchantText:SetText(L.SP_DISENCHANT) end
+  disenchant:SetScript("OnClick", function(self)
+    Click()
+    ns:SetDisenchantClick(self:GetChecked())
+  end)
+  updates[#updates + 1] = function() disenchant:SetChecked(ns:DisenchantClick()) end
+  page.disenchant = disenchant
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -372)
+  how:SetPoint("TOPLEFT", 14, -396)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -394)
+  box:SetPoint("TOPLEFT", 10, -418)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)

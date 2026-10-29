@@ -27,6 +27,7 @@ Who.lua
 Flyout.lua
 GameFixes.lua
 UnitBoxes.lua
+Disenchant.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
