@@ -84,7 +84,10 @@ function ns:SetFishingMode(on)
   if not self.sv then return end
   on = on and true or false
   self.sv.fishingMode = on or nil
-  if on then Apply() else Restore() end
+  if on then Apply() else
+    Restore()
+    if self.FishingWeaponsBack then self:FishingWeaponsBack() end -- (the weapons the pole replaced: Fishing.lua)
+  end
   Refresh()
 end
 

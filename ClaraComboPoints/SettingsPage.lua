@@ -220,11 +220,35 @@ local function Build()
   end
   page.fishingBoost = boost
 
+  -- More boxes, one under the other: the Interact Key's icons (InteractKey.lua); without Leatrix
+  -- Plus (its Interface page has them otherwise), quest progress on nameplates (QuestPlates.lua)
+  -- and the zone in the group finder (GroupFinderZone.lua)
+  local y = -440
+  local function Box(key, get, set, field)
+    local check = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+    check:SetSize(26, 26)
+    check:SetPoint("TOPLEFT", 10, y)
+    local text = check.Text or check.text
+    labels[#labels + 1] = function() text:SetText(L[key]) end
+    check:SetScript("OnClick", function(self)
+      Click()
+      set(ns, self:GetChecked() and true or false)
+    end)
+    updates[#updates + 1] = function() check:SetChecked(get(ns)) end
+    page[field] = check
+    y = y - 24
+  end
+  Box("SP_INTERACT_ICONS", ns.InteractIcons, ns.SetInteractIcons, "interactIcons")
+  if not ns:QolRuns("leatrix") then
+    Box("QUEST_PLATES", ns.QuestPlates, ns.SetQuestPlates, "questPlates")
+    Box("LFG_ZONE", ns.GroupFinderZone, ns.SetGroupFinderZone, "groupFinderZone")
+  end
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -446)
+  how:SetPoint("TOPLEFT", 14, y - 8)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -468)
+  box:SetPoint("TOPLEFT", 10, y - 30)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)
