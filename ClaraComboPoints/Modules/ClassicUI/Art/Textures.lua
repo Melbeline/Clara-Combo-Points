@@ -62,6 +62,7 @@ local SHARE = { slotNormal = 0.9, trackingBorder = { dark = 1.28 }, minimapBorde
 
 -- Falls back to the other copy so a missing file never leaves a blank region; extra args go to SetTexture.
 function ns.SetTex(texture, key, ...)
+    if ns.ArtLocked(texture) then return false end
     local primary, fallback = ns.TexPath(key, texture)
     local ok = texture:SetTexture(primary, ...)
     if ok == false then
@@ -106,7 +107,7 @@ end
 
 -- By file; swaps to its bronze copy with the theme.
 function ns.SetFile(texture, path, ...)
-    if not texture or not path then return end
+    if not texture or not path or ns.ArtLocked(texture) then return end
     B.artKey[texture] = nil
     local copy = BronzeCopy(path)
     B.swapped[texture] = copy and path or nil

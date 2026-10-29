@@ -15,7 +15,7 @@ local SQUARE_W, SQUARE_H = 21, 19 -- the client's ui-hud-calendar atlases
 local RING_R = 73        -- ring spot: its middle's distance from the map's middle
 local RING_ANGLE = 8     -- ring spot: default angle under the day/night (degrees, 0 = right, + counterclockwise)
 local RING_ANGLE_BARE = 40 -- ring spot without a day/night frame: the client's own corner
-local BY_TOGGLE_X = -38  -- zone spot with the minimap close button on: just left of the X's art
+local BY_TOGGLE_X = -160 -- zone spot with the minimap close button on: the bar's left end, as far in as the right spot
 
 local home, square
 local squareState = "up"
@@ -41,6 +41,7 @@ end
 function ns.LayPiece(key, anyway)
     if (key == KEY or (MM.PIECE_KEYS and MM.PIECE_KEYS[key])) and MM.Relayout then MM.Relayout() end
     if ns.PlaceRingButton then ns.PlaceRingButton(key) end
+    if key == "minimapEye" and MM.PlaceEye then MM.PlaceEye() end
     if ns.LayGryphon then ns.LayGryphon(key, anyway) end
     if ns.LayQuestWatch then ns.LayQuestWatch(key) end
     if ns.LayTrackingIcon then ns.LayTrackingIcon(key) end
@@ -99,9 +100,9 @@ end
 ---------------------------------------------------------------- placing
 
 -- Named: the windows' edit mode places and sizes it by name.
-local function Home(cluster)
+local function Home()
     if home then return home end
-    home = CreateFrame("Frame", HOME, cluster)
+    home = CreateFrame("Frame", HOME, MM.scaled)
     square = CreateFrame("Frame", nil, home)
     square:SetAllPoints(home)
     square.tex = square:CreateTexture(nil, "ARTWORK")
@@ -127,7 +128,7 @@ local function PlaceHome(box, cluster, map, spot, diel)
         -- Where 1.x had the minimap toggle, on the zone name's right end.
         local _, plateY = MM.HeaderOffsets()
         local x = MM.ToggleShown() and BY_TOGGLE_X or -15
-        ns.SetPointOnce(box, "CENTER", cluster, "TOPRIGHT", x / k, (-13 + plateY) / k)
+        ns.SetPointOnce(box, "CENTER", cluster, "TOPRIGHT", x / k, (-14 + plateY) / k)
     else
         local angle = tonumber(ns.db.calendarAngle) or (diel and RING_ANGLE or RING_ANGLE_BARE)
         ns.RingPoint(box, angle, RING_R, box:GetEffectiveScale() / map:GetEffectiveScale())
@@ -139,7 +140,7 @@ function MM.PlaceCalendar(cluster, map, above)
     if not button then return end
     local spot = Spot()
     local diel = cluster.DielFrame
-    local box = Home(cluster)
+    local box = Home()
     WatchButton(button)
     button:SetShown(spot ~= nil)
     if spot == nil then

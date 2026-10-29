@@ -90,10 +90,31 @@ local gameArt = setmetatable({}, weak)   -- texture -> share, or true for full
 local function OnCopy(texture)
     return tinted[texture] or drained[texture] ~= nil or swapped[texture] or (B.clientWas and B.clientWas[texture])
 end
+-- The game colors much of its own art (a tooltip's dark center, a quality border): white is not its "as drawn".
+local gameWas = setmetatable({}, { __mode = "k" })   -- game art -> { desaturated, r, g, b, a } before our first themed paint
+local function Remember(texture)
+    if gameWas[texture] ~= nil then return end
+    local r, g, b, a = texture:GetVertexColor()
+    local desat = texture:IsDesaturated()
+    gameWas[texture] = not ns.AnySecret(r, g, b, a, desat) and { desat, r, g, b, a } or false
+end
+-- Ours off it: the game's own desaturation and color back. Art we never painted is left as the game keeps it.
+local function GiveBack(texture)
+    local was = gameWas[texture]
+    if was == nil then return end
+    gameWas[texture] = nil
+    texture:SetDesaturated(was and was[1] or false)
+    if was then texture:SetVertexColor(was[2], was[3], was[4], was[5]) else texture:SetVertexColor(1, 1, 1) end
+end
 local function PaintGame(texture)
     if OnCopy(texture) then return end
     local theme = ns.ThemeFor(texture)
-    Paint(texture, not (theme and theme.client) and theme or nil, gameArt[texture])
+    if theme and not theme.client then
+        Remember(texture)
+        Paint(texture, theme, gameArt[texture])
+    else
+        GiveBack(texture)
+    end
 end
 
 function ns.TintGameArt(texture, share)
@@ -106,8 +127,7 @@ function ns.UntintGameArt(texture)
     if not texture or gameArt[texture] == nil then return end
     gameArt[texture] = nil
     if OnCopy(texture) then return end
-    texture:SetDesaturated(false)
-    texture:SetVertexColor(1, 1, 1)
+    GiveBack(texture)
 end
 
 function ns.GameArtTinted(texture) return gameArt[texture] ~= nil end
@@ -282,12 +302,17 @@ function ns.DrainInput(box, drain)
     ns.EachKey(box, ns.KEYS.LMR, drain or ns.DrainBronze, ns.INPUT_GREY)
 end
 
+-- The theme's layers and masks hang in the slice too: repainted as its edges, a copy's metal went white.
+local function Edge(region, center)
+    return region ~= center and not ns.IsThemeLayer(region) and region:GetObjectType() ~= "MaskTexture"
+end
+
 local function SliceDrain(region, center, grey, drain)
-    if region ~= center then drain(region, grey) end
+    if Edge(region, center) then drain(region, grey) end
 end
 
 local function SliceTint(region, center)
-    if region ~= center and region.IsObjectType and region:IsObjectType("Texture") then ns.BronzeTint(region) end
+    if Edge(region, center) and region.IsObjectType and region:IsObjectType("Texture") then ns.BronzeTint(region) end
 end
 
 -- NineSlice edges; the Center stays as drawn.

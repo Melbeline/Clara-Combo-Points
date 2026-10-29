@@ -21,8 +21,15 @@ Nameplate-Border
 NumericThreatBorder
 PetHappinessFaces
 QuickJoin-Atlas
-RedButtonCaps
-RedButtonCenter
+RedButtonLeft-Disabled
+RedButtonLeft-Pressed
+RedButtonLeft
+RedButtonMid-Disabled
+RedButtonMid-Pressed
+RedButtonMid
+RedButtonRight-Disabled
+RedButtonRight-Pressed
+RedButtonRight
 SkillFrame-BotLeft
 SkillFrame-BotRight
 SpellBook-SkillLineTab

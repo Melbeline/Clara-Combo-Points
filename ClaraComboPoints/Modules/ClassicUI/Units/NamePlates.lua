@@ -3,7 +3,7 @@ if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
 
 -- 1.x plate: 128x16 border with the level in its right slot, 103.75x10 health bar, name above, cast bar below.
--- We re-lay the client plate's pieces and fade its retail art; forbidden plates (instances) are left alone.
+-- We re-lay the client plate's pieces and fade its retail art; locked plates (friends in dungeons) stay the game's.
 
 local Dress, DressNew, FadeKeys, IsSecret = ns.Dress, ns.DressNew, ns.FadeKeys, ns.IsSecret
 
@@ -19,12 +19,9 @@ local LEVEL_X = -11.5
 local ICON_SIZE = 14
 -- Cast border has no level slot: the left half twice, the second mirrored; the bar runs into the slot's width.
 local CAST_EXTRA = INSET_R - INSET_L
--- Era's classic cast bar (Blizzard_NamePlateCastingBar, classic style): its own border under the health border, the
--- icon's slot at its left (the icon 11.5 in), the bar 20.75 in from the left and 3.5 from the right, a half-black
--- backing, the old spark; 4 between the health and cast boxes. Cast bar: icon beside it gives ours before back.
+-- Era's classic cast bar: its own border under the health border, the icon 11.5 in at its left slot, a half-black
+-- backing, the old spark, 4 between the health and cast boxes. Cast bar: icon beside it gives ours before back.
 local ERA_CAST_GAP, ERA_ICON_X = 4, 11.5
--- The game's "cast at you" highlight, hugging Era's bar: 1.5 out at the sides, 1 above, 2.25 below (the modern look's 4).
-local AIM_X, AIM_TOP, AIM_BOTTOM, CLIENT_AIM = 1.5, 1, 2.25, 4
 local CAST_SPARK, CAST_SPARK_SIZE = "Interface\\CastingBar\\UI-CastingBar-Spark", 32
 -- Era's shield on a cast that cannot be interrupted: the old small shield around the bar, the icon kept.
 local SHIELD_L, SHIELD_T, SHIELD_R, SHIELD_B = 20, 11, 13, 13
@@ -171,8 +168,7 @@ local function OldSpark(cast, on)
     end
 end
 
--- The client's shield (a badge in the icon's place) to Era's around the bar and back. A plate's shield cannot be
--- measured (restricted region): set blind, given back as the client's own setup lays it.
+-- The client's shield (a badge at the icon) to Era's round the bar and back: set blind (restricted region), back as its setup lays it.
 local CLIENT_SHIELD, CLIENT_SHIELD_W, CLIENT_SHIELD_H = "nameplates-InterruptShield", 10, 12
 local shieldTaken = setmetatable({}, { __mode = "k" })
 local function EraShield(cast, on)
@@ -228,15 +224,14 @@ local function UpdateLevel(unitFrame)
     local own = unitFrame.fcui
     local level, skull = own and own.level, own and own.skull
     if not level or not unitFrame.unit then return end
-    -- The effective level, as the client's target frame reads it: -1 (a skull) from ten levels up, where UnitLevel still
-    -- tells the number.
+    -- The target frame's rule: the effective level shown, a skull where it or UnitLevel says "??" (bosses, friends too).
     local lvl = (UnitEffectiveLevel or UnitLevel)(unitFrame.unit)
     if lvl == nil or IsSecret(lvl) then
         level:SetText("")
         skull:Hide()
         return
     end
-    if ns.SkullLevel(lvl, unitFrame.unit) then
+    if ns.SkullLevel(lvl, unitFrame.unit) or ns.SkullLevel(UnitLevel(unitFrame.unit), unitFrame.unit) then
         level:SetText("")
         skull:Show()
         return
@@ -329,6 +324,17 @@ end
 -- Plate -> its cast was interrupted, till the next one starts (from our event watch: plates are never hooked).
 local castCut = setmetatable({}, { __mode = "k" })
 
+-- The game's "cast at you" glow (#223), shown by a value kept secret: its own texture wears a red copy of our border.
+local AIM = { layer = "OVERLAY", sublevel = 0, coords = { 0, 1, 0.5, 1 }, point = "TOPLEFT", y = INSET_T, point2 = "BOTTOMRIGHT",
+    y2 = -INSET_B, blend = "ADD", vertex = { 1, 0.35, 0.2 } }
+local AIM_ATLAS = "ui-hud-nameplates-targetedbyenemy"
+local function AimGlow(cast, old)
+    local aim = cast.CastTargetIndicator
+    if not aim then return end
+    AIM.x, AIM.x2 = old and -INSET_L or -INSET_R, old and INSET_R or INSET_L
+    Dress(aim, "nameplateCastBorder", AIM)
+end
+
 -- Cast bar: same fill and border, icon to the left, text inside.
 local function LayCast(castContainer, unitFrame)
     local cast = castContainer.castBar
@@ -356,11 +362,7 @@ local function LayCast(castContainer, unitFrame)
     back:SetShown(not old)
     OldSpark(cast, not old)
     EraShield(cast, not old)
-    local aim = cast.CastTargetIndicator
-    if aim then
-        local x, top, bottom = old and CLIENT_AIM or AIM_X, old and CLIENT_AIM or AIM_TOP, old and CLIENT_AIM or AIM_BOTTOM
-        ns.SetTwoPointsIf(aim, "TOPLEFT", cast, "TOPLEFT", -x, top, "BOTTOMRIGHT", cast, "BOTTOMRIGHT", x, -bottom)
-    end
+    AimGlow(cast, old)
     if cast.Icon then
         ns.SetSizeIf(cast.Icon, ICON_SIZE, ICON_SIZE)
         if old then
@@ -547,9 +549,8 @@ ns.OnToggle(function(key)
     if key == "classicFonts" and NP.active then EachPlate(PlateText) end
 end)
 
--- Plates re-lay after the client's handlers for what re-anchors them (added, faction, target, focus, casts, options, scale),
--- in this frame's pass and the next: a plate registers its events after ours. Only player plates change colour with no
--- event (a duel, a flag, a death): a 0.2 s sweep recolours while one shows.
+-- Plates re-lay after the client's handlers for what re-anchors them, this frame and the next (a plate registers its
+-- events after ours). Only player plates change colour with no event (a duel, a flag, a death): a 0.2 s sweep while one shows.
 local SWEEP = 0.2
 local driver, sweepJob, overJob
 -- Plates owed a re-lay in this frame's pass and in the next frame's; all = every plate.
@@ -564,7 +565,7 @@ end
 
 -- Era's classic plates turn the moused-over name yellow (Plate name on hover). The client paints every name again as
 -- the mouse finds a unit, so ours comes a frame after; as it leaves, the color it had comes back.
-local nameOver, nameWas = nil, {}
+local nameOver, nameWas, nameWasFor = nil, {}, nil
 local function Yellow(name)
     local r, g, b = name:GetVertexColor()
     return ns.AnySecret(r, g, b) or (r == 1 and g == 1 and b == 0)
@@ -584,7 +585,11 @@ local function PaintNameOver(fresh)
     if not name then return end
     local r, g, b = name:GetVertexColor()
     if ns.AnySecret(r, g, b) then nameOver = nil return end
-    nameWas[1], nameWas[2], nameWas[3] = r, g, b
+    -- The game's Classic style yellows the hovered name itself: the color taken before it stays the one to give back.
+    if not (nameWasFor == over and r == 1 and g == 1 and b == 0) then
+        nameWas[1], nameWas[2], nameWas[3] = r, g, b
+        nameWasFor = over
+    end
     name:SetVertexColor(1, 1, 0)
 end
 local function PaintNameFresh() PaintNameOver(true) end
@@ -685,7 +690,6 @@ local function OnEvent(_, event, unit, _, _, interruptedBy)
         local unitFrame = PlateFor(unit)
         if unitFrame then QueueRelay(unitFrame) end
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
-        -- The plate is recycled for another unit.
         local unitFrame = LivePlate(unit)
         if unitFrame then
             castCut[unitFrame] = nil
@@ -730,7 +734,6 @@ end
 
 local function Apply()
     SetActive(true)
-    NP.RestoreStyleChoice()
     if not NamePlateDriverFrame then ns.MissingPiece("NamePlateDriverFrame") return end
     if not driver then
         driver = CreateFrame("Frame")
@@ -744,7 +747,6 @@ end
 
 local function Restore()
     SetActive(false)
-    NP.RestoreStyleChoice()
     for unitFrame in pairs(skinned) do
         if unitFrame.fcui then
             -- Regions only: the table also keeps the name's sizes.
@@ -760,6 +762,8 @@ local function Restore()
         if cast then
             OldSpark(cast, false)
             EraShield(cast, false)
+            local aim = cast.CastTargetIndicator
+            if aim then aim:SetAtlas(AIM_ATLAS) aim:SetVertexColor(1, 1, 1) aim:SetBlendMode("BLEND") end
         end
         for _, bar in pairs({ health, cast }) do
             if bar.fcui then
