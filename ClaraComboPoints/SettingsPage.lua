@@ -184,24 +184,11 @@ local function Build()
   updates[#updates + 1] = function() disenchant:SetChecked(ns:DisenchantClick()) end
   page.disenchant = disenchant
 
-  -- Fishing: a right click reels in too (Fishing.lua; its key in the game's key bindings)
-  local fishing = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-  fishing:SetSize(26, 26)
-  fishing:SetPoint("TOPLEFT", 10, -382)
-  local fishingText = fishing.Text or fishing.text
-  labels[#labels + 1] = function() fishingText:SetText(L.SP_FISHING) end
-  fishing:SetScript("OnClick", function(self)
-    Click()
-    ns:SetFishingRightClick(self:GetChecked())
-  end)
-  updates[#updates + 1] = function() fishing:SetChecked(ns:FishingRightClick()) end
-  page.fishing = fishing
-
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -420)
+  how:SetPoint("TOPLEFT", 14, -396)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -442)
+  box:SetPoint("TOPLEFT", 10, -418)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)
