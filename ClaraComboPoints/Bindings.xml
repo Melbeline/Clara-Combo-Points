@@ -29,5 +29,8 @@
 	<Binding name="CLARA_NODESIGHT_SYMBOLS" category="BINDING_CATEGORY_CLARA_QOL">
 		if ClaraNodeSight_ToggleSymbols then ClaraNodeSight_ToggleSymbols() elseif NodeSight_ToggleSymbols then NodeSight_ToggleSymbols() end
 	</Binding>
+	<Binding name="CLARA_NODESIGHT_SWITCH" category="BINDING_CATEGORY_CLARA_QOL">
+		if ClaraNodeSight_SwitchFinder then ClaraNodeSight_SwitchFinder() end
+	</Binding>
 
 </Bindings>

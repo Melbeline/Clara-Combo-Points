@@ -1,11 +1,11 @@
 -- Clara Combo Points - the mail module's extra slots. Once the mail's twelve slots are full, two
 -- slots more end their second row, then a row more under them each time the last is full (up to six
--- rows), the window taller. What is put there goes in the next mails, sent by themselves once Send is
--- clicked: 12 a mail, to the same character, the subject followed by (2/3); the money and the C.O.D.
--- in the first only, each mail its postage. A mail that fails stops them, the rest kept. Items get
--- there dropped on them, right-clicked in the bags while the mail is full, or chosen for a character
--- (MailItems.lua). Right-click on one: taken off; a click: on the cursor. Should the game send a mail
--- on a click only, Send says which one is next (Send (2/3)).
+-- rows), the window taller. What is put there goes in the next mails: 12 a mail, to the same
+-- character, the subject followed by (2/3); the money and the C.O.D. in the first only, each mail
+-- its postage. Each is made ready once the one before is sent and goes on a click on Send, which
+-- says which one is next (Send (2/3)): one click, one mail. A mail that fails stops them, the rest
+-- kept. Items get there dropped on them, right-clicked in the bags while the mail is full, or
+-- chosen for a character (MailItems.lua). Right-click on one: taken off; a click: on the cursor.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -19,11 +19,9 @@ local MAX_ROWS = 6
 local ROOM = MAX_ROWS * PER_ROW - PER_MAIL -- the extra slots
 local STEP = 0.1 -- between two attachments
 local NEXT = 0.3 -- after a mail sent (the game empties the mail first)
-local WAIT = 5   -- a mail sent without an answer: the game wants a click
 
 local queue = {}     -- the stacks of the extra slots, in order: { bag, slot, id }
-local chain          -- the mails of one send: { part, to, subject, armed, sending, waiting }
-local manual = false -- the game sends on a click only (found this session)
+local chain          -- the mails of one send: { part, to, subject, armed, sending, filling }
 local slots = {}     -- the extra slots' buttons
 local grown, base, barPoint = false, nil, nil -- the window's height, its lower bar's anchor, before
 
@@ -303,29 +301,15 @@ end
 ---------------------------------------------------------------------------
 -- The next mails
 ---------------------------------------------------------------------------
-local function Manual()
-  manual = true
+-- The next mail ready: sent on a click on Send (one click, one mail), the money and the C.O.D. in
+-- the first only
+local function Send()
+  if not (chain and SendMailFrame:IsShown()) then return end
+  if SetSendMailCOD then SetSendMailCOD(0) end
+  if SetSendMailMoney then SetSendMailMoney(0) end
   Label()
   if SendMailMailButton then SendMailMailButton:Enable() end
   Notice(L.MAIL_EXTRA_CLICK:format(Parts()))
-end
-
-local function Send()
-  if not (chain and SendMailFrame:IsShown()) then return end
-  Label()
-  if manual then return Notice(L.MAIL_EXTRA_CLICK:format(Parts())) end
-  local token = {}
-  chain.armed, chain.waiting = true, token
-  if SetSendMailCOD then SetSendMailCOD(0) end
-  if SetSendMailMoney then SetSendMailMoney(0) end
-  if SendMailMailButton then SendMailMailButton:Disable() end
-  SendMail(chain.to, SendMailSubjectEditBox:GetText(), "")
-  C_Timer.After(WAIT, function()
-    if chain and chain.waiting == token then
-      chain.armed, chain.waiting = nil, nil
-      Manual()
-    end
-  end)
 end
 
 -- the next mail: the character, the subject numbered, up to 12 of the extra slots
@@ -422,9 +406,10 @@ hooksecurefunc("SendMail", function(to, subject)
 end)
 
 local events = CreateFrame("Frame")
-for _, e in ipairs({ "MAIL_SHOW", "MAIL_CLOSED", "MAIL_SEND_SUCCESS", "MAIL_FAILED", "BAG_UPDATE_DELAYED",
-  "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do events:RegisterEvent(e) end
-events:SetScript("OnEvent", function(_, event, who, what)
+for _, e in ipairs({ "MAIL_SHOW", "MAIL_CLOSED", "MAIL_SEND_SUCCESS", "MAIL_FAILED", "BAG_UPDATE_DELAYED" }) do
+  events:RegisterEvent(e)
+end
+events:SetScript("OnEvent", function(_, event)
   if event == "MAIL_SHOW" then
     Hook()
   elseif event == "MAIL_CLOSED" then
@@ -434,7 +419,7 @@ events:SetScript("OnEvent", function(_, event, who, what)
     Label()
   elseif event == "MAIL_SEND_SUCCESS" then
     if chain and chain.sending then
-      chain.sending, chain.waiting = nil, nil
+      chain.sending = nil
       if #queue > 0 then
         chain.part = chain.part + 1
         C_Timer.After(NEXT, Next)
@@ -445,15 +430,12 @@ events:SetScript("OnEvent", function(_, event, who, what)
     end
     Label()
   elseif event == "MAIL_FAILED" then
-    if chain then chain.armed, chain.sending, chain.waiting = nil, nil, nil end
+    if chain then chain.armed, chain.sending = nil, nil end
     Label()
   elseif event == "BAG_UPDATE_DELAYED" then
     if hooked and #queue > 0 and SendMailFrame:IsShown() then
       Check()
       Refresh()
     end
-  elseif who == ADDON and chain and chain.waiting and tostring(what):find("SendMail", 1, true) then
-    chain.armed, chain.waiting = nil, nil -- (ADDON_ACTION_BLOCKED / FORBIDDEN: a click wanted)
-    Manual()
   end
 end)

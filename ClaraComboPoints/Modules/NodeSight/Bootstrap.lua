@@ -9,6 +9,7 @@ local ADDON, ns = ...
 
 -- the key binding (Bindings.xml is read whether the module runs or not)
 BINDING_NAME_CLARA_NODESIGHT_SYMBOLS = "NodeSight: Toggle Herb and Ore Symbols"
+BINDING_NAME_CLARA_NODESIGHT_SWITCH = "NodeSight: Switch Find Herbs / Find Minerals"
 
 if ns:QolRuns("nodesight") then
   -- the table the module's files share (the standalone's own `...` table)
