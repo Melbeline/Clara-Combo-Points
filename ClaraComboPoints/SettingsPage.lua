@@ -184,11 +184,47 @@ local function Build()
   updates[#updates + 1] = function() disenchant:SetChecked(ns:DisenchantClick()) end
   page.disenchant = disenchant
 
+  -- Fishing mode, and how much louder its sound effects (FishingMode.lua)
+  local fishing = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+  fishing:SetSize(26, 26)
+  fishing:SetPoint("TOPLEFT", 10, -382)
+  local fishingText = fishing.Text or fishing.text
+  labels[#labels + 1] = function() fishingText:SetText(L.SP_FISHING_MODE) end
+  fishing:SetScript("OnClick", function(self)
+    Click()
+    ns:SetFishingMode(self:GetChecked())
+  end)
+  updates[#updates + 1] = function() fishing:SetChecked(ns:FishingMode()) end
+  page.fishingMode = fishing
+  local boostLabel = Text("GameFontHighlight", "SP_FISHING_BOOST")
+  boostLabel:SetPoint("TOPLEFT", 40, -414)
+  local boost = CreateFrame("Slider", nil, page, "UISliderTemplate")
+  boost:SetSize(200, 17)
+  boost:SetOrientation("HORIZONTAL")
+  boost:SetMinMaxValues(1, ns.FISHING_BOOST_MAX)
+  boost:SetValueStep(1)
+  if boost.SetObeyStepOnDrag then boost:SetObeyStepOnDrag(true) end
+  boost:SetPoint("LEFT", page, "TOPLEFT", 250, -421)
+  local boostValue = Text("GameFontHighlightSmall")
+  boostValue:SetPoint("LEFT", boost, "RIGHT", 8, 0)
+  boost:SetScript("OnValueChanged", function(self, v)
+    v = floor(v + .5)
+    boostValue:SetText("×" .. v)
+    if not self.silent then ns:SetFishingBoost(v) end
+  end)
+  updates[#updates + 1] = function()
+    boost.silent = true
+    boost:SetValue(ns:FishingBoost())
+    boost.silent = false
+    boostValue:SetText("×" .. ns:FishingBoost())
+  end
+  page.fishingBoost = boost
+
   -- How the addon works
   local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, -396)
+  how:SetPoint("TOPLEFT", 14, -446)
   local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, -418)
+  box:SetPoint("TOPLEFT", 10, -468)
   box:SetPoint("BOTTOMRIGHT", -10, 10)
   local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 10, -8)

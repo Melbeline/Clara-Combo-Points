@@ -2340,6 +2340,17 @@ local function AddMenuEntries(_, root)
       section[#section + 1] = MenuUtil.CreateCheckbox(L.MENU_CAMERA, function() return ns:CameraOn() end,
         function() ns:SetCameraOn(not ns:CameraOn()) end)
     end
+    if ns.FishingModeOffered and ns:FishingModeOffered() then -- (FishingMode.lua)
+      local fishing = MenuUtil.CreateCheckbox(L.MENU_FISHING_MODE, function() return ns:FishingMode() end,
+        function() ns:SetFishingMode(not ns:FishingMode()) end)
+      if fishing.SetTooltip then
+        fishing:SetTooltip(function(tooltip)
+          GameTooltip_SetTitle(tooltip, L.MENU_FISHING_MODE)
+          GameTooltip_AddNormalLine(tooltip, L.FISHING_MODE_TIP:format(ns:FishingBoost()))
+        end)
+      end
+      section[#section + 1] = fishing
+    end
     local at, previous
     local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER
     for index, description in root:EnumerateElementDescriptions() do

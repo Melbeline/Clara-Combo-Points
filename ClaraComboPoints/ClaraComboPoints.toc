@@ -28,6 +28,7 @@ GameFixes.lua
 UnitBoxes.lua
 Disenchant.lua
 Fishing.lua
+FishingMode.lua
 ChatPlace.lua
 Tracker.lua
 Clicks.lua
