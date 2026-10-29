@@ -1,0 +1,76 @@
+﻿Clara Combo Points - synchro entre tes comptes WoW
+==================================================
+
+À quoi ça sert
+--------------
+Tes comptes WoW (ICKSTU, WANJ, 101896528#1, #2, #3...) gardent chacun leur propre fichier de
+sauvegarde de Clara. Ce dossier les tient à jour entre eux pour deux choses seulement :
+  - les listes du courrier (destinataires, catégories, objets) ;
+  - le stock (qui a quoi dans ses sacs, sa banque, son courrier), les recettes connues, et ce
+    qui a été envoyé à qui.
+La barre, les profils et les réglages des modules restent propres à chaque compte.
+
+Deux moyens, qui se complètent :
+  1. En jeu, en direct : tes personnages connectés en même temps s'envoient leurs changements
+     au fil de l'eau (par ton groupe et un canal caché ; même royaume et même faction).
+     Rien à installer : c'est dans l'addon.
+  2. Entre deux sessions : ce script Windows. Quand WoW enregistre le fichier d'un compte
+     (déconnexion, /reload, fermeture du jeu), il en passe une copie aux autres comptes.
+     Ils la prennent à leur prochaine connexion. L'entrée la plus récente gagne, entrée par
+     entrée : rien de plus récent n'est jamais écrasé par du plus vieux.
+
+Installer
+---------
+  1. (Facultatif) Double-clic sur Tester.bat : il montre les comptes trouvés et ce qu'il
+     ferait, sans rien écrire.
+  2. Double-clic sur Installer.bat. Il :
+       - sauvegarde le fichier de Clara de chaque compte ;
+       - se copie dans %LOCALAPPDATA%\ClaraComboPoints-Synchro (ce dossier-ci peut ensuite
+         être déplacé ou supprimé) ;
+       - se lance tout de suite, caché, et à chaque ouverture de Windows (raccourci dans le
+         dossier Démarrage). Aucune fenêtre, aucune boîte de copie.
+  Le dossier de WoW est réglé sur F:\Jeux\World of Warcraft\_forever_ en haut des .bat ;
+  s'il n'est pas trouvé, le .bat le demande.
+
+  Si Windows affiche un avertissement en ouvrant un .bat téléchargé : clic droit sur le
+  fichier > Propriétés > cocher « Débloquer » > OK.
+
+Désinstaller
+------------
+  Double-clic sur Desinstaller.bat : le script est arrêté et n'est plus lancé avec Windows.
+  Les fichiers des comptes restent tels quels (rien n'est relié, rien à « délier »). Une
+  copie déjà reçue par un compte est simplement prise à sa prochaine connexion.
+
+Ce qu'il touche, et ce qu'il ne touche pas
+------------------------------------------
+  - Il ne lit et n'écrit que WTF\Account\<compte>\SavedVariables\ClaraComboPoints.lua.
+    Jamais le jeu, jamais un autre addon, jamais WoW pendant qu'il tourne.
+  - Dans ce fichier, il ne change que le bloc ClaraSyncIncoming à la fin ; le reste est
+    gardé octet pour octet.
+  - Il écrit d'un coup (fichier temporaire puis remplacement) : jamais un fichier à moitié
+    écrit. Si un fichier est occupé, il réessaie quelques secondes plus tard.
+  - Il regarde toutes les 2 secondes la date des 5 fichiers : rien de visible sur ta machine.
+
+Si un WoW est lancé
+-------------------
+  Un compte en jeu ne voit pas tout de suite ce que le script a mis dans son fichier : WoW
+  l'écrasera à sa déconnexion. Ce n'est pas grave : ce compte a déjà eu les changements en
+  direct (point 1), et le script le remet à jour juste après sa déconnexion. Au pire, une
+  info d'un compte lancé seul arrive aux autres à leur prochaine connexion.
+
+Sauvegardes et journal
+----------------------
+  %LOCALAPPDATA%\ClaraComboPoints-Synchro\
+    Sauvegardes\installation_<date>\   les fichiers tels qu'ils étaient à l'installation
+    Sauvegardes\<jour>\                une copie par compte et par jour (7 jours gardés)
+    ClaraSync.log                      ce qu'il a fait, et quand
+  Pour revenir en arrière : désinstaller, puis recopier le fichier voulu à sa place, WoW
+  fermé.
+
+En jeu
+------
+  Options de Clara > page Reverse Engineering > section « Synchro entre tes comptes WoW » :
+  la case pour la synchro en direct, et l'état (tes personnages connectés, de confiance, le
+  canal caché). /cl sync donne le même état dans le chat.
+  La première fois qu'un de tes personnages rencontre l'autre dans un groupe, Clara te
+  demande si c'est bien un des tiens. Ensuite ils se reconnaissent seuls.

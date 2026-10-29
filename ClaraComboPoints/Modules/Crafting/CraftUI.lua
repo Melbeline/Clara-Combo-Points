@@ -563,7 +563,24 @@ local function Build()
     Check(e.label, y, function() return C.Filter()[e.key] == true end, function() C.ToggleFilter(e.key) end)
     y = y - 26
   end
-  Text("GameFontHighlightSmall", L.CRAFT_FILTER_HINT, y - 6, true)
+  local filterHint = Text("GameFontHighlightSmall", L.CRAFT_FILTER_HINT, y - 6, true)
+  y = y - 6 - max(14, filterHint:GetStringHeight()) - 16
+
+  -- The sync between the WoW accounts (Modules/Sync)
+  local S = ns.Sync
+  if S then
+    Text("GameFontNormal", L.SYNC_HEAD, y)
+    y = y - 22
+    Check(L.SYNC_ON, y, function() return S.On() end, function(on) S.SetOn(on) end)
+    y = y - 28
+    local status = Text("GameFontHighlightSmall", "", y)
+    updates[#updates + 1] = function()
+      local s = S.Status()
+      status:SetText(L.SYNC_STATUS:format(s.online, s.trusted, s.channel and L.SYNC_CHANNEL_YES or L.SYNC_CHANNEL_NO))
+    end
+    y = y - 34
+    Text("GameFontHighlightSmall", L.SYNC_HINT, y, true)
+  end
 end
 
 page:SetScript("OnShow", function()

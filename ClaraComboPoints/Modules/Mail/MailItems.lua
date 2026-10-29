@@ -25,10 +25,11 @@ end
 function M.AssignItem(id, cat, who)
   if type(id) ~= "number" then return end
   M.db.items[id] = { cat = cat, who = who }
+  M.Stamp("i", id)
 end
 
 function M.ClearItem(id)
-  if type(id) == "number" then M.db.items[id] = nil end
+  if type(id) == "number" then M.db.items[id] = nil; M.Stamp("i", id) end
 end
 
 -- Does the item go to this character now? (given through a category: it still exists and is still

@@ -1,7 +1,8 @@
 -- Clara Combo Points - Reverse Engineering, its data (CraftUI.lua shows it, CraftGame.lua puts it in the
--- game's professions window, ClassicUI's window calls it). Kept for the account (ClaraCraftDB):
---   the account's characters' bags, bank and mailbox, read when each is open, and what was mailed to
---   one of them (until that one opens its mail); the account bank's tabs;
+-- game's professions window, ClassicUI's window calls it). Kept for the account (ClaraCraftDB), and
+-- shared with the other WoW accounts (Modules/Sync):
+--   the account's characters' bags, bank and mailbox, read when each is open (each with when, the newer
+--   wins), and each mail sent to one of them (counted on it until it opens its mail); the account bank;
 --   the recipes seen in a professions window, any character's: what each makes, how many, from what,
 --   and who knows it, so that a reagent made by another profession shows its own reagents too.
 -- Also the search (a recipe found by its name or one of its reagents; "Name" in quotes: that recipe
@@ -21,7 +22,7 @@ C.textAllowed = state == "on"
 local issecret = issecretvalue or function() return false end
 local floor, max, min = math.floor, math.max, math.min
 
-local MAIL_KEEP = 30 * 86400    -- what was mailed to a character, forgotten after the mail's own life
+local MAIL_KEEP = 30 * 86400    -- a mail sent, forgotten after the mail's own life
 local MODES = { icons = true, text = true, off = true }
 
 ---------------------------------------------------------------------------
@@ -42,9 +43,24 @@ local function Clean(db)
   local chars = {}
   for key, c in pairs(type(db.chars) == "table" and db.chars or {}) do
     if type(key) == "string" and key:find("-", 1, true) and type(c) == "table" then
-      chars[key] = { bags = Counts(c.bags), bank = Counts(c.bank), mail = Counts(c.mail), sent = Counts(c.sent),
-        sentAt = type(c.sentAt) == "number" and c.sentAt or nil, at = type(c.at) == "number" and c.at or 0,
+      chars[key] = { bags = Counts(c.bags), bank = Counts(c.bank), mail = Counts(c.mail),
+        mailAt = type(c.mailAt) == "number" and c.mailAt or nil, at = type(c.at) == "number" and c.at or 0,
         class = type(c.class) == "string" and c.class or nil, remote = c.remote == true or nil }
+    end
+  end
+  -- the mails sent to the account's characters: { to, at, items } each, by a key of its own
+  local sends = {}
+  for uid, s in pairs(type(db.sends) == "table" and db.sends or {}) do
+    if type(uid) == "string" and type(s) == "table" and type(s.to) == "string" and type(s.at) == "number" then
+      local items = Counts(s.items)
+      if next(items) then sends[uid] = { to = s.to, at = s.at, items = items } end
+    end
+  end
+  -- (before the sync: what was mailed lay on the character)
+  for key, c in pairs(type(db.chars) == "table" and db.chars or {}) do
+    local items = type(c) == "table" and Counts(c.sent)
+    if items and next(items) and chars[key] then
+      sends["old-" .. key] = { to = key, at = type(c.sentAt) == "number" and c.sentAt or 0, items = items }
     end
   end
   local recipes = {}
@@ -59,15 +75,17 @@ local function Clean(db)
       local who = {}
       for k, on in pairs(type(r.w) == "table" and r.w or {}) do if type(k) == "string" and on == true then who[k] = true end end
       recipes[id] = { o = r.o, m = type(r.m) == "number" and r.m > 0 and r.m or 1, r = list, w = who,
-        p = type(r.p) == "string" and r.p or nil, q = type(r.q) == "string" and r.q or nil }
+        p = type(r.p) == "string" and r.p or nil, q = type(r.q) == "string" and r.q or nil, t = type(r.t) == "number" and r.t or 0 }
     end
   end
   local filter = type(db.filter) == "table" and db.filter or {}
   local function Off(v) if v == false then return false end end -- (a box unticked; nil: its default, on)
   return { mode = MODES[db.mode] and db.mode or nil, chest = Off(db.chest), search = Off(db.search), nested = db.nested == true or nil,
     filter = { on = filter.on == true or nil, bank = filter.bank == true or nil, part = filter.part == true or nil },
-    chars = chars, account = Counts(db.account), recipes = recipes }
+    chars = chars, account = Counts(db.account), accountAt = type(db.accountAt) == "number" and db.accountAt or 0,
+    recipes = recipes, sends = sends }
 end
+C.Clean = Clean
 
 local db, me, mine
 local realm
@@ -147,12 +165,24 @@ function C.Have(id, withBank)
   return n
 end
 
+-- What was mailed to a character and not seen in its mailbox yet
+local function Mailed(key, id)
+  local c = db.chars[key]
+  local seen = c and c.mailAt or 0
+  local n = 0
+  for _, s in pairs(db.sends) do
+    if s.to == key and s.at > seen then n = n + (s.items[id] or 0) end
+  end
+  return n
+end
+C.Mailed = Mailed
+
 -- The account's other characters having some: { { name, bags, bank, mail }, ... }, most first
 function C.Others(id)
   local list = {}
   for key, c in pairs(db.chars) do
     if key ~= me then
-      local bags, bank, mail = c.bags[id] or 0, c.bank[id] or 0, (c.mail[id] or 0) + (c.sent[id] or 0)
+      local bags, bank, mail = c.bags[id] or 0, c.bank[id] or 0, (c.mail[id] or 0) + Mailed(key, id)
       if bags + bank + mail > 0 then
         list[#list + 1] = { name = ShortName(key), bags = bags, bank = bank, mail = mail, class = c.class,
           remote = c.remote, total = bags + bank + mail }
@@ -194,13 +224,38 @@ if #BANK == 0 then -- (the old bank: its own slots, then its bags)
 end
 
 local bankOpen = false
-function C.ScanBags() if mine then mine.bags = Scan(BAGS); mine.at = time() end end
+
+-- This character's entry changed (C.Touched: the sync sends it on)
+local function Touch(kind, key)
+  if C.Touched then C.Touched(kind, key) end
+end
+
+local function Same(a, b)
+  for id, n in pairs(a) do if b[id] ~= n then return false end end
+  for id in pairs(b) do if not a[id] then return false end end
+  return true
+end
+
+function C.ScanBags()
+  if not mine then return end
+  local bags = Scan(BAGS)
+  if Same(bags, mine.bags) and mine.at > 0 then return end
+  mine.bags, mine.at = bags, time()
+  Touch("h", me)
+end
 function C.ScanBank()
   if not (mine and bankOpen) then return end
-  mine.bank = Scan(BANK)
+  local bank = Scan(BANK)
+  if not Same(bank, mine.bank) then
+    mine.bank, mine.at = bank, time()
+    Touch("h", me)
+  end
   if #ACCOUNT > 0 then
     local account = Scan(ACCOUNT)
-    if next(account) or next(db.account) then db.account = account end
+    if (next(account) or next(db.account)) and not Same(account, db.account) then
+      db.account, db.accountAt = account, time()
+      Touch("a", "a")
+    end
   end
 end
 
@@ -214,7 +269,8 @@ function C.ScanMail()
       if id and n and not issecret(id) then counts[id] = (counts[id] or 0) + n end
     end
   end
-  mine.mail, mine.sent, mine.sentAt = counts, {}, nil
+  mine.mail, mine.mailAt, mine.at = counts, time(), time()
+  Touch("h", me)
 end
 
 -- A mail going to one of the account's characters: its attachments counted on that one
@@ -230,17 +286,18 @@ local function OnSend(name)
   if next(items) then pending = { key = KeyOf(name), items = items } end
 end
 
+local sendCount = 0
 local function Sent()
   if not pending then return end
   local key, items = pending.key, pending.items
   pending = nil
-  local c = db.chars[key]
-  if not c then
-    c = { bags = {}, bank = {}, mail = {}, sent = {}, at = 0, remote = true }
-    db.chars[key] = c
+  if not db.chars[key] then
+    db.chars[key] = { bags = {}, bank = {}, mail = {}, at = 0, remote = true }
   end
-  for id, n in pairs(items) do c.sent[id] = (c.sent[id] or 0) + n end
-  c.sentAt = time()
+  sendCount = sendCount + 1
+  local uid = ("%s-%d-%d"):format(me or "?", time(), sendCount)
+  db.sends[uid] = { to = key, at = time(), items = items }
+  Touch("s", uid)
 end
 C.OnSend, C.Sent = OnSend, Sent -- (for the tests)
 
@@ -288,11 +345,14 @@ local function Keep(id, profession)
   local r = C.Read(id)
   if not r then return end
   local old = db.recipes[id]
+  if old and me and old.w[me] and old.p then return end -- (known already, by this character)
   local who = old and old.w or {}
   if me then who[me] = true end
-  db.recipes[id] = { o = r.o, m = r.m, r = r.r, q = r.q, p = profession or (old and old.p), w = who }
+  db.recipes[id] = { o = r.o, m = r.m, r = r.r, q = r.q, p = profession or (old and old.p), w = who, t = time() }
   byItem = nil
+  Touch("p", id)
 end
+function C.RecipesChanged() byItem = nil end
 
 -- A recipe, read now or kept from before
 function C.Recipe(id) return C.Read(id) or db.recipes[id] end
@@ -503,16 +563,15 @@ local function Start()
     me = name .. "-" .. realm
     mine = db.chars[me]
     if not mine then
-      mine = { bags = {}, bank = {}, mail = {}, sent = {}, at = 0 }
+      mine = { bags = {}, bank = {}, mail = {}, at = 0 }
       db.chars[me] = mine
     end
     mine.remote = nil
     mine.class = select(2, UnitClass("player"))
-    if mine.sentAt and time() - mine.sentAt > MAIL_KEEP then mine.sent, mine.sentAt = {}, nil end
   end
   C.me = me
-  for _, c in pairs(db.chars) do
-    if c.sentAt and time() - c.sentAt > MAIL_KEEP then c.sent, c.sentAt = {}, nil end
+  for uid, s in pairs(db.sends) do
+    if time() - s.at > MAIL_KEEP then db.sends[uid] = nil end
   end
   C.ScanBags()
   for _, e in ipairs({ "BAG_UPDATE_DELAYED", "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYERBANKSLOTS_CHANGED", "MAIL_SHOW",
