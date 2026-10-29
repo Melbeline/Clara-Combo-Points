@@ -37,6 +37,9 @@ InteractKey.lua
 QuestPlates.lua
 GroupFinderZone.lua
 ChatCopy.lua
+Rares.lua
+UnitScan.lua
+Screenshots.lua
 ChatPlace.lua
 Tracker.lua
 Clicks.lua
@@ -44,6 +47,7 @@ LearnedSpells.lua
 Moan.lua
 Options.lua
 SettingsPage.lua
+ScanPage.lua
 QoL.lua
 Modules\BuyEmAll\BuyEmAll.lua
 Modules\DialogKey\Bootstrap.lua

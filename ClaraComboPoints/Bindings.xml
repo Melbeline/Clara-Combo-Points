@@ -3,4 +3,7 @@
 	<!-- Fishing (Fishing.lua): casts Fishing; while the line is out the key is the game's Interact Key -->
 	<Binding name="CLICK ClaraFishingButton:LeftButton" category="BINDING_CATEGORY_CLARA"></Binding>
 
+	<!-- UnitScan (UnitScan.lua): /targetexact the hunted mob, one press one target -->
+	<Binding name="CLICK ClaraScanHunt:LeftButton" category="BINDING_CATEGORY_CLARA"></Binding>
+
 </Bindings>
