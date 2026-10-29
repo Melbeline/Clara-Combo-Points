@@ -1,8 +1,9 @@
 -- Clara Combo Points - fishing mode: while it is on, the game's music, ambience, dialogue and the
--- other voices (pets, emotes, error speech) are off, its sound effects louder (x2 by default, up to
--- x10: their own volumes first, then the master volume, never past 100 %), and the sound kept when
--- the game is in the background: the bobber's splash heard over the rest. The game has no volume
--- for one sound, nor any word of a bite: its own channels only. Turned on and off from the
+-- other voices (pets, emotes, error speech) are off, and its reverb and distance filtering; its sound
+-- effects at 100 % (the bobber's splash is one of them: heard with them alone), the master volume
+-- louder (x2 by default, up to x10, never past 100 %), and the sound kept when the game is in the
+-- background: the splash heard over the rest. The game has no volume for one sound, nor any word of
+-- a bite: its own channels only. Turned on and off from the
 -- portrait's menu, the Fishing card of the professions window (the game's and ClassicUI's), and
 -- the game's options (Esc > Options > AddOns > Clara Combo Points, with the boost). All given back
 -- when it is turned off, and at each logout (put on again at the next login); a setting changed by
@@ -13,9 +14,9 @@ local L = ns.L
 local floor, min, max = math.floor, math.min, math.max
 
 local OFF = { "Sound_EnableMusic", "Sound_EnableAmbience", "Sound_EnableDialog", "Sound_EnableErrorSpeech",
-  "Sound_EnableEmoteSounds", "Sound_EnablePetSounds" }
+  "Sound_EnableEmoteSounds", "Sound_EnablePetSounds", "Sound_EnableReverb", "Sound_EnablePositionalLowPassFilter" }
 local ON = { "Sound_EnableAllSound", "Sound_EnableSFX", "Sound_EnableGameplaySFX", "Sound_EnableSoundWhenGameIsInBG" }
-local EFFECTS = { "Sound_SFXVolume", "Sound_GameplaySFX" }
+local EFFECTS = { "Sound_SFXVolume", "Sound_GameplaySFX" } -- (the second: later clients only)
 local MASTER = "Sound_MasterVolume"
 ns.FISHING_BOOST_MAX = 10
 local DEFAULT_BOOST = 2
@@ -67,18 +68,9 @@ local function Apply()
   end
   for _, name in ipairs(OFF) do Want(name, "0") end
   for _, name in ipairs(ON) do Want(name, "1") end
-  -- louder: the effects' own volumes first, the master volume for what they could not take
-  local boost, rest = ns:FishingBoost(), 1
-  for _, name in ipairs(EFFECTS) do
-    local own = tonumber(Own(name))
-    if own and own > 0 then
-      local louder = min(1, own * boost)
-      rest = max(rest, own * boost / louder)
-      Want(name, Volume(louder))
-    end
-  end
+  for _, name in ipairs(EFFECTS) do Want(name, "1") end
   local master = tonumber(Own(MASTER))
-  if master then Want(MASTER, Volume(min(1, master * rest))) end
+  if master then Want(MASTER, Volume(min(1, master * ns:FishingBoost()))) end
   sv.fishingSound, sv.fishingSoundSet = next(saved) and saved or nil, next(set) and set or nil
 end
 
