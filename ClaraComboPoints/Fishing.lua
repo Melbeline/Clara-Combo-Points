@@ -4,8 +4,7 @@
 -- the bobber the game itself picks (its soft interact target): one press, one action, the moment
 -- left to the player. While fishing, the game's interact settings are set as its gamepad mode sets
 -- them (the interact key on for the keyboard too, 20 yards, an icon over the bobber), then given
--- back. A box in the game's options (Esc > Options > AddOns > Clara Combo Points) lets a right
--- click reel in too while fishing (the right click turning the camera again after).
+-- back.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -24,11 +23,6 @@ local CVARS = {
 BINDING_CATEGORY_CLARA = "Clara Combo Points"
 _G["BINDING_NAME_CLICK ClaraFishingButton:LeftButton"] = L.FISH_BINDING
 
-function ns:FishingRightClick() return self.sv ~= nil and self.sv.fishingRightClick == true end
-function ns:SetFishingRightClick(on)
-  if not self.sv then return end
-  self.sv.fishingRightClick = on and true or nil
-end
 
 local button = CreateFrame("Button", "ClaraFishingButton", UIParent, "SecureActionButtonTemplate")
 button:RegisterForClicks("AnyUp", "AnyDown") -- (the game's template acts on one of them: one press, one cast)
@@ -98,7 +92,6 @@ local function Reel(on)
     for _, key in ipairs({ GetBindingKey("CLICK ClaraFishingButton:LeftButton") }) do
       SetOverrideBinding(owner, true, key, "INTERACTTARGET")
     end
-    if ns:FishingRightClick() then SetOverrideBinding(owner, true, "BUTTON2", "INTERACTTARGET") end
   end
   Settings(on)
 end
