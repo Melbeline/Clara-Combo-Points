@@ -34,7 +34,10 @@ local function Learned(message)
   for _, pattern in ipairs(patterns) do
     local what = message:match(pattern)
     if what then
-      for id in what:gmatch("|Hspell:(%d+)") do learned[tonumber(id)] = true end
+      for id in what:gmatch("|Hspell:(%d+)") do
+        learned[tonumber(id)] = true
+        if ns.SpellLearned then ns:SpellLearned(tonumber(id)) end -- (its new rank on the bars: SpellRanks.lua)
+      end
       return
     end
   end
@@ -113,7 +116,10 @@ watcher:SetScript("OnEvent", function(_, event, arg1)
   if event == "CHAT_MSG_SYSTEM" then
     Learned(arg1)
   elseif event == "LEARNED_SPELL_IN_SKILL_LINE" then
-    if type(arg1) == "number" then learned[arg1] = true end
+    if type(arg1) == "number" then
+      learned[arg1] = true
+      if ns.SpellLearned then ns:SpellLearned(arg1) end
+    end
   elseif event == "CURSOR_CHANGED" then
     -- a spell taken (the spellbook, an action bar...): the rows open for it; let go on an
     -- action bar, or nowhere: they close (on the HUD, its grace runs)
