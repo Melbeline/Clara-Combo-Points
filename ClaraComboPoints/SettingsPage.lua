@@ -239,6 +239,8 @@ local function Build()
     y = y - 24
   end
   Box("SP_INTERACT_ICONS", ns.InteractIcons, ns.SetInteractIcons, "interactIcons")
+  Box("SP_LEVEL_SHOTS", ns.LevelShots, ns.SetLevelShots, "levelShots")
+  Box("SP_BOSS_SHOTS", ns.BossShots, ns.SetBossShots, "bossShots")
   if not ns:QolRuns("leatrix") then
     Box("QUEST_PLATES", ns.QuestPlates, ns.SetQuestPlates, "questPlates")
     Box("LFG_ZONE", ns.GroupFinderZone, ns.SetGroupFinderZone, "groupFinderZone")
