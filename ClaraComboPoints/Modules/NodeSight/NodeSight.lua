@@ -48,7 +48,6 @@ local defaults = {
     scan = true, -- the minimap scan
     scanDetail = 2, -- 3 full, 2 lighter, 1 lightest
     switchFinders = false, -- Find Herbs and Find Minerals in turn
-    switchYards = 15, -- yards between switches (10 at least)
     combatScan = true, -- keep scanning in combat
     rares = true, -- rare beasts and humanoids (Beta)
     rareIcon = 2, -- which of ICONS.rares
@@ -343,9 +342,11 @@ end
 ---------------------------------------------------------------------------
 -- Switching finders
 ---------------------------------------------------------------------------
--- The minimap shows one finder's dots at a time. The Switch setting toggles
--- Find Herbs and Find Minerals as you move, keeping the other kind's symbols
--- meanwhile (marker.held).
+-- The minimap shows one finder's dots at a time. The Switch setting keeps the
+-- other kind's symbols while the other finder is off (marker.held); Find Herbs
+-- and Find Minerals are switched with a key (ClaraNodeSight_SwitchFinder).
+-- (Clara Combo Points: switched by the player only, one press, one switch: never
+-- by itself as you move, which cast a tracking spell without a key pressed)
 local SWITCH_WAIT = 1 -- seconds from a switch to the next scan
 local PICK_REACH = 10 -- yards: looting removes a held symbol this close
 
@@ -370,23 +371,20 @@ local function Finders()
     return on, off
 end
 
--- Switches finder after switchYards; true if it did.
+-- The finder on now, for the held symbols; never switches (false).
 local function Switch()
+    turns.kind = Finders()
+    return false
+end
+
+-- Key binding (Bindings.xml): the other finder on, one press, one switch (not in a fight: the
+-- game's global cooldown).
+function ClaraNodeSight_SwitchFinder()
+    if InCombatLockdown() then return end
     local kind, other = Finders()
+    if not (kind and other and C_Minimap.SetTracking) then return end
     turns.kind = kind
-    if InCombatLockdown() then return false end -- costs a global cooldown
-    if not (kind and other and C_Minimap.SetTracking) then return false end
-    local map, x, y, width, height = MapPosition()
-    if not map then return false end
-    if map ~= turns.map then -- new map: start counting here
-        turns.map, turns.x, turns.y = map, x, y
-        return false
-    end
-    local dx, dy = (x - turns.x) * width, (y - turns.y) * height
-    if not turns.scanned or dx * dx + dy * dy < db.switchYards ^ 2 then return false end
-    turns.x, turns.y, turns.scanned = x, y, false
     C_Minimap.SetTracking(other, true)
-    return true
 end
 
 ---------------------------------------------------------------------------
@@ -1526,7 +1524,6 @@ local function OnAddonLoaded()
     ClaraNodeSightDB.sparkleColor = tostring(ClaraNodeSightDB.sparkleColor):match("^%x%x%x%x%x%x%x%x$") or defaults.sparkleColor
     if not SHAPES[ClaraNodeSightDB.shape] then ClaraNodeSightDB.shape = defaults.shape end
     if not ICONS.rares[ClaraNodeSightDB.rareIcon] then ClaraNodeSightDB.rareIcon = defaults.rareIcon end
-    if ClaraNodeSightDB.switchYards < 10 then ClaraNodeSightDB.switchYards = 10 end
     db = ClaraNodeSightDB
     ns.db = db
     NewScanner()

@@ -101,11 +101,8 @@ local function RegisterSettings()
     Checkbox("sound", "Sound for new finds",
         "Plays the minimap's ping sound when something new shows up on your minimap, not seen in the last minute. Not for a herb or ore above your skill. Needs Scan the minimap.",
         UpdateScanner)
-    Checkbox("switchFinders", "Switch between herbs and ore",
-        "Switches between Find Herbs and Find Minerals. You need both trained and one active to start.",
-        UpdateScanner)
-    Slider("switchYards", "Yards between switches", 10, 50,
-        "How far you go before the other one is turned on. The default is " .. defaults.switchYards .. ". Needs Switch between herbs and ore.",
+    Checkbox("switchFinders", "Switch between herbs and ore with a key",
+        "Keeps the other kind's symbols on the minimap while its finder is off. The key \"NodeSight: Switch Find Herbs / Find Minerals\" (Esc > Options > Keybindings) turns the other one on: one press, one switch. You need both trained and one active.",
         UpdateScanner)
 
     Page("Arrow")
