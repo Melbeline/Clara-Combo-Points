@@ -29,6 +29,8 @@ ns.QOL_MODULES = {
   { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
   { key = "names", name = "Names" }, -- (Clara's own: its own entry in the game's options)
   { key = "tooltipanchor", name = "Tooltip Anchor" }, -- (Clara's own)
+  -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
+  { key = "reverseengineering", name = "Reverse Engineering", standalone = "ReverseEngineering" },
   { key = "classicui", name = "ClassicUI Forever", standalone = "ClassicUIForever" },
 }
 
