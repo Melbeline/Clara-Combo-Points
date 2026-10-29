@@ -2380,7 +2380,7 @@ SlashCmdList.CLARARELOAD = function()
 end
 
 -- /cl lock, unlock, hide, show, scale and reset pos act without a word in the chat (what they do
--- shows); only help and debug write there, asked for.
+-- shows); only help and debug write there, asked for, and scan and hunt (a name added or set).
 SLASH_CLARACOMBOPOINTS1 = "/clara"
 SLASH_CLARACOMBOPOINTS2 = "/cl"
 SLASH_CLARACOMBOPOINTS3 = "/ccp"
@@ -2388,6 +2388,7 @@ SLASH_CLARACOMBOPOINTS4 = "/cp"
 SlashCmdList.CLARACOMBOPOINTS = function(msg)
   if not ns.db then return end
   local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
+  local raw = (msg or ""):match("^%s*%S*%s*(.-)%s*$") or "" -- (a name, as typed)
   if cmd == "lock" then
     ns:SetIconsLocked(true)
     ns:SetLocked(true)
@@ -2401,6 +2402,13 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
     ns:ResetWindowPosition()
   elseif cmd == "reset" then
     ns:AskResetAddon()
+  elseif cmd == "scan" and raw ~= "" then
+    Print((ns:ToggleScanName(raw) and L.SCAN_ADDED or L.SCAN_REMOVED):format(raw))
+  elseif cmd == "scan" then
+    ns:OpenScanPage()
+  elseif cmd == "hunt" then
+    ns:SetScanHunt(raw)
+    Print(raw ~= "" and L.SCAN_HUNT_SET:format(raw) or L.SCAN_HUNT_CLEARED)
   elseif cmd == "help" then
     Print(L.HELP)
   elseif cmd == "debug" then
