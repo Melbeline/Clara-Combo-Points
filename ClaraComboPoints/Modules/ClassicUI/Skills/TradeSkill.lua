@@ -98,7 +98,12 @@ local function Collect()
     wipe(types)
     for _, id in ipairs(ids) do
         local info = api.GetRecipeInfo(id)
-        local named = query == "" or (info and type(info.name) == "string" and info.name:lower():find(query, 1, true) ~= nil)
+        local named
+        if ClaraNS.CraftMatch then -- (Clara Combo Points: its search, reagents too, and its materials filter)
+            named = info ~= nil and ClaraNS.CraftMatch(id, info, query) and ClaraNS.CraftShown(id)
+        else
+            named = query == "" or (info and type(info.name) == "string" and info.name:lower():find(query, 1, true) ~= nil)
+        end
         local listed = info and (info.learned ~= false or unlearned) and named and (not era or api.IsRecipeInSkillLine(id, era.professionID))
         local itemType = listed and R.TypeOf(id)
         if itemType and not seenType[itemType] then
@@ -259,6 +264,7 @@ local function FitDetail()
     if rows > 0 then
         bottom = LABEL_TOP + (detail.reagentLabel:GetStringHeight() or 10) + 3 + rows * REAGENT_PITCH - 2
     end
+    if ClaraNS.CraftClassicPlace then bottom = ClaraNS.CraftClassicPlace(detail, bottom) end -- (Clara Combo Points)
     local room = scroll:GetHeight() or 0
     local height = math.max(room, bottom + 4)
     detail:SetSize(scroll:GetWidth() or 1, height)
@@ -351,6 +357,7 @@ UpdateDetail = function()
     for i = shown + 1, REAGENTS_MAX do detail.reagents[i]:Hide() end
     detail.reagentLabel:SetShown(shown > 0)
     detail.shownReagents = shown
+    if ClaraNS.CraftClassicDetail then ClaraNS.CraftClassicDetail(detail, info) end -- (Clara Combo Points)
     -- A new recipe opens at the top.
     if detail.recipeShown ~= info.recipeID then
         detail.recipeShown = info.recipeID
@@ -703,6 +710,7 @@ local function Build()
     ns.tradeDual.Built(panel, Refresh)
     panel:SetScript("OnShow", Refresh)
     R.Changed = Refresh
+    ClaraNS.ClassicTradeRefresh = Refresh -- (Clara Combo Points: its filter and options draw the window again)
     RunWatch()
 
     local events = CreateFrame("Frame")

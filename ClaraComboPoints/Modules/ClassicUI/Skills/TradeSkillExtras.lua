@@ -51,6 +51,8 @@ function ns.TradeSkillFilterEntries()
                 toggle = function() R.ToggleType(itemType) end }
         end
     end
+    -- (Clara Combo Points: Reverse Engineering's materials filter)
+    for _, entry in ipairs(ClaraNS.CraftFilterEntries and ClaraNS.CraftFilterEntries() or {}) do entries[#entries + 1] = entry end
     return entries
 end
 
