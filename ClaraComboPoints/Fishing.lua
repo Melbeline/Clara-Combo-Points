@@ -4,7 +4,8 @@
 -- the bobber the game itself picks (its soft interact target): one press, one action, the moment
 -- left to the player. While fishing, the game's interact settings are set as its gamepad mode sets
 -- them (the interact key on for the keyboard too, 20 yards, an icon over the bobber), then given
--- back.
+-- back. Without a fishing pole in hand, the key first equips the one in the bags (one press), the
+-- weapons it replaces kept and put back when fishing mode is turned off (FishingMode.lua).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -46,6 +47,72 @@ local function Learn()
     fishingName = name
     button:SetAttribute("spell", name)
   end
+end
+
+---------------------------------------------------------------------------
+-- The pole: without one in hand, the key equips the one in the bags (one press), the next press
+-- casts; the weapons it took the place of are kept, put back when fishing mode is turned off
+-- (FishingMode.lua). Out of combat.
+---------------------------------------------------------------------------
+local MAIN, OFF = 16, 17
+
+local function IsPole(item)
+  if not item or not (C_Item and C_Item.GetItemInfoInstant) then return false end
+  local _, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(item)
+  return classID == 2 and subclassID == 20 -- (weapon, fishing pole)
+end
+
+local function PoleInBags()
+  if not (C_Container and C_Container.GetContainerNumSlots) then return end
+  for bag = 0, NUM_BAG_SLOTS or 4 do
+    for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
+      local info = C_Container.GetContainerItemInfo(bag, slot)
+      if type(info) == "table" and info.itemID and IsPole(info.itemID) then return info.itemID end
+    end
+  end
+end
+
+local held = {} -- the weapons in hand, as last seen
+
+local function Me() return UnitGUID("player") or "?" end
+
+local function Pole()
+  if InCombatLockdown() then return end
+  if ns.fishingWeaponsLater then ns:FishingWeaponsBack() end
+  if not fishingName then return end
+  local inHand = IsPole(GetInventoryItemID("player", MAIN))
+  local pole = not inHand and PoleInBags()
+  if pole then
+    button:SetAttribute("type", "macro")
+    button:SetAttribute("macrotext", "/equip item:" .. pole)
+  else
+    button:SetAttribute("type", "spell")
+    button:SetAttribute("macrotext", nil)
+  end
+  -- the pole just put on: the weapons it replaced, kept
+  local sv = ns.sv
+  if sv and inHand and held.main and not IsPole(held.main) then
+    sv.fishingWeapons = sv.fishingWeapons or {}
+    sv.fishingWeapons[Me()] = { main = held.main, off = held.off }
+  end
+  held.main, held.off = GetInventoryItemLink("player", MAIN), GetInventoryItemLink("player", OFF)
+end
+ns.FishingPole = Pole
+
+-- The weapons back in hand (fishing mode turned off), the pole in the bags
+function ns:FishingWeaponsBack()
+  local sv = self.sv
+  local kept = sv and sv.fishingWeapons and sv.fishingWeapons[Me()]
+  if not kept then return end
+  if InCombatLockdown() then self.fishingWeaponsLater = true return end -- (when the fight ends: Pole)
+  self.fishingWeaponsLater = nil
+  sv.fishingWeapons[Me()] = nil
+  if not next(sv.fishingWeapons) then sv.fishingWeapons = nil end
+  if not IsPole(GetInventoryItemID("player", MAIN)) or not (C_Item and C_Item.EquipItemByName) then return end
+  if kept.main then C_Item.EquipItemByName(kept.main, MAIN) end
+  if kept.off then C_Timer.After(0.3, function()
+    if not InCombatLockdown() then C_Item.EquipItemByName(kept.off, OFF) end
+  end) end
 end
 
 ---------------------------------------------------------------------------
@@ -116,9 +183,16 @@ events:SetScript("OnEvent", function(self, event, _, _, spellID)
     self:RegisterEvent("PLAYER_LOGOUT")
     self:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
     self:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
+    self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    self:RegisterEvent("BAG_UPDATE_DELAYED")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
     Learn()
+    Pole()
   elseif event == "SPELLS_CHANGED" then
     Learn()
+    Pole()
+  elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "BAG_UPDATE_DELAYED" or event == "PLAYER_REGEN_ENABLED" then
+    Pole()
   elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
     if IsFishing(spellID) then Reel(true) end
   elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_LOGOUT" then

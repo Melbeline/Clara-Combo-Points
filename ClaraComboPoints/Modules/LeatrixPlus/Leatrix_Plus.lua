@@ -17438,6 +17438,14 @@
 	LeaPlusLC:MakeCB(LeaPlusLC[pg], "TipModEnable"				,	"Enhance tooltip"				,	146, -112, 	true,	"If checked, the tooltip will be color coded and you will be able to modify the tooltip layout and scale.")
 	LeaPlusLC:MakeCB(LeaPlusLC[pg], "EnhanceDressup"			, 	"Enhance dressup"				,	146, -132, 	true,	"If checked, gear toggle buttons will be added to the dressup frame and model positioning controls will be removed.")
 	LeaPlusLC:MakeCB(LeaPlusLC[pg], "EnhanceFlightMap"			, 	"Enhance flight map"			,	146, -152, 	true,	"If checked, you will be able to customise the flight map.")
+	-- (Clara Combo Points: two of its own, kept in its settings and taken at once: QuestPlates.lua, GroupFinderZone.lua)
+	LeaPlusLC:MakeCB(LeaPlusLC[pg], "ClaraQuestPlates"			,	ClaraNS.L.LEA_QUEST_PLATES		,	146, -172, 	false,	ClaraNS.L.QUEST_PLATES_TIP)
+	LeaPlusLC:MakeCB(LeaPlusLC[pg], "ClaraGroupFinderZone"		,	ClaraNS.L.LEA_LFG_ZONE			,	146, -192, 	false,	ClaraNS.L.LFG_ZONE_TIP)
+	for field, get in pairs({ ClaraQuestPlates = "QuestPlates", ClaraGroupFinderZone = "GroupFinderZone" }) do
+		local box = LeaPlusCB[field]
+		box:SetScript("OnShow", function(self) self:SetChecked(ClaraNS[get](ClaraNS)) end)
+		box:HookScript("OnClick", function(self) ClaraNS["Set" .. get](ClaraNS, self:GetChecked() and true or false) end)
+	end
 
 	LeaPlusLC:MakeTx(LeaPlusLC[pg], "Extras"					, 	340, -72)
 	LeaPlusLC:MakeCB(LeaPlusLC[pg], "ShowVolume"				, 	"Show volume slider"			, 	340, -92, 	true,	"If checked, a master volume slider will be shown in the character frame.|n|nThe volume slider can be placed in either of two locations in the character frame.  To toggle between them, hold the shift key down and right-click the slider.")

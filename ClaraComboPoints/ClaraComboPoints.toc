@@ -29,6 +29,13 @@ UnitBoxes.lua
 Disenchant.lua
 Fishing.lua
 FishingMode.lua
+Layers.lua
+MapPin.lua
+SpellRanks.lua
+InteractKey.lua
+QuestPlates.lua
+GroupFinderZone.lua
+ChatCopy.lua
 ChatPlace.lua
 Tracker.lua
 Clicks.lua
