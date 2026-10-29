@@ -1,5 +1,8 @@
 <Bindings>
 
+	<!-- Fishing (Fishing.lua): casts Fishing; while the line is out the key is the game's Interact Key -->
+	<Binding name="CLICK ClaraFishingButton:LeftButton" category="BINDING_CATEGORY_CLARA"></Binding>
+
 	<!-- Leatrix Plus (embedded, or the standalone when it runs: both answer to SlashCmdList["Leatrix_Plus"]) -->
 	<Binding name="CLARA_LEAPLUS_TOGGLE" category="BINDING_CATEGORY_CLARA_QOL">
 		if SlashCmdList["Leatrix_Plus"] then SlashCmdList["Leatrix_Plus"]() end
