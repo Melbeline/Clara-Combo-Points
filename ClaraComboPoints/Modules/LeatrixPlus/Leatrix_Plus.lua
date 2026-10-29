@@ -3107,7 +3107,7 @@
 				if keytext and keytext ~= "" then
 					LeaPlusLC["InvKey"] = strtrim(KeyBox:GetText())
 				else
-					LeaPlusLC["InvKey"] = "inv"
+					LeaPlusLC["InvKey"] = "+"
 				end
 				-- Show the keyword in the option tooltip
 				SetKeywordTip()
@@ -3141,9 +3141,9 @@
 				-- Settings
 				LeaPlusLC["InviteFriendsOnly"] = "Off"
 				-- Reset the keyword to default
-				LeaPlusLC["InvKey"] = "inv"
+				LeaPlusLC["InvKey"] = "+"
 				-- Set the editbox to default
-				KeyBox:SetText("inv")
+				KeyBox:SetText("+")
 				-- Save the keyword
 				SetInvKey()
 				-- Refresh panel
@@ -3151,7 +3151,7 @@
 			end)
 
 			-- Ensure keyword is a string on startup
-			LeaPlusLC["InvKey"] = tostring(LeaPlusLC["InvKey"]) or "inv"
+			LeaPlusLC["InvKey"] = tostring(LeaPlusLC["InvKey"]) or "+"
 
 			-- Set editbox value when shown
 			KeyBox:HookScript("OnShow", function()
@@ -6495,12 +6495,12 @@
 		----------------------------------------------------------------------
 
 		if LeaPlusLC["UseEasyChatResizing"] == "On" and not LeaLockList["UseEasyChatResizing"] then
-			-- (Clara Combo Points: saved only after a resize, once the frame's place is known: right
-			-- after StopMovingOrSizing it may not be yet, and the game's save function then errors)
-			local sizing
-			local function SaveChatPlace()
-				if ChatFrame1:GetLeft() and ChatFrame1:GetBottom() then FCF_SavePositionAndDimensions(ChatFrame1) end
+			-- (Clara Combo Points: the chat's place and size kept by Clara (ChatPlace.lua): the game puts the
+			-- general chat where Edit Mode says only, and reads no other saved size for it)
+			local function KeepChatPlace()
+				if ClaraNS.ChatPlace then ClaraNS.ChatPlace.Keep() end
 			end
+			local sizing
 			ChatFrame1Tab:HookScript("OnMouseDown", function(self,arg1)
 				if arg1 == "LeftButton" then
 					if select(8, GetChatWindowInfo(1)) then
@@ -6509,13 +6509,53 @@
 					end
 				end
 			end)
+			-- (Clara Combo Points: unlocked, its tab dragged moves it, as the game's other chat windows,
+			-- which moves it only in Edit Mode; past the screen's edges too with Unclamp chat frame)
+			local moving
+			ChatFrame1Tab:HookScript("OnDragStart", function()
+				if sizing or select(8, GetChatWindowInfo(1)) then return end
+				if EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() then return end
+				moving = true
+				ChatFrame1:StartMoving()
+			end)
 			ChatFrame1Tab:SetScript("OnMouseUp", function(self,arg1)
-				if arg1 == "LeftButton" and sizing then
-					sizing = nil
+				if arg1 == "LeftButton" and (sizing or moving) then
+					sizing, moving = nil, nil
 					ChatFrame1:StopMovingOrSizing()
-					if ChatFrame1:GetLeft() then SaveChatPlace() else C_Timer.After(0, SaveChatPlace) end
+					KeepChatPlace()
 				end
 			end)
+
+			-- (Clara Combo Points: a grip in the bottom right corner, the game's own windows' one, faint until
+			-- hovered: the chat sized there without Edit Mode and its blue overlay, past the screen's edges
+			-- too with Unclamp chat frame; hidden while Edit Mode shows its own)
+			local grip = CreateFrame("Button", "ClaraChatResizeGrip", ChatFrame1)
+			grip:SetSize(16, 16)
+			grip:SetPoint("BOTTOMRIGHT", ChatFrame1Background or ChatFrame1, "BOTTOMRIGHT", 0, 0)
+			grip:SetFrameLevel(ChatFrame1:GetFrameLevel() + 10)
+			grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+			grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+			grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+			grip:SetAlpha(0.5)
+			grip:SetScript("OnEnter", function(self) self:SetAlpha(1) end)
+			grip:SetScript("OnLeave", function(self) if not self.sizing then self:SetAlpha(0.5) end end)
+			grip:SetScript("OnMouseDown", function(self, button)
+				if button ~= "LeftButton" then return end
+				self.sizing = true
+				ChatFrame1:SetResizable(true)
+				ChatFrame1:StartSizing("BOTTOMRIGHT")
+			end)
+			grip:SetScript("OnMouseUp", function(self)
+				if not self.sizing then return end
+				self.sizing = nil
+				ChatFrame1:StopMovingOrSizing()
+				if not self:IsMouseOver() then self:SetAlpha(0.5) end
+				KeepChatPlace()
+			end)
+			if EventRegistry and EventRegistry.RegisterCallback then
+				EventRegistry:RegisterCallback("EditMode.Enter", function() grip:Hide() end, grip)
+				EventRegistry:RegisterCallback("EditMode.Exit", function() grip:Show() end, grip)
+			end
 		end
 
 		----------------------------------------------------------------------
@@ -8598,7 +8638,8 @@
 
 				-- Function to set button state
 				local function SetHideButtons()
-					if LeaPlusLC["HideMiniAddonButtons"] == "On" then
+					-- (Clara: not with its MinimapDrawer, whose drawer holds these buttons)
+					if LeaPlusLC["HideMiniAddonButtons"] == "On" and not ClaraNS:QolRuns("minimapdrawer") then
 						-- Hide existing buttons
 						local buttons = LibDBIconStub:GetButtonList()
 						for i = 1, #buttons do
@@ -8712,7 +8753,7 @@
 				-- Hide addon buttons: Hide new LibDBIcon icons
 				if LeaPlusLC["MinimapButtonBag"] == "Off" then
 					local buttonName = strlower(name)
-					if LeaPlusLC["HideMiniAddonButtons"] == "On" then
+					if LeaPlusLC["HideMiniAddonButtons"] == "On" and not ClaraNS:QolRuns("minimapdrawer") then
 						-- Hide addon buttons is enabled
 						if not strfind(strlower(LeaPlusDB["MiniExcludeList"]), buttonName) then
 							LibDBIconStub:ShowOnEnter(name, true)
@@ -13434,6 +13475,16 @@
 				UpdateVars("MinimapMod", "MinimapModder")					-- 9.2.26 (24th August 2022)
 				UpdateVars("RestorechatMessages", "RestoreChatMessages")	-- 9.2.36 (20th September 2022)
 
+				-- (Clara Combo Points: its own defaults, on once for a setup made before them; set by hand
+				-- afterwards, they are kept)
+				if LeaPlusDB["ClaraDefaults"] ~= 1 then
+					for void, key in ipairs({ "MaxCameraZoom", "MuteGameSounds", "MuteCustomSounds", "FasterLooting", "FasterMovieSkip", "EasyItemDestroy", "ShowFlightTimes", "ManageWidgetTop", "MinimapModder", "TipModEnable", "EnhanceDressup", "ShowTrainAllButton", "DurabilityStatus", "ShowDruidPowerBar", "ShowReadyTimer", "ShowWowheadLinks", "HideErrorMessages", "QuestFontChange", "AutomateQuests", "AutomateGossip", "AutoSellJunk", "AutoRepairGear", "UseEasyChatResizing", "MoreChatFontSizes", "NoChatFade", "RecentChatWindow", "FilterChatMessages", "RestoreChatMessages", "AcceptPartyFriends", "InviteFromWhisper", "FriendlyGuild" }) do
+						LeaPlusDB[key] = "On"
+					end
+					if LeaPlusDB["InvKey"] == nil or LeaPlusDB["InvKey"] == "inv" then LeaPlusDB["InvKey"] = "+" end
+					LeaPlusDB["ClaraDefaults"] = 1
+				end
+
 				-- Minimum faster auto loot delay changed from 0.0 to 0.1 in 10.0.20
 				if LeaPlusDB["LeaPlusFasterLootDelay"] and LeaPlusDB["LeaPlusFasterLootDelay"] == 0 then
 					LeaPlusDB["LeaPlusFasterLootDelay"] = 0.1
@@ -13477,14 +13528,14 @@
 				end
 
 				-- Automation
-				LeaPlusLC:LoadVarChk("AutomateQuests", "Off")				-- Automate quests
+				LeaPlusLC:LoadVarChk("AutomateQuests", "On")				-- Automate quests
 				LeaPlusLC:LoadVarChk("AutoQuestShift", "Off")				-- Automate quests requires shift
 				LeaPlusLC:LoadVarChk("AutoQuestRegular", "On")				-- Accept regular quests
 				LeaPlusLC:LoadVarChk("AutoQuestDaily", "On")				-- Accept daily quests
 				LeaPlusLC:LoadVarChk("AutoQuestWeekly", "On")				-- Accept weekly quests
 				LeaPlusLC:LoadVarChk("AutoQuestCompleted", "On")			-- Turn-in completed quests
 				LeaPlusLC:LoadVarNum("AutoQuestKeyMenu", 1, 1, 4)			-- Automate quests override key
-				LeaPlusLC:LoadVarChk("AutomateGossip", "Off")				-- Automate gossip
+				LeaPlusLC:LoadVarChk("AutomateGossip", "On")				-- Automate gossip
 				LeaPlusLC:LoadVarChk("AutoAcceptSummon", "Off")				-- Accept summon
 				LeaPlusLC:LoadVarChk("AutoAcceptRes", "Off")				-- Accept resurrection
 				LeaPlusLC:LoadVarChk("AutoResNoCombat", "On")				-- Accept resurrection exclude combat
@@ -13494,11 +13545,11 @@
 				LeaPlusLC:LoadVarNum("AutoReleaseDelay", 0, 0, 3000)		-- Release in PvP Delay
 				LeaPlusLC:LoadVarChk("LevelUpScreenshot", "Off")			-- Level up screenshot (Cheese)
 
-				LeaPlusLC:LoadVarChk("AutoSellJunk", "Off")					-- Sell junk automatically
+				LeaPlusLC:LoadVarChk("AutoSellJunk", "On")					-- Sell junk automatically
 				LeaPlusLC:LoadVarChk("AutoSellShowSummary", "On")			-- Sell junk summary in chat
 				LeaPlusLC:LoadVarChk("AutoSellNoGreyGear", "Off")			-- Sell junk exclude all grey gear
 				LeaPlusLC:LoadVarStr("AutoSellExcludeList", "")				-- Sell junk exclude list
-				LeaPlusLC:LoadVarChk("AutoRepairGear", "Off")				-- Repair automatically
+				LeaPlusLC:LoadVarChk("AutoRepairGear", "On")				-- Repair automatically
 				LeaPlusLC:LoadVarChk("AutoRepairGuildFunds", "On")			-- Repair using guild funds
 				LeaPlusLC:LoadVarChk("AutoRepairShowSummary", "On")			-- Repair show summary in chat
 
@@ -13509,15 +13560,15 @@
 				LeaPlusLC:LoadVarChk("NoFriendRequests", "Off")				-- Block friend requests
 				LeaPlusLC:LoadVarChk("NoSharedQuests", "Off")				-- Block shared quests
 
-				LeaPlusLC:LoadVarChk("AcceptPartyFriends", "Off")			-- Party from friends
-				LeaPlusLC:LoadVarChk("InviteFromWhisper", "Off")			-- Invite from whispers
+				LeaPlusLC:LoadVarChk("AcceptPartyFriends", "On")			-- Party from friends
+				LeaPlusLC:LoadVarChk("InviteFromWhisper", "On")			-- Invite from whispers
 				LeaPlusLC:LoadVarChk("InviteFriendsOnly", "Off")			-- Restrict invites to friends
-				LeaPlusLC["InvKey"]	= LeaPlusDB["InvKey"] or "inv"			-- Invite from whisper keyword
+				LeaPlusLC["InvKey"]	= LeaPlusDB["InvKey"] or "+"			-- Invite from whisper keyword (Clara Combo Points: + by default)
 				LeaPlusLC:LoadVarChk("FriendlyCommunities", "Off")			-- Friendly communities
 				LeaPlusLC:LoadVarChk("FriendlyGuild", "On")					-- Friendly guild
 
 				-- Chat
-				LeaPlusLC:LoadVarChk("UseEasyChatResizing", "Off")			-- Use easy resizing
+				LeaPlusLC:LoadVarChk("UseEasyChatResizing", "On")			-- Use easy resizing
 				LeaPlusLC:LoadVarChk("NoCombatLogTab", "Off")				-- Hide the combat log
 				LeaPlusLC:LoadVarChk("NoChatButtons", "Off")				-- Hide chat buttons
 				LeaPlusLC:LoadVarChk("ShowVoiceButtons", "Off")				-- Show voice buttons
@@ -13525,32 +13576,32 @@
 				LeaPlusLC:LoadVarChk("NoSocialButton", "Off")				-- Hide social button
 				LeaPlusLC:LoadVarChk("UnclampChat", "Off")					-- Unclamp chat frame
 				LeaPlusLC:LoadVarChk("MoveChatEditBoxToTop", "Off")			-- Move editbox to top
-				LeaPlusLC:LoadVarChk("MoreChatFontSizes", "Off")			-- More chat font sizes
+				LeaPlusLC:LoadVarChk("MoreChatFontSizes", "On")			-- More chat font sizes
 
 				LeaPlusLC:LoadVarChk("NoStickyChat", "Off")					-- Disable sticky chat
 				LeaPlusLC:LoadVarChk("UseArrowKeysInChat", "Off")			-- Use arrow keys in chat
-				LeaPlusLC:LoadVarChk("NoChatFade", "Off")					-- Disable chat fade
+				LeaPlusLC:LoadVarChk("NoChatFade", "On")					-- Disable chat fade
 				LeaPlusLC:LoadVarChk("UnivGroupColor", "Off")				-- Universal group color
-				LeaPlusLC:LoadVarChk("RecentChatWindow", "Off")				-- Recent chat window
+				LeaPlusLC:LoadVarChk("RecentChatWindow", "On")				-- Recent chat window
 				LeaPlusLC:LoadVarNum("RecentChatSize", 170, 170, 600)		-- Recent chat size
-				LeaPlusLC:LoadVarChk("FilterChatMessages", "Off")			-- Filter chat messages
+				LeaPlusLC:LoadVarChk("FilterChatMessages", "On")			-- Filter chat messages
 				LeaPlusLC:LoadVarChk("BlockSpellLinks", "Off")				-- Block spell links
 				LeaPlusLC:LoadVarChk("BlockDrunkenSpam", "Off")				-- Block drunken spam
 				LeaPlusLC:LoadVarChk("BlockDuelSpam", "Off")				-- Block duel spam
-				LeaPlusLC:LoadVarChk("RestoreChatMessages", "Off")			-- Restore chat messages
+				LeaPlusLC:LoadVarChk("RestoreChatMessages", "On")			-- Restore chat messages
 
 				-- Text
-				LeaPlusLC:LoadVarChk("HideErrorMessages", "Off")			-- Hide error messages
+				LeaPlusLC:LoadVarChk("HideErrorMessages", "On")			-- Hide error messages
 				LeaPlusLC:LoadVarChk("NoHitIndicators", "Off")				-- Hide portrait numbers
 				LeaPlusLC:LoadVarChk("HideZoneText", "Off")					-- Hide zone text
 				LeaPlusLC:LoadVarChk("HideKeybindText", "Off")				-- Hide keybind text
 				LeaPlusLC:LoadVarChk("HideMacroText", "Off")				-- Hide macro text
 
-				LeaPlusLC:LoadVarChk("QuestFontChange", "Off")				-- Resize quest text
+				LeaPlusLC:LoadVarChk("QuestFontChange", "On")				-- Resize quest text
 				LeaPlusLC:LoadVarNum("LeaPlusQuestFontSize", 12, 10, 30)	-- Quest text slider
 
 				-- Interface
-				LeaPlusLC:LoadVarChk("MinimapModder", "Off")				-- Enhance minimap
+				LeaPlusLC:LoadVarChk("MinimapModder", "On")				-- Enhance minimap
 				LeaPlusLC:LoadVarChk("SquareMinimap", "On")					-- Square minimap
 				LeaPlusLC:LoadVarChk("HideMiniAddonMenu", "On")				-- Hide addon menu
 				LeaPlusLC:LoadVarChk("UnclampMinimap", "Off")				-- Unclamp minimap cluster
@@ -13561,7 +13612,7 @@
 				LeaPlusLC:LoadVarNum("MiniClusterScale", 1, 0.5, 2)			-- Minimap cluster scale
 				LeaPlusLC:LoadVarNum("MinimapEffect", 1, 1, 22)				-- Minimap effect
 
-				LeaPlusLC:LoadVarChk("TipModEnable", "Off")					-- Enhance tooltip
+				LeaPlusLC:LoadVarChk("TipModEnable", "On")					-- Enhance tooltip
 				LeaPlusLC:LoadVarChk("TipShowRank", "On")					-- Show rank for your guild
 				LeaPlusLC:LoadVarChk("TipShowOtherRank", "Off")				-- Show rank for other guilds
 				LeaPlusLC:LoadVarChk("TipShowTarget", "On")					-- Show target
@@ -13574,7 +13625,7 @@
 				LeaPlusLC:LoadVarNum("TipCursorX", 0, -128, 128)			-- Tooltip cursor X offset
 				LeaPlusLC:LoadVarNum("TipCursorY", 0, -128, 128)			-- Tooltip cursor Y offset
 
-				LeaPlusLC:LoadVarChk("EnhanceDressup", "Off")				-- Enhance dressup
+				LeaPlusLC:LoadVarChk("EnhanceDressup", "On")				-- Enhance dressup
 				LeaPlusLC:LoadVarChk("DressupItemButtons", "On")			-- Dressup item buttons
 				LeaPlusLC:LoadVarChk("DressupAnimControl", "On")			-- Dressup animation control
 				LeaPlusLC:LoadVarChk("DressupMoreZoomOut", "Off")			-- Dressup increase zoom out distance
@@ -13592,9 +13643,9 @@
 				LeaPlusLC:LoadVarChk("ShowVolume", "Off")					-- Show volume slider
 				LeaPlusLC:LoadVarChk("ShowVolumeInFrame", "Off")			-- Volume slider dual layout
 
-				LeaPlusLC:LoadVarChk("DurabilityStatus", "Off")				-- Show durability status
+				LeaPlusLC:LoadVarChk("DurabilityStatus", "On")				-- Show durability status
 				LeaPlusLC:LoadVarChk("ShowRaidToggle", "Off")				-- Show raid button
-				LeaPlusLC:LoadVarChk("ShowTrainAllButton", "Off")			-- Show train all button
+				LeaPlusLC:LoadVarChk("ShowTrainAllButton", "On")			-- Show train all button
 				LeaPlusLC:LoadVarChk("ShowBorders", "Off")					-- Show borders
 				LeaPlusLC:LoadVarNum("BordersTop", 0, 0, 300)				-- Top border
 				LeaPlusLC:LoadVarNum("BordersBottom", 0, 0, 300)			-- Bottom border
@@ -13603,16 +13654,16 @@
 				LeaPlusLC:LoadVarNum("BordersAlpha", 0, 0, 0.9)				-- Border alpha
 				LeaPlusLC:LoadVarChk("ShowPlayerChain", "Off")				-- Show player chain
 				LeaPlusLC:LoadVarNum("PlayerChainMenu", 1, 1, 6)			-- Player chain dropdown value
-				LeaPlusLC:LoadVarChk("ShowDruidPowerBar", "Off")			-- Show druid power bar
-				LeaPlusLC:LoadVarChk("ShowReadyTimer", "Off")				-- Show ready timer
+				LeaPlusLC:LoadVarChk("ShowDruidPowerBar", "On")			-- Show druid power bar
+				LeaPlusLC:LoadVarChk("ShowReadyTimer", "On")				-- Show ready timer
 				LeaPlusLC:LoadVarChk("ShowRangeColoring", "Off")			-- Show range coloring
 				LeaPlusLC:LoadVarChk("ShowInfoCards", "Off")				-- Show info cards
 				LeaPlusLC:LoadVarStr("InfoCardKey", "")						-- Info card key
-				LeaPlusLC:LoadVarChk("ShowWowheadLinks", "Off")				-- Show Wowhead links
+				LeaPlusLC:LoadVarChk("ShowWowheadLinks", "On")				-- Show Wowhead links
 				LeaPlusLC:LoadVarChk("WowheadLinkComments", "Off")			-- Show Wowhead links to comments
 
 				-- Frames
-				LeaPlusLC:LoadVarChk("ManageWidgetTop", "Off")				-- Manage widget top
+				LeaPlusLC:LoadVarChk("ManageWidgetTop", "On")				-- Manage widget top
 				LeaPlusLC:LoadVarAnc("WidgetTopA", "TOP")					-- Manage widget top anchor
 				LeaPlusLC:LoadVarAnc("WidgetTopR", "TOP")					-- Manage widget top relative
 				LeaPlusLC:LoadVarNum("WidgetTopX", 0, -5000, 5000)			-- Manage widget top position X
@@ -13635,26 +13686,26 @@
 				LeaPlusLC:LoadVarChk("NoScreenEffects", "Off")				-- Disable screen effects
 				LeaPlusLC:LoadVarChk("SetWeatherDensity", "Off")			-- Set weather density
 				LeaPlusLC:LoadVarNum("WeatherLevel", 3, 0, 3)				-- Weather density level
-				LeaPlusLC:LoadVarChk("MaxCameraZoom", "Off")				-- Max camera zoom
+				LeaPlusLC:LoadVarChk("MaxCameraZoom", "On")				-- Max camera zoom
 
 				LeaPlusLC:LoadVarChk("NoRestedEmotes", "Off")				-- Silence rested emotes
 				LeaPlusLC:LoadVarChk("KeepAudioSynced", "Off")				-- Keep audio synced
-				LeaPlusLC:LoadVarChk("MuteGameSounds", "Off")				-- Mute game sounds
+				LeaPlusLC:LoadVarChk("MuteGameSounds", "On")				-- Mute game sounds
 				LeaPlusLC:LoadVarChk("MuteMountSounds", "Off")				-- Mute mount sounds
-				LeaPlusLC:LoadVarChk("MuteCustomSounds", "Off")				-- Mute custom sounds
+				LeaPlusLC:LoadVarChk("MuteCustomSounds", "On")				-- Mute custom sounds
 				LeaPlusLC:LoadVarStr("MuteCustomList", "")					-- Mute custom sounds list
 
 				LeaPlusLC:LoadVarChk("NoRaidRestrictions", "Off")			-- Remove raid restrictions
 				LeaPlusLC:LoadVarChk("NoConfirmLoot", "Off")				-- Disable loot warnings
-				LeaPlusLC:LoadVarChk("FasterLooting", "Off")				-- Faster auto loot
+				LeaPlusLC:LoadVarChk("FasterLooting", "On")				-- Faster auto loot
 				LeaPlusLC:LoadVarNum("LeaPlusFasterLootDelay", 0.3, 0.1, 0.3)	-- Faster auto loot delay
 
-				LeaPlusLC:LoadVarChk("FasterMovieSkip", "Off")				-- Faster movie skip
+				LeaPlusLC:LoadVarChk("FasterMovieSkip", "On")				-- Faster movie skip
 				LeaPlusLC:LoadVarChk("CombatPlates", "Off")					-- Combat plates
-				LeaPlusLC:LoadVarChk("EasyItemDestroy", "Off")				-- Easy item destroy
+				LeaPlusLC:LoadVarChk("EasyItemDestroy", "On")				-- Easy item destroy
 				LeaPlusLC:LoadVarChk("NoTransforms", "Off")					-- Remove transforms
 
-				LeaPlusLC:LoadVarChk("ShowFlightTimes", "Off")				-- Show flight times
+				LeaPlusLC:LoadVarChk("ShowFlightTimes", "On")				-- Show flight times
 				LeaPlusLC:LoadVarChk("FlightBarBackground", "On")			-- Show flight times bar background
 				LeaPlusLC:LoadVarChk("FlightBarDestination", "On")			-- Show flight times bar destination
 				LeaPlusLC:LoadVarChk("FlightBarFillBar", "Off")				-- Show flight times bar fill mode

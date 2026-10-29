@@ -2,8 +2,7 @@
 -- Shift + click on an item opens a small window to buy any amount of it: the arrows or the
 -- keyboard, Stack (up to the next full stack; right-click: a stack less) and Max (as many as fit
 -- in the bags and can be paid for). Buying more than a stack asks first (a box turns that off);
--- the purchase goes one stack per click, so that one click is one purchase: the purchase's own
--- click buys the first, a click on Buy (the next stack) each of the others.
+-- the purchase goes one stack at a time, half a second apart.
 -- Rewritten for WoW Forever's merchant code (C_MerchantFrame, C_CurrencyInfo, the game's own
 -- Shift + click); its window is made here, only when the module runs. The standalone's setting
 -- (per character there) is carried over while it runs instead.
@@ -194,28 +193,21 @@ local function SetSplit(n)
 end
 
 ---------------------------------------------------------------------------
--- Buying: one stack per click (one click, one purchase), until done, stopped or the merchant
--- closes
+-- Buying: one stack each half second, until done or the merchant closes
 ---------------------------------------------------------------------------
+local loop = CreateFrame("Frame")
+loop:Hide()
 local queue = {}
-local function BuyNext()
+loop:SetScript("OnUpdate", function(self, elapsed)
+  self.wait = (self.wait or 0) - elapsed
+  if self.wait > 0 then return end
+  self.wait = .5
   local n = table.remove(queue, 1)
-  if not n then return end
+  if not n then self:Hide() return end
   BuyMerchantItem(queue.index, n)
-  queue.done = queue.done + 1
-  -- asked again once this dialog has closed (shown again from its own click, it would be hidden)
-  if #queue > 0 then
-    C_Timer.After(0, function()
-      if #queue > 0 then StaticPopup_Show("CLARA_BUYEMALL_NEXT", queue.done + 1, queue.total) end
-    end)
-  end
-end
-local closed = CreateFrame("Frame")
-closed:RegisterEvent("MERCHANT_CLOSED")
-closed:SetScript("OnEvent", function()
-  wipe(queue)
-  StaticPopup_Hide("CLARA_BUYEMALL_NEXT")
 end)
+loop:RegisterEvent("MERCHANT_CLOSED")
+loop:SetScript("OnEvent", function(self) wipe(queue); self:Hide() end)
 
 local function Purchase(n)
   frame:Hide()
@@ -226,21 +218,14 @@ local function Purchase(n)
     queue[#queue + 1] = min(n, per)
     n = n - per
   end
-  queue.total, queue.done = #queue, 0
-  BuyNext() -- (the first: this click's)
+  loop.wait = 0
+  loop:Show()
 end
 
 StaticPopupDialogs.CLARA_BUYEMALL_CONFIRM = {
   text = L.BEA_CONFIRM,
   button1 = YES, button2 = NO,
   OnAccept = function(_, data) if data then Purchase(data) end end,
-  timeout = 0, hideOnEscape = true, preferredIndex = 3,
-}
-StaticPopupDialogs.CLARA_BUYEMALL_NEXT = {
-  text = L.BEA_NEXT,
-  button1 = L.BEA_NEXT_BUY, button2 = CANCEL,
-  OnAccept = function() BuyNext() end,
-  OnCancel = function() wipe(queue) end,
   timeout = 0, hideOnEscape = true, preferredIndex = 3,
 }
 StaticPopupDialogs.CLARA_BUYEMALL_CONFIRM_ONE = {
