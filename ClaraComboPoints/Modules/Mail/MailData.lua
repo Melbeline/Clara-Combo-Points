@@ -68,16 +68,35 @@ local function Clean(db)
   if type(db.own) == "table" then
     for key, on in pairs(db.own) do if type(key) == "string" and on == true then own[key] = true end end
   end
+  -- when each entry last changed (the sync between the WoW accounts, Modules/Sync): st[kind][key] = time
+  local st = {}
+  for _, kind in ipairs({ "r", "c", "i", "o" }) do
+    st[kind] = {}
+    local from = type(db.st) == "table" and type(db.st[kind]) == "table" and db.st[kind] or {}
+    for key, at in pairs(from) do
+      if (type(key) == "string" or type(key) == "number") and type(at) == "number" then st[kind][key] = at end
+    end
+  end
   local sort = type(db.sort) == "string" and (db.sort == "last" or known[db.sort]) and db.sort or "last"
   local nextId = type(db.nextId) == "number" and db.nextId >= 1 and math.floor(db.nextId) or 1
   return { categories = categories, recipients = recipients, items = items, own = own, sort = sort, nextId = nextId,
-    open = db.open == true or nil }
+    open = db.open == true or nil, st = st }
 end
 
 function M.Init()
   ClaraMailDB = Clean(ClaraMailDB)
   M.db = ClaraMailDB
 end
+M.Clean = Clean
+
+-- An entry changed now (r: a character of the list, c: a category, i: an item given, o: one of the
+-- account's characters); one gone keeps its time. The sync (Modules/Sync) sends it on (M.Touched).
+local function Stamp(kind, key)
+  if key == nil then return end
+  M.db.st[kind][key] = time and time() or 0
+  if M.Touched then M.Touched(kind, key) end
+end
+M.Stamp = Stamp
 
 -- a name's key in the list: its letters as typed, lower case (the game's names are not case-sensitive)
 local function Key(name)
@@ -115,16 +134,18 @@ local function Trim(text, limit)
   return text ~= "" and text or nil
 end
 
--- Returns its id, or nil and why ("empty", "exists").
+-- Returns its id, or nil and why ("empty", "exists"). Its id ends with this WoW account's mark when
+-- the sync runs (M.idMark): two accounts' new categories never share one.
 function M.AddCategory(text)
   local name = Trim(text, NAME_MAX)
   if not name then return nil, "empty" end
   for _, c in ipairs(M.Categories()) do
     if c.name:lower() == name:lower() then return nil, "exists" end
   end
-  local id = "c" .. M.db.nextId
+  local id = "c" .. M.db.nextId .. (M.idMark or "")
   M.db.nextId = M.db.nextId + 1
   table.insert(M.db.categories, { id = id, name = name })
+  Stamp("c", id)
   return id
 end
 
@@ -133,8 +154,11 @@ function M.DeleteCategory(id)
   for i, c in ipairs(M.db.categories) do
     if c.id == id then
       table.remove(M.db.categories, i)
-      for _, r in pairs(M.db.recipients) do r.cats[id] = nil end
+      for key, r in pairs(M.db.recipients) do
+        if r.cats[id] then r.cats[id] = nil; Stamp("r", key) end
+      end
       if M.db.sort == id then M.db.sort = "last" end
+      Stamp("c", id)
       return true
     end
   end
@@ -143,18 +167,37 @@ end
 -- The four first categories again, and no character in any; the items keep theirs (dormant), the
 -- list of names stays. The account's characters are Main/alt again at their next login.
 function M.ResetCategories()
+  local gone = {}
+  for _, c in ipairs(M.db.categories) do gone[c.id] = true end
   M.db.categories = DefaultCategories()
-  for _, r in pairs(M.db.recipients) do wipe(r.cats) end
+  for _, c in ipairs(M.db.categories) do gone[c.id] = true end
+  for id in pairs(gone) do Stamp("c", id) end
+  for key, r in pairs(M.db.recipients) do wipe(r.cats); Stamp("r", key) end
+  for key in pairs(M.db.own) do Stamp("o", key) end
   wipe(M.db.own)
   M.db.sort = "last"
 end
 
+-- Every entry of the lists stamped now (a whole list replaced: reset, import)
+local function StampAll(before)
+  local keys = { r = {}, c = {}, i = {}, o = {} }
+  for _, db in ipairs({ before, M.db }) do
+    for key in pairs(db.recipients) do keys.r[key] = true end
+    for _, c in ipairs(db.categories) do keys.c[c.id] = true end
+    for id in pairs(db.items) do keys.i[id] = true end
+    for key in pairs(db.own) do keys.o[key] = true end
+  end
+  for kind, list in pairs(keys) do for key in pairs(list) do Stamp(kind, key) end end
+end
+
 -- Everything as on the first day: categories, names, the items given to them.
 function M.ResetAll()
-  local open = M.db.open
+  local before = M.db
   ClaraMailDB = Clean(nil)
-  ClaraMailDB.open = open
+  ClaraMailDB.open = before.open
+  ClaraMailDB.st = before.st
   M.db = ClaraMailDB
+  StampAll(before)
 end
 
 ---------------------------------------------------------------------------
@@ -187,11 +230,15 @@ function M.Record(name)
   local now = time and time() or 0
   clock = math.max(clock + 0.001, now)
   r.last = clock
+  Stamp("r", (Key(name)))
 end
 
 function M.SetCategory(name, id, on)
-  local r = Entry(name)
-  if r and M.CategoryName(id) then r.cats[id] = on and true or nil end
+  local r, key = Entry(name)
+  if r and M.CategoryName(id) then
+    r.cats[id] = on and true or nil
+    Stamp("r", key)
+  end
 end
 
 function M.HasCategory(name, id)
@@ -201,12 +248,12 @@ end
 
 function M.ClearCategories(name)
   local r = M.Recipient(name)
-  if r then wipe(r.cats) end
+  if r then wipe(r.cats); Stamp("r", (Key(name))) end
 end
 
 function M.Remove(name)
   local key = Key(name)
-  if key then M.db.recipients[key] = nil end
+  if key then M.db.recipients[key] = nil; Stamp("r", key) end
 end
 
 -- Its categories' names, in the list's order.
@@ -259,8 +306,9 @@ function M.AddOwn()
   local key = Key(name)
   if not key or M.db.own[key] then return false end
   M.db.own[key] = true
+  Stamp("o", key)
   local r = Entry(name)
-  if r then r.cats.mainalt = M.CategoryName("mainalt") and true or nil end
+  if r then r.cats.mainalt = M.CategoryName("mainalt") and true or nil; Stamp("r", key) end
   return true
 end
 M.OWN_LEVEL = OWN_LEVEL
@@ -287,9 +335,12 @@ end
 
 -- Replaces this account's.
 function M.Import(data)
-  data.open = M.db.open
+  local before = M.db
+  data.open = before.open
+  data.st = before.st
   ClaraMailDB = data
   M.db = ClaraMailDB
+  StampAll(before)
 end
 
 ---------------------------------------------------------------------------

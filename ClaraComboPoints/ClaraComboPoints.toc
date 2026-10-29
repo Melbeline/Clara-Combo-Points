@@ -5,7 +5,7 @@
 ## Notes-deDE: Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen (WoW Forever). /clara, /cl, /ccp oder /cp
 ## Author: Melbeline
 ## Version: 1.6.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraClassicUIDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraCraftDB
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraClassicUIDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming
 ## SavedVariablesPerCharacter: ClaraClassicUICharDB
 ## LoadSavedVariablesFirst: true
 ## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, ReverseEngineering, ClassicUIForever, ElvUI, EasyFrames, Glass
@@ -427,3 +427,4 @@ Modules\Crafting\CraftData.lua
 Modules\Crafting\CraftUI.lua
 Modules\Crafting\CraftGame.lua
 Modules\Crafting\CraftClassic.lua
+Modules\Sync\Sync.lua

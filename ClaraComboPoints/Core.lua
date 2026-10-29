@@ -2409,6 +2409,9 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
   elseif cmd == "hunt" then
     ns:SetScanHunt(raw)
     Print(raw ~= "" and L.SCAN_HUNT_SET:format(raw) or L.SCAN_HUNT_CLEARED)
+  elseif cmd == "sync" and ns.Sync and ns.Sync.db then
+    local s = ns.Sync.Status()
+    Print(L.SYNC_STATUS:format(s.online, s.trusted, s.channel and L.SYNC_CHANNEL_YES or L.SYNC_CHANNEL_NO))
   elseif cmd == "help" then
     Print(L.HELP)
   elseif cmd == "debug" then
