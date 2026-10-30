@@ -14244,6 +14244,7 @@
 		-- Add a close Button
 		Side.c = LeaPlusLC:CreateCloseButton(Side, 30, 30, "TOPRIGHT", 0, 0)
 		Side.c:SetScript("OnClick", function() Side:Hide() end)
+		ClaraNS:DressDialog(Side, { close = Side.c }) -- (Clara: the game's dialog border, or Classic's, Look.lua)
 
 		-- Add reset, help and back buttons
 		Side.r = LeaPlusLC:CreateButton("ResetButton", Side, "Reset", "BOTTOMLEFT", 16, 53, 0, 25, true, "Click to reset the settings on this page.")
@@ -14731,6 +14732,7 @@
 
 		-- Add close Button (LeaPlusLC.DF: Using custom template)
 		local CloseB = LeaPlusLC:CreateCloseButton(PageF, 30, 30, "TOPRIGHT", 0, 0)
+		ClaraNS:DressDialog(PageF, { close = CloseB }) -- (Clara: the game's dialog border, or Classic's, Look.lua)
 		CloseB:SetScript("OnClick", LeaPlusLC.HideFrames)
 
 		-- Release memory

@@ -45,6 +45,7 @@ Tracker.lua
 Clicks.lua
 LearnedSpells.lua
 Moan.lua
+Look.lua
 Options.lua
 SettingsPage.lua
 ScanPage.lua

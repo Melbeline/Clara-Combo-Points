@@ -248,6 +248,7 @@ end
 
 local function Button(parent, label, w, h, onClick)
   local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  ns:DressButton(b) -- (Look.lua: ClassicUI's red button with ClassicUI; our small font kept, below)
   b:SetSize(w, h or 22)
   b:SetNormalFontObject(GameFontNormalSmall)
   b:SetHighlightFontObject(GameFontHighlightSmall)
@@ -293,6 +294,7 @@ local function Check(parent, label, onToggle)
   local cb = CreateFrame("CheckButton", nil, holder, "UICheckButtonTemplate")
   cb:SetSize(24, 24)
   cb:SetPoint("CENTER")
+  ns:DressCheck(cb)
   local text = cb.Text or cb.text
   text:ClearAllPoints()
   text:SetPoint("LEFT", cb, "RIGHT", 1, 0)
@@ -1553,6 +1555,7 @@ local function TextDialog(p)
   if f.Bg then f.Bg:SetVertexColor(.32, .32, .34) end
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", 1, 0)
+  ns:DressWindow(f, { portrait = false }) -- (Look.lua: ClassicUI's old window with ClassicUI)
 
   local hint = Hint(f, "")
   hint:SetPoint("TOPLEFT", 16, -32)
@@ -3571,6 +3574,7 @@ local function Build()
   qolTab:HookScript("OnEvent", KeepQol)
   tabs[#tabs + 1] = qolTab
   p.qolTab = qolTab
+  ns:DressWindow(p, { tabs = tabs }) -- (Look.lua: ClassicUI's old window with ClassicUI)
   -- all as wide as the widest if the row still fits; else each at its own width; if even that
   -- is too wide (a long language, a narrow window), all narrowed alike (the game's tab shortens
   -- its text)

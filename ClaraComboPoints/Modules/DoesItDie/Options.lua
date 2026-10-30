@@ -403,6 +403,7 @@ local function pushButton(parent, text, width, onClick)
     button:SetSize(width, 22)
     button:SetText(T(text))
     button:SetScript("OnClick", onClick)
+    ClaraNS:DressButton(button) -- (Clara: ClassicUI's red button with ClassicUI)
     return button
 end
 
@@ -647,7 +648,6 @@ local function createTickViewer()
     viewer:RegisterForDrag("LeftButton")
     viewer:SetScript("OnDragStart", viewer.StartMoving)
     viewer:SetScript("OnDragStop", viewer.StopMovingOrSizing)
-    setBackdrop(viewer, 0.06, 0.97)
     table.insert(UISpecialFrames, "DoesItDieLearnedTicks") -- Escape closes it
 
     local title = viewer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -655,6 +655,8 @@ local function createTickViewer()
     title:SetText(T("Learned tick sizes"))
     local close = CreateFrame("Button", nil, viewer, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -10)
+    -- (Clara: in a dialog box, the game's or Classic's, Look.lua)
+    ClaraNS:DressDialog(viewer, { fill = true, dark = true, close = close })
     local intro = viewer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
     intro:SetWidth(width - 32)
@@ -1164,7 +1166,6 @@ local function createWindow()
     window:RegisterForDrag("LeftButton")
     window:SetScript("OnDragStart", window.StartMoving)
     window:SetScript("OnDragStop", window.StopMovingOrSizing)
-    setBackdrop(window, 0.06, 0.97)
     table.insert(UISpecialFrames, "DoesItDieOptions") -- Escape closes it
 
     local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -1173,6 +1174,8 @@ local function createWindow()
 
     local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -12)
+    -- (Clara: in a dialog box, the game's or Classic's, Look.lua)
+    ClaraNS:DressDialog(window, { fill = true, dark = true, close = close })
 
     -- Presets, right-aligned in the title bar.
     local presetLabel = window:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")

@@ -98,33 +98,25 @@ end
 ---------------------------------------------------------------------------
 -- The window
 ---------------------------------------------------------------------------
-local frame = CreateFrame("Frame", "ClaraBuyEmAllFrame", UIParent, "BackdropTemplate")
-frame:SetSize(230, 122)
+local frame = CreateFrame("Frame", "ClaraBuyEmAllFrame", UIParent)
+frame:SetSize(230, 134)
 frame:SetFrameStrata("HIGH")
 frame:SetToplevel(true)
 frame:SetClampedToScreen(true)
 frame:EnableMouse(true)
 frame:EnableKeyboard(true)
 frame:Hide()
-frame:SetBackdrop({
-  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  tile = true, tileSize = 16, edgeSize = 14,
-  insets = { left = 3, right = 3, top = 3, bottom = 3 },
-})
-frame:SetBackdropColor(0, 0, 0, .9)
-frame:SetBackdropBorderColor(.72, .58, .34, 1)
 
 local box = frame:CreateTexture(nil, "BORDER")
 box:SetTexture("Interface\\MoneyFrame\\UI-MoneyFrame")
 box:SetTexCoord(.10546875, .578125, .109375, .3671875)
 box:SetSize(121, 33)
-box:SetPoint("TOP", 1, -8)
+box:SetPoint("TOP", 1, -16)
 local amount = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 amount:SetJustifyH("RIGHT")
 amount:SetPoint("RIGHT", box, "RIGHT", -12, 2)
 local cost = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-cost:SetPoint("TOP", 0, -44)
+cost:SetPoint("TOP", 0, -52)
 
 local function Arrow(side, x)
   local b = CreateFrame("Button", nil, frame)
@@ -144,11 +136,13 @@ local function Button(label, point, x, y, relative)
   b:SetPoint(point, relative or frame, relative and "TOP" or "BOTTOM", x, y)
   return b
 end
-local okay = Button(OKAY or "Okay", "RIGHT", -3, 20)
-local cancel = Button(CANCEL or "Cancel", "LEFT", 5, 20)
+local okay = Button(OKAY or "Okay", "RIGHT", -3, 24)
+local cancel = Button(CANCEL or "Cancel", "LEFT", 5, 24)
 local stack = Button(L.BEA_STACK, "BOTTOM", 0, 2, okay)
 local maxButton = Button(L.BEA_MAX, "BOTTOM", 0, 2, cancel)
 stack:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+-- a dialog box: the game's, or Classic's (Look.lua)
+ns:DressDialog(frame, { fill = true, buttons = { okay, cancel, stack, maxButton } })
 
 ---------------------------------------------------------------------------
 -- The amount
