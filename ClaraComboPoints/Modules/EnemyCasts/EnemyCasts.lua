@@ -2,7 +2,7 @@
 -- The spell it casts (its icon, its name under it), held while the cast lasts, tinted red when it is
 -- interrupted; the instant ones it uses, each for a moment. The last few stay in a row (the newest by the
 -- plate), each fading out after a moment. Left or right of the plate, or above it; the icons' size, how
--- many stay and how long are set on its page (Esc > Options > AddOns > Interface improvements > Enemy casts).
+-- many stay and how long are set on its page (Esc > Options > AddOns > Clara Combo Points > Combat > Enemy Casts).
 -- In WoW Forever a unit's casts can be secret: each plate listens to its own unit (as the game's cast
 -- bars do), so the unit is never read from the event, and a secret spell ID is never read either, only
 -- handed to the game, which turns it into its icon and name and draws them (C_Spell.GetSpellTexture,
@@ -38,13 +38,13 @@ end
 ns.EnemyCastsGet, ns.EnemyCastsSet = Get, Set
 
 ---------------------------------------------------------------------------
--- Its page in the game's options, under Interface improvements
+-- Its page in the game's options, under its theme's page of Clara Combo Points
 ---------------------------------------------------------------------------
 local function RegisterSettings()
-  if not (ns.qolCategory and Settings and Settings.RegisterVerticalLayoutSubcategory
+  if not (ns:QolCategory("enemycasts") and Settings and Settings.RegisterVerticalLayoutSubcategory
     and Settings.RegisterProxySetting and Settings.CreateCheckbox) then return end
   local ok, category = pcall(function()
-    local category = Settings.RegisterVerticalLayoutSubcategory(ns.qolCategory, L.QOL_NAV_ENEMYCASTS)
+    local category = Settings.RegisterVerticalLayoutSubcategory(ns:QolCategory("enemycasts"), L.QOL_NAV_ENEMYCASTS)
     local function Register(key, label)
       return Settings.RegisterProxySetting(category, "ClaraEnemyCasts_" .. key, type(DEFAULTS[key]), label,
         DEFAULTS[key], function() return Get(key) end, function(v) Set(key, v); ns:RefreshQol() end)

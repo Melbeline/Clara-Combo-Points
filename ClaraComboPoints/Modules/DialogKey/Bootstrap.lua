@@ -3,7 +3,7 @@
 -- dialog, accepts and completes quests, number keys pick gossip options and quest rewards. The
 -- first of the module's files: it tells the others (and their libraries) whether they run, and
 -- gives them their shared table. Its settings are saved in ClaraDialogKeyDB; its page in the
--- game's options sits under Interface improvements. Its version check (LibVersionCheck, which
+-- game's options sits under its theme's page of Clara Combo Points. Its version check (LibVersionCheck, which
 -- tells other players' clients the version that runs) is left out.
 -- The built-in one takes over from the standalone DialogKey: while that one is enabled it runs
 -- for the session (only one of them may: each would take the same keys), its settings are

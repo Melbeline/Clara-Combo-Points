@@ -169,7 +169,7 @@ local function CopyDefaults(src, dst)
 end
 
 local function Print(msg)
-  print("|cffffd200Clara Combo Points|r: " .. msg)
+  print("|cffffd200Clara|r: " .. msg)
 end
 ns.Print = Print -- (only for what is asked for: /cl help, /cl debug)
 

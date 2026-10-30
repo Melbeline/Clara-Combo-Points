@@ -1,4 +1,4 @@
--- Clara Combo Points - DialogKey's options, from the Improvements tab (the built-in copy's, or
+-- Clara Combo Points - DialogKey's options, from its theme's page of Clara Combo Points' options (the built-in copy's, or
 -- the standalone's while it runs: both are DialogKeyNS).
 
 local ADDON, ns = ...

@@ -1262,10 +1262,10 @@ function ns.registerOptions()
         if not (window and window:IsShown()) then ns.openOptions() end
     end)
     open:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -14)
-    -- (Clara Combo Points: under Interface improvements; its window also opens from the Improvements tab)
+    -- (Clara Combo Points: under its theme's page of Clara Combo Points)
     local category
-    if ClaraNS.qolCategory and Settings.RegisterCanvasLayoutSubcategory then
-        category = Settings.RegisterCanvasLayoutSubcategory(ClaraNS.qolCategory, panel, "DoesItDie")
+    if ClaraNS:QolCategory("doesitdie") and Settings.RegisterCanvasLayoutSubcategory then
+        category = Settings.RegisterCanvasLayoutSubcategory(ClaraNS:QolCategory("doesitdie"), panel, "DoesItDie")
     else
         category = Settings.RegisterCanvasLayoutCategory(panel, "DoesItDie")
         Settings.RegisterAddOnCategory(category)

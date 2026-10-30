@@ -1,8 +1,8 @@
 ## Interface: 16001, 16002, 16003, 16005, 16010, 120100, 120105
-## Title: Clara Combo Points
-## Notes: Combo points, energy, rage, mana and health bars with buff/debuff icons, for every class (WoW Forever). /clara, /cl, /ccp or /cp
-## Notes-frFR: Points de combo, énergie, rage, mana et vie avec icônes de buffs/debuffs, pour toutes les classes (WoW Forever). /clara, /cl, /ccp ou /cp
-## Notes-deDE: Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen (WoW Forever). /clara, /cl, /ccp oder /cp
+## Title: Clara
+## Notes: Clara Combo Points (combo points, energy, rage, mana and health bars with buff/debuff icons, for every class) and other addons' features built in (WoW Forever). /clara or /cl
+## Notes-frFR: Clara Combo Points (points de combo, énergie, rage, mana et vie avec icônes de buffs/debuffs, pour toutes les classes) et les fonctions d'autres addons, intégrées (WoW Forever). /clara ou /cl
+## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
 ## Version: 1.6.0
 ## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraDoesItDieDB
@@ -48,8 +48,8 @@ Moan.lua
 Look.lua
 Options.lua
 SettingsPage.lua
-ScanPage.lua
 QoL.lua
+ScanPage.lua
 Modules\BuyEmAll\BuyEmAll.lua
 Modules\DialogKey\Bootstrap.lua
 Modules\DialogKey\embeds.xml

@@ -10,19 +10,20 @@ local ADDON, ns = ...
 local L = ns.L
 
 -- The modules, in the order they are listed. standalone: the addon it comes from (the built-in one runs
--- instead of it, from the next reload: it is turned off for the character).
+-- instead of it, from the next reload: it is turned off for the character); theme: the page it is on
+-- (combat, interface, quests, economy).
 ns.QOL_MODULES = {
-  { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic" },
-  { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
-  { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy" },
-  { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer" },
-  { key = "tullarange", name = "tullaRange", standalone = "tullaRange" },
-  { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
-  { key = "tooltipanchor", name = "Tooltip Anchor" }, -- (Clara's own)
-  { key = "idtip", name = "idTip", standalone = "idTip" },
-  { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV" },
-  { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie" },
-  { key = "enemycasts", name = "Enemy Casts" }, -- (Clara's own)
+  { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic", theme = "economy" },
+  { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer", theme = "combat" },
+  { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", theme = "quests" },
+  { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", theme = "interface" },
+  { key = "tullarange", name = "tullaRange", standalone = "tullaRange", theme = "combat" },
+  { key = "mail", name = "Mail", theme = "economy" }, -- (Clara's own: no addon of its own)
+  { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
+  { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
+  { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },
+  { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", theme = "combat" },
+  { key = "enemycasts", name = "Enemy Casts", theme = "combat" }, -- (Clara's own)
 }
 -- Modules no longer built in that took over from their own addon: that one is turned back on for
 -- the characters it was turned off for (at their next login; it runs from the next reload).
@@ -147,24 +148,22 @@ function ns:OpenQol(key)
 end
 function ns:CanOpenQol(key) return openers[key] ~= nil end
 
--- A module's main switches, on its page of the options window's Improvements tab:
+-- A module's main switches, on its page of its theme's page of Clara Combo Points' options:
 -- { { label = locale key, get = function, set = function(on) }, ... }
 ns.qolSwitches = {}
 function ns:SetQolSwitches(key, list) self.qolSwitches[key] = list end
 
 ---------------------------------------------------------------------------
--- "Interface improvements" in the game's options: the modules, where each stands, a box to
--- turn each on or off, its options. The modules' own pages are under it (WeaponSwingTimer: its
--- own entry).
+-- The modules in the game's options (Esc > Options > AddOns > Clara Combo Points), one page per
+-- theme: each module of the theme, where it stands, its box (on or off from the next reload), what
+-- it does, its main switches and a button to its own pages, which are under the theme's page.
 ---------------------------------------------------------------------------
-local page = CreateFrame("Frame")
-page:Hide()
-local built
+local THEMES = { "combat", "interface", "quests", "economy" }
+ns.qolThemes, ns.qolThemePages = {}, {}
 local refreshers = {}
 
 function ns:RefreshQol()
   for _, fn in ipairs(refreshers) do fn() end
-  if self.RefreshOptions then self:RefreshOptions() end -- (the options window's Improvements tab)
 end
 
 -- What a module's state says, in a line.
@@ -179,73 +178,150 @@ function ns:QolStatusText(m)
   return now == "on" and L.QOL_ON or L.QOL_OFF
 end
 
-local function Build()
-  built = true
+local function Click() if SOUNDKIT and PlaySound then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end end
+
+-- One module on its theme's page; the block's height for where it stands
+local function Block(sheet, m, page)
+  local check = CreateFrame("CheckButton", nil, sheet, "UICheckButtonTemplate")
+  check:SetSize(26, 26)
+  local text = check.Text or check.text
+  text:SetFontObject("GameFontNormalLarge")
+  check:SetScript("OnClick", function(self)
+    Click()
+    ns:SetQolEnabled(m.key, self:GetChecked())
+  end)
+  local open = CreateFrame("Button", nil, sheet, "UIPanelButtonTemplate")
+  open:SetSize(150, 22)
+  open:SetScript("OnClick", function() ns:OpenQol(m.key) end)
+  local status = sheet:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+  status:SetJustifyH("LEFT")
+  status:SetWordWrap(true)
+  local about = sheet:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  about:SetJustifyH("LEFT")
+  about:SetWordWrap(true)
+  about:SetTextColor(.82, .82, .85)
+  local switches = {}
+  for n, sw in ipairs(ns.qolSwitches[m.key] or {}) do
+    local c = CreateFrame("CheckButton", nil, sheet, "UICheckButtonTemplate")
+    c:SetSize(22, 22)
+    local label = c.Text or c.text
+    label:SetFontObject("GameFontHighlightSmall")
+    c:SetScript("OnClick", function(self)
+      Click()
+      sw.set(self:GetChecked() and true or false)
+      ns:RefreshQol()
+    end)
+    switches[n] = { check = c, label = label, sw = sw }
+  end
+  page["check_" .. m.key], page["open_" .. m.key] = check, open
+  return function(y, width) -- (its widgets placed from y down; the next block's y)
+    local now = state[m.key]
+    text:SetText(L["QOL_NAV_" .. m.key:upper()] or m.name)
+    check:SetChecked(ns:QolEnabled(m.key))
+    check:SetEnabled(now ~= "unavailable")
+    check:ClearAllPoints()
+    check:SetPoint("TOPLEFT", sheet, "TOPLEFT", 4, y)
+    open:SetText(L.QOL_OPEN)
+    open:SetEnabled((now == "on" or now == "standalone") and openers[m.key] ~= nil)
+    open:ClearAllPoints()
+    open:SetPoint("TOPRIGHT", sheet, "TOPLEFT", width - 4, y - 2)
+    status:SetText(ns:QolStatusText(m))
+    status:SetTextColor(now == "on" and .25 or 1, now == "on" and .82 or .82, now == "on" and .25 or 0)
+    status:SetWidth(width - 34)
+    status:ClearAllPoints()
+    status:SetPoint("TOPLEFT", sheet, "TOPLEFT", 32, y - 26)
+    about:SetText(L["QOL_ABOUT_" .. m.key:upper()] or "")
+    about:SetWidth(width - 34)
+    about:ClearAllPoints()
+    about:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -4)
+    y = y - 26 - (status:GetStringHeight() or 12) - 4 - (about:GetStringHeight() or 12) - 4
+    for _, s in ipairs(switches) do
+      local shown = now == "on"
+      s.check:SetShown(shown)
+      if shown then
+        s.label:SetText(L[s.sw.label] or s.sw.label)
+        s.check:SetChecked(s.sw.get() and true or false)
+        s.check:ClearAllPoints()
+        s.check:SetPoint("TOPLEFT", sheet, "TOPLEFT", 30, y)
+        y = y - 22
+      end
+    end
+    return y - 18
+  end
+end
+
+-- A theme's page: its title, a line on the boxes, its modules (they scroll), Reload UI
+local function BuildTheme(page, theme)
+  page.built = true
   local title = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
   title:SetPoint("TOPLEFT", 7, -22)
-  refreshers[#refreshers + 1] = function() title:SetText(L.QOL_TITLE) end
   local rule = page:CreateTexture(nil, "ARTWORK")
   rule:SetAtlas("Options_HorizontalDivider", true)
   rule:SetPoint("TOP", 0, -50)
   local hint = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  hint:SetPoint("TOPLEFT", 14, -62)
+  hint:SetPoint("TOPLEFT", 14, -60)
   hint:SetPoint("RIGHT", -14, 0)
   hint:SetJustifyH("LEFT")
   hint:SetWordWrap(true)
   hint:SetTextColor(.6, .6, .65)
-  refreshers[#refreshers + 1] = function() hint:SetText(L.QOL_HINT) end
-  local y = -100
-  for _, m in ipairs(ns.QOL_MODULES) do
-    local check = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-    check:SetSize(26, 26)
-    check:SetPoint("TOPLEFT", 10, y)
-    local text = check.Text or check.text
-    text:SetFontObject("GameFontNormal")
-    check:SetScript("OnClick", function(self)
-      if SOUNDKIT and PlaySound then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
-      ns:SetQolEnabled(m.key, self:GetChecked())
-    end)
-    local status = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    status:SetPoint("TOPLEFT", 40, y - 26)
-    status:SetPoint("RIGHT", -170, 0)
-    status:SetJustifyH("LEFT")
-    status:SetWordWrap(true)
-    local open = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-    open:SetSize(150, 22)
-    open:SetPoint("TOPRIGHT", page, "TOPRIGHT", -14, y - 2)
-    open:SetScript("OnClick", function() ns:OpenQol(m.key) end)
-    refreshers[#refreshers + 1] = function()
-      text:SetText(L["QOL_NAV_" .. m.key:upper()] or m.name) -- (its name as the options window shows it)
-      check:SetChecked(ns:QolEnabled(m.key))
-      check:SetEnabled(state[m.key] ~= "unavailable")
-      status:SetText(ns:QolStatusText(m))
-      open:SetText(L.QOL_OPEN)
-      open:SetEnabled((state[m.key] == "on" or state[m.key] == "standalone") and openers[m.key] ~= nil)
-    end
-    page["check_" .. m.key], page["open_" .. m.key] = check, open
-    y = y - 64
-  end
   local reload = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
   reload:SetSize(200, 24)
-  reload:SetPoint("TOPLEFT", 14, y - 6)
+  reload:SetPoint("BOTTOMLEFT", 14, 8)
   reload:SetScript("OnClick", function() if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end end)
-  refreshers[#refreshers + 1] = function() reload:SetText(L.RELOAD_UI) end
+  local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 10, -86)
+  scroll:SetPoint("BOTTOMRIGHT", -30, 40)
+  local sheet = CreateFrame("Frame", nil, scroll)
+  sheet:SetSize(1, 1)
+  scroll:SetScrollChild(sheet)
+  page.scroll, page.sheet = scroll, sheet
+  local blocks = {}
+  for _, m in ipairs(ns.QOL_MODULES) do
+    if m.theme == theme then blocks[#blocks + 1] = Block(sheet, m, page) end
+  end
+  local function Lay()
+    local width = scroll:GetWidth() or 0
+    if width <= 0 then width = 600 end
+    sheet:SetWidth(width)
+    title:SetText(L["QOL_THEME_" .. theme:upper()])
+    hint:SetText(L.QOL_HINT)
+    reload:SetText(L.RELOAD_UI)
+    local y = -4
+    for _, lay in ipairs(blocks) do y = lay(y, width) end
+    sheet:SetHeight(math.max(1, -y))
+    if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
+  end
+  refreshers[#refreshers + 1] = function() if page:IsVisible() then Lay() end end
+  scroll:SetScript("OnSizeChanged", function() if page:IsVisible() then Lay() end end)
+  page.Lay = Lay
 end
 
-function page:OnRefresh()
-  if not ns.sv then return end
-  if not built then Build() end
-  ns:RefreshQol()
-end
-
-if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-  local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, page, L.QOL_TITLE)
-  if ok and category then
-    Settings.RegisterAddOnCategory(category)
-    ns.qolCategory = category
+for _, theme in ipairs(THEMES) do
+  local page = CreateFrame("Frame")
+  page:Hide()
+  function page:OnRefresh()
+    if not ns.sv then return end
+    if not self.built then BuildTheme(self, theme) end
+    self.Lay()
+  end
+  page:SetScript("OnShow", page.OnRefresh)
+  ns.qolThemePages[theme] = page
+  if ns.settingsCategory and Settings and Settings.RegisterCanvasLayoutSubcategory then
+    local ok, category = pcall(Settings.RegisterCanvasLayoutSubcategory, ns.settingsCategory, page,
+      L["QOL_THEME_" .. theme:upper()])
+    if ok and category then ns.qolThemes[theme] = category end
   end
 end
-ns.qolPage = page
+
+-- The page a module's own pages go under: its theme's (else Clara Combo Points' own)
+function ns:QolCategory(key)
+  local m = modules[key]
+  return m and self.qolThemes[m.theme] or self.settingsCategory
+end
+function ns:QolCategoryID(key)
+  local category = self:QolCategory(key)
+  return category and category:GetID() or nil
+end
 
 -- The game's options opened on a page (from a click: not in combat). category: the page, or the
 -- name of another addon's page (found among the game's options; none found: nothing opens).
