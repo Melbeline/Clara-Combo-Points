@@ -106,6 +106,9 @@ local KNOWN_FOCUS_FRAMES = {
 
 -- A known replacement focus frame that's there: its health bar and whose it is, else nil.
 function ns.knownFocusFrame()
+    -- (Clara Combo Points) ClassicUI built in: its own focus health bar, over the game's (faded out)
+    local classic = ClaraNS.ClassicUIHealthBar and ClaraNS.ClassicUIHealthBar(FocusFrame)
+    if classic then return classic, "ClassicUI's" end
     for _, known in ipairs(KNOWN_FOCUS_FRAMES) do
         local bar = ns.resolveFramePath(known.frame .. "." .. known.bar)
         if bar then return bar, known.owner end
@@ -127,6 +130,13 @@ end
 -- A known replacement target frame that's there: its health bar, its portrait if it's shown (EllesmereUI
 -- hides its portrait when portraits are off), and whose it is ("EllesmereUI's"). Nil if none is there.
 function ns.knownTargetFrame()
+    -- (Clara Combo Points) ClassicUI built in: its own target health bar, over the game's (faded out); the
+    -- game's portrait kept
+    local classic = ClaraNS.ClassicUIHealthBar and ClaraNS.ClassicUIHealthBar(TargetFrame)
+    if classic then
+        local container = TargetFrame and TargetFrame.TargetFrameContainer
+        return classic, container and container.Portrait, "ClassicUI's"
+    end
     for _, known in ipairs(KNOWN_TARGET_FRAMES) do
         local root = ns.resolveFramePath(known.frame)
         local bar = root and ns.resolveFramePath(known.frame .. "." .. known.bar)
