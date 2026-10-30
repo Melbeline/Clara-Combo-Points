@@ -7,6 +7,8 @@ local function chunk(path, name) return assert(loadstring(readfile(path), "@" ..
 ---------------------------------------------------------------------------
 -- A permissive mock of the game API
 ---------------------------------------------------------------------------
+local DOCT = dofile((os.getenv("FULLENV") or "fullenv") .. "/doctypes.lua")(os.getenv("FULLENV") or "fullenv")
+local PARENTKEYS = {} -- the children the game's templates name (parentKey), from its XML
 local mockmeta
 local function Mock(name)
   return setmetatable({ __name = name or "mock", __scripts = {} }, mockmeta)
@@ -26,6 +28,9 @@ mockmeta = {
     if k == "IsShown" or k == "IsVisible" or k == "IsMouseOver" or k == "GetChecked" or k == "HasFocus" then return function() return false end end
     if k == "IsEnabled" then return function() return true end end
     if k == "GetChildren" or k == "GetRegions" then return function() end end
+    if type(k) == "string" and k:match("^GetNum") then return function() return 0 end end
+    if type(k) == "string" and not DOCT.methods[k] and k:match("^Get%w*(Size)$") or k == "GetCount" or (type(k) == "string" and k:match("^Get%w+Count$")) then return function() return 0 end end
+    if type(k) == "string" and k:match("^Enumerate") then return function() return function() end end end
     if k == "SetScript" then return function(self, ev, fn) self.__scripts[ev] = fn end end
     if k == "GetScript" then return function(self, ev) return self.__scripts[ev] end end
     if k == "HookScript" then return function(self, ev, fn) local o = self.__scripts[ev]; self.__scripts[ev] = function(...) if o then o(...) end return fn(...) end end end
@@ -35,8 +40,12 @@ mockmeta = {
     if k == "CreateFontString" or k == "CreateTexture" or k == "CreateAnimationGroup" or k == "CreateAnimation" or k == "CreateMaskTexture" or k == "CreateLine" then
       return function(self) local m = Mock(k); rawset(m, "__parent", self); return m end
     end
+    -- a method the game documents: values of the types it returns
+    local rets = type(k) == "string" and DOCT.methods[k]
+    if rets then return function() return DOCT.Returns(rets, function() return Mock("widget") end) end end
+    if type(k) == "string" and PARENTKEYS[k] then local m = Mock(k); rawset(m, "__parent", t); rawset(t, k, m); return m end -- a child the game's templates give
     if type(k) == "string" and k:match("^[%l_]") then return nil end -- fields an addon sets itself
-    local m = Mock(k); rawset(t, k, m); return m -- any other widget method or child: a callable mock
+    local m = Mock(k); rawset(m, "__parent", t); rawset(t, k, m); return m -- any other widget method or child: a callable mock (a child's parent: its owner)
   end,
   __call = function() return Mock("call") end,
   __concat = function(a, b) return tostring(type(a) == "table" and (rawget(a, "__text") or "") or a) .. tostring(type(b) == "table" and (rawget(b, "__text") or "") or b) end,
@@ -52,9 +61,64 @@ for _, k in ipairs({ "LibStub", "ElvUI", "LeaMapsDB", "ZGV", "ZGV_Notification_E
   "ClaraWSTDB", "WSTProfileDB", "ClaraComboPointsDB", "character_hunter_settings", "character_player_settings",
   "character_target_settings", "character_core_settings", "character_castbar_settings", "character_range_settings",
   "chat_msg", "off_width", "main_width", "spell_name", "WST_IsSecret", "getglobal", "NodeSightDB", "ClaraNodeSightDB", "ClaraNodeSight_ToggleSymbols", "NodeSight_ToggleSymbols", "DynamicCam", "DynamicCamDB", "ClaraDynamicCamDB", "ClaraComboPointsDB", "LibStub", "SLASH_DCNEW1", "returnString", "ludius_UiHideModule", "ludius_FADEFRAMES", "ludius_bars_hooked", "GW2_UI", "Bartender4", "Immersion", "cosFix", "ImmersionFrame", "BT4StatusBarTrackingManager", "ElvUI", "DialogKeyNS", "DialogKeyAPI", "DialogKeyNumyDB", "ClaraDialogKeyDB", "XToLevel", "XToLevelDB", "ClaraXToLevelDB", "console", "rafMessageDisplayed", "sConfig", "sData", "ClaraXToLevel_AverageFrame_Classic", "ClaraXToLevel_AverageFrame_Blocky_PlayerFrame", "ChatThrottleLib", "LibVersionCheck", "C_SettingsUtil", "C_StringUtil", "StripHyperlinks", "GetFrameMetatable", "LibDataBroker", "C_PlayerChoice", "PlayerChoiceFrame", "PlayerSpellsFrame", "ForeverClassicUIDB", "ForeverClassicUICharDB", "ClaraClassicUIDB", "ClaraClassicUICharDB", "ClassicUIForeverAPI", "ForeverClassicUI_OnAddonCompartmentClick", "EasyFind", "FRIEND_TAB_WHO" }) do NILS[k] = true end
+-- the game's numeric constants (its UI code, indexed by fullenv/index_framexml.py), and the simple sums it makes of them
+local FXNUM, FXEXPR, FXTABLES, FXKNOWN = {}, {}, {}, {}
+UNKNOWN_CAPS = {}
+do
+  local ok, idx = pcall(dofile, (os.getenv("FULLENV") or "fullenv") .. "/framexml_index.lua")
+  if ok and idx then
+    for k, v in pairs(idx.numbers) do FXNUM[k] = v end
+    for k, v in pairs(idx.exprs) do FXEXPR[k] = v end
+    FXTABLES = idx.tables
+    for k in pairs(idx.parentkeys) do PARENTKEYS[k] = true end
+    for _, set in ipairs({ idx.frames, idx.functions, idx.tables, idx.native, idx.fonts }) do for k in pairs(set) do FXKNOWN[k] = true end end
+  end
+end
 local G = setmetatable(env, { __index = function(t, k)
   if NILS[k] then return nil end
   if type(k) == "string" and #k == 17 and k:match("^F%w+$") then return nil end -- LeaPlusLC:CreateRandomName()
+  -- the game's constants: a number its code sets, else a global string (its text: its name here)
+  if type(k) == "string" and k:match("^[%u_][%u%d_]+$") and #k > 2 then
+    local n = FXNUM[k]
+    if n == nil and FXEXPR[k] then
+      -- a sum of other constants or of the game's Constants tables: worked out as the game does
+      local fn = loadstring("return " .. FXEXPR[k])
+      if fn then
+        setfenv(fn, setmetatable({}, { __index = function(_, name) if name == "Constants" then return DOCT.Constants end return t[name] end }))
+        local ok, v = pcall(fn)
+        if ok and v ~= nil and not (type(v) == "table" and rawget(v, "__name") == "call") then n = v end
+      end
+    end
+    if n ~= nil then rawset(t, k, n); return n end
+    if FXTABLES[k] then -- a table the game makes: a color for its *_COLOR ones
+      local v = k:match("_COLORS?$") and (k:match("S$") and setmetatable({}, { __index = function() return DOCT.Color() end }) or DOCT.Color()) or {}
+      rawset(t, k, v); return v
+    end
+    local word = k:match("_(%u+)$")
+    if k:match("_COLOR$") or (FXKNOWN[k] and ({ YELLOW = 1, GREEN = 1, RED = 1, GRAY = 1, GREY = 1, WHITE = 1, BLUE = 1, ORANGE = 1, PURPLE = 1 })[word or ""]) then
+      local c = DOCT.Color(); rawset(t, k, c); return c -- a color the game gives
+    end
+    if FXKNOWN[k] then rawset(t, k, k); return k end -- a global string the game's code reads: its text
+    UNKNOWN_CAPS[k] = true; return nil
+  end
+  -- a documented namespace or function: its documented returns (a function it does not document: a mock)
+  if type(k) == "string" and DOCT.namespaces[k] then
+    local fns = DOCT.namespaces[k]
+    local ns = setmetatable({}, { __index = function(nt, fk)
+      local rets = fns[fk]
+      local f = rets and function() return DOCT.Returns(rets, function() return Mock("widget") end) end or Mock(k .. "." .. tostring(fk))
+      rawset(nt, fk, f); return f
+    end })
+    rawset(t, k, ns); return ns
+  end
+  if type(k) == "string" and DOCT.globals[k] then
+    local rets = DOCT.globals[k]
+    local f = function() return DOCT.Returns(rets, function() return Mock("widget") end) end
+    rawset(t, k, f); return f
+  end
+  -- a name neither the game's documentation nor its UI code has: nil, as in the game (a loop over
+  -- _G["Name" .. i] stops where the game's frames stop)
+  if type(k) == "string" and not FXKNOWN[k] then return nil end
   -- unknown globals: Blizzard frames, constants and functions are mocks
   local m = Mock("G:" .. tostring(k)); rawset(t, k, m); return m
 end })
@@ -132,7 +196,12 @@ rawset(env, "Settings", {
   CreateSliderOptions = function() return Mock("options") end, CreateControlTextContainer = function() return Mock("container") end,
 })
 local compartment = {}
-rawset(env, "AddonCompartmentFrame", { RegisterAddon = function(self, data) compartment[#compartment + 1] = data end, registeredAddons = {} })
+do -- the addon compartment: a frame, its list of addons
+  local acf = Mock("AddonCompartmentFrame")
+  rawset(acf, "RegisterAddon", function(self, data) compartment[#compartment + 1] = data end)
+  rawset(acf, "registeredAddons", {})
+  rawset(env, "AddonCompartmentFrame", acf)
+end
 
 
 rawset(env, "setfenv", setfenv); rawset(env, "getfenv", getfenv)
@@ -175,7 +244,12 @@ env.Settings.RegisterCanvasLayoutSubcategory = function(parent, frame, name) loc
 local function Zero() return setmetatable({}, { __index = function() return function() return 0 end end }) end
 rawset(env, "C_MountJournal", Zero()); rawset(env, "C_PetJournal", Zero())
 local errors = {}
-rawset(env, "geterrorhandler", function() return function(e) errors[#errors + 1] = tostring(e); print("ERROR: " .. tostring(e)); return e end end)
+local traced = {}
+rawset(env, "geterrorhandler", function() return function(e)
+  errors[#errors + 1] = tostring(e); print("ERROR: " .. tostring(e))
+  if os.getenv("CUI_TRACE") and not traced[tostring(e)] then traced[tostring(e)] = true; print(debug.traceback("", 2):sub(1, 700)) end
+  return e
+end end)
 -- a file listed by an XML file (Script and Include, in order, relative to it)
 local function run(path, name, ns)
   local fn = chunk(path, name)
@@ -217,7 +291,7 @@ rawset(env, "nop", function() end)
 -- an instruction budget per file and per handler: a loop over the mock's endless values stops with where it was
 local function Budget(fn, ...)
   local args, n = { ... }, select("#", ...)
-  debug.sethook(function() debug.sethook(); error("BUDGET " .. debug.traceback("", 2):sub(1, 900), 0) end, "", 5e6)
+  debug.sethook(function() debug.sethook(); error("BUDGET " .. debug.traceback("", 2):sub(1, 900), 0) end, "", 2e7)
   local res = { pcall(fn, unpack(args, 1, n)) }
   debug.sethook()
   return unpack(res)
@@ -251,7 +325,10 @@ local function Session(opts)
     local file = line:match("^(Modules\\ClassicUI\\.+)$")
     if file then
       local path = ADDON .. "/" .. file:gsub("\\", "/")
+      if os.getenv("CUI_TRACE") then local t0 = os.clock(); io.write("load ", file, " ") io.flush() end
+      local t0 = os.clock()
       local ok, err = Budget(run, path, file, ns)
+      if os.getenv("CUI_TRACE") then io.write(string.format("%.2fs %s\n", os.clock() - t0, ok and "" or "STOPPED")) io.flush() end
       if not ok then failed[#failed + 1] = tostring(err) end
     end
   end
@@ -311,6 +388,7 @@ print("turning off: its box or its Turn off button, its hand back at logout")
 local function Region(name) local r = Mock(name); local pts = {}; rawset(r, "points", pts)
   rawset(r, "ClearAllPoints", function() for k in pairs(pts) do pts[k] = nil end end)
   rawset(r, "SetPoint", function(_, p, rel, rp, x, y) pts[p] = { rel, rp, x, y } end)
+  rawset(r, "SetPointBase", r.SetPoint); rawset(r, "ClearAllPointsBase", r.ClearAllPoints) -- (the game's originals: the same here)
   return r end
 local frame = Mock("party1"); rawset(frame, "unit", "party1")
 local portrait, status = Region("Portrait"), Region("Status")
@@ -337,3 +415,9 @@ local realTree = C.TreeMenu
 C.TreeMenu = function(entries) captured = entries return realTree(entries) end
 local okOpen, eOpen = pcall(C.OpenWhoList)
 print("who list opened: " .. tostring(okOpen) .. " " .. tostring(eOpen))
+
+-- capital globals ClassicUI read that the game's documentation and UI code never name (nil in the game too)
+local caps = {}
+for k in pairs(UNKNOWN_CAPS) do caps[#caps + 1] = k end
+table.sort(caps)
+print("capital globals unknown to the game: " .. #caps .. (#caps > 0 and (" (" .. table.concat(caps, ", ") .. ")") or ""))
