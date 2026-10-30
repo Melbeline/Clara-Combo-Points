@@ -3870,6 +3870,9 @@ function ns:ToggleOptions()
   end
 end
 
+-- The options (the portrait menu's More... > Options): the window
+function ns:OpenOptions() self:ShowOptions() end
+
 function ns:ShowOptions()
   panel = panel or Build()
   panel:Show()

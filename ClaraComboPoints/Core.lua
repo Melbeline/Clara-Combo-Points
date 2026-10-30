@@ -2298,6 +2298,7 @@ end
 -- game's "Other Options" (which stays last, Leave Party at the very bottom; no such part: at the
 -- end).
 local function AddMenuEntries(_, root)
+  if ns.TipResetInstances then ns.TipResetInstances(root) end -- (its tooltip: the instances entered, Layers.lua)
   local menu = ns.sv and ns.sv.menu or {}
   if menu.reload ~= false then
     local editModeIndex
@@ -2317,12 +2318,14 @@ local function AddMenuEntries(_, root)
   if menu.line ~= false and ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame
     and MenuUtil.CreateDivider and MenuUtil.CreateTitle and MenuUtil.CreateCheckbox then
     local section = { MenuUtil.CreateDivider(), MenuUtil.CreateTitle("Clara Combo Points"), MenuLineDescription() }
+    -- the rest, used now and then, under More...: its own menu
+    local more = MenuUtil.CreateButton(L.MENU_MORE)
     if MeterSetting() ~= nil then -- the game's damage meter
-      section[#section + 1] = MenuUtil.CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
+      more:CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
         function() ns:SetDamageMeterShown(not ns:DamageMeterShown()) end)
     end
     if ns.FishingModeOffered and ns:FishingModeOffered() then -- (FishingMode.lua)
-      local fishing = MenuUtil.CreateCheckbox(L.MENU_FISHING_MODE, function() return ns:FishingMode() end,
+      local fishing = more:CreateCheckbox(L.MENU_FISHING_MODE, function() return ns:FishingMode() end,
         function() ns:SetFishingMode(not ns:FishingMode()) end)
       if fishing.SetTooltip then
         fishing:SetTooltip(function(tooltip)
@@ -2330,8 +2333,9 @@ local function AddMenuEntries(_, root)
           GameTooltip_AddNormalLine(tooltip, L.FISHING_MODE_TIP:format(ns:FishingBoost()))
         end)
       end
-      section[#section + 1] = fishing
     end
+    more:CreateButton(L.MENU_OPTIONS, function() ns:OpenOptions() end)
+    section[#section + 1] = more
     local at, previous
     local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER
     for index, description in root:EnumerateElementDescriptions() do

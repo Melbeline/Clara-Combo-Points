@@ -1,32 +1,27 @@
--- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
--- DialogKey, MinimapDrawer, idTip, Solo Raid Frame, DoesItDie and Enemy Casts (Clara's own) sit under
--- "Interface improvements" in
--- the game's options (Esc > Options > AddOns), apart from Clara Combo Points; WeaponSwingTimer and
--- tullaRange have their own entries there. Each module runs only in WoW Forever, and only if not
--- turned off here. When its own addon is enabled, that one runs instead (its settings are carried over
--- for the day it is turned off); DialogKey, MinimapDrawer, tullaRange, idTip, Solo Raid Frame and
--- DoesItDie take over from theirs: it runs for that session, then it is turned off for the character,
--- so that the built-in one runs from the next reload (and it is turned back on if the module is turned
--- off here).
+-- Clara Combo Points - interface improvements: other addons' features, built in (and a few of Clara's
+-- own). Each runs only in WoW Forever, and only if not turned off here. When its own addon is enabled,
+-- that one runs for that session (its settings are carried over), then it is turned off for the
+-- character, so that the built-in one runs from the next reload: never both, and the game loads one
+-- copy only (it is turned back on if the module is turned off here).
 -- Saved variables load before the files here (## LoadSavedVariablesFirst), so each module
 -- knows at once whether it runs.
 
 local ADDON, ns = ...
 local L = ns.L
 
--- The modules, in the order they are listed. standalone: the addon it comes from; takeOver: the
--- built-in one runs instead of it (from the next reload: it is turned off for the character).
+-- The modules, in the order they are listed. standalone: the addon it comes from (the built-in one runs
+-- instead of it, from the next reload: it is turned off for the character).
 ns.QOL_MODULES = {
   { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic" },
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
-  { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
-  { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", takeOver = true },
-  { key = "tullarange", name = "tullaRange", standalone = "tullaRange", takeOver = true },
+  { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy" },
+  { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer" },
+  { key = "tullarange", name = "tullaRange", standalone = "tullaRange" },
   { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
   { key = "tooltipanchor", name = "Tooltip Anchor" }, -- (Clara's own)
-  { key = "idtip", name = "idTip", standalone = "idTip", takeOver = true },
-  { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", takeOver = true },
-  { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", takeOver = true },
+  { key = "idtip", name = "idTip", standalone = "idTip" },
+  { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV" },
+  { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie" },
   { key = "enemycasts", name = "Enemy Casts" }, -- (Clara's own)
 }
 -- Modules no longer built in that took over from their own addon: that one is turned back on for
@@ -82,7 +77,7 @@ for _, m in ipairs(ns.QOL_MODULES) do modules[m.key] = m end
 
 -- Its own addon runs this session, and the built-in one takes over from the next reload?
 function ns:QolTakesOver(key)
-  return modules[key].takeOver == true and state[key] == "standalone" and Wanted(key)
+  return modules[key].standalone ~= nil and state[key] == "standalone" and Wanted(key)
 end
 
 -- A module's own addon turned off (or back on) for this character, from the next reload; the
@@ -134,7 +129,7 @@ function ns:SetQolEnabled(key, on)
   if on then self.sv.qol[key] = nil else self.sv.qol[key] = false end
   if next(self.sv.qol) == nil then self.sv.qol = nil end
   local m = modules[key]
-  if m.takeOver and state[key] ~= "unavailable" then
+  if m.standalone and state[key] ~= "unavailable" then
     if not on then
       StandaloneOn(m, true)
     elseif state[key] == "standalone" then
@@ -177,7 +172,7 @@ function ns:QolStatusText(m)
   local now = state[m.key]
   local wanted = self:QolEnabled(m.key)
   if now == "unavailable" then return L.QOL_UNAVAILABLE end
-  if now == "standalone" and wanted and m.takeOver then return L.QOL_TAKEOVER:format(m.name, m.name) end
+  if now == "standalone" and wanted then return L.QOL_TAKEOVER:format(m.name, m.name) end
   if now == "standalone" then return L.QOL_STANDALONE:format(m.name) end
   if now == "on" and not wanted then return L.QOL_OFF_NEXT end
   if now == "off" and wanted then return L.QOL_ON_NEXT end
