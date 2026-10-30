@@ -80,6 +80,7 @@ Modules\TullaRange\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
 Modules\IdTip\IdTip.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
+Modules\EnemyCasts\EnemyCasts.lua
 Modules\DoesItDie\Bootstrap.lua
 Modules\DoesItDie\Locale.lua
 Modules\DoesItDie\Locale_deDE.lua

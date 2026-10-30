@@ -1,5 +1,6 @@
 -- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
--- DialogKey, MinimapDrawer, idTip, Solo Raid Frame and DoesItDie sit under "Interface improvements" in
+-- DialogKey, MinimapDrawer, idTip, Solo Raid Frame, DoesItDie and Enemy Casts (Clara's own) sit under
+-- "Interface improvements" in
 -- the game's options (Esc > Options > AddOns), apart from Clara Combo Points; WeaponSwingTimer and
 -- tullaRange have their own entries there. Each module runs only in WoW Forever, and only if not
 -- turned off here. When its own addon is enabled, that one runs instead (its settings are carried over
@@ -26,6 +27,7 @@ ns.QOL_MODULES = {
   { key = "idtip", name = "idTip", standalone = "idTip", takeOver = true },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", takeOver = true },
   { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", takeOver = true },
+  { key = "enemycasts", name = "Enemy Casts" }, -- (Clara's own)
 }
 -- Modules no longer built in that took over from their own addon: that one is turned back on for
 -- the characters it was turned off for (at their next login; it runs from the next reload).
