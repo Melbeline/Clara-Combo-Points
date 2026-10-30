@@ -615,10 +615,15 @@ ns.barMarker = {
 local driver = CreateFrame("Frame")
 local sinceUpdate = 0
 local reportedError = false
+local wasIdle = false
 driver:SetScript("OnUpdate", function(_, elapsed)
     sinceUpdate = sinceUpdate + elapsed
     if sinceUpdate < UPDATE_INTERVAL then return end
     sinceUpdate = 0
+    -- (Clara: no DoT tracked anywhere and no preview: one pass hides the plates' marks, then no pass at all)
+    local quiet = ns.tracking and ns.tracking.idle() and not (previewPlate and previewState)
+    if quiet and wasIdle then return end
+    wasIdle = quiet
     local ok, err = pcall(refreshPlates)
     if not ok and not reportedError and ns.trace then
         reportedError = true

@@ -1137,7 +1137,9 @@ end
 ns.DEFAULTS = DEFAULTS
 ns.lists = { waitModes = WAIT_MODES } -- Display.lua adds the look lists
 -- What Display.lua needs from the tracking above.
-ns.tracking = { housekeep = housekeep, targetRemainingDamage = targetRemainingDamage, unitKey = unitKey }
+-- (Clara: nothing tracked, no DoT on its way: the displays have nothing to draw)
+local function idle() return next(dotsByTarget) == nil and castInProgress == nil and armedTrap == nil end
+ns.tracking = { housekeep = housekeep, targetRemainingDamage = targetRemainingDamage, unitKey = unitKey, idle = idle }
 
 -- The DoTs on the mob behind `unit` (e.g. "nameplate3"): per-DoT breakdown and total remaining damage.
 function ns.dotBreakdownForUnit(unit)
@@ -1304,12 +1306,16 @@ frame:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
-local sinceUpdate = 0
+local sinceUpdate, wasIdle = 0, false
 frame:SetScript("OnUpdate", function(self, elapsed)
     if db then ns.display.animate(elapsed) end
     sinceUpdate = sinceUpdate + elapsed
     if sinceUpdate < UPDATE_INTERVAL or not db then return end
     sinceUpdate = 0
+    -- (Clara: nothing tracked and no preview: one pass hides what showed, then none until a DoT is cast)
+    local quiet = ns.tracking.idle() and not (ns.previewing and ns.previewing())
+    if quiet and wasIdle then return end
+    wasIdle = quiet
     ns.refresh()
 end)
 
