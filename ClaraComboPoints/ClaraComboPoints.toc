@@ -5,10 +5,10 @@
 ## Notes-deDE: Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen (WoW Forever). /clara, /cl, /ccp oder /cp
 ## Author: Melbeline
 ## Version: 1.6.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraClassicUIDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraClassicUIDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming
 ## SavedVariablesPerCharacter: ClaraClassicUICharDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, ReverseEngineering, ClassicUIForever, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, ReverseEngineering, ClassicUIForever, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -453,6 +453,22 @@ Modules\EnhancedRaidFrames\GUI\GeneralConfigPanel.lua
 Modules\EnhancedRaidFrames\GUI\IndicatorConfigPanel.lua
 Modules\EnhancedRaidFrames\GUI\TargetMarkerConfigPanel.lua
 Modules\EnhancedRaidFrames\GUI\ProfileImportExport.lua
+Modules\DoesItDie\Bootstrap.lua
+Modules\DoesItDie\Locale.lua
+Modules\DoesItDie\Locale_deDE.lua
+Modules\DoesItDie\Locale_esES.lua
+Modules\DoesItDie\Locale_frFR.lua
+Modules\DoesItDie\Locale_koKR.lua
+Modules\DoesItDie\Locale_ptBR.lua
+Modules\DoesItDie\Locale_zhCN.lua
+Modules\DoesItDie\DoesItDie.lua
+Modules\DoesItDie\Display.lua
+Modules\DoesItDie\Frames.lua
+Modules\DoesItDie\Options.lua
+Modules\DoesItDie\Nameplates.lua
+Modules\DoesItDie\Focus.lua
+Modules\DoesItDie\Execute.lua
+Modules\DoesItDie\API.lua
 Modules\Crafting\CraftData.lua
 Modules\Crafting\CraftUI.lua
 Modules\Crafting\CraftGame.lua
