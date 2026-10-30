@@ -273,5 +273,8 @@ Use at your own risk.
 -- (Clara Combo Points: WoW Forever)
 L["forever_indicators_desc"] = "WoW Forever hides auras from addons in combat. Buffs listed by name or spell ID, and debuffs by type (Magic, Curse, Poison, Disease, Dispel), are shown by the game itself, in combat too. Debuffs listed one by one by name or ID show out of combat."
 L["forever_outOfCombat_desc"] = "WoW Forever: out of combat only"
+L["forever_note_missing"] = "WoW Forever: this indicator (\"Show Only if Missing\") shows out of combat only."
+L["forever_note_debuffs"] = "WoW Forever: out of combat only for %s (debuffs named one by one: in combat the game shows debuffs by type)."
+L["forever_note_bleed"] = "WoW Forever: \"Bleed\" is never shown (no bleed type in the game)."
 L["forever_stockIcons_desc"] = "On WoW Forever the game draws the raid frames' own buffs and debuffs itself: show or hide them in the game's raid profile options (button above)."
 L["forever_range_desc"] = "WoW Forever keeps the distance to your group members secret: the frames fade at the game's own range, to the opacity set below."

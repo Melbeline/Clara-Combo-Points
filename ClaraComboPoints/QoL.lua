@@ -1,41 +1,34 @@
--- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
--- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
--- DialogKey, XToLevel, MinimapDrawer, idTip, Solo Raid Frame, Enhanced Raid Frames, DoesItDie and
--- Enemy Casts (Clara's own) sit under
--- "Interface improvements" in the game's options (Esc > Options > AddOns), apart from Clara Combo
--- Points; WeaponSwingTimer, tullaRange and Names have their own entries there, What's Training? its
--- window (/wt). Each module runs only in WoW Forever, and only if not turned off here. When its own addon
--- is enabled, that one runs instead (its settings are carried over for the day it is turned off);
--- DialogKey, XToLevel, MinimapDrawer, tullaRange, idTip, Solo Raid Frame, Enhanced Raid Frames,
--- DoesItDie and What's Training? take over from theirs: it
--- runs for that session, then it is turned off for the character, so that the built-in one runs
--- from the next reload (and it is turned back on if the module is turned off here).
+-- Clara Combo Points - interface improvements: other addons' features, built in (and a few of Clara's
+-- own). Each runs only in WoW Forever, and only if not turned off here. When its own addon is enabled,
+-- that one runs for that session (its settings are carried over), then it is turned off for the
+-- character, so that the built-in one runs from the next reload: never both, and the game loads one
+-- copy only (it is turned back on if the module is turned off here).
 -- Saved variables load before the files here (## LoadSavedVariablesFirst), so each module
 -- knows at once whether it runs.
 
 local ADDON, ns = ...
 local L = ns.L
 
--- The modules, in the order they are listed. standalone: the addon it comes from; takeOver: the
--- built-in one runs instead of it (from the next reload: it is turned off for the character).
+-- The modules, in the order they are listed. standalone: the addon it comes from (the built-in one runs
+-- instead of it, from the next reload: it is turned off for the character).
 ns.QOL_MODULES = {
   { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic" },
   { key = "leatrix", name = "Leatrix Plus", standalone = "Leatrix_Plus" },
   { key = "nodesight", name = "NodeSight", standalone = "NodeSight" },
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer" },
   { key = "dynamiccam", name = "DynamicCam", standalone = "DynamicCam" },
-  { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", takeOver = true },
-  { key = "xtolevel", name = "XToLevel", standalone = "XToLevel", takeOver = true },
-  { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", takeOver = true },
-  { key = "tullarange", name = "tullaRange", standalone = "tullaRange", takeOver = true },
+  { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy" },
+  { key = "xtolevel", name = "XToLevel", standalone = "XToLevel" },
+  { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer" },
+  { key = "tullarange", name = "tullaRange", standalone = "tullaRange" },
   { key = "mail", name = "Mail" }, -- (Clara's own: no addon of its own)
   { key = "names", name = "Names" }, -- (Clara's own: its own entry in the game's options)
   { key = "tooltipanchor", name = "Tooltip Anchor" }, -- (Clara's own)
-  { key = "idtip", name = "idTip", standalone = "idTip", takeOver = true },
-  { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", takeOver = true },
-  { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames", takeOver = true },
-  { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", takeOver = true },
-  { key = "whatstraining", name = "What's Training?", standalone = "WhatsTraining", takeOver = true },
+  { key = "idtip", name = "idTip", standalone = "idTip" },
+  { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV" },
+  { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames" },
+  { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie" },
+  { key = "whatstraining", name = "What's Training?", standalone = "WhatsTraining" },
   { key = "enemycasts", name = "Enemy Casts" }, -- (Clara's own)
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
   { key = "reverseengineering", name = "Reverse Engineering", standalone = "ReverseEngineering" },
@@ -90,7 +83,7 @@ for _, m in ipairs(ns.QOL_MODULES) do modules[m.key] = m end
 
 -- Its own addon runs this session, and the built-in one takes over from the next reload?
 function ns:QolTakesOver(key)
-  return modules[key].takeOver == true and state[key] == "standalone" and Wanted(key)
+  return modules[key].standalone ~= nil and state[key] == "standalone" and Wanted(key)
 end
 
 -- A module's own addon turned off (or back on) for this character, from the next reload; the
@@ -141,7 +134,7 @@ function ns:SetQolEnabled(key, on)
   if on then self.sv.qol[key] = nil else self.sv.qol[key] = false end
   if next(self.sv.qol) == nil then self.sv.qol = nil end
   local m = modules[key]
-  if m.takeOver and state[key] ~= "unavailable" then
+  if m.standalone and state[key] ~= "unavailable" then
     if not on then
       StandaloneOn(m, true)
     elseif state[key] == "standalone" then
@@ -184,7 +177,7 @@ function ns:QolStatusText(m)
   local now = state[m.key]
   local wanted = self:QolEnabled(m.key)
   if now == "unavailable" then return L.QOL_UNAVAILABLE end
-  if now == "standalone" and wanted and m.takeOver then return L.QOL_TAKEOVER:format(m.name, m.name) end
+  if now == "standalone" and wanted then return L.QOL_TAKEOVER:format(m.name, m.name) end
   if now == "standalone" then return L.QOL_STANDALONE:format(m.name) end
   if now == "on" and not wanted then return L.QOL_OFF_NEXT end
   if now == "off" and wanted then return L.QOL_ON_NEXT end

@@ -84,6 +84,15 @@ function EnhancedRaidFrames:CreateIndicatorOptions()
 				width = THIRD_WIDTH * 1.75,
 				order = 2,
 			},
+			-- (Clara, WoW Forever: what of this indicator shows out of combat only; nothing when all of it shows)
+			combatNote = {
+				type = "description",
+				name = function() return self:CombatNote(i) end,
+				hidden = function() return self:CombatNote(i) == "" end,
+				fontSize = "medium",
+				width = "full",
+				order = 2.5,
+			},
 			--------------------------------------------
 			visibilityOptions = {
 				type = "group",
