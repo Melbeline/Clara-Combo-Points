@@ -2,10 +2,12 @@
 -- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
 -- DialogKey, XToLevel, MinimapDrawer, idTip, Solo Raid Frame, Enhanced Raid Frames and DoesItDie sit under
 -- "Interface improvements" in the game's options (Esc > Options > AddOns), apart from Clara Combo
--- Points; WeaponSwingTimer, tullaRange, Names and ClassicUI Forever have their own entries there. Each
+-- Points; WeaponSwingTimer, tullaRange, Names and ClassicUI Forever have their own entries there, What's
+-- Training? its window (/wt). Each
 -- module runs only in WoW Forever, and only if not turned off here. When its own addon is enabled, that
 -- one runs instead (its settings are carried over for the day it is turned off); DialogKey, XToLevel,
--- MinimapDrawer, tullaRange, idTip, Solo Raid Frame, Enhanced Raid Frames and DoesItDie take over from theirs: it
+-- MinimapDrawer, tullaRange, idTip, Solo Raid Frame, Enhanced Raid Frames, DoesItDie and What's Training? take over
+-- from theirs: it
 -- runs for that session, then it is turned off for the character, so that the built-in one runs from
 -- the next reload (and it is turned back on if the module is turned off here).
 -- Saved variables load before the files here (## LoadSavedVariablesFirst), so each module
@@ -33,6 +35,7 @@ ns.QOL_MODULES = {
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", takeOver = true },
   { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames", takeOver = true },
   { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", takeOver = true },
+  { key = "whatstraining", name = "What's Training?", standalone = "WhatsTraining", takeOver = true },
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
   { key = "reverseengineering", name = "Reverse Engineering", standalone = "ReverseEngineering" },
   { key = "classicui", name = "ClassicUI Forever", standalone = "ClassicUIForever" },
