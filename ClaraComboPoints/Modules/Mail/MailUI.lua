@@ -26,7 +26,11 @@ local textBox
 
 local function Skin(kind, frame)
   local classic = ns.ClassicUIPrivate -- (ClassicUI built in, running)
-  if classic and classic.ClaraMailSkin then classic.ClaraMailSkin(kind, frame) end
+  if classic and classic.ClaraMailSkin then
+    classic.ClaraMailSkin(kind, frame)
+  elseif kind == "window" then
+    ns:DressWindow(frame, { portrait = false }) -- (Look.lua: Classic's dialog edge in the Light version)
+  end
 end
 
 local function ClickSound()
@@ -315,8 +319,7 @@ end
 local function TextBox()
   if not textBox and ns.TextDialog then
     textBox = ns.TextDialog(UIParent)
-    textBox:SetFrameStrata("FULLSCREEN_DIALOG")
-    Skin("window", textBox)
+    textBox:SetFrameStrata("FULLSCREEN_DIALOG") -- (dressed as Clara's other windows: Look.lua)
   end
   return textBox
 end
