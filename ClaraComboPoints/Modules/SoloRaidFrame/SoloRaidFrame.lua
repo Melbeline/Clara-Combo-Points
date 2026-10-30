@@ -21,7 +21,8 @@ local function Keep()
   CompactPartyFrame:SetShown(true)
 end
 
--- Hooked as the frame is there (at load in WoW Forever; else at login, shown then)
+-- Hooked as the frame is there: at load if the game made it already, else as the game makes it
+-- (CompactPartyFrame_Generate, WoW Forever) or at login, shown then
 local hooked
 local function Hook(late)
   if hooked or not (CompactPartyFrame and CompactPartyFrame.UpdateVisibility) then return end
@@ -30,6 +31,9 @@ local function Hook(late)
   if late then Keep() end
 end
 Hook()
+if not hooked and type(CompactPartyFrame_Generate) == "function" then
+  hooksecurefunc("CompactPartyFrame_Generate", function() Hook(true) end)
+end
 
 events:SetScript("OnEvent", function(self, event)
   if event == "PLAYER_LOGIN" then
