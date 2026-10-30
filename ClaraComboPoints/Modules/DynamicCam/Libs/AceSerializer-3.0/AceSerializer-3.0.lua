@@ -1,5 +1,5 @@
-local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam built in)
-if type(ClaraNS) == "table" and not ClaraNS.DynamicCamRuns then return end
+local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam and Enhanced Raid Frames built in)
+if type(ClaraNS) == "table" and not (ClaraNS.DynamicCamRuns or ClaraNS.ERFRuns) then return end
 --- **AceSerializer-3.0** can serialize any variable (except functions or userdata) into a string format,
 -- that can be send over the addon comm channel. AceSerializer was designed to keep all data intact, especially
 -- very large numbers or floating point numbers, and table structures. The only caveat currently is, that multiple

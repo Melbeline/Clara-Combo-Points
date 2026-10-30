@@ -1,5 +1,5 @@
-local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam built in)
-if type(ClaraNS) == "table" and not ClaraNS.DynamicCamRuns then return end
+local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam and Enhanced Raid Frames built in)
+if type(ClaraNS) == "table" and not (ClaraNS.DynamicCamRuns or ClaraNS.ERFRuns) then return end
 --- **AceConsole-3.0** provides registration facilities for slash commands.
 -- You can register slash commands to your custom functions and use the `GetArgs` function to parse them
 -- to your addons individual needs.

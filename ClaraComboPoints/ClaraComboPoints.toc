@@ -5,9 +5,9 @@
 ## Notes-deDE: Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen (WoW Forever). /clara, /cl, /ccp oder /cp
 ## Author: Melbeline
 ## Version: 1.6.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, ReverseEngineering, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, ReverseEngineering, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -146,6 +146,34 @@ Modules\Names\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
 Modules\IdTip\IdTip.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
+Modules\EnhancedRaidFrames\Bootstrap.lua
+Modules\EnhancedRaidFrames\Libs\AceBucket-3.0\AceBucket-3.0.lua
+Modules\EnhancedRaidFrames\Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
+Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\prototypes.lua
+Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\FontWidget.lua
+Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\SoundWidget.lua
+Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\StatusbarWidget.lua
+Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\BorderWidget.lua
+Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\BackgroundWidget.lua
+Modules\EnhancedRaidFrames\Libs\LibDeflate\LibDeflate.lua
+Modules\EnhancedRaidFrames\Localizations\enUS.lua
+Modules\EnhancedRaidFrames\Localizations\deDE.lua
+Modules\EnhancedRaidFrames\Localizations\frFR.lua
+Modules\EnhancedRaidFrames\EnhancedRaidFrames.lua
+Modules\EnhancedRaidFrames\Globals.lua
+Modules\EnhancedRaidFrames\DatabaseDefaults.lua
+Modules\EnhancedRaidFrames\Overrides.lua
+Modules\EnhancedRaidFrames\Utils\Utilities.lua
+Modules\EnhancedRaidFrames\Utils\DatabaseMigration.lua
+Modules\EnhancedRaidFrames\Modules\AuraListeners.lua
+Modules\EnhancedRaidFrames\Modules\AuraIndicators.lua
+Modules\EnhancedRaidFrames\Modules\GameAuras.lua
+Modules\EnhancedRaidFrames\Modules\TargetMarkers.lua
+Modules\EnhancedRaidFrames\XML\IndicatorTemplate.xml
+Modules\EnhancedRaidFrames\GUI\GeneralConfigPanel.lua
+Modules\EnhancedRaidFrames\GUI\IndicatorConfigPanel.lua
+Modules\EnhancedRaidFrames\GUI\TargetMarkerConfigPanel.lua
+Modules\EnhancedRaidFrames\GUI\ProfileImportExport.lua
 Modules\Crafting\CraftData.lua
 Modules\Crafting\CraftUI.lua
 Modules\Crafting\CraftGame.lua

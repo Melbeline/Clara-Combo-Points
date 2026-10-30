@@ -1,5 +1,5 @@
-local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam built in)
-if type(ClaraNS) == "table" and not ClaraNS.DynamicCamRuns then return end
+local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam and Enhanced Raid Frames built in)
+if type(ClaraNS) == "table" and not (ClaraNS.DynamicCamRuns or ClaraNS.ERFRuns) then return end
 --- AceEvent-3.0 provides event registration and secure dispatching.
 -- All dispatching is done using **CallbackHandler-1.0**. AceEvent is a simple wrapper around
 -- CallbackHandler, and dispatches all game events or addon message to the registrees.

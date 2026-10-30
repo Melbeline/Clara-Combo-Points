@@ -1,11 +1,11 @@
 -- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
 -- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
--- DialogKey, XToLevel, MinimapDrawer, idTip and Solo Raid Frame sit under "Interface improvements" in
--- the game's options (Esc > Options > AddOns), apart from Clara Combo Points; WeaponSwingTimer,
--- tullaRange and Names have their own entries there. Each module runs only in WoW Forever, and only if
--- not turned off here. When its own addon is enabled, that one runs instead (its settings are carried
--- over for the day it is turned off); DialogKey, XToLevel, MinimapDrawer, tullaRange, idTip and Solo
--- Raid Frame take over from theirs: it
+-- DialogKey, XToLevel, MinimapDrawer, idTip, Solo Raid Frame and Enhanced Raid Frames sit under
+-- "Interface improvements" in the game's options (Esc > Options > AddOns), apart from Clara Combo
+-- Points; WeaponSwingTimer, tullaRange and Names have their own entries there. Each module runs only in
+-- WoW Forever, and only if not turned off here. When its own addon is enabled, that one runs instead
+-- (its settings are carried over for the day it is turned off); DialogKey, XToLevel, MinimapDrawer,
+-- tullaRange, idTip, Solo Raid Frame and Enhanced Raid Frames take over from theirs: it
 -- runs for that session, then it is turned off for the character, so that the built-in one runs
 -- from the next reload (and it is turned back on if the module is turned off here).
 -- Saved variables load before the files here (## LoadSavedVariablesFirst), so each module
@@ -31,6 +31,7 @@ ns.QOL_MODULES = {
   { key = "tooltipanchor", name = "Tooltip Anchor" }, -- (Clara's own)
   { key = "idtip", name = "idTip", standalone = "idTip", takeOver = true },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", takeOver = true },
+  { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames", takeOver = true },
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
   { key = "reverseengineering", name = "Reverse Engineering", standalone = "ReverseEngineering" },
 }

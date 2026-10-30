@@ -1,5 +1,5 @@
-local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam built in)
-if type(ClaraNS) == "table" and not ClaraNS.DynamicCamRuns then return end
+local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DynamicCam and Enhanced Raid Frames built in)
+if type(ClaraNS) == "table" and not (ClaraNS.DynamicCamRuns or ClaraNS.ERFRuns) then return end
 --- **AceLocale-3.0** manages localization in addons, allowing for multiple locale to be registered with fallback to the base locale for untranslated strings.
 -- @class file
 -- @name AceLocale-3.0
