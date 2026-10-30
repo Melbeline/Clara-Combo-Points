@@ -1,7 +1,7 @@
 -- Clara Combo Points - idTip 12.1.4 (by silverwind), built in (QoL.lua): the ids of what a tooltip
 -- shows, on a line of their own (SpellID, ItemID, NpcID, QuestID, CurrencyID, EnchantID, IconID...),
--- each kind on or off. Its page in Esc > Options > AddOns > Interface improvements (its own: a box
--- per kind, in its four groups), its main boxes in the Improvements tab, /idtip. Saved in
+-- each kind on or off. Its page in Esc > Options > AddOns > Clara Combo Points, its theme's page (its own: a box
+-- per kind, in its four groups), its main boxes on its theme's page, /idtip. Saved in
 -- ClaraIdTipDB, for the account. idTip's standalone addon is turned off for the character while this
 -- one runs; its settings are carried over from the session it ran in, if this one has none yet.
 -- idTip's code, as it is: on retail one post call of the tooltip data covers every kind; on the
@@ -598,17 +598,17 @@ if C_PetBattles then
 end
 
 ---------------------------------------------------------------------------
--- Its page in the game's options, under Interface improvements (idTip's own: on/off, then a box per
--- kind in its four groups), its main boxes in the Improvements tab, /idtip
+-- Its page in the game's options, under its theme's page of Clara Combo Points (idTip's own: on/off, then a box per
+-- kind in its four groups), its main boxes on its theme's page, /idtip
 ---------------------------------------------------------------------------
 local function Get(key) return db[key] == true end
 local function Set(key, on) db[key] = on and true or false end
 
 local function RegisterSettings()
-  if not (ns.qolCategory and Settings and Settings.RegisterVerticalLayoutSubcategory
+  if not (ns:QolCategory("idtip") and Settings and Settings.RegisterVerticalLayoutSubcategory
     and Settings.RegisterProxySetting and Settings.CreateCheckbox) then return end
   local ok, category = pcall(function()
-    local category, layout = Settings.RegisterVerticalLayoutSubcategory(ns.qolCategory, "idTip")
+    local category, layout = Settings.RegisterVerticalLayoutSubcategory(ns:QolCategory("idtip"), "idTip")
     local boolean = Settings.VarType and Settings.VarType.Boolean or "boolean"
     local function addCheckbox(key, label, default)
       local setting = Settings.RegisterProxySetting(category, "ClaraIdTip_" .. key, boolean, label, default,

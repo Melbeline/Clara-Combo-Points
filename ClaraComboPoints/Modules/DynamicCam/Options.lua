@@ -3726,7 +3726,7 @@ function Options:RegisterMenus()
   -- so both panels can be open simultaneously without interfering.
   reg:RegisterOptionsTable("DynamicCam_Detached", allOptions)
 
-  self.menu = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("DynamicCam", "DynamicCam", ClaraNS.qolCategory and ClaraNS.qolCategory:GetID() or nil)
+  self.menu = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("DynamicCam", "DynamicCam", ClaraNS:QolCategoryID("dynamiccam"))
 
   -- Detach button and detached frame logic are in Options/DetachFrame.lua.
   self:CreateDetachButton()

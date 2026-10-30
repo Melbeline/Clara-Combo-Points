@@ -2,7 +2,7 @@
 -- own (tullaRange_Config's color settings): for out of range, out of mana and unusable, a box to
 -- turn it on or off, the color and opacity (0 to 100), desaturated or not, an icon of one's
 -- spellbook showing it (a click shows another). Its three boxes also on its page of the options
--- window's Improvements tab. Built the first time it is shown.
+-- theme's page of Clara Combo Points' options. Built the first time it is shown.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -203,11 +203,9 @@ page:SetScript("OnShow", function()
   Update()
 end)
 
-if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-  local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, page, "tullaRange")
-  if ok and category then
-    Settings.RegisterAddOnCategory(category)
-    ns.tullaRangeCategory = category
-  end
+-- (under its theme's page of Clara Combo Points)
+if Settings and Settings.RegisterCanvasLayoutSubcategory and ns:QolCategory("tullarange") then
+  local ok, category = pcall(Settings.RegisterCanvasLayoutSubcategory, ns:QolCategory("tullarange"), page, "tullaRange")
+  if ok and category then ns.tullaRangeCategory = category end
 end
 ns.tullaRangePage = page

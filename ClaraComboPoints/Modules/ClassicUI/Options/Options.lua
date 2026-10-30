@@ -16,22 +16,34 @@ local function BuildSettings()
         EasyFind.API.RegisterSettingsIndex(TITLE, ns.OptionsIndexRows)
     end
     if not Settings or not Settings.RegisterAddOnCategory then return end
+    -- Clara: our entry under its Interface page (Esc > Options > AddOns > Clara > Interface), else our own
+    local parent = ClaraNS.QolCategory and ClaraNS:QolCategory("classicui")
     -- Our own panel as canvas pages: the search and every page's buttons on our entry, each page under it as the game
     -- lists other addons' pages.
     if Settings.RegisterCanvasLayoutCategory and ns.OptionsCanvas then
-        local cat = Settings.RegisterCanvasLayoutCategory(ns.OptionsCanvas(), TITLE)
+        local cat
+        if parent and Settings.RegisterCanvasLayoutSubcategory then
+            cat = Settings.RegisterCanvasLayoutSubcategory(parent, ns.OptionsCanvas(), TITLE)
+        else
+            cat = Settings.RegisterCanvasLayoutCategory(ns.OptionsCanvas(), TITLE)
+            Settings.RegisterAddOnCategory(cat)
+        end
         if Settings.RegisterCanvasLayoutSubcategory then
             for _, page in ipairs(ns.OptionsPageNames()) do
                 Settings.RegisterCanvasLayoutSubcategory(cat, ns.OptionsCanvas(page), page)
             end
         end
-        Settings.RegisterAddOnCategory(cat)
         category = cat
         return
     end
     -- Fallback: a plain checkbox list.
     if not Settings.RegisterVerticalLayoutCategory or not Settings.RegisterAddOnSetting then return end
-    local cat = Settings.RegisterVerticalLayoutCategory(TITLE)
+    local cat
+    if parent and Settings.RegisterVerticalLayoutSubcategory then
+        cat = Settings.RegisterVerticalLayoutSubcategory(parent, TITLE)
+    else
+        cat = Settings.RegisterVerticalLayoutCategory(TITLE)
+    end
 
     local function Checkbox(key, label, tooltip)
         local setting = Settings.RegisterAddOnSetting(cat, "FCUI_" .. key, key, ns.db, Settings.VarType.Boolean, label, ns.DB_DEFAULTS[key])
@@ -43,7 +55,7 @@ local function BuildSettings()
         Checkbox(entry[1], entry[2], entry[3])
     end
 
-    Settings.RegisterAddOnCategory(cat)
+    if not parent then Settings.RegisterAddOnCategory(cat) end
     category = cat
 end
 

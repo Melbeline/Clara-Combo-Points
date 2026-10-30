@@ -129,9 +129,10 @@ function page:OnRefresh()
 end
 page:SetScript("OnShow", function(self) self:OnRefresh() end)
 
--- Under Clara Combo Points' own page (SettingsPage.lua registers it first)
-if ns.settingsCategory and Settings and Settings.RegisterCanvasLayoutSubcategory then
-  local ok, sub = pcall(Settings.RegisterCanvasLayoutSubcategory, ns.settingsCategory, page, "UnitScan")
+-- Under the Quests and progress page of Clara Combo Points (QoL.lua registers it first)
+local parent = ns.qolThemes and ns.qolThemes.quests or ns.settingsCategory
+if parent and Settings and Settings.RegisterCanvasLayoutSubcategory then
+  local ok, sub = pcall(Settings.RegisterCanvasLayoutSubcategory, parent, page, "UnitScan")
   if ok and sub then ns.scanCategory = sub end
 end
 

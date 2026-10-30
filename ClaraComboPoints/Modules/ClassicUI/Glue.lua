@@ -1,4 +1,4 @@
--- Clara Combo Points - ClassicUI Forever's options window, from the Improvements tab (the built-in
+-- Clara - ClassicUI Forever's options window, from its Options button on the Interface page (the built-in
 -- copy's, or the standalone's while it runs: both answer the addon compartment's call).
 
 local ADDON, ns = ...

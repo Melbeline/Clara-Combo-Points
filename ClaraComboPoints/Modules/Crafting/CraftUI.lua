@@ -6,7 +6,7 @@
 --   tooltip saying how many and who;
 --   as text, as the addon Reverse Engineering lists it: every material down to the raw ones ("Raw
 --   Materials Needed for"), or the tree of them ("Materials for"), a button at the top right switching.
--- Also its options page (under Interface improvements), its switches in the Improvements tab and the
+-- Also its options page (under its theme's page of Clara Combo Points), its switches on its theme's page and the
 -- entries of the professions windows' filter menus.
 
 local ADDON, ns = ...
@@ -480,7 +480,7 @@ function ns.CraftFilterEntries()
 end
 
 ---------------------------------------------------------------------------
--- Its options: a page under Interface improvements, switches in the Improvements tab
+-- Its options: a page under its theme's page of Clara Combo Points, switches on its theme's page
 ---------------------------------------------------------------------------
 local function SetMode(mode)
   C.SetMode(mode)
@@ -590,8 +590,8 @@ end)
 
 if Settings and Settings.RegisterCanvasLayoutCategory then
   local ok, category = pcall(function()
-    if ns.qolCategory and Settings.RegisterCanvasLayoutSubcategory then
-      return Settings.RegisterCanvasLayoutSubcategory(ns.qolCategory, page, "Reverse Engineering")
+    if ns:QolCategory("reverseengineering") and Settings.RegisterCanvasLayoutSubcategory then
+      return Settings.RegisterCanvasLayoutSubcategory(ns:QolCategory("reverseengineering"), page, "Reverse Engineering")
     end
     local c = Settings.RegisterCanvasLayoutCategory(page, "Reverse Engineering")
     Settings.RegisterAddOnCategory(c)

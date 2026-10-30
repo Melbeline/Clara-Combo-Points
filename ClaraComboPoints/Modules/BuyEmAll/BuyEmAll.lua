@@ -27,13 +27,13 @@ if ns:QolState("buyemall") == "standalone" then
   end)
 end
 
--- Its page in the game's options, under Interface improvements: the one setting
+-- Its page in the game's options, under its theme's page of Clara Combo Points: the one setting
 local subcategory
 local function RegisterSettings()
-  if subcategory or not (ns.qolCategory and Settings and Settings.RegisterVerticalLayoutSubcategory
+  if subcategory or not (ns:QolCategory("buyemall") and Settings and Settings.RegisterVerticalLayoutSubcategory
     and Settings.RegisterProxySetting and Settings.CreateCheckbox) then return end
   local ok = pcall(function()
-    local category = Settings.RegisterVerticalLayoutSubcategory(ns.qolCategory, "BuyEmAll")
+    local category = Settings.RegisterVerticalLayoutSubcategory(ns:QolCategory("buyemall"), "BuyEmAll")
     local setting = Settings.RegisterProxySetting(category, "ClaraBuyEmAllConfirm", Settings.VarType and Settings.VarType.Boolean or "boolean",
       L.BEA_SW_CONFIRM, true, Confirm, function(v) SetConfirm(v); ns:RefreshQol() end)
     Settings.CreateCheckbox(category, setting, L.BEA_SW_CONFIRM_TIP)

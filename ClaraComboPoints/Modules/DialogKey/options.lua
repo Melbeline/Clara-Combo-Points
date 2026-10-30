@@ -163,7 +163,7 @@ function ns:RegisterOptions()
         initialized = true
         LibStub("AceConfig-3.0"):RegisterOptionsTable(self.configPanelName, function() return self:GetOptionsTable() end)
         local _, categoryID = LibStub("AceConfigDialog-3.0"):AddToBlizOptions(self.configPanelName, "DialogKey",
-            ClaraNS.qolCategory and ClaraNS.qolCategory:GetID() or nil)
+            ClaraNS:QolCategoryID("dialogkey"))
         self.categoryID = categoryID
     else
         LibStub("AceConfigRegistry-3.0"):NotifyChange(self.configPanelName)

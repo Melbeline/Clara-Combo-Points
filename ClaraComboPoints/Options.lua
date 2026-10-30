@@ -76,6 +76,7 @@ local SHAPES = { "FILL", "CELL", "SQUARE" } -- icons: the row fills the bar's wi
 local FONT_MENU_H = 360 -- the list of fonts scrolls past this height
 
 local panel           -- the window, built the first time it opens
+local host            -- the game's options page it fills while it is shown there (ns.CorePage), else nil
 local editing         -- class profile shown in the window
 local page = 1        -- page shown
 local selSide, selK = "above", 1 -- icon row that "Add" fills
@@ -86,8 +87,13 @@ local function Tr(key) return function() return L[key] end end
 -- The window's size and the spells panel's (sv.window, sv.catalog: nil = the default). The
 -- panel's height is the window's while it is locked beside it.
 local SIDE_W = 420
-local function WinW() return ns.sv.window.w or PANEL_W end
-local function WinH() return ns.sv.window.h or PANEL_H end
+-- (in the game's options: its page's size)
+local function HostSize(i)
+  local size = select(i, host:GetSize())
+  if type(size) == "number" and size > 0 then return size end
+end
+local function WinW() return host and HostSize(1) or ns.sv.window.w or PANEL_W end
+local function WinH() return host and HostSize(2) or ns.sv.window.h or PANEL_H end
 local function CatW() return ns.sv.catalog.w or SIDE_W end
 local function CatH() return ns.sv.catalog.h or WinH() end
 local function OnRelabel(fn)
@@ -2115,7 +2121,7 @@ local function IconsPage(p, icons, OnRefresh)
   ghost = DragGhost(p)
   catalog = Catalog(p)
   OnRefresh(function()
-    catalog:Sync(page == ICONS_PAGE and not p.qolActive)
+    catalog:Sync(page == ICONS_PAGE)
     catalogBtn:SetActive(catalog:IsShown())
   end)
 end
@@ -2401,6 +2407,14 @@ local function FreeCatalog()
 end
 
 local function PlaceWindow()
+  if host then -- (in the game's options: filling its page)
+    panel:SetScale(1)
+    panel:ClearAllPoints()
+    panel:SetAllPoints(host)
+    panel:Resize()
+    PlaceCatalog()
+    return
+  end
   local w = ns.sv.window
   local s = w.scale or AutoScale()
   panel:SetScale(s)
@@ -2428,7 +2442,7 @@ end
 -- moves away from that edge (unless it is already partly off the screen, where it was put). A
 -- panel with a place of its own stays where it was put.
 function FitSidePanel()
-  if CatalogFree() then return end
+  if host or CatalogFree() then return end
   local left, right, top, screen = panel:GetLeft(), panel:GetRight(), panel:GetTop(), UIParent:GetRight()
   if not (left and right and top and screen) then return end
   screen = screen / panel:GetScale() -- in the window's own units
@@ -3268,6 +3282,7 @@ local function PortraitControls(p, portrait)
     portraitButton:SetSize(58, 58)
     portraitButton:SetPoint("TOPLEFT", -5, 7)
   end
+  p.portraitButton = portraitButton
   portraitButton:RegisterForClicks("RightButtonUp")
   portraitButton:RegisterForDrag("LeftButton")
   portraitButton:SetScript("OnDragStart", function() p:StartMoving() end)
@@ -3362,135 +3377,6 @@ local function PortraitControls(p, portrait)
   return specMenu
 end
 
----------------------------------------------------------------------------
--- The Improvements tab: the interface improvements built in (QoL.lua), one page each, listed
--- on the left like the pages of a class: where it stands, a box to turn it on or off (from the
--- next reload), its main switches, and a button to its full options.
----------------------------------------------------------------------------
--- its name on its tab, in gold (the class tabs: in their class's colour)
-function ns.QolTabLabel()
-  return ("|cff%02x%02x%02x%s|r"):format(floor(GOLD_R * 255 + .5), floor(GOLD_G * 255 + .5), floor(GOLD_B * 255 + .5),
-    L.QOL_TAB)
-end
-
--- The modules' list: rows a little lower than the pages' (a name, and a description on two lines at
--- most); it scrolls when they do not all fit the window
-local QOL_ROW_H = 50
-
-function ns.BuildQolView(p, OnRefresh)
-  local view = CreateFrame("Frame", nil, p)
-  view:SetPoint("TOPLEFT", 12, NAV_TOP)
-  view:SetPoint("BOTTOMRIGHT", -12, 40)
-  view:Hide()
-  local list = Box(view)
-  list:SetPoint("TOPLEFT")
-  list:SetPoint("BOTTOMLEFT")
-  list:SetWidth(NAV_W - 16)
-  -- the modules' list scrolls (the wheel, or its two arrows) while the window is shorter than it
-  local scroller = CreateFrame("ScrollFrame", nil, list)
-  scroller:SetPoint("TOPLEFT", 0, -2)
-  scroller:SetPoint("BOTTOMRIGHT", 0, 2)
-  local rows = CreateFrame("Frame", nil, scroller)
-  rows:SetSize(NAV_W - 16, #ns.QOL_MODULES * QOL_ROW_H + 4)
-  scroller:SetScrollChild(rows)
-  local function Arrow(dir, delta)
-    local a = CreateFrame("Button", nil, list)
-    a:SetSize(18, 18)
-    a:SetFrameLevel(scroller:GetFrameLevel() + 10)
-    a:SetPoint(dir == "Up" and "TOPRIGHT" or "BOTTOMRIGHT", list, dir == "Up" and "TOPRIGHT" or "BOTTOMRIGHT", -3, dir == "Up" and -3 or 3)
-    a:SetNormalTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Up")
-    a:SetPushedTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Down")
-    a:SetHighlightTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Highlight", "ADD")
-    a:SetScript("OnClick", function() ClickSound(); scroller:Scroll(delta) end)
-    a:Hide()
-    return a
-  end
-  local up, down = Arrow("Up", 1), Arrow("Down", -1)
-  function scroller:Place(y)
-    local range = max(0, rows:GetHeight() - (self:GetHeight() or 0))
-    y = max(0, min(range, y))
-    self:SetVerticalScroll(y)
-    up:SetShown(y > 0)
-    down:SetShown(y < range - .5)
-  end
-  function scroller:Scroll(delta) self:Place(self:GetVerticalScroll() - delta * QOL_ROW_H) end
-  scroller:EnableMouseWheel(true)
-  scroller:SetScript("OnMouseWheel", scroller.Scroll)
-  scroller:SetScript("OnSizeChanged", function(self) self:Place(self:GetVerticalScroll()) end)
-  local shown = 1
-  local buttons, sheets = {}, {}
-  for i, m in ipairs(ns.QOL_MODULES) do
-    local b = NavButton(rows, i, "QOL_NAV_" .. m.key:upper(), "QOL_NAVDESC_" .. m.key:upper(), function()
-      shown = i
-      p:Refresh()
-    end)
-    b.page = nil -- (not one of a class's pages)
-    b:SetHeight(QOL_ROW_H - 4)
-    b:SetPoint("TOPLEFT", rows, "TOPLEFT", 4, -2 - (i - 1) * QOL_ROW_H)
-    buttons[i] = b
-    -- its page
-    local sheet = CreateFrame("Frame", nil, view)
-    sheet:SetPoint("TOPLEFT", list, "TOPRIGHT", 14, 0)
-    sheet:SetPoint("BOTTOMRIGHT")
-    sheet.back = CreateFrame("Frame", nil, sheet) -- its group box, under its widgets
-    sheet.back:SetAllPoints()
-    sheet.back:SetFrameLevel(sheet:GetFrameLevel())
-    sheet:SetFrameLevel(sheet.back:GetFrameLevel() + 4)
-    sheets[i] = sheet
-    local W = COL_W + 120
-    local box = Section(sheet, nil, LEFT, -8, W)
-    box.title:SetText(m.name)
-    local status = Wrapped(sheet, "", W)
-    status:SetPoint("TOPLEFT", LEFT, -32)
-    local about = Wrapped(sheet, Tr("QOL_ABOUT_" .. m.key:upper()), W)
-    about:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -8)
-    local on = Check(sheet, Tr("QOL_BUILT_IN"), function(v) ns:SetQolEnabled(m.key, v) end)
-    on:SetPoint("TOPLEFT", about, "BOTTOMLEFT", 2, -12)
-    local open = Button(sheet, Tr("QOL_OPEN_FULL"), 220, 22, function() ns:OpenQol(m.key) end)
-    open:SetPoint("TOPLEFT", on, "BOTTOMLEFT", -2, -12)
-    local reload = Button(sheet, Tr("RELOAD_UI"), 160, 22, function()
-      if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
-    end)
-    reload:SetPoint("LEFT", open, "RIGHT", 8, 0)
-    -- its main switches (the module's own settings, set by the module: ns:SetQolSwitches)
-    local switches = {}
-    for n, sw in ipairs(ns.qolSwitches and ns.qolSwitches[m.key] or {}) do
-      local c = Check(sheet, Tr(sw.label), function(v) sw.set(v) p:Refresh() end)
-      c:SetPoint("TOPLEFT", open, "BOTTOMLEFT", 2, -16 - (n - 1) * 24)
-      switches[n] = { check = c, sw = sw }
-    end
-    OnRefresh(function()
-      if not p.qolActive then return end
-      local state = ns:QolState(m.key)
-      status:SetText(ns:QolStatusText(m))
-      on:Set(ns:QolEnabled(m.key))
-      on.check:SetEnabled(state ~= "unavailable")
-      open:SetEnabled((state == "on" or state == "standalone") and ns:CanOpenQol(m.key))
-      local pending = ((state == "on") ~= ns:QolEnabled(m.key) and state ~= "standalone" and state ~= "unavailable")
-        or ns:QolTakesOver(m.key) -- (its own addon runs this session: the built-in one from the next reload)
-      reload:SetShown(pending)
-      for _, s in ipairs(switches) do
-        s.check:SetShown(state == "on")
-        if state == "on" then s.check:Set(s.sw.get()) end
-      end
-      -- the box down to the lowest widget: the buttons, or the last switch shown
-      local lowest = -32 - (status:GetStringHeight() or 14) - 8 - (about:GetStringHeight() or 14) - 12 - 14 - 12 - 22
-      if #switches > 0 and state == "on" then lowest = lowest - 16 - (#switches - 1) * 24 - 14 end
-      box:Fit(lowest)
-    end)
-  end
-  OnRefresh(function()
-    view:SetShown(p.qolActive == true)
-    for i, b in ipairs(buttons) do
-      b:SetActive(i == shown)
-      sheets[i]:SetShown(i == shown)
-    end
-    if p.qolActive then scroller:Place(scroller:GetVerticalScroll()) end
-  end)
-  p.qolView, p.qolList = view, scroller
-  return view
-end
-
 local function Build()
   relabels = {}
   local p = CreateFrame("Frame", "ClaraComboPointsOptions", UIParent, "PortraitFrameTemplate")
@@ -3507,8 +3393,9 @@ local function Build()
   p:EnableMouse(true)
   p:SetMovable(true)
   p:RegisterForDrag("LeftButton")
-  p:SetScript("OnDragStart", p.StartMoving)
+  p:SetScript("OnDragStart", function(self) if not ns.optionsHost then self:StartMoving() end end)
   p:SetScript("OnDragStop", function(self)
+    if ns.optionsHost then return end
     self:StopMovingOrSizing()
     SaveWindowPlace()
   end)
@@ -3534,7 +3421,6 @@ local function Build()
         L["TAB_" .. class])
     end, function()
       ns:EndTyping() -- (a number being typed belongs to the tab it was typed on)
-      p.qolActive = nil
       editing = class
       specMenu:Hide()
       ClosePicker()
@@ -3556,24 +3442,6 @@ local function Build()
     t:HookScript("OnEvent", Keep)
     tabs[i] = t
   end
-  -- last, the Improvements tab (the interface improvements, for every class)
-  local qolTab = Tab(p, ns.QolTabLabel, function()
-    ns:EndTyping()
-    p.qolActive = true
-    specMenu:Hide()
-    ClosePicker()
-    resetAll.armed = nil
-    status:SetText("")
-    p.ClearProfileMessages() -- (an Export / Import box belongs to the class tab it was opened on)
-    p:Refresh()
-  end)
-  qolTab:SetPoint("LEFT", tabs[#tabs], "RIGHT", 4, 0)
-  qolTab.isQol = true
-  local function KeepQol(self) if self.fixedWidth then PanelTemplates_TabResize(self, 0, self.fixedWidth) end end
-  qolTab:HookScript("OnShow", KeepQol)
-  qolTab:HookScript("OnEvent", KeepQol)
-  tabs[#tabs + 1] = qolTab
-  p.qolTab = qolTab
   ns:DressWindow(p, { tabs = tabs }) -- (Look.lua: ClassicUI's old window with ClassicUI)
   -- all as wide as the widest if the row still fits; else each at its own width; if even that
   -- is too wide (a long language, a narrow window), all narrowed alike (the game's tab shortens
@@ -3728,6 +3596,7 @@ local function Build()
   opacity:SetPoint("RIGHT", p, "BOTTOMRIGHT", -FOOTER_RIGHT - 52, 22)
   local opacityLabel = Text(p, Tr("WINDOW_OPACITY"))
   opacityLabel:SetPoint("RIGHT", opacity, "LEFT", -8, 0)
+  p.opacity, p.opacityLabel = opacity, opacityLabel
   -- a narrow window: the commands cut short before the opacity
   local function FitCommands()
     local room = (p:GetWidth() - FOOTER_RIGHT - 52 - 90 - 8 - (opacityLabel:GetStringWidth() or 0) - 12) - LEFT
@@ -3739,21 +3608,17 @@ local function Build()
   OnRefresh(function() opacity:Set(floor(ns.sv.window.alpha * 100 + .5)) end)
   p.grip = SizeGrip(p, WindowTarget)
   OnRefresh(function()
-    for _, t in ipairs(tabs) do t:SetActive((t.isQol and p.qolActive) or (not p.qolActive and t.class == editing)) end
+    for _, t in ipairs(tabs) do t:SetActive(t.class == editing) end
     for _, f in ipairs(flags) do f:SetActive(f.lang == ns.lang) end
     if portrait then portrait:SetTexture(PortraitIcon(editing)) end
   end)
   OnRefresh(function()
-    local classTab = not p.qolActive -- (the Improvements tab has its own pages)
-    nav:SetShown(classTab)
-    body:SetShown(classTab)
     for i, content in ipairs(pages) do
-      content:SetShown(classTab and i == page)
-      content.back:SetShown(classTab and i == page)
+      content:SetShown(i == page)
+      content.back:SetShown(i == page)
     end
     for _, b in ipairs(navButtons) do b:SetActive(b.page == page) end
   end)
-  ns.BuildQolView(p, OnRefresh)
 
   GeneralPage(p, pages[1], OnRefresh)
   BarsPage(p, pages[2], OnRefresh)
@@ -3825,9 +3690,8 @@ local function Build()
   -- are visible straight away.
   p:SetScript("OnShow", function(self)
     PlaceWindow()
-    self:SetAlpha(ns.sv.window.alpha)
+    self:SetAlpha(ns.optionsHost and 1 or ns.sv.window.alpha)
     editing = ns.homeClass or "ROGUE"
-    self.qolActive = nil
     resetAll.armed = nil
     status:SetText("")
     self.ClearProfileMessages()
@@ -3868,7 +3732,7 @@ function ns:RefreshOptions()
 end
 
 function ns:ToggleOptions()
-  if panel and panel:IsShown() then
+  if panel and panel:IsShown() and not host then -- (shown in the game's options: brought out to its window)
     panel:Hide()
   else
     self:ShowOptions()
@@ -3878,7 +3742,88 @@ end
 -- The options (the portrait menu's More... > Options): the window
 function ns:OpenOptions() self:ShowOptions() end
 
+---------------------------------------------------------------------------
+-- In the game's options too (Esc > Options > AddOns > Clara Combo Points > the bar): the same window,
+-- without its frame, filling the page (laid out again for its width); a button at its top puts it back
+-- in its own window (beside the spellbook, to drag spells into the bar), and opening the window
+-- (/clara, the portrait's menu) takes it back from the page.
+---------------------------------------------------------------------------
+local CHROME = { "NineSlice", "PortraitContainer", "TitleContainer", "CloseButton", "Bg", "claraEdge", "portraitButton",
+  "grip", "opacity", "opacityLabel" }
+local function Chrome(on)
+  for _, key in ipairs(CHROME) do
+    local part = panel[key]
+    if type(part) == "table" and part.SetShown then part:SetShown(on) end
+  end
+  local fcui = panel.fcui -- (ClassicUI's dressing of it, with ClassicUI)
+  if type(fcui) == "table" then
+    for _, key in ipairs({ "backing", "streaks", "titleStrip", "insetFloor" }) do
+      if fcui[key] then fcui[key]:SetShown(on) end
+    end
+  end
+  if panel.detach then panel.detach:SetShown(not on) end
+end
+
+-- Esc closes it (in its window), or the game's options (in the page)
+local function EscCloses(on)
+  local name = panel:GetName()
+  for i = #UISpecialFrames, 1, -1 do
+    if UISpecialFrames[i] == name then table.remove(UISpecialFrames, i) end
+  end
+  if on then tinsert(UISpecialFrames, name) end
+end
+
+local function Detach()
+  if not host then return end
+  host, ns.optionsHost = nil, nil
+  panel:Hide()
+  panel:SetParent(UIParent)
+  panel:SetFrameStrata("HIGH")
+  Chrome(true)
+  EscCloses(true)
+end
+
+local function Embed(page)
+  panel = panel or Build()
+  if host == page and panel:IsShown() then return end
+  panel:Hide() -- (open in its window: closed there, its state put away)
+  host, ns.optionsHost = page, page -- (ns.optionsHost: for the window's own code)
+  panel:SetParent(page)
+  panel:SetFrameLevel(page:GetFrameLevel() + 2)
+  if not panel.detach then
+    local b = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    b:SetSize(200, 22)
+    b:SetPoint("TOPLEFT", 12, -6)
+    b:SetText(L.CORE_DETACH)
+    b:SetScript("OnClick", function()
+      ClickSound()
+      Detach()
+      ns:ShowOptions()
+      if HideUIPanel and SettingsPanel and SettingsPanel:IsShown() and not InCombatLockdown() then HideUIPanel(SettingsPanel) end
+    end)
+    panel.relabels[#panel.relabels + 1] = function() b:SetText(L.CORE_DETACH) end
+    panel.detach = b
+  end
+  Chrome(false)
+  EscCloses(false)
+  panel:Show()
+end
+
+-- Its page in the game's options (SettingsPage.lua registers it under Clara Combo Points, first)
+function ns.CorePage()
+  local page = CreateFrame("Frame")
+  page:Hide()
+  page:SetScript("OnShow", function(self) if ns.sv then Embed(self) end end)
+  page:SetScript("OnHide", function(self) if host == self and panel then panel:Hide() end end)
+  page:SetScript("OnSizeChanged", function(self)
+    if host == self and panel and panel:IsShown() then panel:Resize() end
+  end)
+  ns.corePage = page
+  return page
+end
+
 function ns:ShowOptions()
+  Detach()
   panel = panel or Build()
   panel:Show()
   panel:Raise()

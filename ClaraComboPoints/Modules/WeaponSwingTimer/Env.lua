@@ -66,7 +66,7 @@ elseif ns:QolState("wst") == "standalone" then
   end)
 end
 
--- Its main switches, on its page of Clara's options window (Improvements tab): the settings of
+-- Its main switches, on its theme's page of Clara Combo Points' options: the settings of
 -- this character's profile, as the module's own panel sets them
 if E.env then
   local env = E.env

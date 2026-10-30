@@ -21,7 +21,7 @@ local CVARS = {
   SoftTargetIconInteract = { value = "1" },
 }
 
-BINDING_CATEGORY_CLARA = "Clara Combo Points"
+BINDING_CATEGORY_CLARA = "Clara"
 _G["BINDING_NAME_CLICK ClaraFishingButton:LeftButton"] = L.FISH_BINDING
 
 

@@ -1,5 +1,5 @@
 -- Clara Combo Points - XToLevel's windows (templates in its XML files), made only while the
--- module runs, with the names its code reads; its options from the Improvements tab (the
+-- module runs, with the names its code reads; its options from its theme's page of Clara Combo Points' options (the
 -- built-in copy's, or the standalone's while it runs: both are XToLevel).
 
 local ADDON, ns = ...

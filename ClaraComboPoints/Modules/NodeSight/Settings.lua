@@ -16,10 +16,10 @@ local Setup, UpdateAll, ShowWhatsNew = ns.Setup, ns.UpdateAll, ns.ShowWhatsNew
 
 local function RegisterSettings()
     -- Rows go to the current page; Page() starts a subpage.
-    -- (Clara Combo Points: under Interface improvements, not a category of its own)
+    -- (Clara Combo Points: under its theme's page of Clara Combo Points, not a category of its own)
     local main, layout
-    if Clara.qolCategory then
-        main, layout = Settings.RegisterVerticalLayoutSubcategory(Clara.qolCategory, "NodeSight")
+    if Clara:QolCategory("nodesight") then
+        main, layout = Settings.RegisterVerticalLayoutSubcategory(Clara:QolCategory("nodesight"), "NodeSight")
     else
         main, layout = Settings.RegisterVerticalLayoutCategory("NodeSight")
     end
@@ -192,7 +192,7 @@ local function RegisterSettings()
         "Sparkles on the herb or ore you face, from far away. Not perfect yet, and uses a lot more CPU. Takes over your map pin while on. Needs Sparkles on herbs or ore.",
         world.Changed)
 
-    if not Clara.qolCategory then Settings.RegisterAddOnCategory(main) end
+    if not Clara:QolCategory("nodesight") then Settings.RegisterAddOnCategory(main) end
     Clara.nodeSightCategory = main
 end
 

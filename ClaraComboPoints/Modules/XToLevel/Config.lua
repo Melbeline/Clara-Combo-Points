@@ -155,10 +155,10 @@ function XToLevel.Config:Initialize()
     
     local head_frame_str = "XToLevel";
     local A3CFG = LibStub("AceConfigDialog-3.0")
-    local headID -- (Clara Combo Points: under Interface improvements, its pages under it)
+    local headID -- (Clara Combo Points: under its theme's page of Clara Combo Points, its pages under it)
     self.frames.Information, headID = A3CFG:AddToBlizOptions("XToLevel", head_frame_str,
-        ClaraNS.qolCategory and ClaraNS.qolCategory:GetID() or nil, "Information")
-    if ClaraNS.qolCategory and headID then head_frame_str = headID end
+        ClaraNS:QolCategoryID("xtolevel"), "Information")
+    if ClaraNS:QolCategoryID("xtolevel") and headID then head_frame_str = headID end
     self.frames.General = A3CFG:AddToBlizOptions("XToLevel", L["General Tab"], head_frame_str, "General")
     self.frames.Messages = A3CFG:AddToBlizOptions("XToLevel", L["Messages Tab"], head_frame_str, "Messages")
     self.frames.Window = A3CFG:AddToBlizOptions("XToLevel", L["Window Tab"], head_frame_str, "Window")
