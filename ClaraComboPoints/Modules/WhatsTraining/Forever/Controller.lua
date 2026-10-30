@@ -607,6 +607,11 @@ function wt.EnableControllerBook(root, mainFrame, place, updatePreview)
             end
         end
         wasDown, wasAtEnd = IsKeyDown("PADRSHOULDER") == true, false
+        -- (Clara: no gamepad, nothing to watch for each frame: a last pass settles the view, then the
+        -- watcher sleeps until one connects)
+        local watch = observer:GetScript("OnUpdate")
+        if not connected and watch and observer:IsShown() then watch(observer, 0) end
+        observer:SetShown(connected)
     end
     observer:RegisterEvent("GAME_PAD_CONNECTED")
     observer:RegisterEvent("GAME_PAD_DISCONNECTED")

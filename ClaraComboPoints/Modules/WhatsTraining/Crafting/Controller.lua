@@ -332,6 +332,11 @@ function wt.EnableCraftingController(book, page, view, launcher, returnTab, sele
         end
         previousButton = entryButton()
         wasDown, wasAtEdge = IsKeyDown(previousButton) == true, false
+        -- (Clara: no gamepad, nothing to watch for each frame: a last pass settles the view, then the
+        -- watcher sleeps until one connects)
+        local watch = observer:GetScript("OnUpdate")
+        if not connected and watch and observer:IsShown() then watch(observer, 0) end
+        observer:SetShown(connected)
     end
     for _, event in ipairs({"GAME_PAD_CONNECTED", "GAME_PAD_DISCONNECTED", "GAME_PAD_CONFIGS_CHANGED", "GAME_PAD_ACTIVE_CHANGED"}) do
         observer:RegisterEvent(event)
