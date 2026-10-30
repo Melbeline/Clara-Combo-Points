@@ -3379,15 +3379,46 @@ function ns.BuildQolView(p, OnRefresh)
   list:SetPoint("TOPLEFT")
   list:SetPoint("BOTTOMLEFT")
   list:SetWidth(NAV_W - 16)
+  -- the modules' list scrolls (the wheel, or its two arrows) while the window is shorter than it
+  local scroller = CreateFrame("ScrollFrame", nil, list)
+  scroller:SetPoint("TOPLEFT", 0, -2)
+  scroller:SetPoint("BOTTOMRIGHT", 0, 2)
+  local rows = CreateFrame("Frame", nil, scroller)
+  rows:SetSize(NAV_W - 16, #ns.QOL_MODULES * NAV_ROW_H + 4)
+  scroller:SetScrollChild(rows)
+  local function Arrow(dir, delta)
+    local a = CreateFrame("Button", nil, list)
+    a:SetSize(18, 18)
+    a:SetFrameLevel(scroller:GetFrameLevel() + 10)
+    a:SetPoint(dir == "Up" and "TOPRIGHT" or "BOTTOMRIGHT", list, dir == "Up" and "TOPRIGHT" or "BOTTOMRIGHT", -3, dir == "Up" and -3 or 3)
+    a:SetNormalTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Up")
+    a:SetPushedTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Down")
+    a:SetHighlightTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Highlight", "ADD")
+    a:SetScript("OnClick", function() ClickSound(); scroller:Scroll(delta) end)
+    a:Hide()
+    return a
+  end
+  local up, down = Arrow("Up", 1), Arrow("Down", -1)
+  function scroller:Place(y)
+    local range = max(0, rows:GetHeight() - (self:GetHeight() or 0))
+    y = max(0, min(range, y))
+    self:SetVerticalScroll(y)
+    up:SetShown(y > 0)
+    down:SetShown(y < range - .5)
+  end
+  function scroller:Scroll(delta) self:Place(self:GetVerticalScroll() - delta * NAV_ROW_H) end
+  scroller:EnableMouseWheel(true)
+  scroller:SetScript("OnMouseWheel", scroller.Scroll)
+  scroller:SetScript("OnSizeChanged", function(self) self:Place(self:GetVerticalScroll()) end)
   local shown = 1
   local buttons, sheets = {}, {}
   for i, m in ipairs(ns.QOL_MODULES) do
-    local b = NavButton(list, i, "QOL_NAV_" .. m.key:upper(), "QOL_NAVDESC_" .. m.key:upper(), function()
+    local b = NavButton(rows, i, "QOL_NAV_" .. m.key:upper(), "QOL_NAVDESC_" .. m.key:upper(), function()
       shown = i
       p:Refresh()
     end)
     b.page = nil -- (not one of a class's pages)
-    b:SetPoint("TOPLEFT", list, "TOPLEFT", 4, -4 - (i - 1) * NAV_ROW_H)
+    b:SetPoint("TOPLEFT", rows, "TOPLEFT", 4, -2 - (i - 1) * NAV_ROW_H)
     buttons[i] = b
     -- its page
     local sheet = CreateFrame("Frame", nil, view)
@@ -3446,8 +3477,9 @@ function ns.BuildQolView(p, OnRefresh)
       b:SetActive(i == shown)
       sheets[i]:SetShown(i == shown)
     end
+    if p.qolActive then scroller:Place(scroller:GetVerticalScroll()) end
   end)
-  p.qolView = view
+  p.qolView, p.qolList = view, scroller
   return view
 end
 
