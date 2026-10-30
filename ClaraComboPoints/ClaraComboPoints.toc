@@ -5,9 +5,10 @@
 ## Notes-deDE: Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen (WoW Forever). /clara, /cl, /ccp oder /cp
 ## Author: Melbeline
 ## Version: 1.6.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, WT_WeaponGrouping, WT_ShowKnownWeaponSkills, WT_SpellDisplay, WT_SideBySide, WT_ScrollTwoPages, WT_FloatingFramePoint, WT_WaypointProvider, WT_ProfessionTabPosition, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming
+## SavedVariablesPerCharacter: WT_LearnedPetAbilities, WT_NeedsToOpenBeastTraining, WT_IgnoredSpells, WT_PriceFaction, WT_HideWeaponSkillSwitcher, WT_Crafting
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, ReverseEngineering, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, WhatsTraining, ReverseEngineering, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -190,6 +191,46 @@ Modules\DoesItDie\Nameplates.lua
 Modules\DoesItDie\Focus.lua
 Modules\DoesItDie\Execute.lua
 Modules\DoesItDie\API.lua
+Modules\WhatsTraining\Bootstrap.lua
+Modules\WhatsTraining\libs\LibDataBroker-1.1.lua
+Modules\WhatsTraining\libs\LibBabble-CreatureType-3.0\LibBabble-3.0.lua
+Modules\WhatsTraining\libs\LibBabble-CreatureType-3.0\LibBabble-CreatureType-3.0.lua
+Modules\WhatsTraining\libs\FusionIgnoreStore\IgnoreStore.lua
+Modules\WhatsTraining\Game.lua
+Modules\WhatsTraining\Localization.lua
+Modules\WhatsTraining\Utils.lua
+Modules\WhatsTraining\Cache.lua
+Modules\WhatsTraining\Classes\Camelot\Druid.lua
+Modules\WhatsTraining\Classes\Camelot\Hunter.lua
+Modules\WhatsTraining\Classes\Camelot\HunterPets.lua
+Modules\WhatsTraining\Classes\Camelot\Mage.lua
+Modules\WhatsTraining\Classes\Camelot\Paladin.lua
+Modules\WhatsTraining\Classes\Camelot\Priest.lua
+Modules\WhatsTraining\Classes\Camelot\Rogue.lua
+Modules\WhatsTraining\Classes\Camelot\Shaman.lua
+Modules\WhatsTraining\Classes\Camelot\Warlock.lua
+Modules\WhatsTraining\Classes\Camelot\WarlockTomes.lua
+Modules\WhatsTraining\Classes\Camelot\Warrior.lua
+Modules\WhatsTraining\Classes\Camelot\QuestSpells.lua
+Modules\WhatsTraining\Classes\Player.lua
+Modules\WhatsTraining\Classes\HunterPets.lua
+Modules\WhatsTraining\Classes\WarlockTomes.lua
+Modules\WhatsTraining\Classes\WeaponSkills.lua
+Modules\WhatsTraining\Classes\Camelot\WeaponSkills.lua
+Modules\WhatsTraining\Classes\Camelot\TrainerFactions.lua
+Modules\WhatsTraining\Pricing.lua
+Modules\WhatsTraining\Compare.lua
+Modules\WhatsTraining\Waypoint.lua
+Modules\WhatsTraining\WeaponGrouping.lua
+Modules\WhatsTraining\Rows.lua
+Modules\WhatsTraining\WhatsTrainingUI.lua
+Modules\WhatsTraining\Forever\Forever.xml
+Modules\WhatsTraining\Crafting\Crafting.xml
+Modules\WhatsTraining\Categories.lua
+Modules\WhatsTraining\DataBuilder.lua
+Modules\WhatsTraining\WhatsTraining.lua
+Modules\WhatsTraining\Broker.lua
+Modules\WhatsTraining\Api.lua
 Modules\Crafting\CraftData.lua
 Modules\Crafting\CraftUI.lua
 Modules\Crafting\CraftGame.lua
