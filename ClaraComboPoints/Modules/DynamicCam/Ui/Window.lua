@@ -212,6 +212,7 @@ function Ui.CreateWindow(opts)
   f.CloseButton = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   f.CloseButton:SetPoint("TOPRIGHT", 1, 1)
   f.CloseButton:SetScript("OnClick", function(self) self:GetParent():Hide() end)
+  ClaraNS:DressWindow(f, { portrait = false }) -- (Clara: ClassicUI's old window with ClassicUI, Look.lua)
 
   -- Drag the window from any empty area, including the title bar: f is the
   -- bottom-most frame, so clicks on interactive children (buttons, sliders,
