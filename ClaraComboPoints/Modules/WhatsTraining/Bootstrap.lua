@@ -15,7 +15,7 @@ if ns.WhatsTrainingRuns then
   ns.WhatsTrainingPrivate = {} -- (the standalone's own `...` table)
 end
 
--- Its window (the one /wt opens), from the Improvements tab
+-- Its window (the one /wt opens), from its theme's page of Clara Combo Points' options
 ns:SetQolOpener("whatstraining", function()
   local open = SlashCmdList and SlashCmdList.WHATSTRAINING
   if type(open) == "function" and not InCombatLockdown() then open("") end

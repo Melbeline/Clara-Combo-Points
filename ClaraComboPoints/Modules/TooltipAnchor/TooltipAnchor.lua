@@ -3,8 +3,8 @@
 -- in the game's place, at the mouse (following it), or at an anchor one moves. The tooltip is held
 -- by the corner one picks: its bottom right one by default, or top right, bottom left, top left.
 -- The anchor ("Tooltip Anchor", dragged, a cross to put it away) in ClassicUI's art while ClassicUI
--- runs, the game's otherwise. Its page in Esc > Options > AddOns > Interface improvements, its
--- boxes in the Improvements tab. Saved in ClaraTooltipAnchorDB, for the account.
+-- runs, the game's otherwise. Its page in Esc > Options > AddOns > Clara Combo Points, its theme's page, its
+-- boxes on its theme's page. Saved in ClaraTooltipAnchorDB, for the account.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -163,7 +163,7 @@ ns:SetQolSwitches("tooltipanchor", {
 })
 
 ---------------------------------------------------------------------------
--- Its page: under Interface improvements in the game's options
+-- Its page: under its theme's page in Clara Combo Points' options
 ---------------------------------------------------------------------------
 local page = CreateFrame("Frame")
 page:Hide()
@@ -246,8 +246,8 @@ end)
 
 if Settings and Settings.RegisterCanvasLayoutCategory then
   local ok, category = pcall(function()
-    if ns.qolCategory and Settings.RegisterCanvasLayoutSubcategory then
-      return Settings.RegisterCanvasLayoutSubcategory(ns.qolCategory, page, "Tooltip Anchor")
+    if ns:QolCategory("tooltipanchor") and Settings.RegisterCanvasLayoutSubcategory then
+      return Settings.RegisterCanvasLayoutSubcategory(ns:QolCategory("tooltipanchor"), page, "Tooltip Anchor")
     end
     local c = Settings.RegisterCanvasLayoutCategory(page, "Tooltip Anchor")
     Settings.RegisterAddOnCategory(c)

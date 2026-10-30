@@ -1895,7 +1895,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
     end
 end)
 
--- (Clara Combo Points: its settings and its drawer, for the Improvements tab: Glue.lua)
+-- (Clara Combo Points: its settings and its drawer, for its theme's page: Glue.lua)
 ClaraNS.MinimapDrawerSettings = function() return DB end
 ClaraNS.MinimapDrawerToggle = function() if DB then Toggle() end end
 ClaraNS.MinimapDrawerCancelHover = CancelHover

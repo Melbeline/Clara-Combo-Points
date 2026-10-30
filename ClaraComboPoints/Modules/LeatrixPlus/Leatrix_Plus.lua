@@ -13447,8 +13447,8 @@
 
 			expTitle:SetText(L["Forever"])
 			local category
-			if ClaraNS.qolCategory and Settings.RegisterCanvasLayoutSubcategory then
-				category = Settings.RegisterCanvasLayoutSubcategory(ClaraNS.qolCategory, interPanel, L["Leatrix Plus"])
+			if ClaraNS:QolCategory("leatrix") and Settings.RegisterCanvasLayoutSubcategory then
+				category = Settings.RegisterCanvasLayoutSubcategory(ClaraNS:QolCategory("leatrix"), interPanel, L["Leatrix Plus"])
 			else
 				category = Settings.RegisterCanvasLayoutCategory(interPanel, L["Leatrix Plus"])
 				Settings.RegisterAddOnCategory(category)

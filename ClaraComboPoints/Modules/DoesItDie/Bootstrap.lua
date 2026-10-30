@@ -3,7 +3,7 @@
 -- nameplates'), and a kill icon on the portrait when they will finish it off. Made for WoW Forever (its
 -- secret health is compared by the game's own bars, never read). The first of the module's files: it tells
 -- the others whether they run, and gives them their own shared table. Saved in ClaraDoesItDieDB; its page
--- under Interface improvements, its window (/did) also from the Improvements tab.
+-- under its theme's page of Clara Combo Points, its window (/did) also from its theme's page of Clara Combo Points' options.
 -- Clara's default look is the game's: a dark red fill in the health bar's own texture (Forever's, or
 -- ClassicUI's while it runs; "The health bar's own look", added to its fill styles), a thin dark outline, the
 -- game's boss skull as the kill icon, no glow or shine; DoesItDie's own looks stay one choice away.

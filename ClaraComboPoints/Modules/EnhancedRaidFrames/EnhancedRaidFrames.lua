@@ -47,7 +47,7 @@ function EnhancedRaidFrames:OnInitialize()
 		self:RefreshConfig()
 	end)
 
-	-- (Clara Combo Points) Its main box in the Improvements tab
+	-- (Clara Combo Points) Its main box on its theme's page
 	ClaraNS:SetQolSwitches("enhancedraidframes", {
 		{ label = "ERF_SW_MARKERS", get = function() return self.db.profile.showTargetMarkers end,
 		  set = function(on) self.db.profile.showTargetMarkers = on and true or false; self:RefreshConfig() end },
@@ -152,9 +152,9 @@ function EnhancedRaidFrames:InitializeConfigPanels()
 	AceConfigRegistry:RegisterOptionsTable("ERF Import Export Profile Options", self:CreateProfileImportExportOptions())
 
 	-- Add to config panels to in-game interface options
-	-- (Clara Combo Points: under Interface improvements, its four pages under its own)
+	-- (Clara Combo Points: under its theme's page of Clara Combo Points, its four pages under its own)
 	local _, main = AceConfigDialog:AddToBlizOptions("Enhanced Raid Frames", "Enhanced Raid Frames",
-			ClaraNS.qolCategory and ClaraNS.qolCategory:GetID() or nil)
+			ClaraNS:QolCategoryID("enhancedraidframes"))
 	ClaraNS.erfCategory = main and Settings.GetCategory and Settings.GetCategory(main) or main
 	AceConfigDialog:AddToBlizOptions("ERF Indicator Options", L["Indicator Options"], main)
 	AceConfigDialog:AddToBlizOptions("ERF Target Marker Options", L["Target Marker Options"], main)

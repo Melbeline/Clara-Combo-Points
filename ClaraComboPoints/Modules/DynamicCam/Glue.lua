@@ -92,7 +92,7 @@ function ns:SetCameraOn(on)
   if self.RefreshQol then self:RefreshQol() end
 end
 
--- the Improvements tab: the box, and DynamicCam's own window
+-- the its theme's page: the box, and DynamicCam's own window
 ns:SetQolSwitches("dynamiccam", {
   { label = "DC_SW_ON", get = function() return ns:CameraOn() end, set = function(on) ns:SetCameraOn(on) end },
 })

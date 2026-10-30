@@ -25,8 +25,8 @@ addon_data.config.InitializeVisuals = function()
 
     panel.name = "WeaponSwingTimer"
     panel.default = addon_data.config.OnDefault
-    local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-    Settings.RegisterAddOnCategory(category)
+    -- (Clara Combo Points: under its theme's page of Clara Combo Points)
+    local category = Settings.RegisterCanvasLayoutSubcategory(ClaraNS:QolCategory("wst"), panel, panel.name)
     addon_data.config.settingsCategoryID = category:GetID()
     
     -- Add the melee panel

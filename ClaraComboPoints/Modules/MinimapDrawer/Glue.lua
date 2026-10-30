@@ -1,4 +1,4 @@
--- Clara Combo Points - MinimapDrawer in the Improvements tab: its two switches (the drawer opening
+-- Clara Combo Points - MinimapDrawer on its theme's page: its two switches (the drawer opening
 -- when the level circle is hovered; a double middle-click on the portrait reloading the
 -- interface), and its drawer for the rest (the delay, the padlock to move it).
 

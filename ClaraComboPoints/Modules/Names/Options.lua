@@ -1,7 +1,7 @@
 -- Clara Combo Points - Names' page in the game's options (Esc > Options > AddOns > Names), its own
 -- entry: a box for each place surnames are hidden, and one's own name and surname over one's head
 -- (the game's own settings, turned with them). The same boxes on its page of the options window's
--- Improvements tab. Built the first time it is shown.
+-- its theme's page. Built the first time it is shown.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -129,17 +129,15 @@ page:SetScript("OnShow", function()
   Update()
 end)
 
--- The game's settings changed elsewhere (its own options, a box of the Improvements tab)
+-- The game's settings changed elsewhere (its own options, a box of its theme's page)
 function ns.NamesChanged()
   if built and page:IsVisible() then Update() end
   if ns.RefreshOptions then ns:RefreshOptions() end
 end
 
-if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-  local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, page, "Names")
-  if ok and category then
-    Settings.RegisterAddOnCategory(category)
-    ns.namesCategory = category
-  end
+-- (under its theme's page of Clara Combo Points)
+if Settings and Settings.RegisterCanvasLayoutSubcategory and ns:QolCategory("names") then
+  local ok, category = pcall(Settings.RegisterCanvasLayoutSubcategory, ns:QolCategory("names"), page, "Names")
+  if ok and category then ns.namesCategory = category end
 end
 ns.namesPage = page

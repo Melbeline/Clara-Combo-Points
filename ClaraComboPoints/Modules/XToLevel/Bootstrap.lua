@@ -3,7 +3,7 @@
 -- to the next level, in a small window, a LibDataBroker feed and the tooltips. The first of the
 -- module's files: it tells the others (and their libraries) whether they run, and gives them
 -- their shared table. Its settings and each character's data are saved in ClaraXToLevelDB; its
--- pages in the game's options sit under Interface improvements. Its windows are templates here,
+-- pages in the game's options sit under its theme's page of Clara Combo Points. Its windows are templates here,
 -- made by Glue.lua only while it runs (frames of an XML file are made, and shown, in every
 -- session), with names of their own (ClaraXToLevel_...: no clash with the standalone's).
 -- The built-in one takes over from the standalone XToLevel: while that one is enabled it runs for

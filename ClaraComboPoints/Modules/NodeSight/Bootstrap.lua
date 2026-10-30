@@ -2,7 +2,7 @@
 -- on the minimap is, an arrow to the nearest one, sparkles on it when close. The first of the
 -- module's files: it gives the others their shared table, or none (they then do nothing) when
 -- the module does not run. Its settings are saved in ClaraNodeSightDB; its pages in the game's
--- options sit under Interface improvements. While the standalone NodeSight runs instead, its
+-- options sit under its theme's page of Clara Combo Points. While the standalone NodeSight runs instead, its
 -- settings are copied at login and logout, so turning it off later needs nothing set again.
 
 local ADDON, ns = ...
@@ -23,7 +23,7 @@ elseif ns:QolState("nodesight") == "standalone" then
   end)
 end
 
--- Its main switches, on its page of Clara's options window (Improvements tab)
+-- Its main switches, on its theme's page of Clara Combo Points' options
 local N = ns.NodeSight
 if N then
   local function Scanner() if N.UpdateScanner then N.UpdateScanner() end end

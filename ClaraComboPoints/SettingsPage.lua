@@ -44,7 +44,7 @@ local function Build()
   built = true
   local title = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
   title:SetPoint("TOPLEFT", 7, -22)
-  title:SetText("Clara Combo Points")
+  title:SetText("Clara")
   local version = page:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   version:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 8, 2)
   version:SetText("v" .. ns.VERSION)
@@ -288,11 +288,18 @@ function ns:RefreshSettingsPage()
   if built and page:IsVisible() then Update() end
 end
 
--- Registered as the addon loads, so the AddOns tab lists it from the first opening on.
+-- Registered as the addon loads, so the AddOns tab lists it from the first opening on: "Clara", its name
+-- starting with a space (the game lists the addons by name, and a space comes before every letter and
+-- "!": the first of the list). Under it, first, Clara Combo Points (the bar's own options: the options
+-- window, Options.lua), then the modules' pages by theme (QoL.lua).
 if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-  local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, page, "Clara Combo Points")
+  local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, page, " Clara")
   if ok and category then
     Settings.RegisterAddOnCategory(category)
     ns.settingsCategory = category
+    if Settings.RegisterCanvasLayoutSubcategory and ns.CorePage then
+      local ok2, core = pcall(Settings.RegisterCanvasLayoutSubcategory, category, ns.CorePage(), "Clara Combo Points")
+      if ok2 and core then ns.coreCategory = core end
+    end
   end
 end
