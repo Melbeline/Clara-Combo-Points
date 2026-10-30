@@ -425,6 +425,7 @@ Modules\Names\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
 Modules\IdTip\IdTip.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
+Modules\EnemyCasts\EnemyCasts.lua
 Modules\EnhancedRaidFrames\Bootstrap.lua
 Modules\EnhancedRaidFrames\Libs\AceBucket-3.0\AceBucket-3.0.lua
 Modules\EnhancedRaidFrames\Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua

@@ -1,6 +1,7 @@
 -- Clara Combo Points - interface improvements: other addons' features, built in. BuyEmAll,
 -- Leatrix Plus (with Cheese's level-up screenshot as one of its options), NodeSight, DynamicCam,
--- DialogKey, XToLevel, MinimapDrawer, idTip, Solo Raid Frame, Enhanced Raid Frames and DoesItDie sit under
+-- DialogKey, XToLevel, MinimapDrawer, idTip, Solo Raid Frame, Enhanced Raid Frames, DoesItDie and
+-- Enemy Casts (Clara's own) sit under
 -- "Interface improvements" in the game's options (Esc > Options > AddOns), apart from Clara Combo
 -- Points; WeaponSwingTimer, tullaRange, Names and ClassicUI Forever have their own entries there, What's
 -- Training? its window (/wt). Each
@@ -36,6 +37,7 @@ ns.QOL_MODULES = {
   { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames", takeOver = true },
   { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", takeOver = true },
   { key = "whatstraining", name = "What's Training?", standalone = "WhatsTraining", takeOver = true },
+  { key = "enemycasts", name = "Enemy Casts" }, -- (Clara's own)
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
   { key = "reverseengineering", name = "Reverse Engineering", standalone = "ReverseEngineering" },
   { key = "classicui", name = "ClassicUI Forever", standalone = "ClassicUIForever" },
