@@ -193,5 +193,8 @@ Voici des options expérimentales, potentiellement risquées.
 ]]
 L["forever_indicators_desc"] = "En combat, WoW Forever cache les auras aux addons. Les buffs écrits par nom ou par ID de sort, et les debuffs par type (Magic, Curse, Poison, Disease, Dispel), sont affichés par le jeu lui-même, en combat aussi. Les debuffs écrits un par un, par nom ou ID, s'affichent hors combat."
 L["forever_outOfCombat_desc"] = "WoW Forever : hors combat seulement"
+L["forever_note_missing"] = "WoW Forever : cet indicateur (« Afficher uniquement si manquant ») ne s'affiche que hors combat."
+L["forever_note_debuffs"] = "WoW Forever : hors combat seulement pour %s (debuffs nommés un par un : en combat, le jeu montre les debuffs par type)."
+L["forever_note_bleed"] = "WoW Forever : « Bleed » ne s'affiche jamais (aucun type saignement dans le jeu)."
 L["forever_stockIcons_desc"] = "Dans WoW Forever, le jeu dessine lui-même les buffs et debuffs de ses cadres de raid : on les affiche ou les masque dans les options des profils de raid du jeu (bouton ci-dessus)."
 L["forever_range_desc"] = "WoW Forever garde secrète la distance aux membres du groupe : les cadres pâlissent à la portée du jeu, jusqu'à l'opacité réglée ci-dessous."

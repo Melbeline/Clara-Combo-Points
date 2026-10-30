@@ -103,7 +103,39 @@
 	end
 
 	-- Lock and unlock an item
+	-- (Clara: options one of Clara's built-in modules does instead, while it runs: greyed, their tooltip says which)
+	local claraOwned = {
+		ShowRangeColoring = function() return ClaraNS:QolRuns("tullarange") and "tullaRange" end,
+		HideMiniAddonButtons = function() return ClaraNS:QolRuns("minimapdrawer") and "MinimapDrawer" end,
+		TooltipAnchorMenu = function() return ClaraNS.TooltipAnchorActive and ClaraNS.TooltipAnchorActive() and "Tooltip Anchor" end,
+	}
+	local function ClaraOwner(item)
+		for key, owner in pairs(claraOwned) do
+			if LeaPlusCB[key] == item then return owner() end
+		end
+	end
+	function LeaPlusLC:ClaraLockOwned()
+		for key, owner in pairs(claraOwned) do
+			local item, name = LeaPlusCB[key], owner()
+			if item and name then
+				LeaPlusLC:LockItem(item, true)
+				if not item.claraNote then
+					item.claraNote = true
+					local note = ClaraNS.L.LEA_OWNED:format(name)
+					if item.tiptext then
+						item.tiptext = item.tiptext .. "|n|n" .. note
+					else
+						item.tiptext = note
+						item:HookScript("OnEnter", LeaPlusLC.TipSee)
+						item:HookScript("OnLeave", GameTooltip_Hide)
+					end
+				end
+			end
+		end
+	end
+
 	function LeaPlusLC:LockItem(item, lock)
+		if not lock and item and ClaraOwner(item) then lock = true end
 		if lock then
 			item:Disable()
 			item:SetAlpha(0.3)
@@ -14245,6 +14277,7 @@
 		Side.c = LeaPlusLC:CreateCloseButton(Side, 30, 30, "TOPRIGHT", 0, 0)
 		Side.c:SetScript("OnClick", function() Side:Hide() end)
 		ClaraNS:DressDialog(Side, { close = Side.c }) -- (Clara: the game's dialog border, or Classic's, Look.lua)
+		Side:HookScript("OnShow", function() LeaPlusLC:ClaraLockOwned() end)
 
 		-- Add reset, help and back buttons
 		Side.r = LeaPlusLC:CreateButton("ResetButton", Side, "Reset", "BOTTOMLEFT", 16, 53, 0, 25, true, "Click to reset the settings on this page.")
@@ -14733,6 +14766,7 @@
 		-- Add close Button (LeaPlusLC.DF: Using custom template)
 		local CloseB = LeaPlusLC:CreateCloseButton(PageF, 30, 30, "TOPRIGHT", 0, 0)
 		ClaraNS:DressDialog(PageF, { close = CloseB }) -- (Clara: the game's dialog border, or Classic's, Look.lua)
+		PageF:HookScript("OnShow", function() LeaPlusLC:ClaraLockOwned() end)
 		CloseB:SetScript("OnClick", LeaPlusLC.HideFrames)
 
 		-- Release memory

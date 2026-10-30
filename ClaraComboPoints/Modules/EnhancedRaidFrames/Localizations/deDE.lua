@@ -176,5 +176,8 @@ L["zeroMeansIgnored_desc"] = "Ein Wert von '0' bedeutet, dass diese Einstellung 
 -- (Clara Combo Points: WoW Forever)
 L["forever_indicators_desc"] = "WoW Forever verbirgt Auren im Kampf vor Addons. Nach Name oder Zauber-ID eingetragene Buffs und Debuffs nach Typ (Magic, Curse, Poison, Disease, Dispel) zeigt das Spiel selbst an, auch im Kampf. Einzeln nach Name oder ID eingetragene Debuffs erscheinen außerhalb des Kampfes."
 L["forever_outOfCombat_desc"] = "WoW Forever: nur außerhalb des Kampfes"
+L["forever_note_missing"] = "WoW Forever: dieser Indikator (\"Zeige nur wenn fehlend\") erscheint nur außerhalb des Kampfes."
+L["forever_note_debuffs"] = "WoW Forever: nur außerhalb des Kampfes für %s (einzeln benannte Debuffs: im Kampf zeigt das Spiel Debuffs nach Typ)."
+L["forever_note_bleed"] = "WoW Forever: \"Bleed\" wird nie angezeigt (kein Blutungstyp im Spiel)."
 L["forever_stockIcons_desc"] = "In WoW Forever zeichnet das Spiel die eigenen Buffs und Debuffs der Schlachtzugsrahmen selbst: ein- oder ausblenden in den Schlachtzugsprofil-Optionen des Spiels (Schaltfläche oben)."
 L["forever_range_desc"] = "WoW Forever hält die Entfernung zu deinen Gruppenmitgliedern geheim: die Rahmen verblassen bei der Reichweite des Spiels, auf die unten eingestellte Deckkraft."

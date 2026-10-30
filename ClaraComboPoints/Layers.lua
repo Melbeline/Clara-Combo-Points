@@ -1,5 +1,6 @@
--- Clara Combo Points - in the tooltip of the clock under the minimap: the layer you are on, and the
--- dungeons and raids entered (5 an hour, 30 a day). A creature's GUID carries the number of the
+-- Clara Combo Points - in the tooltip of the clock under the minimap: the layer you are on; in the
+-- tooltip of "Reset all instances" (the portrait's menu): the dungeons and raids entered (5 an hour,
+-- 30 a day). A creature's GUID carries the number of the
 -- world copy it stands in (Creature-0-server-map-copy-npc-spawn): the copies seen on a continent,
 -- in order, give the layer's number (the same way as NovaWorldBuffs; seen by this account only, so
 -- a layer never met is not counted). An instance is a new one when its creatures carry a copy not
@@ -143,13 +144,29 @@ local function AddLines()
   elseif kind == "none" or kind == nil then
     GameTooltip:AddLine(L.LAYER_UNKNOWN, .6, .6, .6)
   end
+end
+
+-- In the tooltip of the portrait menu's "Reset all instances": the entries of the hour and of the day
+local function InstanceLines(tooltip)
+  if not ns.sv then return end
+  tooltip:SetText(RESET_INSTANCES or "")
   local hour, day, frees = ns.InstanceCounts()
   local color = hour >= PER_HOUR and RED_FONT_COLOR or NORMAL_FONT_COLOR
   local text = L.INSTANCES_HOUR:format(hour, PER_HOUR)
   if hour > 0 and frees then text = text .. " " .. L.INSTANCES_FREES:format(math.max(1, floor(frees / 60 + .5))) end
-  GameTooltip:AddLine(text, color.r, color.g, color.b)
+  tooltip:AddLine(text, color.r, color.g, color.b)
   local dayColor = day >= PER_DAY and RED_FONT_COLOR or NORMAL_FONT_COLOR
-  GameTooltip:AddLine(L.INSTANCES_DAY:format(day, PER_DAY), dayColor.r, dayColor.g, dayColor.b)
+  tooltip:AddLine(L.INSTANCES_DAY:format(day, PER_DAY), dayColor.r, dayColor.g, dayColor.b)
+end
+-- (called by the portrait menu's own changes, Core.lua)
+function ns.TipResetInstances(root)
+  if not (RESET_INSTANCES and MenuUtil.GetElementText) then return end
+  for _, description in root:EnumerateElementDescriptions() do
+    if MenuUtil.GetElementText(description) == RESET_INSTANCES then
+      if description.SetTooltip then description:SetTooltip(InstanceLines) end
+      return
+    end
+  end
 end
 
 local events = CreateFrame("Frame")

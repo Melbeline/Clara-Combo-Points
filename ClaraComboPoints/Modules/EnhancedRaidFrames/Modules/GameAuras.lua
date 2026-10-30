@@ -15,6 +15,7 @@
 local _, ClaraNS = ...
 local EnhancedRaidFrames = ClaraNS.ERF
 if not EnhancedRaidFrames then return end
+local L = LibStub("AceLocale-3.0"):GetLocale("EnhancedRaidFrames")
 
 local TEMPLATE = "CustomAuraContainerTemplate"
 local WHITE = "Interface\\Buttons\\WHITE8X8"
@@ -92,6 +93,39 @@ function EnhancedRaidFrames:BuildGameAuraWatch()
 		end
 		watch[i] = w
 	end
+end
+
+--- What of this indicator shows out of combat only (WoW Forever): a line for its options, under its list
+---@param i number @The indicator position
+---@return string @Empty when all of it shows in combat too
+function EnhancedRaidFrames:CombatNote(i)
+	local cfg = self.db.profile["indicator-" .. i]
+	local entries = self.auraStrings and self.auraStrings[i] or {}
+	if not entries[1] then
+		return ""
+	end
+	if cfg.missingOnly then
+		return self.RED_COLOR:WrapTextInColorCode(L["forever_note_missing"])
+	end
+	local lines, debuffs = {}, {}
+	for _, entry in ipairs(entries) do
+		if entry == "bleed" then
+			lines[#lines + 1] = L["forever_note_bleed"]
+		elseif not DISPEL_WILDCARDS[entry] and entry ~= "dispel" and ClaraNS.CatalogRecords then
+			-- (a debuff Clara's catalog knows by that name or ID: the game's slots show debuffs by type only)
+			local ok, records = Pcall(ClaraNS.CatalogRecords, ClaraNS, tonumber(entry), not tonumber(entry) and entry or nil)
+			for _, rec in ipairs(ok and records or {}) do
+				if rec.kind == "DEBUFF" then
+					debuffs[#debuffs + 1] = rec.name or entry
+					break
+				end
+			end
+		end
+	end
+	if debuffs[1] then
+		table.insert(lines, 1, L["forever_note_debuffs"]:format(table.concat(debuffs, ", ")))
+	end
+	return #lines > 0 and self.RED_COLOR:WrapTextInColorCode(table.concat(lines, "\n")) or ""
 end
 
 --- Does the game's slot of this indicator show this aura? (Then the addon's own indicator does not.)
