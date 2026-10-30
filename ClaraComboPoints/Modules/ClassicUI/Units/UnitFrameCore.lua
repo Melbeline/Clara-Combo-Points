@@ -320,6 +320,12 @@ function UF.BuildBars(frame, container, contextual, x, bgH, bgY, unit, clientHea
     return host, health, power, bg
 end
 
+-- (Clara Combo Points: the health bar drawn over a unit frame's, for Clara's modules that mark it: DoesItDie)
+function ClaraNS.ClassicUIHealthBar(frame)
+    local lay = frame and lays[frame]
+    return lay and lay.health or nil
+end
+
 -- The name's top off the host: in its box, or over the frame when the health bar takes the box.
 function UF.NameY(kind)
     return UF.NAME_TEXT_Y + (UF.Thick(kind) == "name" and NAME_ABOVE or 0)
