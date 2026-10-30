@@ -1005,6 +1005,8 @@ function ns.reattach()
 end
 
 -- state: { health = 0-100, dots = { { name, school, damage }, ... } } (damage in % of max health), or nil.
+function ns.previewing() return previewState ~= nil end -- (Clara: the drivers' quiet check)
+
 function ns.setPreviewState(state)
     previewState = state
 end
