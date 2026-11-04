@@ -402,6 +402,7 @@ Modules\LeatrixPlus\Leatrix_Plus_Mute.lua
 Modules\LeatrixPlus\Leatrix_Plus_Minimap.lua
 Modules\LeatrixPlus\Leatrix_Plus.xml
 Modules\LeatrixPlus\Leatrix_Plus.lua
+Modules\LeatrixPlus\SettingsPages.lua
 Modules\WeaponSwingTimer\Env.lua
 Modules\WeaponSwingTimer\localization.lua
 Modules\WeaponSwingTimer\WeaponSwingTimer_ranged_base_speed.lua

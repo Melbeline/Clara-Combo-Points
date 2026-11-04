@@ -35,8 +35,12 @@ elseif ns:QolState("leatrix") == "standalone" then
 end
 
 -- Its options: the built-in copy's panel, or the standalone's
+-- Its options: its pages in the game's options (SettingsPages.lua; its window one click from there, or /ltp), else
+-- its window, else the standalone's
 ns:SetQolOpener("leatrix", function()
-  if ns.LeatrixPlus and ns.LeatrixPlus.Open then
+  if ns.LeatrixPlus and ns.LeatrixPlus.settingsCategory then
+    ns:OpenSettingsTo(ns.LeatrixPlus.settingsCategory)
+  elseif ns.LeatrixPlus and ns.LeatrixPlus.Open then
     ns.LeatrixPlus.Open()
   elseif SlashCmdList and SlashCmdList["Leatrix_Plus"] then
     SlashCmdList["Leatrix_Plus"]("")
