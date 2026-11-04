@@ -19,6 +19,7 @@ ns.QOL_MODULES = {
   { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", theme = "interface" },
   { key = "tullarange", name = "tullaRange", standalone = "tullaRange", theme = "combat" },
   { key = "mail", name = "Mail", theme = "economy" }, -- (Clara's own: no addon of its own)
+  { key = "money", name = "Gold tracker", theme = "economy" }, -- (Clara's own)
   { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },

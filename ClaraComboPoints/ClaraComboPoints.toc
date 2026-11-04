@@ -5,7 +5,7 @@
 ## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
 ## Version: 1.6.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraDoesItDieDB
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraDoesItDieDB, ClaraMoneyDB
 ## LoadSavedVariablesFirst: true
 ## OptionalDeps: WeaponSwingTimer, BuyEmAllClassic, DialogKey_Numy, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, DoesItDie, ElvUI, EasyFrames, Glass
 ## Category: UI
@@ -77,6 +77,8 @@ Modules\Mail\MailData.lua
 Modules\Mail\MailUI.lua
 Modules\Mail\MailItems.lua
 Modules\Mail\MailExtra.lua
+Modules\Money\Money.lua
+Modules\Money\MoneyUI.lua
 Modules\TullaRange\TullaRange.lua
 Modules\TullaRange\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
