@@ -44,7 +44,7 @@ M.LoadAddon(ADDON_DIR, ns)
 if not ns.Sync then out("(no sync between accounts in this version)"); out(""); out("0 failure(s)"); return end
 M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN")
 local function Run() while M.timers and #M.timers > 0 do M.RunTimer() end end
-M.RunTimer() -- (the sync starts the next frame, after the others)
+for _ = 1, 20 do if ClaraSyncDB then break end M.RunTimer() end -- (the sync starts the next frame, after the others)
 M.Fire("PLAYER_ENTERING_WORLD")
 local Sync, Mail, Craft = ns.Sync, ns.Mail, ns.Craft
 local mdb = ClaraMailDB
