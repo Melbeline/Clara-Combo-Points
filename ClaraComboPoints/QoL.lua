@@ -24,6 +24,7 @@ ns.QOL_MODULES = {
   { key = "tullarange", name = "tullaRange", standalone = "tullaRange", theme = "combat" },
   { key = "mail", name = "Mail", theme = "economy" }, -- (Clara's own: no addon of its own)
   { key = "money", name = "Gold tracker", theme = "economy" }, -- (Clara's own)
+  { key = "lofplus", name = "LootOptimizer Forever", theme = "economy" }, -- (Clara's own, beside LOF)
   { key = "names", name = "Names", theme = "interface" }, -- (Clara's own: its own entry in the game's options)
   { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
