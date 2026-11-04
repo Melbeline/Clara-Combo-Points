@@ -1172,19 +1172,53 @@ end }
 -- the game's options: vertical subcategories and settings it keeps (BuyEmAll's page)
 Settings.VarType = { Boolean = "boolean", Number = "number", String = "string" }
 function Settings.RegisterVerticalLayoutSubcategory(parent, name)
-  local category = { name = name, parent = parent, ID = #M.settingsCategories + 200, settings = {} }
+  local category = { name = name, parent = parent, ID = #M.settingsCategories + 200, settings = {}, rows = {} }
   function category:GetID() return self.ID end
   M.subcategories = M.subcategories or {}
   M.subcategories[name] = category
-  return category, {}
+  M.subcategoryList = M.subcategoryList or {}
+  table.insert(M.subcategoryList, category)
+  return category, { AddInitializer = function(_, init) table.insert(category.rows, init) end }
 end
+-- the rows the game's helpers make (an initializer: its setting, its kind, whether it is on)
+local function Initializer(category, setting, kind, extra)
+  local init = { setting = setting, kind = kind, predicates = {} }
+  for k, v in pairs(extra or {}) do init[k] = v end
+  function init:AddModifyPredicate(fn) table.insert(self.predicates, fn) end
+  function init:IsOn() for _, fn in ipairs(self.predicates) do if not fn() then return false end end return true end
+  if setting then setting.init = init end
+  if category and category.rows then table.insert(category.rows, init) end
+  return init
+end
+function Settings.CreateSliderOptions(min, max, step)
+  return { min = min, max = max, step = step, SetLabelFormatter = function(self, where, fn) self.formatter = fn end }
+end
+function Settings.CreateSlider(category, setting, options, tooltip)
+  setting.slider, setting.tooltip = options, tooltip
+  return Initializer(category, setting, "slider", { options = options })
+end
+function Settings.CreateControlTextContainer()
+  local data = {}
+  return { Add = function(_, value, label) table.insert(data, { value = value, label = label }) end, GetData = function() return data end }
+end
+function Settings.CreateDropdown(category, setting, options, tooltip)
+  setting.dropdown, setting.tooltip = options, tooltip
+  return Initializer(category, setting, "dropdown")
+end
+function CreateSettingsButtonInitializer(name, buttonText, onClick, tooltip, search)
+  return { kind = "button", name = name, buttonText = buttonText, click = onClick, tooltip = tooltip }
+end
+function CreateSettingsListSectionHeaderInitializer(text) return { kind = "header", name = text } end
 function Settings.RegisterProxySetting(category, variable, kind, name, default, get, set)
   local setting = { variable = variable, name = name, default = default, GetValue = function() return get() end,
     SetValue = function(_, v) set(v) end }
   category.settings[#category.settings + 1] = setting
   return setting
 end
-function Settings.CreateCheckbox(category, setting, tooltip) setting.checkbox, setting.tooltip = true, tooltip end
+function Settings.CreateCheckbox(category, setting, tooltip)
+  setting.checkbox, setting.tooltip = true, tooltip
+  return Initializer(category, setting, "checkbox")
+end
 
 -- screen ----------------------------------------------------------------------
 UIParent = CreateFrame("Frame", "UIParent")
@@ -1333,7 +1367,7 @@ function GetInstanceInfo()
 end
 
 -- The game's slider with steppers (MinimalSliderWithSteppersTemplate): callbacks per owner.
-MinimalSliderWithSteppersMixin = { Event = { OnValueChanged = "OnValueChanged" } }
+MinimalSliderWithSteppersMixin = { Event = { OnValueChanged = "OnValueChanged" }, Label = { Left = 1, Right = 2, Top = 3, Min = 4, Max = 5 } }
 M.TEMPLATES.MinimalSliderWithSteppersTemplate = function(f)
   f:SetSize(250, 40)
   f._callbacks = {}

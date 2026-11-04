@@ -59,7 +59,7 @@ local H, Sn = ns.PriceHistory, ns.Sniper
 out("== its tab in Auctionator's strip")
 check(registered and registered.tabTemplate == "ClaraSniperTabFrameTemplate" and registered.tabFrameName == "ClaraSniperFrame",
   "registered as Auctionator lets addons add a tab")
-check(registered and registered.tabOrder > 3 and registered.tabOrder < 4, "after Cancel, before Auctionator's own")
+check(registered and registered.tabOrder > 3 and registered.tabOrder < 4, "between Cancel and Auctionator's own options: the last but one")
 
 out("== its prices over time")
 M.Fire("AUCTION_HOUSE_SHOW")

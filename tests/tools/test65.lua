@@ -37,9 +37,52 @@ check(ns.db ~= ClaraDoesItDieDB and ns.display == nil and ns.refresh == nil, "Cl
 check(DoesItDie and DoesItDie.GetDamage ~= nil or DoesItDie ~= nil, "its public API for other addons")
 check(SlashCmdList.DOESITDIE and SLASH_DOESITDIE1 == "/did", "/did")
 check(ns.doesItDieCategory and ns.doesItDieCategory.parent == ns.qolThemes.combat, "its page under Combat")
-check(ns:CanOpenQol("doesitdie"), "its window from the Improvements tab")
+check(ns:CanOpenQol("doesitdie"), "its options from the Improvements tab")
+check(ns.doesItDieCategory and ns.doesItDieCategory.rows, "its page: the game's own (vertical, its rows)")
+ns:OpenQol("doesitdie")
+check(M.openedCategory == ns.doesItDieCategory:GetID(), "the Improvements tab's button: its page in the game's options")
+
+out("== its pages: the game's controls")
+local pages = {}
+for _, c in ipairs(M.subcategoryList or {}) do if c.parent == ns.doesItDieCategory then pages[#pages + 1] = c end end
+check(#pages == 7, "a page per tab of its window (" .. #pages .. ")")
+local kinds, byVar = { checkbox = 0, slider = 0, dropdown = 0, button = 0 }, {}
+for _, c in ipairs(pages) do
+  for _, row in ipairs(c.rows) do
+    kinds[row.kind] = (kinds[row.kind] or 0) + 1
+    if row.setting then byVar[row.setting.variable] = row end
+  end
+end
+check(kinds.checkbox >= 14 and kinds.slider >= 20 and kinds.dropdown >= 20, "the game's check boxes, sliders and dropdowns ("
+  .. kinds.checkbox .. "/" .. kinds.slider .. "/" .. kinds.dropdown .. ")")
+local P0 = ns.DoesItDiePrivate
+local fillColor, dotColors = byVar.ClaraDoesItDie_fillColor, byVar.ClaraDoesItDie_dotColors
+dotColors.setting:SetValue("each")
+check(P0.db.dotColors == "each" and not fillColor:IsOn(), "a choice: kept in its settings; the row it rules greyed out")
+dotColors.setting:SetValue("single")
+check(fillColor:IsOn(), "and back")
+local size = byVar.ClaraDoesItDie_skullSize
+size.setting:SetValue(64)
+check(P0.db.skullSize == 64 and size.options.formatter and size.options.formatter(64) == "64", "a slider: its value, shown beside it")
+local opacity = byVar.ClaraDoesItDie_fillOpacity
+check(opacity.options.formatter(35) == "35%", "with its unit")
+local entries = byVar.ClaraDoesItDie_skullIcon.setting.dropdown()
+check(#entries >= 4 and entries[1].label ~= nil, "a dropdown: its choices, named")
+local home = ns.doesItDieCategory.rows
+local presets, preview = 0, nil
+for _, row in ipairs(home) do
+  if row.kind == "button" then
+    if row.buttonText == home[2].buttonText then presets = presets + 1 else preview = row end
+  end
+end
+check(presets == 5, "its looks: Clara's default and its four presets, one click each")
+local adv
+for _, page in ipairs(P0.settingsPages or {}) do if page.name == "Advanced" then adv = page.category end end
+local setIn
+for _, row in ipairs(adv and adv.rows or {}) do if row.kind == "button" and row.buttonText == P0.locale.T("Set in the window") then setIn = row end end
 M.showKids = true
-local okOpen, errOpen = pcall(ns.OpenQol, ns, "doesitdie")
+check(setIn ~= nil, "a frame picked on screen: in the window")
+local okOpen, errOpen = pcall(preview.click)
 local win = _G.DoesItDieOptions
 check(okOpen and win and win:IsShown(), "it opens " .. tostring(errOpen or ""))
 local edge = win and win.claraEdge

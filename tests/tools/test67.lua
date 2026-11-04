@@ -70,16 +70,16 @@ S.units = { nameplate1 = { attackable = true }, nameplate2 = { attackable = fals
 
 -- the game's dropdowns and sliders on its option pages
 local made = {}
-Settings.CreateDropdown = Settings.CreateDropdown or function(c, setting, options)
+Settings.CreateDropdown = function(c, setting, options)
   made[setting.variable] = options(); return {} end
 Settings.CreateControlTextContainer = Settings.CreateControlTextContainer or function()
   local data = {}
   return { Add = function(_, value, label) data[#data + 1] = { value = value, label = label } end, GetData = function() return data end }
 end
-Settings.CreateSliderOptions = Settings.CreateSliderOptions or function(low, high, step)
+Settings.CreateSliderOptions = function(low, high, step)
   return { low = low, high = high, step = step, SetLabelFormatter = function(self, _, fn) self.format = fn end }
 end
-Settings.CreateSlider = Settings.CreateSlider or function(c, setting, options) made[setting.variable] = options; return {} end
+Settings.CreateSlider = function(c, setting, options) made[setting.variable] = options; return {} end
 MinimalSliderWithSteppersMixin.Label = MinimalSliderWithSteppersMixin.Label or { Right = 1 }
 
 local ns = {}
