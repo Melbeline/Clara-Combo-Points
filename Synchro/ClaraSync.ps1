@@ -3,8 +3,8 @@
 # Le script surveille le fichier de sauvegarde de Clara de chaque compte :
 #   <WoW Forever>\WTF\Account\<compte>\SavedVariables\ClaraComboPoints.lua
 # Quand WoW en écrit un (déconnexion, /reload, fermeture), il met dans le fichier de chaque AUTRE
-# compte une copie des listes de courrier et du stock de celui-ci (ClaraMailDB, ClaraCraftDB,
-# ClaraSyncDB), sous le nom ClaraSyncIncoming. Clara la fusionne à la connexion suivante de ce compte
+# compte une copie des listes de courrier, du stock et de l'or des personnages de celui-ci (ClaraMailDB,
+# ClaraCraftDB, ClaraSyncDB, ClaraMoneyDB), sous le nom ClaraSyncIncoming. Clara la fusionne à la connexion suivante de ce compte
 # (l'entrée la plus récente gagne) puis l'efface. Rien d'autre n'est touché : les réglages de la barre
 # et des modules restent propres à chaque compte, et les fichiers des autres addons ne sont jamais ouverts.
 #
@@ -24,7 +24,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $FileName = 'ClaraComboPoints.lua'
-$Shared = @('ClaraMailDB', 'ClaraCraftDB', 'ClaraSyncDB')
+$Shared = @('ClaraMailDB', 'ClaraCraftDB', 'ClaraSyncDB', 'ClaraMoneyDB')
 $Incoming = 'ClaraSyncIncoming'
 $Wow = $Wow.Trim().Trim('"').TrimEnd('\')
 $AccountRoot = if ($Wow -ne '') { Join-Path $Wow 'WTF\Account' } else { '' }

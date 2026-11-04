@@ -1,7 +1,8 @@
 -- Clara Combo Points - the sync between the WoW accounts of one Battle.net: the mail module's lists (the
 -- characters, the categories, the items given, the account's own characters) and Reverse Engineering's
 -- stock (each character's bags, bank and mailbox, the mails sent between them, the account bank, the
--- recipes known). The bar and the modules' settings are not shared: each WoW account keeps its own.
+-- recipes known) and the gold tracker's characters (their gold, level and class; the accounts' names). The bar
+-- and the modules' settings are not shared: each WoW account keeps its own.
 -- Every entry carries when it last changed; the newer wins (an entry removed keeps that time: removed
 -- then). Two ways, together:
 --   live, between characters online at the same time: their group (party or raid) and a hidden chat
@@ -15,8 +16,8 @@
 
 local ADDON, ns = ...
 local L = ns.L
-local M, C = ns.Mail, ns.Craft
-if not (M or C) then return end
+local M, C, Gd = ns.Mail, ns.Craft, ns.Money
+if not (M or C or Gd) then return end
 
 local issecret = issecretvalue or function() return false end
 local floor, max = math.floor, math.max
@@ -89,10 +90,11 @@ S.Canon = Canon
 -- The kinds of entries: where each is, its time, its content
 --   r: a character of the mail list   c: a category   i: an item given   o: one of the account's own
 --   h: a character's stock            s: a mail sent  a: the account bank p: a recipe known
--- d is { mail = ClaraMailDB, craft = ClaraCraftDB } (this account's, or another's from its file)
+--   n: an account's name (gold)       g: a character's gold, level and class
+-- d is { mail = ClaraMailDB, craft = ClaraCraftDB, money = ClaraMoneyDB } (this account's, or another's from its file)
 ---------------------------------------------------------------------------
 local K = {}
-local ORDER = { "c", "r", "i", "o", "h", "s", "a", "p" } -- (categories before the characters in them)
+local ORDER = { "c", "r", "i", "o", "h", "s", "a", "p", "n", "g" } -- (categories before the characters in them)
 
 local function Union(a, b)
   for k in pairs(a or {}) do b[k] = true end
@@ -240,7 +242,43 @@ if C then
   }
 end
 
-local function Dbs() return { mail = M and M.db, craft = C and C.db } end
+if Gd then
+  K.n = { buckets = 1,
+    keys = function(d, out) for id in pairs(d.money.accounts) do out[id] = true end end,
+    stamp = function(d, id) local a = d.money.accounts[id]; return a and a.at or 0 end,
+    get = function(d, id) local a = d.money.accounts[id]; return a and { n = a.n } or nil end,
+    put = function(id, rec, at)
+      if type(id) ~= "string" or type(rec) ~= "table" or type(rec.n) ~= "string" or rec.n == "" then return end
+      Gd.db.accounts[id] = { n = rec.n:sub(1, 24), at = at }
+      if Gd.Changed then Gd.Changed() end
+    end,
+  }
+  K.g = { buckets = 4, every = 30, -- (gold changes often: sent at most every half minute)
+    keys = function(d, out)
+      for key in pairs(d.money.chars) do out[key] = true end
+      for key in pairs(d.money.gone) do out[key] = true end
+    end,
+    stamp = function(d, key) local r = d.money.chars[key]; return r and r.at or d.money.gone[key] or 0 end,
+    get = function(d, key)
+      local r = d.money.chars[key]
+      return r and { n = r.n, r = r.r, c = r.c, l = r.l, m = r.m, a = r.a } or nil
+    end,
+    put = function(key, rec, at)
+      if type(key) ~= "string" then return end
+      local clean = rec and Gd.CleanChar(rec, at)
+      if clean then
+        Gd.db.chars[key] = clean
+        Gd.db.gone[key] = nil
+      else
+        Gd.db.chars[key] = nil
+        Gd.db.gone[key] = at
+      end
+      if Gd.Changed then Gd.Changed() end
+    end,
+  }
+end
+
+local function Dbs() return { mail = M and M.db, craft = C and C.db, money = Gd and Gd.db } end
 
 local function Keys(kind, d)
   local out = {}
@@ -274,6 +312,7 @@ S.Apply = Apply
 local function Changed()
   if M and M.Changed then M.Changed() end
   if C and C.Changed then C.Changed() end
+  if Gd and Gd.Changed then Gd.Changed() end
 end
 
 -- A whole set of entries (another account's, from its file) taken in
@@ -604,12 +643,15 @@ local function TakeIncoming()
   ClaraSyncIncoming = nil
   if type(incoming) ~= "table" then return false end
   local any = false
-  for _, src in pairs(incoming) do
+  for folder, src in pairs(incoming) do
     if type(src) == "table" then
       local d = {
         mail = M and type(src.ClaraMailDB) == "table" and M.Clean(src.ClaraMailDB) or (M and M.Clean(nil)),
         craft = C and type(src.ClaraCraftDB) == "table" and C.Clean(src.ClaraCraftDB) or (C and C.Clean(nil)),
+        money = Gd and Gd.Clean(src.ClaraMoneyDB),
       }
+      -- that account's name: its folder, as the Windows script names its part (unless the player named it)
+      if Gd and d.money.me and Gd.FolderName(d.money.me, folder) then any = true end
       if S.MergeFrom(d) then any = true end
       local other = type(src.ClaraSyncDB) == "table" and Clean(src.ClaraSyncDB)
       if other then
@@ -659,6 +701,7 @@ local function Start()
   channelName = ChannelName(myKey)
   if M then M.Touched = Touched end
   if C then C.Touched = Touched end
+  if Gd then Gd.Touched = Touched end
   if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
   for _, e in ipairs({ "CHAT_MSG_ADDON", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD" }) do events:RegisterEvent(e) end
   C_Timer.After(8, function() Hello() end)
