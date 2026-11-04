@@ -515,7 +515,8 @@ local function Join()
   if tries > 6 then return end
   -- after the game's own channels (General first), never before them
   if select("#", GetChannelList()) == 0 and tries < 5 then C_Timer.After(4, Join) return end
-  local join = JoinChannelByName or JoinTemporaryChannel
+  -- (the game's own UI joins with JoinPermanentChannel: the last resort, if the other two are not there)
+  local join = JoinChannelByName or JoinTemporaryChannel or JoinPermanentChannel
   if join then pcall(join, CHANNEL) end
   C_Timer.After(5, Join)
 end

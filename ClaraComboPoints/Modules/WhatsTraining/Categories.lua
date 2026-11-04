@@ -31,7 +31,8 @@ wt.headers = {
         brokerMaxDisplayEntries = 10
     }, {
         name = wt.L.MISSINGREQS_HEADER,
-        color = ORANGE_FONT_COLOR_CODE,
+        -- (Clara: WoW Forever has no ORANGE_FONT_COLOR_CODE, only the color object)
+        color = ORANGE_FONT_COLOR_CODE or (ORANGE_FONT_COLOR and ORANGE_FONT_COLOR:GenerateHexColorMarkup()) or "|cffff7f3f",
         hideLevel = true,
         key = wt.MISSINGREQS_KEY,
         brokerMaxDisplayEntries = 5

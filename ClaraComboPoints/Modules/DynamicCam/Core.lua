@@ -1549,7 +1549,8 @@ end
 function DynamicCam:ShowUISlash(input)
   local tokens = tokenize(input)
   local duration = tonumber(tokens[1])
-  local currentSituation = self.db.profile.situations[self.currentSituationID]
+  -- (Clara: no situation active, as on a new profile where they all start off: the situations' defaults)
+  local currentSituation = self.currentSituationID and self.db.profile.situations[self.currentSituationID] or self.situationDefaults
   self:FadeInUI(duration or currentSituation.transitionTime.timeToExit)
 end
 
@@ -1557,7 +1558,7 @@ end
 function DynamicCam:HideUISlash(input)
   local tokens = tokenize(input)
   local duration = tonumber(tokens[1])
-  local currentSituation = self.db.profile.situations[self.currentSituationID]
+  local currentSituation = self.currentSituationID and self.db.profile.situations[self.currentSituationID] or self.situationDefaults
   self:FadeOutUI(duration or currentSituation.transitionTime.timeToEnter, currentSituation.hideUI)
 end
 
