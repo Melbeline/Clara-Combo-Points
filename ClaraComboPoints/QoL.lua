@@ -26,6 +26,7 @@ ns.QOL_MODULES = {
   { key = "money", name = "Gold tracker", theme = "economy" }, -- (Clara's own)
   { key = "lofplus", name = "LootOptimizer Forever", theme = "economy" }, -- (Clara's own, beside LOF)
   { key = "prices", name = "Auction house prices shared", theme = "economy" }, -- (Clara's own)
+  { key = "sniper", name = "Sniper", theme = "economy" }, -- (Clara's own, a tab beside Auctionator's)
   { key = "names", name = "Names", theme = "interface" }, -- (Clara's own: its own entry in the game's options)
   { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
