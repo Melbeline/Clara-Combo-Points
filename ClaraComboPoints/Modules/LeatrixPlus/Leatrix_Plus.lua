@@ -13447,7 +13447,14 @@
 
 			expTitle:SetText(L["Forever"])
 			local category
-			if ClaraNS:QolCategory("leatrix") and Settings.RegisterCanvasLayoutSubcategory then
+			-- Clara: its options in the game's own menu, with the game's controls (SettingsPages.lua), else this page
+			if Leatrix_Plus.BuildSettingsPages then
+				local ok, built = pcall(Leatrix_Plus.BuildSettingsPages)
+				category = ok and built or nil
+			end
+			if category then
+				-- (built)
+			elseif ClaraNS:QolCategory("leatrix") and Settings.RegisterCanvasLayoutSubcategory then
 				category = Settings.RegisterCanvasLayoutSubcategory(ClaraNS:QolCategory("leatrix"), interPanel, L["Leatrix Plus"])
 			else
 				category = Settings.RegisterCanvasLayoutCategory(interPanel, L["Leatrix Plus"])
@@ -16726,6 +16733,51 @@
 	end
 
 	-- Create options pages
+	----------------------------------------------------------------------
+	-- Clara Combo Points: what the panel is made of, kept as it is made (each check box, slider, dropdown, heading,
+	-- configuration panel and gear button, in order, with each setting's default), so that SettingsPages.lua can
+	-- show the same options in the game's own options menu, with the game's controls. Nothing here changes them.
+	----------------------------------------------------------------------
+
+	do
+		local mirror = { controls = {}, panels = {}, panelList = {}, gears = {}, defaults = {} }
+		mirror.LC, mirror.CB, mirror.L, mirror.configList = LeaPlusLC, LeaPlusCB, L, LeaConfigList
+		Leatrix_Plus.mirror = mirror
+		local function Wrap(name, after)
+			local original = LeaPlusLC[name]
+			if type(original) ~= "function" then return end
+			LeaPlusLC[name] = function(self, ...)
+				local r1, r2, r3 = original(self, ...)
+				pcall(after, r1, ...)
+				return r1, r2, r3
+			end
+		end
+		local function Add(control) table.insert(mirror.controls, control) end
+		Wrap("MakeCB", function(_, parent, field, caption, x, y, reload, tip)
+			Add({ kind = "check", parent = parent, field = field, caption = caption, reload = reload, tip = tip })
+		end)
+		Wrap("MakeSL", function(_, frame, field, caption, low, high, step, x, y, form)
+			Add({ kind = "slider", parent = frame, field = field, tip = caption, low = low, high = high, step = step, form = form })
+		end)
+		Wrap("CreateDropdown", function(_, field, label, width, anchor, parent, relative, x, y, reload, items)
+			Add({ kind = "dropdown", parent = parent, field = field, caption = label, reload = reload, items = items })
+		end)
+		Wrap("MakeTx", function(text, frame, title)
+			Add({ kind = "heading", parent = frame, caption = title, region = text })
+		end)
+		Wrap("CfgBtn", function(_, name, parent)
+			if parent then mirror.gears[parent] = name end
+		end)
+		Wrap("CreatePanel", function(panel, title, globref)
+			if panel then
+				mirror.panels[panel] = { title = title, name = globref }
+				table.insert(mirror.panelList, panel)
+			end
+		end)
+		Wrap("LoadVarChk", function(_, var, def) mirror.defaults[var] = def end)
+		Wrap("LoadVarNum", function(_, var, def) mirror.defaults[var] = def end)
+	end
+
 	LeaPlusLC["Page0"] = LeaPlusLC:MakePage("Page0", "Home"			, "LeaPlusNav0", "Home"			, LeaPlusLC["PageF"], "TOPLEFT", 16, -72, 112, 20)
 	LeaPlusLC["Page1"] = LeaPlusLC:MakePage("Page1", "Automation"	, "LeaPlusNav1", "Automation"	, LeaPlusLC["PageF"], "TOPLEFT", 16, -112, 112, 20)
 	LeaPlusLC["Page2"] = LeaPlusLC:MakePage("Page2", "Social"		, "LeaPlusNav2", "Social"		, LeaPlusLC["PageF"], "TOPLEFT", 16, -132, 112, 20)
