@@ -1,7 +1,8 @@
 -- Clara Combo Points - the sync between the WoW accounts of one Battle.net: the mail module's lists (the
 -- characters, the categories, the items given, the account's own characters) and Reverse Engineering's
 -- stock (each character's bags, bank and mailbox, the mails sent between them, the account bank, the
--- recipes known) and the gold tracker's characters (their gold, level and class; the accounts' names). The bar
+-- recipes known), the gold tracker's characters (their gold, level and class; the accounts' names) and the
+-- auction house prices (Prices.lua: live, only those of the items the player's characters hold). The bar
 -- and the modules' settings are not shared: each WoW account keeps its own.
 -- Every entry carries when it last changed; the newer wins (an entry removed keeps that time: removed
 -- then). Two ways, together:
@@ -16,8 +17,8 @@
 
 local ADDON, ns = ...
 local L = ns.L
-local M, C, Gd = ns.Mail, ns.Craft, ns.Money
-if not (M or C or Gd) then return end
+local M, C, Gd, Pr = ns.Mail, ns.Craft, ns.Money, ns.Prices
+if not (M or C or Gd or Pr) then return end
 
 local issecret = issecretvalue or function() return false end
 local floor, max = math.floor, math.max
@@ -27,6 +28,7 @@ local PART = 230              -- a message's text, at most (the game takes 255 w
 local HELLO_AGAIN = 60        -- the same character greeted at most this often
 local CHAR_EVERY = 30         -- a character's bags sent at most this often
 local SEND_EVERY = 0.12       -- between two messages
+local CHUNK = 150             -- entries in one message, at most (a scan's prices: several messages)
 local THROTTLED = { [3] = true, [8] = true, [11] = true } -- (the game's SendAddonMessageResult: throttled, locked)
 
 local S = {}
@@ -94,7 +96,7 @@ S.Canon = Canon
 -- d is { mail = ClaraMailDB, craft = ClaraCraftDB, money = ClaraMoneyDB } (this account's, or another's from its file)
 ---------------------------------------------------------------------------
 local K = {}
-local ORDER = { "c", "r", "i", "o", "h", "s", "a", "p", "n", "g" } -- (categories before the characters in them)
+local ORDER = { "c", "r", "i", "o", "h", "s", "a", "p", "n", "g", "v" } -- (categories before the characters in them)
 
 local function Union(a, b)
   for k in pairs(a or {}) do b[k] = true end
@@ -278,7 +280,18 @@ if Gd then
   }
 end
 
-local function Dbs() return { mail = M and M.db, craft = C and C.db, money = Gd and Gd.db } end
+if Pr then
+  -- an auction house price, by realm and Auctionator's item key: live only (a whole scan comes by the files)
+  K.v = { buckets = 16, live = true, every = 20,
+    keys = function(d, out) for key in pairs(d.prices.items) do out[key] = true end end,
+    stamp = function(d, key) local r = d.prices.items[key]; return r and r.t or 0 end,
+    get = function(d, key) local r = d.prices.items[key]; return r and { m = r.m, d = r.d, a = r.a } or nil end,
+    put = function(key, rec, at) if rec then Pr.Put(key, rec, at) end end,
+    union = function() return false end, -- (the same time: the same scan)
+  }
+end
+
+local function Dbs() return { mail = M and M.db, craft = C and C.db, money = Gd and Gd.db, prices = Pr and Pr.db } end
 
 local function Keys(kind, d)
   local out = {}
@@ -535,7 +548,12 @@ local function Flush(kind)
   local d, k, list = Dbs(), K[kind], {}
   for key in pairs(pending[kind] or {}) do list[#list + 1] = { key, k.stamp(d, key), k.get(d, key) or false } end
   pending[kind] = nil
-  if #list > 0 and S.On() then Send({ t = "B", k = kind, e = list }) end
+  if not S.On() then return end
+  for first = 1, #list, CHUNK do
+    local part = {}
+    for i = first, math.min(first + CHUNK - 1, #list) do part[#part + 1] = list[i] end
+    Send({ t = "B", k = kind, e = part })
+  end
 end
 
 local function Touched(kind, key)
@@ -649,6 +667,7 @@ local function TakeIncoming()
         mail = M and type(src.ClaraMailDB) == "table" and M.Clean(src.ClaraMailDB) or (M and M.Clean(nil)),
         craft = C and type(src.ClaraCraftDB) == "table" and C.Clean(src.ClaraCraftDB) or (C and C.Clean(nil)),
         money = Gd and Gd.Clean(src.ClaraMoneyDB),
+        prices = Pr and Pr.Clean(src.ClaraPricesDB),
       }
       -- that account's name: its folder, as the Windows script names its part (unless the player named it)
       if Gd and d.money.me and Gd.FolderName(d.money.me, folder) then any = true end
@@ -702,6 +721,7 @@ local function Start()
   if M then M.Touched = Touched end
   if C then C.Touched = Touched end
   if Gd then Gd.Touched = Touched end
+  if Pr then Pr.Touched = Touched end
   if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
   for _, e in ipairs({ "CHAT_MSG_ADDON", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD" }) do events:RegisterEvent(e) end
   C_Timer.After(8, function() Hello() end)
