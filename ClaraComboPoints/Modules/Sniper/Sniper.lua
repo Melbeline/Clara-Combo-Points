@@ -418,7 +418,7 @@ end
 -- (the XML template's OnLoad, Sniper.xml)
 function ClaraSniper_OnLoad(self) Build(self) end
 
--- The tab in Auctionator's strip (before its own last one), as it lets other addons add theirs
+-- The tab in Auctionator's strip (between its Cancel and its own options tab), as it lets other addons add theirs
 local a = _G.Auctionator
 if a and a.Tabs and a.Tabs.Register then
   a.Tabs.Register({
@@ -427,7 +427,7 @@ if a and a.Tabs and a.Tabs.Register then
     tabTemplate = "ClaraSniperTabFrameTemplate",
     tabHeader = L.SNIPER_HEADER,
     tabFrameName = "ClaraSniperFrame",
-    tabOrder = 3.5,
+    tabOrder = 3.5, -- (between Cancel and its own options: the last but one)
   })
   Sn.registered = true
 end
