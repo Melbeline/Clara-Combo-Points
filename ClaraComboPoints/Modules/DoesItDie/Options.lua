@@ -763,14 +763,14 @@ local function selectTab(tab)
         other.content:SetShown(selected)
         other.button.text:SetTextColor(selected and 1 or 0.6, selected and 0.82 or 0.6, selected and 0 or 0.6)
         other.button.underline:SetShown(selected)
-        if other.footer then other.footer:SetShown(selected) end
+        if other.footerButton then other.footerButton:SetShown(selected) end
     end
 end
 
 -- A tab whose methods add rows top to bottom and remember the setting keys, for "Reset this tab".
 local function addTab(name)
     local area = window.settingsArea
-    local tab = { keys = {}, y = 0 }
+    local tab = { keys = {}, y = 0, name = name }
     tab.content = CreateFrame("Frame", nil, area)
     tab.content:SetPoint("TOPLEFT", area, "TOPLEFT", 8, -40)
     tab.content:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", -8, 40)
@@ -809,6 +809,20 @@ local function addTab(name)
     function tab:frame(key, ...) return place(frameRow(self.content, key, ...), key) end
     function tab:info(...) return place(infoRow(self.content, ...)) end
     function tab:gap() self.y = self.y + 8 end
+    -- (Clara: a button under the tab, and two buttons on one row; the game's pages make their own)
+    function tab:footer(text, width, onClick)
+        local button = pushButton(window.settingsArea, text, width, onClick)
+        button:SetPoint("BOTTOMLEFT", 10, 10)
+        button:Hide()
+        self.footerButton = button
+        return button
+    end
+    function tab:actions(labelText, text1, onClick1, text2, onClick2, opts)
+        local row = self:action(labelText, text1, onClick1, opts)
+        local second = pushButton(row, text2, 90, onClick2)
+        second:SetPoint("LEFT", row.button, "RIGHT", 6, 0)
+        return row
+    end
 
     table.insert(tabs, tab)
     return tab
@@ -835,7 +849,8 @@ local function singleColor(settings) return settings.dotColors == "single" end
 local function perDot(settings) return settings.dotColors ~= "single" end
 local function showsLabel(settings) return settings.showLabel end
 
-local function buildTabs()
+-- (Clara: the options described once, built twice: the window's tabs (addTab) and the game's pages)
+local function describe(addTab)
     local lists = ns.lists
 
     local icon = addTab("Kill icon")
@@ -917,7 +932,7 @@ local function buildTabs()
     plates:slider("plateOutlineThickness", "Outline thickness", 1, 3, 1, { enabledIf = plateOutline })
     plates:choice("plateOutlineColor", "Outline color", lists.colors, { enabledIf = plateOutline })
     plates:slider("plateOutlineOpacity", "Outline opacity", 10, 100, 5, { suffix = "%", enabledIf = plateOutline })
-    plates.footer = pushButton(window.settingsArea, "Copy from Marker tab", 160, function()
+    plates:footer("Copy from Marker tab", 160, function()
         local db = ns.db
         db.plateFillTexture, db.plateFillColor, db.plateFillOpacity = db.fillTexture, db.fillColor, db.fillOpacity
         db.plateDotColors, db.plateIcon = db.dotColors, db.skullIcon
@@ -926,8 +941,6 @@ local function buildTabs()
         db.plateOutlineColor, db.plateOutlineOpacity = db.outlineColor, db.outlineOpacity
         changed()
     end)
-    plates.footer:SetPoint("BOTTOMLEFT", 10, 10)
-    plates.footer:Hide()
 
     -- The focus frame (Focus.lua): its own look, like the nameplates'. Its frame path is on the Advanced tab.
     local focusOn = function(s) return s.focusMode ~= "off" end
@@ -956,15 +969,13 @@ local function buildTabs()
     focus:slider("focusOutlineThickness", "Outline thickness", 1, 3, 1, { enabledIf = focusOutline })
     focus:choice("focusOutlineColor", "Outline color", lists.colors, { enabledIf = focusOutline })
     focus:slider("focusOutlineOpacity", "Outline opacity", 10, 100, 5, { suffix = "%", enabledIf = focusOutline })
-    focus.footer = pushButton(window.settingsArea, "Copy from Nameplates tab", 180, function()
+    focus:footer("Copy from Nameplates tab", 180, function()
         local db = ns.db
         for plateKey, focusKey in pairs(ns.focusKeys) do
             if plateKey ~= "nameplateMode" then db[focusKey] = db[plateKey] end
         end
         changed()
     end)
-    focus.footer:SetPoint("BOTTOMLEFT", 10, 10)
-    focus.footer:Hide()
 
     local advanced = addTab("Advanced")
     advanced:choice("uiLanguage", "Window language", ns.locale.windowLanguages(), { tooltip = "The language of this "
@@ -978,13 +989,11 @@ local function buildTabs()
         .. "failed cast removes it." })
     advanced:checkbox("debug", "Echo trace log to chat",
         { tooltip = "Prints each DoT cast, matched tick and estimate to chat." })
-    local learned = advanced:action("Learned tick sizes", "View", toggleTickViewer, { tooltip = "What each of your "
-        .. "DoTs really ticks for, learned from earlier casts, next to what its tooltip says. Reset forgets them all." })
-    local resetLearned = pushButton(learned, "Reset", 90, function()
+    advanced:actions("Learned tick sizes", "View", toggleTickViewer, "Reset", function()
         ns.resetLearnedTicks()
         if tickViewer and tickViewer:IsShown() then tickViewer:Refresh() end
-    end)
-    resetLearned:SetPoint("LEFT", learned.button, "RIGHT", 6, 0)
+    end, { tooltip = "What each of your "
+        .. "DoTs really ticks for, learned from earlier casts, next to what its tooltip says. Reset forgets them all." })
     -- Custom target frame (Frames.lua), for unit frame addons that replace Blizzard's.
     advanced:gap()
     advanced:gap()
@@ -1013,6 +1022,8 @@ local function buildTabs()
         .. "unitFrame.healthBar. /did plates logs what each plate uses. Leave empty for automatic." })
     advanced:info("Nameplate bar in use", function() return ns.plateBarStatus and ns.plateBarStatus() or "" end)
 end
+
+local function buildTabs() describe(addTab) end
 
 local function buildPreview(pane)
     local title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1248,27 +1259,164 @@ function ns.openOptions()
     end
 end
 
--- Options > AddOns > DoesItDie: a short page with a button that opens the window.
+-- (Clara: the window opened on one of its tabs, from the game's pages: the frames picked on screen, typed in)
+function ns.openOptionsTab(name)
+    if not ns.db then return end
+    if SettingsPanel and SettingsPanel:IsShown() then pcall(HideUIPanel, SettingsPanel) end
+    if not window then createWindow() end
+    window:Show()
+    for _, tab in ipairs(tabs) do
+        if tab.name == name then selectTab(tab) end
+    end
+end
+
+-- The look presets put back to Clara's default look (the game's: the health bar's own texture, a dark red)
+local function applyDefaultLook()
+    for _, preset in ipairs(PRESETS) do
+        for key in pairs(preset.values) do db()[key] = ns.DEFAULTS[key] end
+    end
+    changed()
+end
+
+---------------------------------------------------------------------------
+-- Clara Combo Points: the options in the game's own menu (Esc > Options > AddOns > Clara > Combat > DoesItDie),
+-- with the game's controls: its check boxes, sliders and dropdowns, the same as the game's own pages. Its main page:
+-- the looks (Clara's default, DoesItDie's presets) and the window with its live preview; then a page per tab of
+-- the window (Kill icon, Marker, Effects, Text, Nameplates, Focus, Advanced). The game's Defaults button puts a
+-- page back. What a page cannot show (the frames picked on screen, the learned ticks' list) opens the window there.
+---------------------------------------------------------------------------
+local function settingsChanged(onChange, value)
+    changed()
+    if onChange then onChange(value) end
+    -- the rows that depend on another (greyed out while it is off) looked at again
+    local list = SettingsPanel and SettingsPanel.GetSettingsList and SettingsPanel:GetSettingsList()
+    local box = list and list.ScrollBox
+    if box and box.ForEachFrame then
+        box:ForEachFrame(function(frame) if frame.EvaluateState then pcall(frame.EvaluateState, frame) end end)
+    end
+end
+
+local function settingsPage(category, layout)
+    local page = { keys = {}, category = category, layout = layout }
+    local function register(key, labelText, default, onChange)
+        local kind = type(default) == "boolean" and Settings.VarType.Boolean
+            or type(default) == "number" and Settings.VarType.Number or Settings.VarType.String
+        table.insert(page.keys, key)
+        return Settings.RegisterProxySetting(category, "ClaraDoesItDie_" .. key, kind, T(labelText), default,
+            function()
+                local value = db() and db()[key]
+                if value == nil then return default end
+                return value
+            end,
+            function(value)
+                if not db() then return end
+                db()[key] = value
+                settingsChanged(onChange, value)
+            end)
+    end
+    local function enabled(initializer, opts)
+        if initializer and opts.enabledIf and initializer.AddModifyPredicate then
+            initializer:AddModifyPredicate(function() return db() ~= nil and opts.enabledIf(db()) and true or false end)
+        end
+        return initializer
+    end
+    local function tip(opts) return opts.tooltip and T(opts.tooltip) or nil end
+    local function button(labelText, text, onClick, tooltip)
+        if CreateSettingsButtonInitializer and layout and layout.AddInitializer then
+            layout:AddInitializer(CreateSettingsButtonInitializer(labelText, text, onClick, tooltip, false))
+        end
+    end
+    page.button = button
+
+    function page:checkbox(key, labelText, opts)
+        opts = opts or {}
+        local setting = register(key, labelText, ns.DEFAULTS[key] == true, opts.onChange)
+        return enabled(Settings.CreateCheckbox(category, setting, tip(opts)), opts)
+    end
+    function page:slider(key, labelText, min, max, step, opts)
+        opts = opts or {}
+        local default = tonumber(ns.DEFAULTS[key]) or min
+        local setting = register(key, labelText, default, opts.onChange)
+        local options = Settings.CreateSliderOptions(min, max, step)
+        local label = MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label
+        if options.SetLabelFormatter and label and label.Right then
+            local suffix = opts.suffix or ""
+            options:SetLabelFormatter(label.Right, function(value) return math.floor(value + 0.5) .. suffix end)
+        end
+        return enabled(Settings.CreateSlider(category, setting, options, tip(opts)), opts)
+    end
+    function page:choice(key, labelText, list, opts)
+        opts = opts or {}
+        local default = ns.DEFAULTS[key]
+        if default == nil and list[1] then default = list[1].id end
+        local setting = register(key, labelText, default, opts.onChange)
+        local function options()
+            local container = Settings.CreateControlTextContainer()
+            for _, entry in ipairs(list) do container:Add(entry.id, T(entry.label)) end
+            return container:GetData()
+        end
+        return enabled(Settings.CreateDropdown(category, setting, options, tip(opts)), opts)
+    end
+    function page:gap() end
+    function page:footer(text, _, onClick) button("", T(text), onClick) end
+    function page:action(labelText, text, onClick, opts) button(T(labelText), T(text), onClick, tip(opts or {})) end
+    function page:actions(labelText, text1, onClick1, text2, onClick2, opts)
+        button(T(labelText), T(text1), onClick1, tip(opts or {}))
+        button("", T(text2), onClick2)
+    end
+    -- a frame picked on screen or typed: in the window's Advanced tab
+    function page:frame(key, labelText, _, opts)
+        button(T(labelText), T("Set in the window"), function() ns.openOptionsTab("Advanced") end, tip(opts or {}))
+    end
+    function page:info() end
+    return page
+end
+
 function ns.registerOptions()
-    local panel = CreateFrame("Frame")
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("DoesItDie")
-    local text = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    text:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
-    text:SetText(T("Settings have their own window with a live preview. You can also type /did."))
-    local open = pushButton(panel, "Open DoesItDie options", 200, function()
+    local parent = ClaraNS:QolCategory("doesitdie")
+    local main, layout
+    if parent and Settings.RegisterVerticalLayoutSubcategory and Settings.CreateSlider and Settings.CreateDropdown then
+        main, layout = Settings.RegisterVerticalLayoutSubcategory(parent, "DoesItDie")
+    end
+    if not main then
+        -- (no vertical pages: a page with the window's button, as DoesItDie has it)
+        local panel = CreateFrame("Frame")
+        local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", 16, -16)
+        title:SetText("DoesItDie")
+        local open = pushButton(panel, "Open DoesItDie options", 200, function()
+            if SettingsPanel and SettingsPanel:IsShown() then pcall(HideUIPanel, SettingsPanel) end
+            if not (window and window:IsShown()) then ns.openOptions() end
+        end)
+        open:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -14)
+        main = Settings.RegisterCanvasLayoutCategory(panel, "DoesItDie")
+        Settings.RegisterAddOnCategory(main)
+        ClaraNS.doesItDieCategory = main
+        return
+    end
+    ClaraNS.doesItDieCategory = main
+    local home = settingsPage(main, layout)
+    if CreateSettingsListSectionHeaderInitializer and layout.AddInitializer then
+        layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(T("Presets")))
+    end
+    home.button(T("Default (the game's look)"), T("Apply"), applyDefaultLook)
+    for _, preset in ipairs(PRESETS) do
+        home.button(T(preset.label), T("Apply"), function() applyPreset(preset) end)
+    end
+    if CreateSettingsListSectionHeaderInitializer and layout.AddInitializer then
+        layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(T("Live preview")))
+    end
+    home.button(T("Live preview"), T("Open the window"), function()
         if SettingsPanel and SettingsPanel:IsShown() then pcall(HideUIPanel, SettingsPanel) end
         if not (window and window:IsShown()) then ns.openOptions() end
+    end, T("Settings have their own window with a live preview. You can also type /did."))
+    -- a page per tab of the window
+    ns.settingsPages = {}
+    describe(function(name)
+        local category, pageLayout = Settings.RegisterVerticalLayoutSubcategory(main, T(name))
+        local page = settingsPage(category, pageLayout)
+        page.name = name
+        table.insert(ns.settingsPages, page)
+        return page
     end)
-    open:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -14)
-    -- (Clara Combo Points: under its theme's page of Clara Combo Points)
-    local category
-    if ClaraNS:QolCategory("doesitdie") and Settings.RegisterCanvasLayoutSubcategory then
-        category = Settings.RegisterCanvasLayoutSubcategory(ClaraNS:QolCategory("doesitdie"), panel, "DoesItDie")
-    else
-        category = Settings.RegisterCanvasLayoutCategory(panel, "DoesItDie")
-        Settings.RegisterAddOnCategory(category)
-    end
-    ClaraNS.doesItDieCategory = category
 end
