@@ -25,12 +25,8 @@ elseif ns:QolTakesOver("doesitdie") then
   end)
 end
 
--- Its options: its window (with its live preview), else its page, else the standalone's (found by name)
+-- Its options: its pages in the game's options (the game's own controls; its window with its live preview is
+-- one click from there, or /did), else the standalone's (found by name)
 ns:SetQolOpener("doesitdie", function()
-  local private = ns.DoesItDiePrivate
-  if private and private.openOptions and not InCombatLockdown() then
-    private.openOptions()
-  else
-    ns:OpenSettingsTo(ns.doesItDieCategory or "DoesItDie")
-  end
+  ns:OpenSettingsTo(ns.doesItDieCategory or "DoesItDie")
 end)

@@ -389,6 +389,10 @@ local STRINGS = {
     ["Target frame health bar not found; health bar markers unavailable."] = "Lebensleiste des Zielfensters nicht gefunden; Markierungen auf der Lebensleiste nicht verfügbar.",
     ["Target portrait not found; kill icon shown beside the target frame."] = "Zielporträt nicht gefunden; das Kill-Symbol wird neben dem Zielfenster angezeigt.",
     ["That frame has no name to save, so it can't be found again after a reload. Try the frame around it, or type a path."] = "Dieses Fenster hat keinen Namen, der gespeichert werden könnte, und wäre nach einem Neuladen nicht wiederzufinden. Versuche das Fenster darum herum oder gib einen Pfad ein.",
+    ["Default (the game's look)"] = "Standard (Aussehen des Spiels)",
+    ["Apply"] = "Anwenden",
+    ["Open the window"] = "Fenster öffnen",
+    ["Set in the window"] = "Im Fenster einstellen",
 }
 
 ns.locale.register({
