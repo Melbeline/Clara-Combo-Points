@@ -177,7 +177,7 @@ local function SettlePending()
             local set = SetFor(tex)
             watched[tex] = set
             set[tex] = true
-            setJob[set]:Wake()
+            if setJob[set] then setJob[set]:Wake() end -- (none when the scheduler refused its host)
         end
     end
 end
