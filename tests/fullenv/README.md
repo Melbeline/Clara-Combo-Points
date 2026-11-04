@@ -7,3 +7,11 @@
 - `doctypes.lua` : renvoie des valeurs du bon type pour toute fonction ou méthode documentée.
 
 `apidoc.lua` et `framexml_index.lua` se régénèrent à partir des fichiers du client (non inclus ici).
+
+## Tout l'addon d'un coup
+
+- `make_full.py` assemble `full_harness.lua` (le faux jeu de `tools/cui_harness.lua` + `full_tail.lua`).
+- `run_full.sh <dossier ClaraComboPoints> <nom>` : charge tout le `.toc` (Lua et XML) avec tous les modules
+  activés, joue une session (connexion, combat, fenêtres, chaque page d'options, chaque commande slash,
+  chaque fenêtre de module, déconnexion) et écrit `full_out_<nom>.txt` : fichiers bloqués, erreurs,
+  fonctions C_ inconnues du jeu, modèles inconnus, noms globaux inconnus.
