@@ -4,10 +4,15 @@
 À quoi ça sert
 --------------
 Tes comptes WoW (ICKSTU, WANJ, 101896528#1, #2, #3...) gardent chacun leur propre fichier de
-sauvegarde de Clara. Ce dossier les tient à jour entre eux pour deux choses seulement :
+sauvegarde de Clara. Ce dossier les tient à jour entre eux pour trois choses seulement :
   - les listes du courrier (destinataires, catégories, objets) ;
   - le stock (qui a quoi dans ses sacs, sa banque, son courrier), les recettes connues, et ce
     qui a été envoyé à qui.
+  - l'or, le niveau et la classe de chaque personnage (la fenêtre « Or des personnages », clic droit
+    sur la monnaie du sac principal ; chaque compte y est nommé d'après son dossier, 101896528#1 = WoW1).
+
+Après une mise à jour de Clara qui ajoute une donnée partagée (comme l'or), relance Installer.bat une fois :
+il remplace l'ancienne copie du script.
 La barre, les profils et les réglages des modules restent propres à chaque compte.
 
 Deux moyens, qui se complètent :
