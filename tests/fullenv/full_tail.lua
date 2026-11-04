@@ -351,6 +351,9 @@ end
 ---------------------------------------------------------------------------
 -- the game's Constants tables, as documented (one it does not document: empty)
 rawset(env, "Constants", setmetatable(DOCT.Constants, { __index = function(t, k) local v = {}; rawset(t, k, v); return v end }))
+-- the game's class order on WoW Forever (Blizzard_FrameXMLBase/Camelot/Constants.lua: the nine of 1.x)
+rawset(env, "CLASS_SORT_ORDER", { "WARRIOR", "PALADIN", "PRIEST", "SHAMAN", "DRUID", "ROGUE", "MAGE", "WARLOCK", "HUNTER" })
+rawset(env, "MAX_CLASSES", 9)
 -- the game's own dialogs (StaticPopupDialogs["DELETE_ITEM"]...): there, as tables an addon may extend
 rawset(env, "StaticPopupDialogs", setmetatable({}, { __index = function(t, k)
   if FXI.dialogs[k] then local d = { text = k }; rawset(t, k, d); return d end
@@ -440,6 +443,11 @@ if os.getenv("FULL_DEBUG_DC") then
     end
   end
   print("DC situations", n, "current", DC.currentSituationID)
+end
+-- a scenario of its own (FULL_SCENARIO=<file.lua>): called with the addon's globals, its table and the harness's steps
+if os.getenv("FULL_SCENARIO") then
+  local fn = assert(loadfile(os.getenv("FULL_SCENARIO")))
+  Step("scenario", function() fn({ env = env, ns = ns, Fire = Fire, RunTimers = RunTimers, Updates = Updates }) end)
 end
 Fire("PLAYER_LOGOUT")
 

@@ -23,7 +23,7 @@ end
 
 -- WoW Forever; every module turned off by hand (so none of them loads here)
 GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end
-ClaraComboPointsDB = { qol = { whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false, dialogkey = false, xtolevel = false, minimapdrawer = false, mail = false, classicui = false,
+ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false, dialogkey = false, xtolevel = false, minimapdrawer = false, mail = false, classicui = false,
   tullarange = false, names = false, tooltipanchor = false, idtip = false, soloraidframe = false, enemycasts = false, reverseengineering = false } }
 local ns = {}
 S.class = "ROGUE"; S.locale = "enUS"

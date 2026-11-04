@@ -12,7 +12,7 @@ end
 local function vc(icon) local v = icon._vc; return v and table.concat(v, ",") or "nil" end
 
 GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end
-ClaraComboPointsDB = { qol = { whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false,
+ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false,
   dialogkey = false, xtolevel = false, minimapdrawer = false, mail = false, classicui = false } }
 
 -- the game's action buttons (ActionBarActionButtonMixin), their slots, the pet bar

@@ -6,7 +6,7 @@ local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c th
 
 -- WoW Forever; only BuyEmAll built in
 GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end
-ClaraComboPointsDB = { qol = { whatstraining = false, doesitdie = false, enhancedraidframes = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false, dialogkey = false, xtolevel = false, minimapdrawer = false, mail = false, classicui = false } }
+ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, enhancedraidframes = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false, dialogkey = false, xtolevel = false, minimapdrawer = false, mail = false, classicui = false } }
 
 -- a merchant: 1 = Refreshing Spring Water (5 a lot, stacks of 20, 25 copper a lot),
 -- 2 = Heavy Leather Ball (one, 1 copper, no stack), 3 = Mark of Honor bought with tokens

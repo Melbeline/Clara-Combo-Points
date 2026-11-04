@@ -8,7 +8,7 @@ local function readfile(p) local f = io.open(p, "rb"); if not f then return nil 
 if not readfile(ADDON_DIR .. "/Modules/Names/Names.lua") then out("(no Names on this branch)"); out(""); out("0 failure(s)"); return end
 
 GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end
-ClaraComboPointsDB = { qol = { whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false,
+ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false,
   dialogkey = false, xtolevel = false, minimapdrawer = false, mail = false, classicui = false, tullarange = false } }
 
 -- the game's settings and console

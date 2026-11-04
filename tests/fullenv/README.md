@@ -15,3 +15,6 @@
   activés, joue une session (connexion, combat, fenêtres, chaque page d'options, chaque commande slash,
   chaque fenêtre de module, déconnexion) et écrit `full_out_<nom>.txt` : fichiers bloqués, erreurs,
   fonctions C_ inconnues du jeu, modèles inconnus, noms globaux inconnus.
+- `FULL_SCENARIO=<fichier.lua> run_full.sh …` : joue en plus, avant la déconnexion, un scénario à soi (il reçoit
+  `{ env, ns, Fire, RunTimers, Updates }`) ; ses erreurs vont dans le rapport. `scn_lfg_skin.lua` : la fenêtre de
+  LFG Forever habillée par ClassicUI (version avec ClassicUI), sa flèche et Relancer la recherche cliqués.

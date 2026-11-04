@@ -10,7 +10,7 @@ local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 
 GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end
-ClaraComboPointsDB = { qol = { whatstraining = false, doesitdie = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false,
+ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false,
   dialogkey = false, xtolevel = false, minimapdrawer = false, classicui = false, tullarange = false, names = false,
   tooltipanchor = false, mail = false, reverseengineering = false, idtip = false, soloraidframe = false } }
 S.knownSpells = { [527] = true, [528] = true } -- a priest: Dispel Magic, Cure Disease
