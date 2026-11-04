@@ -5,10 +5,10 @@
 ## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
 ## Version: 1.6.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, WT_WeaponGrouping, WT_ShowKnownWeaponSkills, WT_SpellDisplay, WT_SideBySide, WT_ScrollTwoPages, WT_FloatingFramePoint, WT_WaypointProvider, WT_ProfessionTabPosition, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB
-## SavedVariablesPerCharacter: WT_LearnedPetAbilities, WT_NeedsToOpenBeastTraining, WT_IgnoredSpells, WT_PriceFaction, WT_HideWeaponSkillSwitcher, WT_Crafting
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, WT_WeaponGrouping, WT_ShowKnownWeaponSkills, WT_SpellDisplay, WT_SideBySide, WT_ScrollTwoPages, WT_FloatingFramePoint, WT_WaypointProvider, WT_ProfessionTabPosition, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB
+## SavedVariablesPerCharacter: WT_LearnedPetAbilities, WT_NeedsToOpenBeastTraining, WT_IgnoredSpells, WT_PriceFaction, WT_HideWeaponSkillSwitcher, WT_Crafting, ClaraLFGForeverCharDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, WhatsTraining, ReverseEngineering, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, WhatsTraining, LFGForever, ReverseEngineering, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -236,6 +236,25 @@ Modules\WhatsTraining\DataBuilder.lua
 Modules\WhatsTraining\WhatsTraining.lua
 Modules\WhatsTraining\Broker.lua
 Modules\WhatsTraining\Api.lua
+Modules\LFGForever\Bootstrap.lua
+Modules\LFGForever\Locale_Clara.lua
+Modules\LFGForever\locale.lua
+Modules\LFGForever\db.lua
+Modules\LFGForever\main.lua
+Modules\LFGForever\relations.lua
+Modules\LFGForever\talents.lua
+Modules\LFGForever\settings.lua
+Modules\LFGForever\settings.xml
+Modules\LFGForever\listpanel.lua
+Modules\LFGForever\whisperlog.lua
+Modules\LFGForever\filterpanel_shared.lua
+Modules\LFGForever\filterpanel_miscellaneous.lua
+Modules\LFGForever\filterpanel_groupclasses.lua
+Modules\LFGForever\filterpanel.lua
+Modules\LFGForever\window.lua
+Modules\LFGForever\blizzardtab.lua
+Modules\LFGForever\minimap.lua
+Modules\LFGForever\slash.lua
 Modules\Crafting\CraftData.lua
 Modules\Crafting\CraftUI.lua
 Modules\Crafting\CraftGame.lua

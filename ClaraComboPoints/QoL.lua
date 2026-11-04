@@ -31,6 +31,7 @@ ns.QOL_MODULES = {
   { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames", theme = "combat" },
   { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", theme = "combat" },
   { key = "whatstraining", name = "What's Training?", standalone = "WhatsTraining", theme = "quests" },
+  { key = "lfgforever", name = "LFG Forever", standalone = "LFGForever", theme = "quests" },
   { key = "enemycasts", name = "Enemy Casts", theme = "combat" }, -- (Clara's own)
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
   { key = "reverseengineering", name = "Reverse Engineering", standalone = "ReverseEngineering", theme = "economy" },

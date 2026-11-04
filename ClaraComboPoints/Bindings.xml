@@ -31,6 +31,11 @@
 	<Binding name="CLICK ClaraLeaPlusFlare8:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
 	<Binding name="CLICK ClaraLeaPlusFlare9:LeftButton" category="BINDING_CATEGORY_CLARA_QOL"></Binding>
 
+	<!-- LFG Forever (built in, or the standalone when it runs: both define LFGForever_ToggleWindow) -->
+	<Binding name="CLARA_LFGFOREVER_TOGGLE" category="BINDING_CATEGORY_CLARA_QOL">
+		if LFGForever_ToggleWindow then LFGForever_ToggleWindow() end
+	</Binding>
+
 	<!-- NodeSight (embedded, or the standalone when it runs) -->
 	<Binding name="CLARA_NODESIGHT_SYMBOLS" category="BINDING_CATEGORY_CLARA_QOL">
 		if ClaraNodeSight_ToggleSymbols then ClaraNodeSight_ToggleSymbols() elseif NodeSight_ToggleSymbols then NodeSight_ToggleSymbols() end
