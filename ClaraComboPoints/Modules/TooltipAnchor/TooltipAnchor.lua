@@ -3,8 +3,12 @@
 -- in the game's place, at the mouse (following it), or at an anchor one moves. The tooltip is held
 -- by the corner one picks: its bottom right one by default, or top right, bottom left, top left.
 -- The anchor ("Tooltip Anchor", dragged, a cross to put it away) in ClassicUI's art while ClassicUI
--- runs, the game's otherwise. Its page in Esc > Options > AddOns > Clara Combo Points, its theme's page, its
--- boxes on its theme's page. Saved in ClaraTooltipAnchorDB, for the account.
+-- runs, the game's otherwise; shown or put away (unlocked, locked) by a button on its page or
+-- /tiptac anchor, its option left as it is. Its bottom is the tooltip's health bar's when one shows
+-- (a unit's), else the tooltip's own. The tooltips of the buttons by the bags (the micro menu, the
+-- latency, the keyring, the bags and the backpack), which the game puts by their button, go there
+-- too. Its page in Esc > Options > AddOns > Clara Combo Points, its theme's page, its boxes on its
+-- theme's page. Saved in ClaraTooltipAnchorDB, for the account.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -125,6 +129,23 @@ follower:SetScript("OnUpdate", function(self)
   AtCursor(tooltip)
 end)
 
+-- The tooltip's health bar under it (a unit's): the anchor holds its bottom rather than the tooltip's
+local function BarBelow(tooltip)
+  local bar = tooltip == GameTooltip and GameTooltipStatusBar
+  if not (bar and bar:IsShown() and bar.GetPoint) then return 0 end
+  local point, rel, relPoint, _, y = bar:GetPoint(1)
+  if rel ~= tooltip or not (point and point:find("^TOP") and relPoint and relPoint:find("^BOTTOM")) then return 0 end
+  return math.max(0, -(y or 0)) + (bar:GetHeight() or 0)
+end
+
+local held -- the tooltip held at the anchor now
+local function AtAnchor(tooltip)
+  local lift = db.corner:find("^BOTTOM") and BarBelow(tooltip) or 0
+  tooltip:ClearAllPoints()
+  tooltip:SetPoint(db.corner, anchor, db.corner, 0, lift)
+  held = tooltip
+end
+
 local function OnDefaultAnchor(tooltip, parent)
   if not (tooltip and db) or db.mode == "game" then return end
   if tooltip.IsForbidden and tooltip:IsForbidden() then return end
@@ -135,15 +156,47 @@ local function OnDefaultAnchor(tooltip, parent)
       follower:Show()
     end
   else
-    tooltip:ClearAllPoints()
-    tooltip:SetPoint(db.corner, anchor, db.corner)
+    AtAnchor(tooltip)
   end
+end
+
+-- The health bar shown or hidden once the tooltip is filled: the tooltip held at the anchor moved with it
+local function BarChanged()
+  if db and db.mode == "anchor" and held == GameTooltip and GameTooltip:IsShown() then AtAnchor(GameTooltip) end
+end
+
+-- The buttons by the bags, whose tooltips the game puts by them: theirs follow the mode too
+local BAG_BUTTONS = { "^CharacterBag%dSlot$", "^MainMenuBarBackpackButton$", "^KeyRingButton$", "^CharacterReagentBag%dSlot$",
+  "MicroButton$", "Latency", "PerformanceBar" }
+function ns.TooltipAnchorTakes(owner)
+  local name = owner and owner.GetName and owner:GetName()
+  if type(name) ~= "string" then return false end
+  for _, pattern in ipairs(BAG_BUTTONS) do if name:find(pattern) then return true end end
+  return false
+end
+
+local function OnSetOwner(tooltip, owner)
+  if not (db and db.mode ~= "game" and ns.TooltipAnchorTakes(owner)) then return end
+  if tooltip.IsForbidden and tooltip:IsForbidden() then return end
+  if tooltip.SetAnchorType then tooltip:SetAnchorType("ANCHOR_NONE") end
+  OnDefaultAnchor(tooltip, owner)
 end
 
 local function SetMode(mode)
   db.mode = mode
   if mode == "anchor" and not anchor:IsShown() and not (db.x and db.y) then anchor:Show() end
   if mode ~= "anchor" then anchor:Hide() end
+end
+
+-- Unlocked: the anchor shown, to be moved; locked: put away. Its option left as it is.
+local function ToggleAnchor()
+  if anchor:IsShown() then
+    anchor:Hide()
+  else
+    PlaceAnchor()
+    anchor:Show()
+  end
+  return anchor:IsShown()
 end
 
 ns.TooltipAnchor = {
@@ -153,7 +206,22 @@ ns.TooltipAnchor = {
   Corner = function() return db.corner end,
   SetCorner = function(corner) if Has(CORNERS, corner) then db.corner = corner end end,
   ShowAnchor = function() PlaceAnchor(); anchor:Show() end,
+  ToggleAnchor = ToggleAnchor,
 }
+
+-- /tiptac anchor: the anchor shown or put away (anything else: TipTac's own command, if it is there)
+local tiptacOwn = SlashCmdList and SlashCmdList.TIPTAC
+SLASH_CLARATIPTAC1 = "/tiptac"
+SlashCmdList.CLARATIPTAC = function(msg)
+  local word = (msg or ""):match("^%s*(%S*)"):lower()
+  if word == "anchor" or word == "ancre" or word == "anker" then
+    ToggleAnchor()
+  elseif tiptacOwn then
+    tiptacOwn(msg)
+  else
+    ns.Print(L.TA_COMMAND)
+  end
+end
 
 ns:SetQolSwitches("tooltipanchor", {
   { label = "TA_SW_CURSOR", get = function() return db.mode == "cursor" end,
@@ -219,17 +287,22 @@ local function Build()
     Radio(L["TA_MODE_" .. mode:upper()], y, function() return db.mode == mode end, function() SetMode(mode) end)
     y = y - 26
   end
+  -- unlock: the anchor shown, to be moved; lock: put away (the option above left as it is)
   local move = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-  move:SetSize(220, 22)
+  move:SetSize(260, 22)
   move:SetPoint("TOPLEFT", 40, y - 2)
-  move:SetText(L.TA_MOVE)
   move:SetScript("OnClick", function()
     Click()
-    if db.mode ~= "anchor" then SetMode("anchor") end
-    PlaceAnchor()
-    anchor:Show()
+    ToggleAnchor()
     Update()
   end)
+  updates[#updates + 1] = function() move:SetText(anchor:IsShown() and L.TA_LOCK or L.TA_UNLOCK) end
+  anchor:HookScript("OnShow", Update)
+  anchor:HookScript("OnHide", Update)
+  local command = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  command:SetPoint("LEFT", move, "RIGHT", 10, 0)
+  command:SetTextColor(.6, .6, .65)
+  command:SetText("/tiptac anchor")
   y = y - 40
   Header(L.TA_HEAD_CORNER, y)
   y = y - 22
@@ -263,4 +336,10 @@ f:SetScript("OnEvent", function(self)
   MakeClose()
   PlaceAnchor()
   if type(GameTooltip_SetDefaultAnchor) == "function" then hooksecurefunc("GameTooltip_SetDefaultAnchor", OnDefaultAnchor) end
+  if GameTooltip and GameTooltip.SetOwner then hooksecurefunc(GameTooltip, "SetOwner", OnSetOwner) end
+  if GameTooltipStatusBar and GameTooltipStatusBar.HookScript then
+    GameTooltipStatusBar:HookScript("OnShow", BarChanged)
+    GameTooltipStatusBar:HookScript("OnHide", BarChanged)
+  end
+  if GameTooltip and GameTooltip.HookScript then GameTooltip:HookScript("OnHide", function() held = nil end) end
 end)
