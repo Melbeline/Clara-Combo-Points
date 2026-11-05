@@ -1,8 +1,10 @@
 -- Clara Combo Points - the game's own settings handed down to alts. A profile holds what a
--- character keeps for itself (its alts start without it): the action bars shown (2 to 8), the
--- options of the game's Options window stored for that character only, and the Edit Mode layout
--- in use. Settings stored for the whole account (or the computer) are already every
--- character's: not kept, so a later change of them is never undone.
+-- character keeps for itself (its alts start without it): the action bars shown (2 to 8), every
+-- game setting stored for that character only (the Options window's and the others), the Edit
+-- Mode layout in use, its key bindings, the per-character settings of Clara's modules, and the
+-- profile each addon using AceDB (most addons) has for this character. Settings stored for the
+-- whole account (or the computer) are already every character's: not kept, so a later change of
+-- them is never undone. (Other addons' own per-character files cannot be read by another addon.)
 -- The profile picked as the alts' one goes, once, to each new character (level 5 or lower) at its
 -- first login with the addon, out of combat; the interface is then offered a reload. A profile
 -- can also be put on the current character by hand (the options window's header), and passed to
@@ -18,11 +20,62 @@ local NEW_LEVEL = 5    -- up to this level, a character not done yet is a new on
 local NAME_MAX = 32    -- a profile's name, in characters
 local BARS_MAX = 12    -- action bar switches kept
 local EXPORT_PREFIX = "CCPA1:" -- (a class tab's profiles: CCP1, Profiles.lua)
-local MAX_IMPORT = 65536
+local MAX_IMPORT = 4194304 -- (the addons' settings with it: a long line)
+local KEEP_DEPTH = 4 -- an addon's settings kept when no deeper than this (an export holds 8 levels at most)
+-- Clara's modules' settings kept for each character (their SavedVariablesPerCharacter), whole
+local CHAR_TABLES = { "ClaraClassicUICharDB", "ClaraLFGForeverCharDB", "WT_IgnoredSpells", "WT_HideWeaponSkillSwitcher",
+  "WT_PriceFaction" }
+-- game settings stored for a character that are its state rather than a setting: not handed down
+local NOT_SETTINGS = { "^last", "^cameraSaved", "Tracked", "^lastTransmog" }
 
 ---------------------------------------------------------------------------
 -- Saved data
 ---------------------------------------------------------------------------
+-- How many tables deep a value goes (nil past the limit)
+local function Depth(v, limit, d)
+  d = d or 0
+  if type(v) ~= "table" then return d end
+  if d >= limit then return nil end
+  local most = d + 1
+  for k, x in pairs(v) do
+    if type(k) == "table" then return nil end
+    local n = Depth(x, limit, d + 1)
+    if not n then return nil end
+    if n > most then most = n end
+  end
+  return most
+end
+
+-- A copy of plain data (strings, numbers, booleans, tables of them)
+local function Copy(v)
+  local t = type(v)
+  if t == "string" or t == "number" or t == "boolean" then return v end
+  if t ~= "table" then return nil end
+  local out = {}
+  for k, x in pairs(v) do
+    local kt = type(k)
+    if kt == "string" or kt == "number" then
+      local c = Copy(x)
+      if c ~= nil then out[k] = c end
+    end
+  end
+  return out
+end
+
+-- Key bindings: { set = 1 or 2, list = { { command, key, key... } } }
+local function CleanBindings(b)
+  if type(b) ~= "table" or type(b.list) ~= "table" then return nil end
+  local list = {}
+  for _, e in ipairs(b.list) do
+    if type(e) == "table" and type(e[1]) == "string" then
+      local entry = { e[1] }
+      for j = 2, #e do if type(e[j]) == "string" and e[j] ~= "" then entry[#entry + 1] = e[j] end end
+      if #entry > 1 then list[#list + 1] = entry end
+    end
+  end
+  return { set = (b.set == 1 or b.set == 2) and b.set or 2, list = list }
+end
+
 local function CleanProfile(p)
   if type(p) ~= "table" then return nil end
   local cvars = {}
@@ -45,7 +98,22 @@ local function CleanProfile(p)
   else
     layout = { kind = layout.kind, name = layout.name, index = layout.index }
   end
-  return { cvars = cvars, bars = bars, layout = layout,
+  local chars = {}
+  if type(p.chars) == "table" then
+    for _, name in ipairs(CHAR_TABLES) do
+      if p.chars[name] ~= nil and Depth(p.chars[name], KEEP_DEPTH + 1) then chars[name] = Copy(p.chars[name]) end
+    end
+  end
+  local ace = {}
+  if type(p.ace) == "table" then
+    for name, a in pairs(p.ace) do
+      if type(name) == "string" and type(a) == "table" and type(a.key) == "string" and type(a.data) == "table"
+        and Depth(a.data, KEEP_DEPTH + 1) then
+        ace[name] = { key = a.key, mine = a.mine and true or nil, data = Copy(a.data) }
+      end
+    end
+  end
+  return { cvars = cvars, bars = bars, layout = layout, bindings = CleanBindings(p.bindings), chars = chars, ace = ace,
     from = type(p.from) == "string" and p.from or nil, when = type(p.when) == "number" and p.when or nil }
 end
 
@@ -102,6 +170,76 @@ local function OptionVariables()
     if ok and type(name) == "string" and inGame then found[name] = true end
   end
   return found
+end
+
+-- Every game setting (console variable) the game has, the Options window's among them, but its state.
+local function AllVariables()
+  local found = OptionVariables()
+  local get = C_Console and C_Console.GetAllCommands
+  local ok, list = false, nil
+  if get then ok, list = pcall(get) end
+  if ok and type(list) == "table" then
+    local CVAR = Enum and Enum.ConsoleCommandType and Enum.ConsoleCommandType.Cvar or 0
+    for _, c in ipairs(list) do
+      local name = type(c) == "table" and c.command
+      if type(name) == "string" and c.commandType == CVAR then
+        local skip = false
+        for _, pattern in ipairs(NOT_SETTINGS) do if name:find(pattern) then skip = true break end end
+        if not skip then found[name] = true end
+      end
+    end
+  end
+  return found
+end
+
+-- The key bindings in use (this character's own, or the account's)
+local function ReadBindings()
+  if not (GetNumBindings and GetBinding) then return nil end
+  local list = {}
+  for i = 1, GetNumBindings() do
+    local t = { GetBinding(i) }
+    if type(t[1]) == "string" then
+      local entry = { t[1] }
+      for j = 3, #t do if type(t[j]) == "string" and t[j] ~= "" then entry[#entry + 1] = t[j] end end
+      if #entry > 1 then list[#list + 1] = entry end
+    end
+  end
+  return { set = GetCurrentBindingSet and GetCurrentBindingSet() or 2, list = list }
+end
+
+-- This character's key in AceDB's tables ("Name - Realm")
+local function AceKey()
+  local who, realm = UnitName and UnitName("player"), GetRealmName and GetRealmName()
+  return who and realm and (who .. " - " .. realm) or nil
+end
+
+-- Each AceDB table's profile for this character (the addons using AceDB: most of them)
+local function ReadAce()
+  local out, me = {}, AceKey()
+  if not me then return out end
+  for name, sv in pairs(_G) do
+    if type(name) == "string" and type(sv) == "table" then
+      local keys, profiles = rawget(sv, "profileKeys"), rawget(sv, "profiles")
+      if type(keys) == "table" and type(profiles) == "table" then
+        local key = rawget(keys, me)
+        local data = type(key) == "string" and rawget(profiles, key)
+        if type(data) == "table" and Depth(data, KEEP_DEPTH + 1) then
+          out[name] = { key = key, mine = key == me or nil, data = Copy(data) }
+        end
+      end
+    end
+  end
+  return out
+end
+
+-- Clara's modules' per-character settings
+local function ReadChars()
+  local out = {}
+  for _, name in ipairs(CHAR_TABLES) do
+    local v = rawget(_G, name)
+    if v ~= nil and Depth(v, KEEP_DEPTH + 1) then out[name] = Copy(v) end
+  end
+  return out
 end
 
 -- A console variable this character keeps for itself, that an addon may set: its value.
@@ -192,13 +330,14 @@ function ns:SaveAltProfile(name)
   name = self:AltProfileName(name)
   if not (store and name) then return nil end
   local cvars = {}
-  for variable in pairs(OptionVariables()) do
+  for variable in pairs(AllVariables()) do
     local value = OwnValue(variable)
     if value ~= nil then cvars[variable] = value end
   end
   local who = UnitName and UnitName("player")
   local realm = GetRealmName and GetRealmName()
-  local profile = { cvars = cvars, bars = ReadBars(), layout = ReadLayout(),
+  local profile = { cvars = cvars, bars = ReadBars(), layout = ReadLayout(), bindings = ReadBindings(),
+    chars = ReadChars(), ace = ReadAce(),
     from = who and (realm and realm ~= "" and (who .. " - " .. realm) or who) or nil, when = time and time() or nil }
   store.profiles[name] = profile
   store.default = name
@@ -276,6 +415,11 @@ function ns:AltSummary(name)
   local shown = 0
   for _, on in ipairs(p.bars) do if on then shown = shown + 1 end end
   local lines = { L.ALTS_HOLDS:format(shown, #p.bars, options) }
+  local addons = 0
+  for _ in pairs(p.ace or {}) do addons = addons + 1 end
+  for _ in pairs(p.chars or {}) do addons = addons + 1 end
+  local keys = p.bindings and #p.bindings.list or 0
+  if keys > 0 or addons > 0 then lines[#lines + 1] = L.ALTS_HOLDS_MORE:format(keys, addons) end
   if p.layout then lines[#lines + 1] = L.ALTS_HOLDS_LAYOUT:format(p.layout.name) end
   if p.layout and p.layout.kind == LayoutKind("Character") then lines[#lines + 1] = L.ALTS_LAYOUT_OWN end
   if p.from then
@@ -304,6 +448,51 @@ local function ApplyOptions(cvars)
   for name, value in pairs(cvars) do
     local now = OwnValue(name)
     if now ~= nil and now ~= value then C_CVar.SetCVar(name, value) end
+  end
+end
+
+-- Its key bindings as this character's own (the keys not in it unbound), out of combat
+local function ApplyBindings(b)
+  if not (b and b.list and SetBinding and GetNumBindings and GetBinding) then return false end
+  if InCombatLockdown and InCombatLockdown() then return false end
+  local want = {}
+  for _, e in ipairs(b.list) do
+    for j = 2, #e do want[e[j]] = e[1] end
+  end
+  for i = 1, GetNumBindings() do
+    local t = { GetBinding(i) }
+    for j = 3, #t do
+      local key = t[j]
+      if type(key) == "string" and key ~= "" and want[key] == nil then SetBinding(key) end
+    end
+  end
+  for key, command in pairs(want) do SetBinding(key, command) end
+  if SaveBindings then SaveBindings(CHARACTER_BINDINGS or 2) end
+  return true
+end
+
+-- Clara's modules' per-character settings (in use after the reload offered)
+local function ApplyChars(chars)
+  for name, v in pairs(chars or {}) do _G[name] = Copy(v) end
+end
+
+-- Each addon's AceDB profile: a shared one used as it is (made if this account has none of that name),
+-- the other character's own copied as this character's own
+local function ApplyAce(ace)
+  local me = AceKey()
+  if not me then return end
+  for name, a in pairs(ace or {}) do
+    local sv = rawget(_G, name)
+    local keys, profiles = type(sv) == "table" and rawget(sv, "profileKeys"), type(sv) == "table" and rawget(sv, "profiles")
+    if type(keys) == "table" and type(profiles) == "table" then
+      if a.mine then
+        profiles[me] = Copy(a.data)
+        keys[me] = me
+      else
+        if type(profiles[a.key]) ~= "table" then profiles[a.key] = Copy(a.data) end
+        keys[me] = a.key
+      end
+    end
   end
 end
 
@@ -337,6 +526,9 @@ local function Finish(name, asked)
   ApplyOptions(p.cvars)
   ApplyBars(p.bars)
   local layoutDone = ApplyLayout(p.layout)
+  ApplyBindings(p.bindings)
+  ApplyChars(p.chars)
+  ApplyAce(p.ace)
   local store, me = Store(), Me()
   if store and me then store.done[me] = true end
   if ns.RefreshOptions then ns:RefreshOptions() end
