@@ -42,6 +42,7 @@ local GCD = 1.5              -- a cooldown this short is only the global cooldow
 local ABBREV = 120           -- countdown: "2m" from two minutes up, "1:59" below
 local MASK_ATLAS = "UI-HUD-CoolDownManager-Mask" -- keeps the icon art inside the frame (fills the icon)
 local CHECKED_FILE = "Interface\\Buttons\\CheckButtonHilight" -- an action button's checked look
+local ACTIVE_ICON = "Interface\\Icons\\Spell_Nature_WispSplode" -- the action bars' icon for a form or stealth that is on
 -- where each icon looks for its aura (on = the entry's condition; auto for plain entries)
 local LOOKUPS = {
   auto   = { { "player", "HELPFUL" }, { "target", "HARMFUL" }, { "player", "HARMFUL" } },
@@ -448,7 +449,8 @@ end
 
 -- The spell's form, stance or stealth on (Stealth, Prowl, Cat Form, Battle Stance, Devotion
 -- Aura...), the spell queued (Heroic Strike) or repeating (Auto Shot, Shoot): checked, as an
--- action button shows it.
+-- action button shows it. A form, a stealth, Shadowmeld, an aspect, a paladin's aura, Shadowform
+-- or Ghost Wolf on also takes the action bars' icon for it (the white star).
 local IsCurrentSpell = (C_Spell and C_Spell.IsCurrentSpell) or IsCurrentSpell
 local IsAutoRepeatSpell = (C_Spell and C_Spell.IsAutoRepeatSpell) or IsAutoRepeatSpell
 local function SpellOn(fn, spell)
@@ -474,6 +476,20 @@ local function Checked(slot)
 end
 ns.IconChecked = function(_, slot) return Checked(slot) end
 
+-- On as a form is: the game's form (stance bar), or an aura you cast on yourself that lasts until
+-- it is cancelled (no duration: Shadowmeld, Stealth, the aspects, Trueshot Aura, the paladins'
+-- auras...). Not another player's aura on you, not a timed buff.
+local function FormLike(slot, aura, unit)
+  if slot.item or not slot.name or ns.preview then return false end
+  if FormOn(slot.name) then return true end
+  if not aura or unit ~= "player" then return false end
+  local source = aura.sourceUnit
+  if issecretvalue(source) or source ~= "player" then return false end
+  local duration, ends = Plain(aura.duration), Plain(aura.expirationTime)
+  return duration == 0 and (ends == nil or ends == 0)
+end
+ns.IconFormLike = function(_, slot, aura, unit) return FormLike(slot, aura, unit) end
+
 local function ShowChecked(slot, on)
   if slot.isChecked == on then return end
   slot.isChecked = on
@@ -491,6 +507,7 @@ local function SetSlot(slot, look, aura, unit, enchant)
   if ns.preview then
     -- a sample: lit, with a cooldown under way
     ShowChecked(slot, false)
+    slot.spellChecked = false
     slot.icon:SetTexture(slot.spellIcon)
     slot.icon:SetDesaturated(false)
     slot:SetAlpha(1)
@@ -548,7 +565,10 @@ local function SetSlot(slot, look, aura, unit, enchant)
     local charges = Charges(slot)
     if charges ~= nil then slot.count:SetText(charges) end
   end
-  local checked = Checked(slot)
+  local formOn = FormLike(slot, aura, unit)
+  if formOn then slot.icon:SetTexture(ACTIVE_ICON) end
+  slot.spellChecked = Checked(slot) -- (what the form and action bar events can read again: ns:CheckIcons)
+  local checked = formOn or slot.spellChecked
   ShowChecked(slot, checked)
   local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown or checked
   slot.icon:SetDesaturated(not lit)
@@ -592,7 +612,7 @@ function ns:CheckIcons()
     for _, row in pairs(rows[side]) do
       for i = 1, #(row.spells or NONE) do
         local slot = row.slots[i]
-        if slot and (Checked(slot) and true or false) ~= (slot.isChecked and true or false) then
+        if slot and (Checked(slot) and true or false) ~= (slot.spellChecked and true or false) then
           dirty = true
           return
         end
