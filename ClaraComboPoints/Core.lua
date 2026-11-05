@@ -2515,6 +2515,9 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
     Print(L.HELP)
   elseif cmd == "souris" or cmd == "mouse" or cmd == "maus" then
     ns:MouseReportSoon()
+  elseif cmd == "chat" then
+    local ok, err = xpcall(function() ns:ChatReport() end, function(e) return tostring(e) end)
+    if not ok then Print("/cl chat: " .. tostring(err)) end
   elseif cmd == "debug" then
     for _, line in ipairs(ns:DebugIcons()) do Print(line) end
     for _, line in ipairs(ns.DebugClicks and ns:DebugClicks() or {}) do Print(line) end

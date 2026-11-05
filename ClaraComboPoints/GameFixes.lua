@@ -210,12 +210,17 @@ local function PutBarText(fs)
   fs:SetPoint("RIGHT", spot.bar, "RIGHT", spot.x, 0)
   placingBarText = false
 end
+-- (run inside the game's own calls too, a secure click's target change: its answers can be secret there, never
+-- compared; the text is then simply put back)
+local secretText = issecretvalue or function() return false end
 local function BarTextMoved(fs)
   if placingBarText then return end
   local spot = barTextSpots[fs]
   if not spot or ClassicFrames(spot.unit) then return end
+  local okN, n = pcall(fs.GetNumPoints, fs)
   local ok, point, rel = pcall(fs.GetPoint, fs, 1)
-  if ok and fs:GetNumPoints() == 1 and point == "RIGHT" and rel == spot.bar then return end
+  if okN and ok and not (secretText(n) or secretText(point) or secretText(rel))
+    and n == 1 and point == "RIGHT" and rel == spot.bar then return end
   PutBarText(fs)
 end
 local function KeepBarText(fs, unit, bar, x)
@@ -274,6 +279,7 @@ local texts = CreateFrame("Frame")
 texts:RegisterEvent("PLAYER_ENTERING_WORLD")
 texts:RegisterEvent("PLAYER_TARGET_CHANGED")
 texts:RegisterEvent("PLAYER_FOCUS_CHANGED")
+texts:RegisterEvent("PLAYER_REGEN_ENABLED") -- (moved by the game in a fight: put back after it)
 texts:SetScript("OnEvent", function(_, event)
   if event ~= "PLAYER_FOCUS_CHANGED" then ns:PlaceBarTexts("target") end
   if event ~= "PLAYER_TARGET_CHANGED" then ns:PlaceBarTexts("focus") end
@@ -602,6 +608,60 @@ end
 local function Say(text, r, g, b)
   if UIErrorsFrame and UIErrorsFrame.AddMessage then UIErrorsFrame:AddMessage(text, r or 1, g or .82, b or 0, 1, 1.5) end
 end
+-- /cl chat: each chat window, its tab and its typing bar as they stand (shown, alpha, parent, DynamicCam's fade marks),
+-- in the same window to copy: what makes a chat vanish.
+function ns:ChatReport()
+  local out = { ("Clara %s  ·  chat"):format(ns.VERSION or "") }
+  local function Pct(v)
+    v = Plain(v)
+    return type(v) == "number" and ("%.0f%%"):format(v * 100) or tostring(v)
+  end
+  local function Line(label, f)
+    if type(f) ~= "table" or type(f.GetAlpha) ~= "function" then return label .. ": none" end
+    local parent = Call(f, "GetParent")
+    local point, rel, relPoint, x, y = Call(f, "GetPoint", 1)
+    return ("%s: shown %s visible %s alpha %s eff %s ignoreParent %s parent %s [%s %s] %s %s %s %s,%s  dc fade %s after %s on %s"):format(label,
+      tostring(Plain(Call(f, "IsShown"))), tostring(Plain(Call(f, "IsVisible"))), Pct(Call(f, "GetAlpha")),
+      Pct(Call(f, "GetEffectiveAlpha")), tostring(Plain(Call(f, "IsIgnoringParentAlpha"))),
+      NameOf(parent), tostring(Plain(Call(f, "GetFrameStrata"))), Num(Call(f, "GetFrameLevel")), tostring(Plain(point)),
+      NameOf((not secretR(rel) and type(rel) == "table") and rel or nil), tostring(Plain(relPoint)), Num(x), Num(y),
+      tostring(rawget(f, "ludius_fadeout")), tostring(rawget(f, "ludius_alphaAfterFadeOut")), tostring(rawget(f, "ludius_alreadyOnIt")))
+  end
+  out[#out + 1] = Line("UIParent", UIParent)
+  out[#out + 1] = Line("GeneralDockManager", _G.GeneralDockManager)
+  local selected = _G.SELECTED_CHAT_FRAME or _G.SELECTED_DOCK_FRAME
+  out[#out + 1] = "selected: " .. NameOf(selected) .. "  ·  combat log: " .. NameOf(_G.COMBATLOG)
+  for i = 1, math.max(NUM_CHAT_WINDOWS or 0, 20) do
+    local chat = _G["ChatFrame" .. i]
+    if chat then
+      out[#out + 1] = ""
+      out[#out + 1] = Line("ChatFrame" .. i, chat) .. ("  docked %s faded %s"):format(tostring(rawget(chat, "isDocked")),
+        tostring(rawget(chat, "hasBeenFaded")))
+      out[#out + 1] = "    " .. Line("tab", _G["ChatFrame" .. i .. "Tab"])
+      out[#out + 1] = "    " .. Line("editBox", _G["ChatFrame" .. i .. "EditBox"])
+      out[#out + 1] = "    " .. Line("background", rawget(chat, "Background"))
+      out[#out + 1] = "    " .. Line("buttonFrame", rawget(chat, "buttonFrame"))
+    end
+  end
+  out[#out + 1] = ""
+  out[#out + 1] = Line("CombatLogQuickButtonFrame_Custom", _G.CombatLogQuickButtonFrame_Custom)
+  local dc = LibStub and LibStub("AceAddon-3.0", true)
+  dc = dc and dc:GetAddon("DynamicCam", true)
+  out[#out + 1] = ("DynamicCam: %s, situation %s"):format(dc and (dc.IsEnabled and tostring(dc:IsEnabled()) or "yes") or "none",
+    tostring(dc and dc.currentSituationID))
+  local text = table.concat(out, "\n")
+  if ns.sv then ns.sv.chatReport = text end
+  local box = ReportBox()
+  box.text = text
+  box.title:SetText(L.CHAT_REPORT_TITLE)
+  box.hint:SetText(L.MOUSE_REPORT_HINT)
+  box.edit:SetText(text)
+  box:Show()
+  box.edit:SetFocus()
+  box.edit:HighlightText()
+  return text
+end
+
 function ns:MouseReportSoon()
   print("|cffffd200Clara|r: " .. L.MOUSE_REPORT_SOON)
   -- the count on the middle of the screen: 3, 2, 1, then taken
