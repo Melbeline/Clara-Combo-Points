@@ -199,7 +199,6 @@ La page **Clara** elle-même a, tout en haut, **Replacer la fenêtre d'options**
 
 ## Corrections du jeu
 
-- **Statistiques de la fenêtre du personnage** : le menu de droite s'ouvre toujours sur **À distance** pour un chasseur, sur **Sorts** pour un prêtre, un mage et un démoniste (le jeu ne garde qu'un choix pour tout le compte) ; tu peux en changer tant qu'elle reste ouverte. Les autres classes : comme le jeu.
 - **Cadres de raid qui sautent en haut de l'écran** : à chaque mise à jour du raid (un membre ou un familier qui arrive ou s'en va, un changement de groupe…), le jeu donne un instant à leur conteneur une taille de 3000 × 3000, puis le remesure d'après ses cadres affichés ; l'Edit Mode le garde dans l'écran, donc pendant ce temps il est poussé tout en haut. Interface masquée (Alt-Z), aucun cadre n'est affiché, la mesure échoue et les cadres de raid réapparaissent en haut de l'écran. L'addon le remesure dès que ses cadres sont de nouveau affichés (interface réaffichée, hors combat) si sa taille est restée fausse : les cadres reviennent à leur place.
 
 ## Vitesse d'attaque, menace et distance sur la cible et le focus
