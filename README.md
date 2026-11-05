@@ -312,7 +312,7 @@ Les polices de `Media/Fonts` viennent de Google Fonts, sous licence SIL Open Fon
 - **DynamicCam** 2.21.5, de mpstark et LudiusMaximus, sous licence MIT (voir `Modules/DynamicCam/LICENSE`), avec ses bibliothèques (Ace3, LibCamera, LibEasing, LibHideUI, LibMountInfo, LibCompress : voir `Modules/DynamicCam/Libs/LICENSE.md`).
 - **DialogKey (Numy Edition)** 1.2.62, de Numy (d'après Foxthorn, N01ch et FuriousProgrammer), sous licence GNU GPL v3 (voir `Modules/DialogKey/LICENSE`), avec ses bibliothèques (Ace3, NumyAceEvent-3.0) ; sa vérification de version (LibVersionCheck, qui annonce aux autres joueurs la version utilisée) est retirée.
 - **XToLevel** (XToLevelNG) 12.1.5, d'Atli Þór et Bjarke Istrup Pedersen (voir `Modules/XToLevel/LICENSE.txt`), avec ses bibliothèques (Ace3, LibDataBroker-1.1).
-- **MinimapDrawer** 1.10.0 (fourni par Melbeline).
+- **MinimapDrawer** 1.11.0 (fourni par Melbeline ; la version standalone : github.com/Melbeline/MinimapDrawer).
 - **idTip** 12.1.4, de silverwind.
 - **Solo Raid Frame NV** 2.5, de Spridan.
 - **Enhanced Raid Frames** 3.16.17 (version Classic, convertie pour WoW Forever), de Britt W. Yazel, sous licence MIT (voir `Modules/EnhancedRaidFrames/LICENSE`), avec ses bibliothèques (Ace3, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibDeflate : voir `Modules/EnhancedRaidFrames/Libs/LibDeflate/LICENSE.txt`) ; LibDispel, LibDualSpec, LibRangeCheck et LibClassicDurations, inutiles ou faits pour d'autres versions du jeu, sont retirés.
