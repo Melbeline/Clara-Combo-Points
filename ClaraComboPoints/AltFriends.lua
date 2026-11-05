@@ -1,59 +1,140 @@
--- Clara Combo Points - one's other characters in the friends list. WoW Forever keeps the game's
--- character friends (C_FriendList: the server takes them and tells when they come online) but its
--- friends window shows only the Battle.net friends (the game's character friends list is off there).
--- Add Alt, between Add Friend and Send Message (the three the same width), adds a character by its
--- first name and surname, with the suggestions of the mail's To field (the account's characters
--- among them); the character friends then show in the list as the game draws them (online or not,
--- level, class, zone, tooltip, right-click menu), above the offline Battle.net friends. With the
--- client's own list of them on, the game shows them itself and nothing here runs.
+-- Clara Combo Points - one's other characters in the friends list. WoW Forever's friends list takes
+-- none of the account's own characters; Clara keeps them instead (for the whole account) and shows
+-- them in the friends window, above the offline Battle.net friends, in the game's look: online (the
+-- character played now, or one heard on the sync between the accounts in the last five minutes) or
+-- offline, with its level and class as Clara last saw them (the gold tracker) and when it was last
+-- played. Add Alt, between Add Friend and Send Message (the three the same width), adds one by its
+-- first name and surname with the suggestions of the mail's To field (the account's characters
+-- among them). Over a row: its tooltip; right-click: whisper (online) or remove it from the list.
 
 local ADDON, ns = ...
 local L = ns.L
 
-local GAP = 2               -- between the three foot buttons
-local LEFT, RIGHT = 4, 6    -- the game's margins for its two (FriendsFrameButtonTemplate_BottomLeft / _BottomRight)
+local GAP = 2                -- between the three foot buttons
+local LEFT, RIGHT = 4, 6     -- the game's margins for its two (FriendsFrameButtonTemplate_BottomLeft / _BottomRight)
 local NAME_MAX = 12 + 1 + 64 -- a first name, a space, a surname (the game's own Add Friend box)
+local HEARD = 300            -- seconds: a character heard on the sync this recently is online
+local TYPE = "claraAlt"      -- the list entries' button type (the game's: numbers)
 
 local AltFriends = {}
 ns.AltFriends = AltFriends
+AltFriends.TYPE = TYPE
 
--- The game shows its character friends itself (other clients): nothing to add.
-local function GameShowsThem()
-  local list = C_FriendList
-  if not (list and list.GetNumFriends and list.AddFriend) then return true end
-  if list.IsLegacyFriendSystemEnabled then
-    local ok, on = pcall(list.IsLegacyFriendSystemEnabled)
-    return ok and on == true
+---------------------------------------------------------------------------
+-- The list (ns.sv.altFriends: lower-case whole name -> { name = "First Surname" })
+---------------------------------------------------------------------------
+local function Normal(name)
+  if type(name) ~= "string" then return nil end
+  name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+  if name == "" or #name > NAME_MAX then return nil end
+  return name
+end
+
+local function List()
+  local sv = ns.sv
+  if not sv then return nil end
+  if type(sv.altFriends) ~= "table" then sv.altFriends = {} end
+  for key, alt in pairs(sv.altFriends) do
+    if type(key) ~= "string" or type(alt) ~= "table" or not Normal(alt.name) then sv.altFriends[key] = nil end
   end
+  return sv.altFriends
+end
+AltFriends.List = List
+
+function AltFriends.Add(name)
+  name = Normal(name)
+  local list = List()
+  if not (name and list) then return false end
+  list[name:lower()] = { name = name }
+  AltFriends.Refresh()
   return true
 end
-AltFriends.GameShowsThem = GameShowsThem
+
+function AltFriends.Remove(name)
+  local list = List()
+  if not (list and type(name) == "string") then return false end
+  list[name:lower()] = nil
+  AltFriends.Refresh()
+  return true
+end
+
+-- In the list's order: online first, then by name.
+local function Sorted()
+  local out = {}
+  for _, alt in pairs(List() or {}) do out[#out + 1] = alt end
+  table.sort(out, function(a, b)
+    local oa, ob = AltFriends.Online(a.name), AltFriends.Online(b.name)
+    if oa ~= ob then return oa end
+    return a.name:lower() < b.name:lower()
+  end)
+  return out
+end
+AltFriends.Sorted = Sorted
+
+---------------------------------------------------------------------------
+-- What Clara knows of a character: online, level, class, last played
+---------------------------------------------------------------------------
+local function Realm()
+  local realm = GetNormalizedRealmName and GetNormalizedRealmName() or (GetRealmName and GetRealmName() or "")
+  return (realm or ""):gsub("%s", "")
+end
+
+-- Its key in the gold tracker and the sync ("First-Realm": the first name the game gives)
+local function KeyOf(name) return (name:match("^(%S+)") or name) .. "-" .. Realm() end
+
+local function IsMe(name)
+  local me = ns.FullName and ns:FullName("player")
+  return type(me) == "string" and me:lower() == name:lower()
+end
+
+function AltFriends.Online(name)
+  if IsMe(name) then return true end
+  local seen = ns.Sync and ns.Sync.seen and ns.Sync.seen[KeyOf(name)]
+  return type(seen) == "number" and GetTime() - seen < HEARD
+end
+
+function AltFriends.Facts(name)
+  local facts = {}
+  if IsMe(name) then
+    facts.level = UnitLevel and UnitLevel("player")
+    facts.class = select(2, UnitClass("player"))
+    facts.zone = GetRealZoneText and GetRealZoneText() or (GetZoneText and GetZoneText())
+    return facts
+  end
+  local money = ns.Money and ns.Money.db and ns.Money.db.chars
+  local rec = money and money[KeyOf(name)]
+  if rec then facts.level, facts.class, facts.at = rec.l, rec.c, rec.at end
+  return facts
+end
+
+local function ClassName(class)
+  return class and (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class]) or class
+end
+
+local function Ago(at)
+  if type(at) ~= "number" or at <= 0 or not time then return nil end
+  local seconds = math.max(60, time() - at)
+  local text = SecondsToTime and SecondsToTime(seconds, false, false, 1) or (math.floor(seconds / 60) .. " min")
+  return L.ALT_LAST_SEEN:format(text)
+end
 
 ---------------------------------------------------------------------------
 -- Add Alt: a name typed (first name and surname), with the To field's suggestions
 ---------------------------------------------------------------------------
-function AltFriends.Add(name)
-  if type(name) ~= "string" then return false end
-  name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
-  if name == "" then return false end
-  local ok = pcall(C_FriendList.AddFriend, name)
-  return ok
-end
-
 local function Box(dialog) return dialog and (dialog.GetEditBox and dialog:GetEditBox() or dialog.editBox) end
 
 local function Dialog()
   if StaticPopupDialogs.CLARA_ADD_ALT then return end
-  local list = AUTOCOMPLETE_LIST and AUTOCOMPLETE_LIST.MAIL
+  local choices = AUTOCOMPLETE_LIST and AUTOCOMPLETE_LIST.MAIL
   StaticPopupDialogs.CLARA_ADD_ALT = {
     text = L.ALT_ADD_ASK,
     button1 = ACCEPT or "Accept",
     button2 = CANCEL or "Cancel",
     hasEditBox = 1,
     autoCompleteSource = C_AutoComplete and C_AutoComplete.GetAutoCompleteResults or nil,
-    autoCompleteArgs = list and { list.include, list.exclude } or nil,
+    autoCompleteArgs = choices and { choices.include, choices.exclude } or nil,
     maxLetters = NAME_MAX,
-    OnAccept = function(dialog) AltFriends.Add(Box(dialog) and Box(dialog):GetText()) end,
+    OnAccept = function(dialog) local box = Box(dialog) if box then AltFriends.Add(box:GetText()) end end,
     OnShow = function(dialog) local box = Box(dialog) if box then box:SetFocus() end end,
     OnHide = function(dialog) local box = Box(dialog) if box then box:SetText("") end end,
     EditBoxOnEnterPressed = function(editBox)
@@ -97,10 +178,7 @@ end
 
 function AltFriends.LayFoot()
   local add, send = FriendsFrameAddFriendButton, FriendsFrameSendMessageButton
-  if not (add and send and FriendsFrame) or GameShowsThem() then
-    if altButton then altButton:Hide() end
-    return false
-  end
+  if not (add and send and FriendsFrame) then return false end
   altButton = altButton or MakeButton(add:GetParent())
   AltFriends.button = altButton
   local width = FriendsFrame:GetWidth() or 0
@@ -117,7 +195,7 @@ function AltFriends.LayFoot()
 end
 
 ---------------------------------------------------------------------------
--- The list: the character friends above the offline Battle.net friends
+-- The list: the alts above the offline Battle.net friends
 ---------------------------------------------------------------------------
 local function OfflineBNet(id)
   if not (C_BattleNet and C_BattleNet.GetFriendAccountInfo) then return false end
@@ -127,18 +205,25 @@ local function OfflineBNet(id)
   return not (game and game.isOnline)
 end
 
+-- One the game lists itself (a character friend of another account): left where the game puts it.
+local function GameFriend(name)
+  if not (C_FriendList and C_FriendList.GetFriendInfo) then return false end
+  local ok, info = pcall(C_FriendList.GetFriendInfo, name)
+  return ok and type(info) == "table"
+end
+
 function AltFriends.AddToList()
-  if GameShowsThem() then return 0 end
   local frame = FriendsListFrame
   local box = frame and frame.ScrollBox
   if not (box and box.GetDataProvider and frame:IsShown()) then return 0 end
   local data = box:GetDataProvider()
   if not data then return 0 end
-  local ok, total = pcall(C_FriendList.GetNumFriends)
-  total = ok and tonumber(total) or 0
-  if total <= 0 then return 0 end
-  local WOW, BNET, DIVIDER = FRIENDS_BUTTON_TYPE_WOW, FRIENDS_BUTTON_TYPE_BNET, FRIENDS_BUTTON_TYPE_DIVIDER
-  -- (the game lists them online first: their ids in that order)
+  local alts = {}
+  for _, alt in ipairs(Sorted()) do
+    if not GameFriend(alt.name) then alts[#alts + 1] = alt end
+  end
+  if #alts == 0 then return 0 end
+  local BNET, DIVIDER = FRIENDS_BUTTON_TYPE_BNET, FRIENDS_BUTTON_TYPE_DIVIDER
   local size = data:GetSize()
   local at
   for i = 1, size do
@@ -151,20 +236,130 @@ function AltFriends.AddToList()
     if last and last.buttonType ~= DIVIDER then block[#block + 1] = { buttonType = DIVIDER } end
     at = size + 1
   end
-  for i = 1, total do block[#block + 1] = { id = i, buttonType = WOW } end
+  for i, alt in ipairs(alts) do block[#block + 1] = { id = i, buttonType = TYPE, alt = alt } end
   if at <= size then block[#block + 1] = { buttonType = DIVIDER } end -- (then the offline Battle.net friends)
   for k, entry in ipairs(block) do data:InsertAtIndex(entry, at + k - 1) end
-  return total
+  return #alts
+end
+
+function AltFriends.Refresh()
+  if FriendsListFrame and FriendsListFrame:IsShown() and FriendsList_Update then FriendsList_Update(true) end
 end
 
 ---------------------------------------------------------------------------
--- Hooks: the game's own list update, the window shown
+-- A row: the game's friend row, drawn here; the mouse on a layer of ours (the game's own scripts read
+-- its friends only)
+---------------------------------------------------------------------------
+local function Tip(catcher)
+  local alt = catcher.alt
+  if not alt then return end
+  local facts = AltFriends.Facts(alt.name)
+  GameTooltip:SetOwner(catcher, "ANCHOR_RIGHT")
+  GameTooltip:SetText(alt.name, 1, 0.82, 0)
+  if facts.level and facts.class then
+    GameTooltip:AddLine((FRIENDS_LEVEL_TEMPLATE or "Level %d %s"):format(facts.level, ClassName(facts.class)), 1, 1, 1)
+  end
+  if AltFriends.Online(alt.name) then
+    GameTooltip:AddLine(facts.zone or L.ALT_ONLINE, 0.2, 1, 0.2)
+  else
+    GameTooltip:AddLine(Ago(facts.at) or FRIENDS_LIST_OFFLINE or "Offline", 0.6, 0.6, 0.6)
+  end
+  GameTooltip:AddLine(L.ALT_ROW_HINT, 0.6, 0.6, 0.6, true)
+  GameTooltip:Show()
+end
+
+local function Menu(catcher)
+  local alt = catcher.alt
+  if not (alt and MenuUtil and MenuUtil.CreateContextMenu) then return end
+  MenuUtil.CreateContextMenu(catcher, function(_, root)
+    root:CreateTitle(alt.name)
+    if AltFriends.Online(alt.name) and not IsMe(alt.name) then
+      root:CreateButton(WHISPER or "Whisper", function()
+        local tell = (ChatFrameUtil and ChatFrameUtil.SendTell) or ChatFrame_SendTell
+        if tell then tell(alt.name) end
+      end)
+    end
+    root:CreateButton(L.ALT_REMOVE, function() AltFriends.Remove(alt.name) end)
+  end)
+end
+
+local function Catcher(button)
+  local catcher = button.claraAlt
+  if catcher then return catcher end
+  catcher = CreateFrame("Button", nil, button)
+  catcher:SetAllPoints(button)
+  catcher:SetFrameLevel(button:GetFrameLevel() + 10)
+  catcher:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  catcher:SetScript("OnEnter", function(self)
+    if button.LockHighlight then button:LockHighlight() end
+    Tip(self)
+  end)
+  catcher:SetScript("OnLeave", function()
+    if button.UnlockHighlight then button:UnlockHighlight() end
+    GameTooltip:Hide()
+  end)
+  catcher:SetScript("OnClick", function(self, which) if which == "RightButton" then Menu(self) end end)
+  button.claraAlt = catcher
+  return catcher
+end
+
+local function Color(color, alpha)
+  if type(color) == "table" and color.GetRGBA then return color:GetRGBA() end
+  return 0.588, 0.588, 0.588, alpha or 0.05
+end
+
+function AltFriends.DrawRow(button, entry)
+  if not button then return end
+  local alt = entry and entry.buttonType == TYPE and entry.alt
+  if not alt then
+    if button.claraAlt then button.claraAlt:Hide(); button.claraAlt.alt = nil end
+    return
+  end
+  local online = AltFriends.Online(alt.name)
+  local facts = AltFriends.Facts(alt.name)
+  local nameText, info = alt.name, nil
+  if online then
+    if facts.level and facts.class then
+      nameText = alt.name .. ", " .. (FRIENDS_LEVEL_TEMPLATE or "Level %d %s"):format(facts.level, ClassName(facts.class))
+    end
+    info = facts.zone or L.ALT_ONLINE
+  else
+    info = Ago(facts.at) or FRIENDS_LIST_OFFLINE or "Offline"
+  end
+  if button.background then
+    button.background:SetColorTexture(Color(online and FRIENDS_WOW_BACKGROUND_COLOR or FRIENDS_OFFLINE_BACKGROUND_COLOR))
+  end
+  if button.status then
+    button.status:SetTexture(online and (FRIENDS_TEXTURE_ONLINE or "Interface\\FriendsFrame\\StatusIcon-Online")
+      or (FRIENDS_TEXTURE_OFFLINE or "Interface\\FriendsFrame\\StatusIcon-Offline"))
+  end
+  if button.name then
+    button.name:SetText(nameText)
+    local r, g, b = Color(online and FRIENDS_WOW_NAME_COLOR or FRIENDS_GRAY_COLOR)
+    if not online and not FRIENDS_GRAY_COLOR then r, g, b = 0.486, 0.518, 0.541 end
+    button.name:SetTextColor(r, g, b)
+  end
+  if button.info then button.info:SetText(info) end
+  for _, key in ipairs({ "gameIcon", "travelPassButton", "summonButton", "Favorite" }) do
+    if button[key] then button[key]:Hide() end
+  end
+  button:Show()
+  local catcher = Catcher(button)
+  catcher.alt = alt
+  catcher:Show()
+end
+
+---------------------------------------------------------------------------
+-- Hooks: the game's own list update and rows, the window shown
 ---------------------------------------------------------------------------
 local hooked = false
 local function Hook()
   if hooked or not FriendsFrame then return end
   hooked = true
   if FriendsList_Update then hooksecurefunc("FriendsList_Update", function() AltFriends.AddToList() end) end
+  if FriendsFrame_UpdateFriendButton then
+    hooksecurefunc("FriendsFrame_UpdateFriendButton", function(button, entry) AltFriends.DrawRow(button, entry) end)
+  end
   FriendsFrame:HookScript("OnShow", function() AltFriends.LayFoot() end)
   if FriendsListFrame then FriendsListFrame:HookScript("OnShow", function() AltFriends.LayFoot() end) end
 end
@@ -174,5 +369,6 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self)
   self:UnregisterAllEvents()
+  List()
   Hook()
 end)

@@ -4,7 +4,7 @@
 ## Notes-frFR: Clara Combo Points (points de combo, énergie, rage, mana et vie avec icônes de buffs/debuffs, pour toutes les classes) et les fonctions d'autres addons, intégrées (WoW Forever). /clara ou /cl
 ## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
-## Version: 1.6.0
+## Version: 1.7.0
 ## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, WT_WeaponGrouping, WT_ShowKnownWeaponSkills, WT_SpellDisplay, WT_SideBySide, WT_ScrollTwoPages, WT_FloatingFramePoint, WT_WaypointProvider, WT_ProfessionTabPosition, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB
 ## SavedVariablesPerCharacter: WT_LearnedPetAbilities, WT_NeedsToOpenBeastTraining, WT_IgnoredSpells, WT_PriceFaction, WT_HideWeaponSkillSwitcher, WT_Crafting, ClaraLFGForeverCharDB
 ## LoadSavedVariablesFirst: true
