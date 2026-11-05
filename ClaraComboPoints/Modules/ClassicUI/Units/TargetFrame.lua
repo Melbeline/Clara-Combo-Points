@@ -277,7 +277,10 @@ local function SkinTarget(frame, unit)
     if blizzHealth then
         ns.Fade(blizzHealth)
         UF.HoldCover(healthContainer, health)
-        BarTexts(frame, contextual, health, { blizzHealth.TextString, healthContainer.LeftText, healthContainer.RightText,
+        -- The value and the percent the game writes: the bar's own strings (as the player frame's), the container's where the
+        -- bar has none. The container's alone left the value on the client bar, wider than ours: out by the portrait.
+        BarTexts(frame, contextual, health, { blizzHealth.TextString or healthContainer.HealthBarText,
+            blizzHealth.LeftText or healthContainer.LeftText, blizzHealth.RightText or healthContainer.RightText,
             healthContainer.DeadText, healthContainer.UnconsciousText }, TEXTS, blizzHealth, frame, unit, false)
         AttachOverlays(blizzHealth, health, healthContainer.HealthBarMask)
     end
