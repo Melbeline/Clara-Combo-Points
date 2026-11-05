@@ -14,7 +14,9 @@ local ADDON, ns = ...
 _G.ClaraComboPoints = ns
 local L = ns.L
 
-ns.VERSION = "1.6.0"
+-- (the TOC's: the options window's title and the settings page show the build in the game)
+local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+ns.VERSION = meta and meta(ADDON, "Version") or "1.7.0"
 
 local NUM_POINTS    = 5
 local POWER         = Enum and Enum.PowerType or {}
