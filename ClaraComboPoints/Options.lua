@@ -263,6 +263,22 @@ local function Button(parent, label, w, h, onClick)
   else
     b:SetText(label)
   end
+  -- its label held inside it: cut with "..." when longer than the button (the whole of it at the mouse)
+  local fs = b:GetFontString() or b.Text
+  if fs then
+    fs:ClearAllPoints()
+    fs:SetPoint("LEFT", b, "LEFT", 5, 0)
+    fs:SetPoint("RIGHT", b, "RIGHT", -5, 0)
+    if fs.SetWordWrap then fs:SetWordWrap(false) end
+    if fs.SetMaxLines then fs:SetMaxLines(1) end
+    b:SetScript("OnEnter", function(self)
+      if not (GameTooltip and fs.IsTruncated and fs:IsTruncated()) then return end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText(fs:GetText() or "", 1, 1, 1)
+      GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  end
   b:SetScript("OnClick", function(self) ClickSound(); onClick(self) end)
   function b:SetLabel(s) self:SetText(s) end
   -- a selected option keeps its highlight lit, with white text
@@ -3180,16 +3196,23 @@ local function Later(fn)
 end
 
 -- This character's settings into a profile; what it holds, once, in the chat.
-local function AltsSave(name)
-  if not ns:SaveAltProfile(name) then return end
-  local lines = ns:AltSummary(name) or {}
-  ns.Print(L.ALTS_SAVED:format(name) .. " " .. table.concat(lines, " · ", 1, min(2, #lines)))
+local function AltsSave(name) ns:SaveAltProfileSay(name) end
+
+-- Changes still waiting for a reload: asked first whether to reload (then saved once reloaded), or not now
+-- (nothing saved). Nothing waiting: go on (proceed).
+local function AltsReloadFirst(name, proceed)
+  local waiting = ns:ReloadPending()
+  if #waiting == 0 then return proceed() end
+  ns:Ask(L.ALTS_RELOAD_ASK:format(table.concat(waiting, ", "), name), false,
+    { L.ALTS_RELOAD_SAVE, function() ns:SaveAltProfileAfterReload(name) end }, { L.ALTS_NOT_NOW })
 end
 
 -- The header's button: into the profile shown on its right (none yet: a first one).
 local function AltsAskSave()
   local name = ns:AltDefault() or L.ALTS_FIRST_NAME
-  ns:Ask(L.ALTS_SAVE_ASK:format(name), false, { L.ALTS_SAVE, function() AltsSave(name) end }, { L.CANCEL })
+  AltsReloadFirst(name, function()
+    ns:Ask(L.ALTS_SAVE_ASK:format(name), false, { L.ALTS_SAVE, function() AltsSave(name) end }, { L.CANCEL })
+  end)
 end
 
 local function AltsPicker(p, textBox)
@@ -3197,9 +3220,11 @@ local function AltsPicker(p, textBox)
     ns:AskText(L.ALTS_NEW_ASK, UnitName and UnitName("player") or "", L.ALTS_SAVE, function(typed)
       local name = ns:AltProfileName(typed)
       if not name then return end
-      if not ns:AltProfile(name) then return AltsSave(name) end
       Later(function()
-        ns:Ask(L.PROFILE_OVERWRITE_ASK:format(name), false, { L.PROFILE_OVERWRITE, function() AltsSave(name) end }, { L.CANCEL })
+        AltsReloadFirst(name, function()
+          if not ns:AltProfile(name) then return AltsSave(name) end
+          ns:Ask(L.PROFILE_OVERWRITE_ASK:format(name), false, { L.PROFILE_OVERWRITE, function() AltsSave(name) end }, { L.CANCEL })
+        end)
       end)
     end)
   end
@@ -3284,6 +3309,10 @@ local function AltsPicker(p, textBox)
       if now then
         root:CreateButton(L.ALTS_APPLY_NOW:format(now), function() Apply(now) end)
         root:CreateButton(L.ALTS_EXPORT:format(now), function() Export(now) end)
+      end
+      if #names > 0 then -- any profile, the one picked or another: its list
+        local export = root:CreateButton(L.ALTS_EXPORT_ONE)
+        for _, name in ipairs(names) do export:CreateButton(name, function() Export(name) end) end
       end
       root:CreateButton(L.ALTS_IMPORT, Import)
       if now then root:CreateButton(L.ALTS_DELETE:format(now), function() Delete(now) end) end

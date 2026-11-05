@@ -2129,6 +2129,23 @@ function ns:Ask(text, alert, ...)
   return StaticPopup_Show(ASK, text, nil, buttons) ~= nil
 end
 
+-- What still waits for a reload of the interface to take effect, by name (each part of the addon tells
+-- it: a module turned on or off, Leatrix Plus's options marked *, a profile just put on).
+local reloadChecks = {}
+function ns:AddReloadCheck(fn) reloadChecks[#reloadChecks + 1] = fn end
+function ns:ReloadPending()
+  local names = {}
+  for _, fn in ipairs(reloadChecks) do
+    local ok, got = pcall(fn)
+    if ok and type(got) == "string" then
+      names[#names + 1] = got
+    elseif ok and type(got) == "table" then
+      for _, n in ipairs(got) do if type(n) == "string" then names[#names + 1] = n end end
+    end
+  end
+  return names
+end
+
 -- A question with a line to type (a name) in the game's dialog box: fn(text) on its first button
 -- or Enter; Cancel and Escape close it.
 local ASK_TEXT = "CLARACOMBOPOINTS_ASK_TEXT"

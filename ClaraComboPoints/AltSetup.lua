@@ -63,7 +63,14 @@ function ns:InitAlts(sv)
     for who, v in pairs(alts.done) do if type(who) == "string" and v == true then done[who] = true end end
   end
   local default = type(alts.default) == "string" and profiles[alts.default] and alts.default or nil
-  sv.alts = { profiles = profiles, done = done, default = default }
+  -- a save asked for once the interface is reloaded (the header's button, changes waiting for a reload)
+  local after = alts.after
+  if type(after) ~= "table" or type(after.name) ~= "string" or type(after.who) ~= "string" or type(after.when) ~= "number" then
+    after = nil
+  else
+    after = { name = after.name, who = after.who, when = after.when }
+  end
+  sv.alts = { profiles = profiles, done = done, default = default, after = after }
 end
 
 local function Store()
@@ -201,6 +208,25 @@ function ns:SaveAltProfile(name)
   return profile
 end
 
+-- Saved, and said once in the chat with what it holds.
+function ns:SaveAltProfileSay(name)
+  local profile = self:SaveAltProfile(name)
+  if not profile then return nil end
+  local lines = self:AltSummary(name) or {}
+  self.Print(L.ALTS_SAVED:format(name) .. " " .. table.concat(lines, " · ", 1, min(2, #lines)))
+  return profile
+end
+
+-- Saved once the interface is reloaded (changes waiting for a reload take effect first, and are written).
+local AFTER_WINDOW = 900 -- (seconds: a save asked for longer ago than this is dropped)
+function ns:SaveAltProfileAfterReload(name)
+  local store, me = Store(), Me()
+  if not (store and me) then return false end
+  store.after = { name = name, who = me, when = time and time() or 0 }
+  if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+  return true
+end
+
 function ns:DeleteAltProfile(name)
   local store = Store()
   if not (store and name and store.profiles[name]) then return end
@@ -302,6 +328,8 @@ end
 
 local pending -- a profile to put on this character once out of combat and Edit Mode ready
 local waiter = CreateFrame("Frame")
+local reloadDue -- a profile put on this session, the reload it asked for not done yet
+ns:AddReloadCheck(function() return reloadDue and L.ALTS_RELOAD_PROFILE:format(reloadDue) end)
 
 local function Finish(name, asked)
   local p = ns:AltProfile(name)
@@ -312,6 +340,7 @@ local function Finish(name, asked)
   local store, me = Store(), Me()
   if store and me then store.done[me] = true end
   if ns.RefreshOptions then ns:RefreshOptions() end
+  reloadDue = name
   local text = (asked and L.ALTS_APPLIED_ASK or L.ALTS_GOT_ASK):format(name)
   if p.layout and not layoutDone then text = text .. "\n\n" .. L.ALTS_LAYOUT_MISSING:format(p.layout.name) end
   local function Ask()
@@ -351,9 +380,18 @@ function ns:ApplyAltProfile(name, asked)
   return true
 end
 
--- A new character's first login: the alts' profile, once.
+-- A new character's first login: the alts' profile, once. And a save asked for before the reload.
 function ns:AltsAtLogin()
   local store, me = Store(), Me()
+  local after = store and store.after
+  if after then
+    store.after = nil
+    local fresh = time and (time() - after.when) <= AFTER_WINDOW
+    if after.who == me and fresh then
+      local function Save() ns:SaveAltProfileSay(after.name) end
+      if C_Timer and C_Timer.After then C_Timer.After(3, Save) else Save() end -- (Edit Mode and the game's settings in place)
+    end
+  end
   if not (store and me and store.default) or store.done[me] then return end
   local level = UnitLevel and UnitLevel("player")
   if type(level) ~= "number" or level < 1 or level > NEW_LEVEL then return end
