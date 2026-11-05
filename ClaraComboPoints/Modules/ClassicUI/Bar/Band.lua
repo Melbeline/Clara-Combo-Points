@@ -287,7 +287,10 @@ local function IconScale(bar)
     local own = (ns.db and ns.db.classicBarSize == true) and 1 or (45 / 36)
     if own <= 0 then own = 1 end
     if scale <= 0 then scale = 1 end
-    return scale * own
+    -- (Clara Combo Points) its Bar scale module's slider on top: the bars, micro menu and bags at once
+    local clara = ClaraNS.BarScaleFactor and ClaraNS.BarScaleFactor() or 1
+    if type(clara) ~= "number" or clara <= 0 then clara = 1 end
+    return scale * own * clara
 end
 B.IconScale = IconScale
 
