@@ -5961,6 +5961,8 @@
 				hooksecurefunc("CompactRaidFrameManager_UpdateOptionsFlowContainer", function()
 					if CompactRaidFrameManager and CompactRaidFrameManagerDisplayFrameHiddenModeToggle then
 						local void, void, void, void, y = CompactRaidFrameManager:GetPoint()
+						-- (Clara Combo Points: a secret place is never added to; a protected button is not moved in combat)
+						if type(y) ~= "number" or (issecretvalue and issecretvalue(y)) or InCombatLockdown() then return end
 						CompactRaidFrameManagerDisplayFrameHiddenModeToggle:SetWidth(40)
 						CompactRaidFrameManagerDisplayFrameHiddenModeToggle:ClearAllPoints()
 						CompactRaidFrameManagerDisplayFrameHiddenModeToggle:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, y + 32)
@@ -6554,7 +6556,7 @@
 				moving = true
 				ChatFrame1:StartMoving()
 			end)
-			ChatFrame1Tab:SetScript("OnMouseUp", function(self,arg1)
+			ChatFrame1Tab:HookScript("OnMouseUp", function(self,arg1) -- (Clara Combo Points: hooked, the tab's own kept)
 				if arg1 == "LeftButton" and (sizing or moving) then
 					sizing, moving = nil, nil
 					ChatFrame1:StopMovingOrSizing()
@@ -6603,6 +6605,10 @@
 			--	Error message events
 			local OrigErrHandler = UIErrorsFrame:GetScript('OnEvent')
 			UIErrorsFrame:SetScript('OnEvent', function (self, event, id, err, ...)
+				-- (Clara Combo Points: a message this client keeps secret, or none, is never compared: the game's own way)
+				if type(err) ~= "string" or (issecretvalue and issecretvalue(err)) then
+					return OrigErrHandler(self, event, id, err, ...)
+				end
 				if event == "UI_ERROR_MESSAGE" then
 					-- Hide error messages
 					if LeaPlusLC["ShowErrorsFlag"] == 1 then
