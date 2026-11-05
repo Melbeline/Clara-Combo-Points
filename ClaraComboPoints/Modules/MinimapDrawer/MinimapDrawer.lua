@@ -1636,7 +1636,13 @@ local function Toggle()
     if menu:IsShown() then Close() else Open() end
 end
 
+-- (Clara Combo Points: the mouse already on the circle as the world shows (a reload by the portrait's
+-- double middle-click, the cursor left there) opens nothing: it has to leave the circle and come back)
+local hoverArmed = true
+local quietUntil = math.huge -- (until the world has shown, and a moment after)
 hotspot:SetScript("OnEnter", function()
+    if GetTime() < quietUntil then hoverArmed = false end
+    if not hoverArmed then return end
     if unlocked or menu:IsShown() or not DB.autoopen then return end
     CancelHover()
     local delay = DB.delay
@@ -1650,7 +1656,17 @@ hotspot:SetScript("OnEnter", function()
     end
 end)
 
-hotspot:SetScript("OnLeave", CancelHover)
+hotspot:SetScript("OnLeave", function()
+    hoverArmed = true
+    CancelHover()
+end)
+local function DisarmIfUnderMouse()
+    local ok, over = pcall(hotspot.IsMouseOver, hotspot)
+    if ok and not (issecretvalue and issecretvalue(over)) and over == true then
+        hoverArmed = false
+        CancelHover()
+    end
+end
 
 hotspot:SetScript("OnClick", function()
     if unlocked then return end
@@ -1897,6 +1913,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_LOGIN" then
         OnLogin()
     elseif event == "PLAYER_ENTERING_WORLD" then
+        quietUntil = GetTime() + 2
+        DisarmIfUnderMouse() -- (Clara Combo Points: no drawer opened by a mouse left on the circle)
         -- les autres addons créent leurs boutons au fil du chargement
         C_Timer.After(1, Scan)
         C_Timer.After(3, Scan)

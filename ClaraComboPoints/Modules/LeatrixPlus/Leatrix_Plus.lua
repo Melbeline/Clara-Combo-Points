@@ -110,11 +110,31 @@
 		TooltipAnchorMenu = function() return ClaraNS.TooltipAnchorActive and ClaraNS.TooltipAnchorActive() and "Tooltip Anchor" end,
 	}
 	local function ClaraOwner(item)
+		if item and item == LeaPlusCB["UseEasyChatResizing"] then return true end -- (removed: always greyed)
 		for key, owner in pairs(claraOwned) do
 			if LeaPlusCB[key] == item then return owner() end
 		end
 	end
+	-- (Clara: options taken out of Leatrix Plus here: greyed, their tooltip says why)
+	local claraRemoved = { UseEasyChatResizing = "LEA_REMOVED_CHAT_RESIZE" }
 	function LeaPlusLC:ClaraLockOwned()
+		for key, text in pairs(claraRemoved) do
+			local item = LeaPlusCB[key]
+			if item then
+				LeaPlusLC:LockItem(item, true)
+				if not item.claraNote then
+					item.claraNote = true
+					local note = ClaraNS.L[text]
+					if item.tiptext then
+						item.tiptext = item.tiptext .. "|n|n" .. note
+					else
+						item.tiptext = note
+						item:HookScript("OnEnter", LeaPlusLC.TipSee)
+						item:HookScript("OnLeave", GameTooltip_Hide)
+					end
+				end
+			end
+		end
 		for key, owner in pairs(claraOwned) do
 			local item, name = LeaPlusCB[key], owner()
 			if item and name then
@@ -6532,69 +6552,8 @@
 		--	Use easy chat frame resizing
 		----------------------------------------------------------------------
 
-		if LeaPlusLC["UseEasyChatResizing"] == "On" and not LeaLockList["UseEasyChatResizing"] then
-			-- (Clara Combo Points: the chat's place and size kept by Clara (ChatPlace.lua): the game puts the
-			-- general chat where Edit Mode says only, and reads no other saved size for it)
-			local function KeepChatPlace()
-				if ClaraNS.ChatPlace then ClaraNS.ChatPlace.Keep() end
-			end
-			local sizing
-			ChatFrame1Tab:HookScript("OnMouseDown", function(self,arg1)
-				if arg1 == "LeftButton" then
-					if select(8, GetChatWindowInfo(1)) then
-						sizing = true
-						ChatFrame1:StartSizing("TOP")
-					end
-				end
-			end)
-			-- (Clara Combo Points: unlocked, its tab dragged moves it, as the game's other chat windows,
-			-- which moves it only in Edit Mode; past the screen's edges too with Unclamp chat frame)
-			local moving
-			ChatFrame1Tab:HookScript("OnDragStart", function()
-				if sizing or select(8, GetChatWindowInfo(1)) then return end
-				if EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() then return end
-				moving = true
-				ChatFrame1:StartMoving()
-			end)
-			ChatFrame1Tab:HookScript("OnMouseUp", function(self,arg1) -- (Clara Combo Points: hooked, the tab's own kept)
-				if arg1 == "LeftButton" and (sizing or moving) then
-					sizing, moving = nil, nil
-					ChatFrame1:StopMovingOrSizing()
-					KeepChatPlace()
-				end
-			end)
-
-			-- (Clara Combo Points: a grip in the bottom right corner, the game's own windows' one, faint until
-			-- hovered: the chat sized there without Edit Mode and its blue overlay, past the screen's edges
-			-- too with Unclamp chat frame; hidden while Edit Mode shows its own)
-			local grip = CreateFrame("Button", "ClaraChatResizeGrip", ChatFrame1)
-			grip:SetSize(16, 16)
-			grip:SetPoint("BOTTOMRIGHT", ChatFrame1Background or ChatFrame1, "BOTTOMRIGHT", 0, 0)
-			grip:SetFrameLevel(ChatFrame1:GetFrameLevel() + 10)
-			grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-			grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-			grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-			grip:SetAlpha(0.5)
-			grip:SetScript("OnEnter", function(self) self:SetAlpha(1) end)
-			grip:SetScript("OnLeave", function(self) if not self.sizing then self:SetAlpha(0.5) end end)
-			grip:SetScript("OnMouseDown", function(self, button)
-				if button ~= "LeftButton" then return end
-				self.sizing = true
-				ChatFrame1:SetResizable(true)
-				ChatFrame1:StartSizing("BOTTOMRIGHT")
-			end)
-			grip:SetScript("OnMouseUp", function(self)
-				if not self.sizing then return end
-				self.sizing = nil
-				ChatFrame1:StopMovingOrSizing()
-				if not self:IsMouseOver() then self:SetAlpha(0.5) end
-				KeepChatPlace()
-			end)
-			if EventRegistry and EventRegistry.RegisterCallback then
-				EventRegistry:RegisterCallback("EditMode.Enter", function() grip:Hide() end, grip)
-				EventRegistry:RegisterCallback("EditMode.Exit", function() grip:Show() end, grip)
-			end
-		end
+		-- (Clara Combo Points: Use easy resizing removed: the general chat is placed and sized in Edit Mode only;
+		-- moved or sized outside it, the chat and Edit Mode pulled it each their way)
 
 		----------------------------------------------------------------------
 		--	Hide error messages
@@ -13527,7 +13486,7 @@
 				-- (Clara Combo Points: its own defaults, on once for a setup made before them; set by hand
 				-- afterwards, they are kept)
 				if LeaPlusDB["ClaraDefaults"] ~= 1 then
-					for void, key in ipairs({ "MaxCameraZoom", "MuteGameSounds", "MuteCustomSounds", "FasterLooting", "FasterMovieSkip", "EasyItemDestroy", "ShowFlightTimes", "ManageWidgetTop", "MinimapModder", "TipModEnable", "EnhanceDressup", "ShowTrainAllButton", "DurabilityStatus", "ShowDruidPowerBar", "ShowReadyTimer", "ShowWowheadLinks", "HideErrorMessages", "QuestFontChange", "AutomateQuests", "AutomateGossip", "AutoSellJunk", "AutoRepairGear", "UseEasyChatResizing", "MoreChatFontSizes", "NoChatFade", "RecentChatWindow", "FilterChatMessages", "RestoreChatMessages", "AcceptPartyFriends", "InviteFromWhisper", "FriendlyGuild" }) do
+					for void, key in ipairs({ "MaxCameraZoom", "MuteGameSounds", "MuteCustomSounds", "FasterLooting", "FasterMovieSkip", "EasyItemDestroy", "ShowFlightTimes", "ManageWidgetTop", "MinimapModder", "TipModEnable", "EnhanceDressup", "ShowTrainAllButton", "DurabilityStatus", "ShowDruidPowerBar", "ShowReadyTimer", "ShowWowheadLinks", "HideErrorMessages", "QuestFontChange", "AutomateQuests", "AutomateGossip", "AutoSellJunk", "AutoRepairGear", "MoreChatFontSizes", "NoChatFade", "RecentChatWindow", "FilterChatMessages", "RestoreChatMessages", "AcceptPartyFriends", "InviteFromWhisper", "FriendlyGuild" }) do
 						LeaPlusDB[key] = "On"
 					end
 					if LeaPlusDB["InvKey"] == nil or LeaPlusDB["InvKey"] == "inv" then LeaPlusDB["InvKey"] = "+" end
@@ -13617,7 +13576,8 @@
 				LeaPlusLC:LoadVarChk("FriendlyGuild", "On")					-- Friendly guild
 
 				-- Chat
-				LeaPlusLC:LoadVarChk("UseEasyChatResizing", "On")			-- Use easy resizing
+				LeaPlusLC:LoadVarChk("UseEasyChatResizing", "Off")			-- Use easy resizing
+				LeaPlusLC["UseEasyChatResizing"], LeaPlusDB["UseEasyChatResizing"] = "Off", "Off" -- (Clara: removed, Edit Mode only)
 				LeaPlusLC:LoadVarChk("NoCombatLogTab", "Off")				-- Hide the combat log
 				LeaPlusLC:LoadVarChk("NoChatButtons", "Off")				-- Hide chat buttons
 				LeaPlusLC:LoadVarChk("ShowVoiceButtons", "Off")				-- Show voice buttons
@@ -16492,7 +16452,7 @@
 				LeaPlusDB["FriendlyGuild"] = "On"				-- Friendly guild
 
 				-- Chat
-				LeaPlusDB["UseEasyChatResizing"] = "On"			-- Use easy resizing
+				LeaPlusDB["UseEasyChatResizing"] = "Off"			-- Use easy resizing (Clara: removed)
 				LeaPlusDB["NoCombatLogTab"] = "On"				-- Hide the combat log
 				LeaPlusDB["NoChatButtons"] = "On"				-- Hide chat buttons
 				LeaPlusDB["ShowVoiceButtons"] = "On"			-- Show voice buttons

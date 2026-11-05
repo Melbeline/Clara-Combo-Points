@@ -451,7 +451,9 @@ end
 -- The spell's form, stance or stealth on (Stealth, Prowl, Cat Form, Battle Stance, Devotion
 -- Aura...), the spell queued (Heroic Strike) or repeating (Auto Shot, Shoot): checked, as an
 -- action button shows it. A form, a stealth, Shadowmeld, an aspect, a paladin's aura, Shadowform
--- or Ghost Wolf on also takes the action bars' icon for it (the white star).
+-- or Ghost Wolf on also takes the action bars' icon for it (the white star): known on by the game's form
+-- (stance bar), its aura, or the star the game's own buttons show for it (Shadowmeld, the aspects: no form,
+-- no aura of theirs to be read on WoW Forever).
 local IsCurrentSpell = (C_Spell and C_Spell.IsCurrentSpell) or IsCurrentSpell
 local IsAutoRepeatSpell = (C_Spell and C_Spell.IsAutoRepeatSpell) or IsAutoRepeatSpell
 local function SpellOn(fn, spell)
@@ -469,11 +471,70 @@ local function FormOn(name)
   end
   return false
 end
+-- The white star: the game's icon for a form or a toggle on (its file ID, read once from its path)
+local starID
+local function IsStar(icon)
+  if icon == nil or issecretvalue(icon) then return false end
+  if type(icon) == "string" then return icon:lower():find("wispsplode", 1, true) ~= nil end
+  if type(icon) ~= "number" then return false end
+  if starID == nil then
+    starID = false
+    local probe = ns.hud and ns.hud.CreateTexture and ns.hud:CreateTexture(nil, "BACKGROUND")
+    if probe then
+      probe:SetTexture(ACTIVE_ICON)
+      local id = probe.GetTextureFileID and probe:GetTextureFileID()
+      if type(id) == "number" and not issecretvalue(id) then starID = id end
+      probe:Hide()
+    end
+  end
+  return starID ~= false and icon == starID
+end
+
+-- The action bars' slots holding each spell (by name), read again when the bars change
+local actionsByName
+local function ActionsOf(name)
+  if not actionsByName then
+    actionsByName = {}
+    if GetActionInfo then
+      for action = 1, ACTION_SLOTS do
+        local ok, kind, id = pcall(GetActionInfo, action)
+        if ok and kind == "spell" and Plain(id) then
+          local spellName = ns:SpellName(id)
+          if spellName then
+            actionsByName[spellName] = actionsByName[spellName] or {}
+            table.insert(actionsByName[spellName], action)
+          end
+        end
+      end
+    end
+  end
+  return actionsByName[name] or NONE
+end
+function ns:ActionBarsChanged() actionsByName = nil end
+
+-- On as the game's own buttons show it: the star instead of its icon (Shadowmeld, an aspect...), on the
+-- spell itself or on an action button holding it
+local function ShownOn(slot)
+  if slot.item or not slot.name or ns.preview then return false end
+  local GetSpellTextureNow = C_Spell and C_Spell.GetSpellTexture
+  if GetSpellTextureNow and slot.spell ~= nil then
+    local ok, icon = pcall(GetSpellTextureNow, slot.spell)
+    if ok and IsStar(icon) then return true end
+  end
+  if GetActionTexture then
+    for _, action in ipairs(ActionsOf(slot.name)) do
+      local ok, icon = pcall(GetActionTexture, action)
+      if ok and IsStar(icon) then return true end
+    end
+  end
+  return false
+end
+
 local function Checked(slot)
   if slot.item or not slot.name or ns.preview then return false end
   return SpellOn(IsCurrentSpell, slot.name) or SpellOn(IsAutoRepeatSpell, slot.name)
     or (type(slot.spell) == "number" and SpellOn(IsCurrentSpell, slot.spell))
-    or FormOn(slot.name)
+    or FormOn(slot.name) or ShownOn(slot)
 end
 ns.IconChecked = function(_, slot) return Checked(slot) end
 
@@ -482,7 +543,7 @@ ns.IconChecked = function(_, slot) return Checked(slot) end
 -- auras...). Not another player's aura on you, not a timed buff.
 local function FormLike(slot, aura, unit)
   if slot.item or not slot.name or ns.preview then return false end
-  if FormOn(slot.name) then return true end
+  if FormOn(slot.name) or ShownOn(slot) then return true end
   if not aura or unit ~= "player" then return false end
   local source = aura.sourceUnit
   if issecretvalue(source) or source ~= "player" then return false end
