@@ -97,9 +97,11 @@ end)
 -- The chat channels' order and colours, kept by the channel's name (the game keeps them by
 -- number, and a custom channel rejoined at login takes the next free number: its place and its
 -- colour were lost). The order set by dragging in Chat settings > Channels, and the colour picked
--- for a channel, come back at each login. L2P: 00A9FF until another is picked.
+-- for a channel, come back at each login. Each channel has its own colour, whatever its number: the one
+-- picked for it in Chat settings, else the game's colour for channels (FFC0C0), L2P's 00A9FF.
 ---------------------------------------------------------------------------
 local DEFAULT_COLORS = { l2p = { 0, 169 / 255, 1 } }
+local CHANNEL_COLOR = { 1, 192 / 255, 192 / 255 } -- (FFC0C0, the game's own for a channel)
 
 local function Store()
   local sv = ns.sv
@@ -107,6 +109,9 @@ local function Store()
   local c = type(sv.chatChannels) == "table" and sv.chatChannels or {}
   if type(c.order) ~= "table" then c.order = {} end
   if type(c.colors) ~= "table" then c.colors = {} end
+  -- (the colours kept before each channel had its own: some were taken from the number a channel had at
+  -- login, another's; forgotten once)
+  if c.v ~= 2 then c.colors, c.v = {}, 2 end
   sv.chatChannels = c
   return c
 end
@@ -189,10 +194,11 @@ local function ApplyChannels()
       end
     end
   end
-  -- the colours, on the numbers the channels have now
+  -- the colours, on the numbers the channels have now: each its own (a number keeps the colour of the channel it
+  -- had before; the communities' channels are left to the game)
   if not ChangeChatColor then return end
   for _, ch in ipairs(Joined()) do
-    local color = c.colors[ch.key] or DEFAULT_COLORS[ch.key]
+    local color = not ch.key:find("^community:") and (c.colors[ch.key] or DEFAULT_COLORS[ch.key] or CHANNEL_COLOR)
     local info = ChatTypeInfo and ChatTypeInfo["CHANNEL" .. ch.index]
     if type(color) == "table" and info
       and (math.abs((info.r or 0) - color[1]) > .004 or math.abs((info.g or 0) - color[2]) > .004 or math.abs((info.b or 0) - color[3]) > .004) then
@@ -226,10 +232,12 @@ channelEvents:SetScript("OnEvent", function(self, event)
   if event == "PLAYER_ENTERING_WORLD" and not self.hooked then
     self.hooked = true
     loginAt = GetTime()
-    -- a colour picked for a channel: kept for its name
+    -- a colour picked for a channel (in Chat settings, the game's colour picker): kept for its name
     if ChangeChatColor then
       hooksecurefunc("ChangeChatColor", function(chatType, r, g, b)
         if restoring or type(chatType) ~= "string" then return end
+        local config = _G.ChatConfigFrame
+        if not (config and config.IsShown and config:IsShown()) then return end
         local index = tonumber(chatType:match("^CHANNEL(%d+)$"))
         local c = Store()
         if not (index and c) then return end

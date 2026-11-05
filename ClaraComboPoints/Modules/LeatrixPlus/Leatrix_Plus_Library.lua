@@ -1132,6 +1132,12 @@ function Leatrix_Plus:LeaPlusLCA()
 -- LibChatAnimsStart
 --@curseforge-project-slug: libchatanims@
 local MAJOR, MINOR = "LibChatAnims", 6 -- Bump minor on changes
+-- (Clara Combo Points: WoW Forever's chat flashes its tabs with animations already and keeps their
+-- alerting state and alphas out of reach of taint (ChatFrameUtil.SetTabAlerting, SetTabAlphas). Replaced
+-- here, FCF_StopAlertFlash, which each chat window calls as it shows, ran an addon's code in the middle
+-- of every tab switch: the rest of it, and the chat's fading, went on tainted, and the chat, its tabs and
+-- its edit box faded away until a reload. The game's own are kept.)
+if ChatFrameUtil and ChatFrameUtil.SetTabAlerting and ChatFrameUtil.StartSyncedFlash then return end
 local LCA = LibStub:NewLibrary(MAJOR, MINOR)
 if not LCA then return end -- No upgrade needed
 
