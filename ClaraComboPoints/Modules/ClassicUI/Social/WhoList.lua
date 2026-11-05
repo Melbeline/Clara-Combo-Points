@@ -57,7 +57,9 @@ local function Collect()
     shown = Safe(shown, 0) or 0
     for i = 1, shown do
         local fine, info = pcall(C_FriendList.GetWhoInfo, i)
-        if fine and type(info) == "table" and info.fullName and not IsSecret(info.fullName) then
+        -- (Clara's /who by first name or surname, Who.lua: the results it keeps)
+        local keep = not ClaraNS.WhoKeep or ClaraNS.WhoKeep(info)
+        if fine and keep and type(info) == "table" and info.fullName and not IsSecret(info.fullName) then
             results[#results + 1] = {
                 name = info.fullName,
                 guild = Safe(info.fullGuildName, ""),
