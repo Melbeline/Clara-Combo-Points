@@ -8,9 +8,10 @@
 --   lead while it attacks you), in the threat color; the game shows its own only with the
 --   threatShowNumeric setting, hidden while this one shows; a box in the game's options
 --   (Esc > Options > AddOns > Clara Combo Points) turns it off;
---   the distance to an enemy, from WeaponSwingTimer's range bands ("8-15 m"), in their colors (a
---   hunter's by default).
--- Centered over the name bar, never past its right end (the portrait is there); the longer box
+--   the distance to an enemy, from WeaponSwingTimer's range bands ("8-15", no unit), in their
+--   colors (a hunter's by default).
+-- Only the boxes showing, close together (a box hidden leaves no gap), centered over the name bar,
+-- never past its right end (the portrait is there): the three fit over it. A longer box (none now)
 -- drawn with the same border, its ends as drawn and its straight middle stretched.
 -- And a boss's swing timer: a mark crossing its name bar from one swing to the next, before or
 -- behind the name. The combat log is closed to addons: its swings are the hits seen on its target
@@ -22,8 +23,8 @@ local ADDON, ns = ...
 local L = ns.L
 
 local BOX_W, BOX_H, FILL_W, FILL_H, FILL_Y, TEXT_Y = 49, 18, 37, 14, -3, -4 -- (the game's own)
-local WIDTH = { speed = BOX_W, threat = BOX_W, range = 60 }
-local GAP = 4
+local WIDTH = { speed = BOX_W, threat = BOX_W, range = BOX_W }
+local GAP = 1
 local TEX_W = 64 -- (the border's file; its ends 9 wide, its straight middle from 9 to 40)
 local END_W = 9
 local BORDER = "Interface\\TargetingFrame\\NumericThreatBorder"
@@ -148,14 +149,15 @@ local function Box(spot, kind)
   return box
 end
 
--- Side by side, centered over the name bar, never past its right end: placed again only when the
--- boxes wanted change
+-- Side by side, the ones showing only (close together), centered over the name bar, never past its
+-- right end: placed again only when the boxes showing change
 local function Layout(spot)
   local wanted = { speed = SpeedOn(), threat = spot.base and ns:ThreatBox() or (not spot.base and spot.threatOn),
     range = RangeOn() }
   local list = {}
   for _, kind in ipairs({ "speed", "threat", "range" }) do
-    if wanted[kind] and Box(spot, kind) then list[#list + 1] = kind end
+    local box = wanted[kind] and Box(spot, kind)
+    if box and box:IsShown() then list[#list + 1] = kind end
   end
   local key = table.concat(list, "/") .. ":" .. tostring(spot.width) .. ":" .. tostring(spot.threat)
   if spot.placed == key then return end
@@ -207,6 +209,7 @@ local function UpdateThreat(unit)
     threat.fill:SetVertexColor(GetThreatStatusColor(status))
   end
   SetShown(threat, value ~= nil)
+  Layout(spot) -- (the boxes showing, close together)
 end
 
 ---------------------------------------------------------------------------
@@ -295,8 +298,7 @@ end
 local function Label(box, short)
   if box.short == short and box.lang == ns.lang then return end
   box.short, box.lang = short, ns.lang
-  box.text:SetText(short .. " " .. L.RANGE_UNIT)
-  if box.text:GetStringWidth() > box:GetWidth() - (BOX_W - FILL_W) then box.text:SetText(short) end -- (no room for the unit)
+  box.text:SetText(short) -- (the band alone: "8-35")
 end
 
 local function UpdateRange(unit, spot)
@@ -326,6 +328,7 @@ local function UpdateBoxes(unit)
   Layout(spot)
   UpdateSpeed(unit, spot)
   UpdateRange(unit, spot)
+  Layout(spot) -- (the boxes showing now, close together)
   Told(spot)
   return UnitExists(unit) and (SpeedOn() or RangeOn())
 end
