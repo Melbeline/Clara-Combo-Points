@@ -222,3 +222,10 @@ function Leatrix_Plus.BuildSettingsPages()
   end
   return main
 end
+
+-- Its options marked * changed since the last reload (its own Reload button lit): a reload waits
+ClaraNS:AddReloadCheck(function()
+  local m = Leatrix_Plus.mirror
+  local button = m and m.CB and m.CB.ReloadUIButton
+  if button and button.IsEnabled and button:IsEnabled() then return "Leatrix Plus" end
+end)
