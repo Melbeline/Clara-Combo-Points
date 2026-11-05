@@ -134,8 +134,11 @@ local function BarBelow(tooltip)
   local bar = tooltip == GameTooltip and GameTooltipStatusBar
   if not (bar and bar:IsShown() and bar.GetPoint) then return 0 end
   local point, rel, relPoint, _, y = bar:GetPoint(1)
-  if rel ~= tooltip or not (point and point:find("^TOP") and relPoint and relPoint:find("^BOTTOM")) then return 0 end
-  return math.max(0, -(y or 0)) + (bar:GetHeight() or 0)
+  local height = bar:GetHeight()
+  -- (a value this client keeps secret is never compared: no lift then)
+  if issecretvalue and (issecretvalue(point) or issecretvalue(rel) or issecretvalue(relPoint) or issecretvalue(y) or issecretvalue(height)) then return 0 end
+  if rel ~= tooltip or not (type(point) == "string" and point:find("^TOP") and type(relPoint) == "string" and relPoint:find("^BOTTOM")) then return 0 end
+  return math.max(0, -(y or 0)) + (height or 0)
 end
 
 local held -- the tooltip held at the anchor now

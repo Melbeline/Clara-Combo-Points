@@ -290,6 +290,8 @@ end)
 -- The plates need Enable Interact Key, Interact Key Icons and a wider pick
 -- range. Blizzard doesn't read these CVars through its cache, so setting them
 -- doesn't taint. Changes wait out combat; old values come back when sparkles go off.
+-- (Clara Combo Points: set when the sparkles are turned on; one the player changes afterwards in the game's
+-- options is theirs: never set again at the next login or loading screen.)
 
 local RANGE = 30 -- yards (default 10)
 
@@ -315,12 +317,20 @@ local function PutBack(cvar)
     ns.db.saved[cvar], ns.db.applied[cvar] = nil, nil
 end
 
--- Sets each needed CVar, saving the old value.
-local function ApplySetup()
+-- Sets each needed CVar, saving the old value. fresh: the sparkles just turned on (each set again);
+-- else (a login, a loading screen) one the player changed since is left as they set it.
+local function ApplySetup(fresh)
+    ns.db.managed = ns.db.managed or {}
     for _, entry in ipairs(WANTED) do
         local cvar, value = entry[1], entry[2]
         local old = C_CVar.GetCVar(cvar)
-        if old ~= nil and not Same(old, value) then
+        -- (set by NodeSight before: in managed, or, from an earlier version, in applied)
+        local ours = ns.db.managed[cvar] or ns.db.applied[cvar] ~= nil
+        local theirs = not fresh and ours and old ~= nil and not Same(old, value)
+        if theirs then
+            -- (changed by the player: their value from now on, not put back when sparkles go off either)
+            ns.db.saved[cvar], ns.db.applied[cvar] = nil, nil
+        elseif old ~= nil and not Same(old, value) then
             C_CVar.SetCVar(cvar, value)
             -- Save only if the game accepted it, and only once.
             if Same(C_CVar.GetCVar(cvar), value) then
@@ -328,22 +338,26 @@ local function ApplySetup()
                 ns.db.applied[cvar] = value
             end
         end
+        if not theirs then ns.db.managed[cvar] = true end
     end
 end
 
 local function RestoreSetup()
     for cvar in pairs(ns.db.saved) do PutBack(cvar) end
     for cvar in pairs(ns.db.applied) do ns.db.applied[cvar] = nil end
+    ns.db.managed = nil
 end
 
 -- Applies or restores the CVars to match the sparkle settings.
-local function Setup()
+-- fresh: a sparkle box just ticked (the game's settings it needs set again)
+local function Setup(fresh)
     if InCombatLockdown() then
-        pendingSetup = true
+        pendingSetup = pendingSetup == "fresh" and pendingSetup or (fresh and "fresh" or true)
         return
     end
+    if pendingSetup == "fresh" then fresh = true end
     pendingSetup = nil
-    if SparklesOn() then ApplySetup() else RestoreSetup() end
+    if SparklesOn() then ApplySetup(fresh) else RestoreSetup() end
 end
 
 -- What the other files use of this one.

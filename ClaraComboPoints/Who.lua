@@ -5,8 +5,8 @@
 -- lea), the search is the game's own: every name with lea in it. A search of several words or
 -- with a filter (g-, z-, c-, r-, a level) is left alone. On unless turned off (Esc > Options >
 -- AddOns > Clara Combo Points).
--- Any Who list reads its results from the game the same way (the game's own, ClassicUI Forever's,
--- others): the two functions it reads them with give the matching ones only, in their order.
+-- The game's own functions are left as they are: the lists shown are filtered (the game's Who list in the group
+-- finder window, ClassicUI Forever's), after the game has made them.
 
 local ADDON, ns = ...
 
@@ -44,42 +44,43 @@ local function NameHas(name, word)
   return false
 end
 
-local GetNum, GetInfo = F.GetNumWhoResults, F.GetWhoInfo
 local word -- the word of the last search (nil: no name search)
-local map  -- the results that match, by their place in the filtered list (nil: all of them)
 
--- Read again each time a list asks how many there are (its update): the game's results change
--- with each search and each sort. (No name is the word: none shown.)
-local function Matches(count)
-  map = nil
-  if not word or not ns:WhoNames() or type(count) ~= "number" or issecretvalue(count) then return end
-  local found = {}
-  for i = 1, count do
-    local ok, info = pcall(GetInfo, i)
-    if ok and type(info) == "table" and NameHas(info.fullName, word) then found[#found + 1] = i end
-  end
-  map = found
+-- A result kept: no name search, the search off, or the word one of its name's
+local function Keep(info)
+  if not word or not ns:WhoNames() then return true end
+  return type(info) == "table" and NameHas(info.fullName, word)
 end
-
-F.GetNumWhoResults = function(...)
-  local shown, total = GetNum(...)
-  Matches(shown)
-  if map then return #map, #map end
-  return shown, total
-end
-
-F.GetWhoInfo = function(index, ...)
-  if map then
-    local real = type(index) == "number" and map[index]
-    if not real then return nil end
-    return GetInfo(real, ...)
-  end
-  return GetInfo(index, ...)
-end
+ns.WhoKeep = Keep -- (ClassicUI Forever's list reads it)
 
 hooksecurefunc(F, "SendWho", function(text)
   word = Word(text)
-  map = nil
+end)
+
+-- The game's list: its rows that do not match taken out once it has made them (its own functions untouched)
+local function Filter(box, provider)
+  if not word or not ns:WhoNames() or type(provider) ~= "table" or type(provider.RemoveByPredicate) ~= "function" then return end
+  pcall(provider.RemoveByPredicate, provider, function(data)
+    return type(data) == "table" and data.info ~= nil and not Keep(data.info)
+  end)
+end
+local hooked = {}
+local function Watch(frame)
+  local box = frame and frame.ScrollBox
+  if type(box) ~= "table" or hooked[box] or type(box.SetDataProvider) ~= "function" then return end
+  hooked[box] = true
+  hooksecurefunc(box, "SetDataProvider", Filter)
+end
+local function WatchAll()
+  Watch(_G.LFGWhoListFrame) -- (WoW Forever: the Who list is the group finder's third tab)
+  Watch(_G.WhoFrame)
+end
+WatchAll()
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("ADDON_LOADED")
+loader:SetScript("OnEvent", function(self, _, name)
+  if name == "Blizzard_GroupFinder_VanillaStyle" or name == "Blizzard_FriendsFrame" then WatchAll() end
+  if hooked[_G.LFGWhoListFrame and _G.LFGWhoListFrame.ScrollBox or 0] then self:UnregisterEvent("ADDON_LOADED") end
 end)
 
 ns.WhoWord = Word -- (for the tests)

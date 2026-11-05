@@ -151,6 +151,8 @@ local function PlaceBox(card)
   local spell = card.SpellButton1
   local point, rel, _, x, y
   if spell then point, rel, _, x, y = spell:GetPoint(1) end
+  -- (a casting button's anchor can come back secret: never compared, the other place then)
+  if issecretvalue and (issecretvalue(point) or issecretvalue(rel) or issecretvalue(x) or issecretvalue(y)) then point, rel = nil, nil end
   if classic and rel == card and point == "TOPLEFT" then
     -- (from the card, where ClassicUI puts its first spell: a frame hung on a casting button would be
     -- locked with it in combat)

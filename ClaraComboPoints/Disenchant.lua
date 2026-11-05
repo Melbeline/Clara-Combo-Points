@@ -60,10 +60,17 @@ local function Disenchantable(bag, slot)
   return classID == 2 or classID == 4 -- (weapon, armour)
 end
 
+-- (a protected button's state can come back secret: never tested, counted as no)
+local function Yes(f, method)
+  if not (f and type(f[method]) == "function") then return false end
+  local ok, v = pcall(f[method], f)
+  return ok and not issecret(v) and v == true
+end
+
 local function Show()
   if InCombatLockdown() or not ns:DisenchantClick() or not IsAltKeyDown() then return end
   local owner = last.owner
-  if not (owner and owner.IsVisible and owner:IsVisible() and owner:IsMouseOver()) then return end
+  if not (Yes(owner, "IsVisible") and Yes(owner, "IsMouseOver")) then return end
   if not (Known() and Disenchantable(last.bag, last.slot)) then return end
   button:SetAttribute("target-bag", last.bag)
   button:SetAttribute("target-slot", last.slot)
@@ -101,7 +108,7 @@ events:SetScript("OnEvent", function(self, event, key, down)
     Hide() -- (before the fight's lock)
   elseif key == "LALT" or key == "RALT" then
     local owner = last.owner
-    if not button:IsShown() and not (owner and owner:IsVisible() and owner:IsMouseOver()) then
+    if not button:IsShown() and not (Yes(owner, "IsVisible") and Yes(owner, "IsMouseOver")) then
       self:UnregisterEvent("MODIFIER_STATE_CHANGED") -- (off the bags: until the next item's tooltip)
       return
     end

@@ -25,6 +25,9 @@ local function Lift(entry, lift)
   if not icon then return end
   if not entry.claraIconPoint then
     local point, rel, relPoint, x, y = icon:GetPoint(1)
+    if issecretvalue and (issecretvalue(point) or issecretvalue(rel) or issecretvalue(relPoint) or issecretvalue(x) or issecretvalue(y)) then
+      point, rel, relPoint, x, y = nil, nil, nil, nil, nil
+    end
     entry.claraIconPoint = { point or "TOPLEFT", rel or entry, relPoint or "TOPLEFT", x or 8, y or -14 }
   end
   local p = entry.claraIconPoint

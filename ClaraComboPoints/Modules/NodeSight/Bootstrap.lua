@@ -29,7 +29,7 @@ if N then
   local function Scanner() if N.UpdateScanner then N.UpdateScanner() end end
   local function Sparkles() -- (as its own boxes: the sparkles need some of the game's settings)
     if N.UpdateAll then N.UpdateAll() end
-    if N.Setup then N.Setup() end
+    if N.Setup then N.Setup(true) end
   end
   local function Switch(label, key, apply)
     return {

@@ -64,10 +64,10 @@ local function RegisterSettings()
     end
 
     -- Added to the sparkle checkboxes' tooltips.
-    local NEEDS = " While any sparkles are on, NodeSight turns on Enable Interact Key, its icons for objects and targeting all around you (Options > Controls and Accessibility), and hides the game's own icon and name. Turning all sparkles off puts your settings back."
+    local NEEDS = " While any sparkles are on, NodeSight turns on Enable Interact Key, its icons for objects and targeting all around you (Options > Controls and Accessibility), and hides the game's own icon and name. One you change afterwards in the game's options stays as you set it. Turning all sparkles off puts your settings back."
     local function SparklesChanged()
         UpdateAll()
-        Setup()
+        Setup(true)
     end
 
     -- What's New button, left of Blizzard's Defaults button and parented to it (so
