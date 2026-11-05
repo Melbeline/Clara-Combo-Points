@@ -154,9 +154,15 @@ end
 -- placing for the game's own frames, which can run before ours at login), so a value never stands out by the portrait.
 local textSpots = setmetatable({}, { __mode = "k" })   -- client font string -> { point, bar, x, y }
 local placing = false
-local function PlaceText(fs)
+local moves, movesAt = 0, 0
+local function PlaceText(fs, first)
     local spot = textSpots[fs]
-    if not spot then return end
+    if not spot or (not first and not UF.active) then return end
+    -- Never a tug of war with another keeper of the same string: a few moves a frame at most.
+    local now = GetTime()
+    if now ~= movesAt then movesAt, moves = now, 0 end
+    moves = moves + 1
+    if moves > 12 then return end
     placing = true
     fs:ClearAllPoints()
     fs:SetPoint(spot[1], spot[2], spot[1], spot[3], spot[4])
@@ -180,7 +186,7 @@ local function AttachTexts(bar, texts, offsets, textParent)
             if offsets.font then fs:SetFontObject(offsets.font) end
             local o = offsets[i]
             textSpots[fs] = { o[1], bar, o[2], o[3] }
-            PlaceText(fs)
+            PlaceText(fs, true)
             ns.HookMethod(fs, "SetPoint", TextMoved)
         end
     end
