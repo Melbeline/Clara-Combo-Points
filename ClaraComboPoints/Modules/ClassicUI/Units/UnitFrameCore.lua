@@ -168,12 +168,15 @@ local function PlaceText(fs, first)
     fs:SetPoint(spot[1], spot[2], spot[1], spot[3], spot[4])
     placing = false
 end
+-- Run inside the game's own calls too (a secure click targeting re-lays the target frame): there its answers can be
+-- secret, never compared; then the text is simply put back.
 local function TextMoved(fs)
     if placing then return end
     local spot = textSpots[fs]
     if not spot then return end
-    local point, rel = fs:GetPoint(1)
-    if fs:GetNumPoints() == 1 and point == spot[1] and rel == spot[2] then return end
+    local okN, n = pcall(fs.GetNumPoints, fs)
+    local ok, point, rel = pcall(fs.GetPoint, fs, 1)
+    if okN and ok and not ns.AnySecret(n, point, rel) and n == 1 and point == spot[1] and rel == spot[2] then return end
     PlaceText(fs)
 end
 
