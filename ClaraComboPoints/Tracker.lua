@@ -42,7 +42,8 @@ local GCD = 1.5              -- a cooldown this short is only the global cooldow
 local ABBREV = 120           -- countdown: "2m" from two minutes up, "1:59" below
 local MASK_ATLAS = "UI-HUD-CoolDownManager-Mask" -- keeps the icon art inside the frame (fills the icon)
 local CHECKED_FILE = "Interface\\Buttons\\CheckButtonHilight" -- an action button's checked look
-local ACTIVE_ICON = "Interface\\Icons\\Spell_Nature_WispSplode" -- the action bars' icon for a form or stealth that is on
+local ACTIVE_ICON = "Interface\\Icons\\Spell_Nature_WispSplode" -- (when the game shows none of its own: see ActiveIcon)
+local ACTION_SLOTS = 180     -- the action bars' slots read for a spell's icon as they show it
 -- where each icon looks for its aura (on = the entry's condition; auto for plain entries)
 local LOOKUPS = {
   auto   = { { "player", "HELPFUL" }, { "target", "HARMFUL" }, { "player", "HARMFUL" } },
@@ -490,6 +491,30 @@ local function FormLike(slot, aura, unit)
 end
 ns.IconFormLike = function(_, slot, aura, unit) return FormLike(slot, aura, unit) end
 
+-- The icon the game shows for it while on: its form's on the stance bar (Stealth's, a druid form's,
+-- a stance's), else its button's on the action bars (Shadowmeld's star...), else the star.
+local function ActiveIcon(slot)
+  if GetNumShapeshiftForms and GetShapeshiftFormInfo then
+    local ok, n = pcall(GetNumShapeshiftForms)
+    for i = 1, (ok and Plain(n)) or 0 do
+      local okI, icon, active, _, spellID = pcall(GetShapeshiftFormInfo, i)
+      if okI and Bool(active) and Plain(spellID) and ns:SpellName(spellID) == slot.name
+        and not issecretvalue(icon) and icon then return icon end
+    end
+  end
+  if GetActionInfo and GetActionTexture then
+    for action = 1, ACTION_SLOTS do
+      local ok, kind, id = pcall(GetActionInfo, action)
+      if ok and kind == "spell" and Plain(id) and ns:SpellName(id) == slot.name then
+        local okT, icon = pcall(GetActionTexture, action)
+        if okT and icon and not issecretvalue(icon) then return icon end
+      end
+    end
+  end
+  return ACTIVE_ICON
+end
+ns.IconActiveTexture = function(_, slot) return ActiveIcon(slot) end
+
 local function ShowChecked(slot, on)
   if slot.isChecked == on then return end
   slot.isChecked = on
@@ -566,7 +591,7 @@ local function SetSlot(slot, look, aura, unit, enchant)
     if charges ~= nil then slot.count:SetText(charges) end
   end
   local formOn = FormLike(slot, aura, unit)
-  if formOn then slot.icon:SetTexture(ACTIVE_ICON) end
+  if formOn then slot.icon:SetTexture(ActiveIcon(slot)) end
   slot.spellChecked = Checked(slot) -- (what the form and action bar events can read again: ns:CheckIcons)
   local checked = formOn or slot.spellChecked
   ShowChecked(slot, checked)
