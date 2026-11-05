@@ -376,8 +376,20 @@ end
 
 local function HeadEnter(head) WakeBar(head:GetParent()) end
 
+-- (Clara Combo Points) The right pane opens on the class's own section each time the sheet shows: Ranged for a
+-- hunter, Spell for a priest, a mage and a warlock (the profile's pick is shared by every character); a pick made
+-- while the sheet is open holds until it closes. The other classes: the profile's pick, as before.
+local RIGHT_PANE = { HUNTER = "section7", PRIEST = "section4", MAGE = "section4", WARLOCK = "section4" }
+local function ClassPane(pane)
+    if pane.side ~= "statPaneRight" then return nil end
+    local _, class = UnitClass("player")
+    return RIGHT_PANE[class]
+end
+ns.RIGHT_STAT_PANE = RIGHT_PANE
+
 -- The profile's pick, as every other look setting; a pick 0.33.0 kept per character goes into the profile once.
 local function Picked(pane)
+    if pane.override then return pane.override end
     local own = ns.char and ns.char[pane.side]
     if own ~= nil then
         ns.db[pane.side] = own
@@ -416,7 +428,7 @@ local function Pane(parent, side, fallback)
     pane.lines = {}
 
     local function Pick(section)
-        ns.db[pane.side] = section.key
+        if ClassPane(pane) then pane.override = section.key else ns.db[pane.side] = section.key end
         pane.offset = 0
         ns.UpdateStatPanes()
         -- Withheld in combat: the shown section still goes back to its top with the offset.
@@ -456,6 +468,13 @@ local function Pane(parent, side, fallback)
     -- Hover only: clicks still pass to the doll under the box.
     pane:SetMouseMotionEnabled(true)
     pane:SetScript("OnEnter", WakeBar)
+    -- (Clara Combo Points) The sheet shown: the class's own section again (see ClassPane).
+    pane:SetScript("OnShow", function(self)
+        local own = ClassPane(self)
+        if not own or self.override == own then return end
+        self.override, self.offset = own, 0
+        ns.UpdateStatPanes()
+    end)
     return pane
 end
 
