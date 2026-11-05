@@ -245,11 +245,36 @@ end
 local glass = {}
 local glassWatched = false
 
--- Swap the client's atlas art for the 1.x glass, which the client puts back.
+-- (Clara Combo Points) The glass's art: the active tracking spell's icon, round in the ring, while one is on and the
+-- option holds (MinimapTracking.lua tells it); else the 1.x glass.
+local glassSpell
+local function GlassArt(tex)
+    if glassSpell then
+        tex:SetTexture(glassSpell)
+        local made = tex.fcuiMask ~= nil
+        ns.RoundIcon(tex)
+        if made and not tex.fcuiMasked then tex:AddMaskTexture(tex.fcuiMask) end
+        tex.fcuiMasked = true
+    else
+        if tex.fcuiMasked then
+            tex:RemoveMaskTexture(tex.fcuiMask)
+            tex.fcuiMasked = false
+        end
+        ns.Dress(tex, "trackingNone", NO_TRACKING)
+    end
+end
+function MM.GlassSpell(texture)
+    if texture == glassSpell then return end
+    glassSpell = texture
+    if not MM.active then return end
+    for i = 1, 2 do if glass[i] then GlassArt(glass[i]) end end
+end
+
+-- Swap the client's atlas art for the 1.x glass (or the spell's icon), which the client puts back.
 local function OldGlass()
     for i = 1, 2 do
         local tex = glass[i]
-        if tex and tex.GetAtlas and tex:GetAtlas() then ns.Dress(tex, "trackingNone", NO_TRACKING) end
+        if tex and tex.GetAtlas and tex:GetAtlas() then GlassArt(tex) end
     end
 end
 
@@ -310,6 +335,7 @@ local function DressGlass(button, tracking)
     glass[1], glass[2] = button:GetNormalTexture(), button:GetPushedTexture()
     PlaceGlass(glass[1], tracking, 6)
     PlaceGlass(glass[2], tracking, 8)
+    if glassSpell then for i = 1, 2 do if glass[i] then GlassArt(glass[i]) end end end
     if not stateArt then
         OldGlass()
         WatchGlass(tracking)

@@ -93,3 +93,7 @@ L["OPT_showAddonBag_TIP"] = "Toujours affiché, ou seulement quand la souris sur
 L["OPT_hoverAddonBag"] = "Affichage : au survol"
 L["OPT_hoverAddonBag_TIP"] = "Toujours affiché, ou seulement quand la souris survole la minicarte."
 L["MAP_EYE_REAL_SIZE"] = "Taille sur la minicarte : %s"
+L["OPT_trackingOnGlass"] = "Sort de pistage sur le bouton de pistage"
+L["OPT_trackingOnGlass_TIP"] = "L'icône du pistage actif (Découverte de gisements, Découverte d'herbes, pistages du chasseur) sur la loupe du bouton de pistage, son menu gardé, au lieu d'un anneau à part sur la minicarte."
+L["OPT_hideTrackingBuff"] = "Pistage : hors de la barre des buffs"
+L["OPT_hideTrackingBuff_TIP"] = "Le buff du pistage actif retiré de la barre des buffs (il se voit sur la minicarte)."

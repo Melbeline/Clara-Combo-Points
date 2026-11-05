@@ -92,3 +92,7 @@ L["OPT_showAddonBag_TIP"] = "Always shown, or only while the mouse is over the m
 L["OPT_hoverAddonBag"] = "Show: on hover"
 L["OPT_hoverAddonBag_TIP"] = "Always shown, or only while the mouse is over the minimap."
 L["MAP_EYE_REAL_SIZE"] = "Size on the minimap: %s"
+L["OPT_trackingOnGlass"] = "Tracking spell on the tracking button"
+L["OPT_trackingOnGlass_TIP"] = "The active tracking spell's icon (Find Minerals, Find Herbs, a hunter's tracking) on the tracking button's glass, its menu kept, instead of a ring of its own on the minimap."
+L["OPT_hideTrackingBuff"] = "Tracking: out of the buff bar"
+L["OPT_hideTrackingBuff_TIP"] = "The active tracking spell's buff left out of the buff bar (it shows on the minimap)."

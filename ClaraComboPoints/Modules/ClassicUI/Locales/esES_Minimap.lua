@@ -93,3 +93,7 @@ L["OPT_showAddonBag_TIP"] = "Siempre visible, o solo mientras el ratón está so
 L["OPT_hoverAddonBag"] = "Mostrar: al pasar el ratón"
 L["OPT_hoverAddonBag_TIP"] = "Siempre visible, o solo mientras el ratón está sobre el minimapa."
 L["MAP_EYE_REAL_SIZE"] = "Tamaño en el minimapa: %s"
+L["OPT_trackingOnGlass"] = "Hechizo de rastreo en el botón de rastreo"
+L["OPT_trackingOnGlass_TIP"] = "El icono del rastreo activo (Encontrar minerales, Encontrar hierbas, rastreos del cazador) en la lupa del botón de rastreo, con su menú, en lugar de un anillo aparte en el minimapa."
+L["OPT_hideTrackingBuff"] = "Rastreo: fuera de la barra de beneficios"
+L["OPT_hideTrackingBuff_TIP"] = "El beneficio del rastreo activo fuera de la barra de beneficios (se ve en el minimapa)."

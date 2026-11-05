@@ -2,8 +2,10 @@ local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.l
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
 
--- 1.x MiniMapTracking: the active tracking spell on the rim; right-click cancels it. Its buff leaves the buff bar
--- meanwhile (TrackingBuff.lua). Era's size, a ring larger than the others, unless Same size as other buttons.
+-- 1.x MiniMapTracking: the active tracking spell on the rim; right-click cancels it. Era's size, a ring larger than the
+-- others, unless Same size as other buttons. (Clara Combo Points) By default the spell's icon is shown on the tracking
+-- button's glass instead (its menu kept), and no rim icon; its buff stays in the buff bar unless the option takes it
+-- out (TrackingBuff.lua).
 
 local MM = ns.MM
 local C_Minimap = _G.C_Minimap
@@ -53,11 +55,17 @@ local function ActiveTrackingSpell()
     return nil
 end
 
+local function OnGlass() return ns.db == nil or ns.db.trackingOnGlass ~= false end
+
 local function UpdateTracking()
     local frame = trackFrame
     local index, info
-    if frame and TrackingOn() then index, info = ActiveTrackingSpell() end
-    if MM.TrackingBuff then MM.TrackingBuff(info) end
+    local activeIndex, active
+    if MM.active then activeIndex, active = ActiveTrackingSpell() end
+    -- (Clara Combo Points) the spell on the glass; the rim icon only without it
+    if MM.GlassSpell then MM.GlassSpell(OnGlass() and active and not ns.IsSecret(active.texture) and active.texture or nil) end
+    if frame and TrackingOn() and not OnGlass() then index, info = activeIndex, active end
+    if MM.TrackingBuff then MM.TrackingBuff(ns.db and ns.db.hideTrackingBuff and active or nil) end
     if not frame then return end
     frame.index = index
     frame.spellID = info and not ns.IsSecret(info.spellID) and info.spellID or nil
@@ -155,6 +163,10 @@ end
 ns.OnToggle(function(key)
     if (key == "hideButtonBorders" or key == "hideBorderTracking") and glassBack and MM.active then
         MM.GlassDisc(MinimapCluster.Tracking)
+    end
+    if key == "trackingOnGlass" or key == "hideTrackingBuff" then
+        UpdateTracking()
+        return
     end
     if key ~= "trackingSameSize" or not trackFrame then return end
     Shape(trackFrame)

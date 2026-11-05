@@ -93,3 +93,7 @@ L["OPT_showAddonBag_TIP"] = "Immer angezeigt oder nur, solange die Maus über de
 L["OPT_hoverAddonBag"] = "Anzeige: beim Überfahren"
 L["OPT_hoverAddonBag_TIP"] = "Immer angezeigt oder nur, solange die Maus über der Minikarte ist."
 L["MAP_EYE_REAL_SIZE"] = "Größe an der Minikarte: %s"
+L["OPT_trackingOnGlass"] = "Aufspürzauber auf der Aufspür-Schaltfläche"
+L["OPT_trackingOnGlass_TIP"] = "Das Symbol des aktiven Aufspürens (Mineraliensuche, Kräutersuche, Aufspüren des Jägers) auf der Lupe der Aufspür-Schaltfläche, ihr Menü bleibt, statt eines eigenen Rings an der Minikarte."
+L["OPT_hideTrackingBuff"] = "Aufspüren: nicht in der Buffleiste"
+L["OPT_hideTrackingBuff_TIP"] = "Der Buff des aktiven Aufspürens nicht in der Buffleiste (er ist an der Minikarte zu sehen)."

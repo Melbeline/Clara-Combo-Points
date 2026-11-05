@@ -2,7 +2,7 @@ local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.l
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
 
--- While the classic tracking icon shows the tracking spell, its buff leaves the buff bar, as in 1.x.
+-- With the option to take it out (Clara Combo Points: off by default), the tracking spell's buff leaves the buff bar.
 -- Watch only: after each client fill, hide that button and move each later one into the slot the
 -- client gave the one before it (read from the client's own anchors), so no gap is left.
 

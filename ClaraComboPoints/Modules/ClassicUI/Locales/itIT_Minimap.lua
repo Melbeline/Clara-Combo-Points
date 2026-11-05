@@ -93,3 +93,7 @@ L["OPT_showAddonBag_TIP"] = "Sempre visibile, o solo mentre il mouse è sulla mi
 L["OPT_hoverAddonBag"] = "Mostra: al passaggio del mouse"
 L["OPT_hoverAddonBag_TIP"] = "Sempre visibile, o solo mentre il mouse è sulla minimappa."
 L["MAP_EYE_REAL_SIZE"] = "Dimensione sulla minimappa: %s"
+L["OPT_trackingOnGlass"] = "Incantesimo di tracciamento sul pulsante di tracciamento"
+L["OPT_trackingOnGlass_TIP"] = "L'icona del tracciamento attivo (Trova minerali, Trova erbe, tracciamenti del cacciatore) sulla lente del pulsante di tracciamento, con il suo menu, invece di un anello a parte sulla minimappa."
+L["OPT_hideTrackingBuff"] = "Tracciamento: fuori dalla barra dei buff"
+L["OPT_hideTrackingBuff_TIP"] = "Il buff del tracciamento attivo fuori dalla barra dei buff (si vede sulla minimappa)."
