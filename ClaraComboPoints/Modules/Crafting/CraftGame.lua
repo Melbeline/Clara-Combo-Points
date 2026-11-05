@@ -22,7 +22,10 @@ end
 
 -- The chests on the reagents' buttons
 local function Chests()
-  local slots = form.GetSlotsByReagentType and form:GetSlotsByReagentType(BASIC) or (form.reagentSlots and form.reagentSlots[BASIC])
+  -- (no slots before the form has shown a recipe: a gathering profession's page, Herbalism's, has none)
+  local made = rawget(form, "reagentSlots")
+  if type(made) ~= "table" then return end
+  local slots = form.GetSlotsByReagentType and form:GetSlotsByReagentType(BASIC) or made[BASIC]
   for _, slot in ipairs(slots or {}) do
     local schematic = slot.GetReagentSlotSchematic and slot:GetReagentSlotSchematic()
     local reagent = schematic and schematic.reagents and schematic.reagents[1]
