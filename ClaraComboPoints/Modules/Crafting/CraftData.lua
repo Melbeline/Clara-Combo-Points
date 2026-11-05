@@ -78,12 +78,17 @@ local function Clean(db)
         p = type(r.p) == "string" and r.p or nil, q = type(r.q) == "string" and r.q or nil, t = type(r.t) == "number" and r.t or 0 }
     end
   end
+  -- the subcomponents folded (their reagents hidden), by the item they make
+  local collapsed = {}
+  for id, on in pairs(type(db.collapsed) == "table" and db.collapsed or {}) do
+    if type(id) == "number" and on == true then collapsed[id] = true end
+  end
   local filter = type(db.filter) == "table" and db.filter or {}
   local function Off(v) if v == false then return false end end -- (a box unticked; nil: its default, on)
   return { mode = MODES[db.mode] and db.mode or nil, chest = Off(db.chest), search = Off(db.search), nested = db.nested == true or nil,
     filter = { on = filter.on == true or nil, bank = filter.bank == true or nil, part = filter.part == true or nil },
     chars = chars, account = Counts(db.account), accountAt = type(db.accountAt) == "number" and db.accountAt or 0,
-    recipes = recipes, sends = sends }
+    recipes = recipes, sends = sends, collapsed = next(collapsed) and collapsed or nil }
 end
 C.Clean = Clean
 
@@ -100,6 +105,13 @@ function C.Option(key) return db ~= nil and db[key] ~= false end
 function C.SetOption(key, on) if on then db[key] = nil else db[key] = false end end
 function C.Nested() return db ~= nil and db.nested == true end
 function C.SetNested(on) db.nested = on and true or nil end
+function C.Collapsed(id) return db ~= nil and db.collapsed ~= nil and db.collapsed[id] == true end
+function C.SetCollapsed(id, on)
+  if not db or type(id) ~= "number" then return end
+  db.collapsed = db.collapsed or {}
+  db.collapsed[id] = on and true or nil
+  if not next(db.collapsed) then db.collapsed = nil end
+end
 function C.Filter() return db and db.filter or {} end
 function C.SetFilter(key, on) db.filter[key] = on and true or nil end
 

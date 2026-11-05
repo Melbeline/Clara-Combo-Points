@@ -3,7 +3,8 @@
 --   with icons: "Subcomponents", each reagent a profession makes, in turn: its icon and how many the
 --   bags make now, what it needs (tools), then its own reagents, lit when the bags hold enough, grey
 --   otherwise; a chest on a reagent the bank (or another of the account's characters) holds, its
---   tooltip saying how many and who;
+--   tooltip saying how many and who; a - / + button at the right of each folds its reagents away
+--   or shows them again (kept for the account);
 --   as text, as the addon Reverse Engineering lists it: every material down to the raw ones ("Raw
 --   Materials Needed for"), or the tree of them ("Materials for"), a button at the top right switching.
 -- Also its options page (under its theme's page of Clara Combo Points), its switches on its theme's page and the
@@ -21,6 +22,7 @@ local PLATE = "Interface\\QuestFrame\\UI-QuestItemNameFrame"
 local DIVIDER = "Interface\\Common\\UI-TooltipDivider-Transparent"
 local ICON, REAGENT_W, REAGENT_H, PITCH = 37, 147, 36, 39
 local LINE_INDENT = 16
+local FOLD = 16 -- the fold button of a subcomponent
 
 local function Icon(id)
   if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(id) end
@@ -129,7 +131,30 @@ local function NewHeader(parent)
   h:SetScript("OnEnter", ItemTip)
   h:SetScript("OnLeave", GameTooltip_Hide)
   h:SetScript("OnClick", ItemClick)
+  -- - / +: its reagents folded away or shown
+  local fold = CreateFrame("Button", nil, parent)
+  fold:SetSize(FOLD, FOLD)
+  fold:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight", "ADD")
+  fold:SetScript("OnClick", function(self)
+    if SOUNDKIT and PlaySound then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+    C.SetCollapsed(self.itemID, not C.Collapsed(self.itemID))
+    if self.panel and self.panel.onChange then self.panel.onChange() end
+    if self:IsMouseOver() and self:GetScript("OnEnter") then self:GetScript("OnEnter")(self) end
+  end)
+  fold:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:SetText(C.Collapsed(self.itemID) and L.CRAFT_UNFOLD or L.CRAFT_FOLD)
+    GameTooltip:Show()
+  end)
+  fold:SetScript("OnLeave", GameTooltip_Hide)
+  h.fold = fold
   return h
+end
+
+local function SetFold(fold, folded)
+  local art = folded and "Interface\\Buttons\\UI-PlusButton-" or "Interface\\Buttons\\UI-MinusButton-"
+  fold:SetNormalTexture(art .. "Up")
+  fold:SetPushedTexture(art .. "Down")
 end
 
 local function NewReagent(parent)
@@ -170,7 +195,7 @@ local function Pool(make)
     for i = self.used + 1, #self.items do
       local item = self.items[i]
       item:Hide()
-      if item.name and item.name.Hide and item.sub then item.name:Hide(); item.sub:Hide(); item.label:Hide() end
+      if item.name and item.name.Hide and item.sub then item.name:Hide(); item.sub:Hide(); item.label:Hide(); item.fold:Hide() end
     end
   end
   return pool
@@ -231,7 +256,7 @@ local function LayIcons(p, recipeID, width)
     h.count:SetText(made > 0 and made or "")
     h.icon:SetDesaturated(made == 0)
     h.name:SetText(C.ItemName(h.itemID) or "")
-    h.name:SetWidth(width - ICON - 12)
+    h.name:SetWidth(width - ICON - 16 - FOLD)
     if made > 0 then h.name:SetTextColor(1, .82, 0) else h.name:SetTextColor(.6, .6, .6) end
     local r = C.Recipe(s.recipe)
     local names, profession, mineToo = C.KnownBy(s.recipe)
@@ -240,14 +265,24 @@ local function LayIcons(p, recipeID, width)
       sub = (sub ~= "" and sub .. "\n" or "") .. "|cff999999" .. (profession and (profession .. " : ") or "") .. table.concat(names, ", ") .. "|r"
     end
     h.sub:SetText(sub)
-    h.sub:SetWidth(width - ICON - 12)
+    h.sub:SetWidth(width - ICON - 16 - FOLD)
     h:Show(); h.name:Show(); h.sub:SetShown(sub ~= "")
+    local folded = C.Collapsed(h.itemID)
+    h.fold.itemID, h.fold.panel = h.itemID, p
+    SetFold(h.fold, folded)
+    h.fold:ClearAllPoints()
+    h.fold:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, y - 1)
+    h.fold:Show()
     y = y - max(ICON, 16 + (sub ~= "" and h.sub:GetStringHeight() + 2 or 0)) - 4
-    h.label:ClearAllPoints()
-    h.label:SetPoint("TOPLEFT", f, "TOPLEFT", 2, y)
-    h.label:Show()
-    y = y - 14
-    local list = C.Reagents(s.recipe)
+    local list = folded and {} or C.Reagents(s.recipe)
+    if folded then
+      h.label:Hide()
+    else
+      h.label:ClearAllPoints()
+      h.label:SetPoint("TOPLEFT", f, "TOPLEFT", 2, y)
+      h.label:Show()
+      y = y - 14
+    end
     for i, reagent in ipairs(list) do
       local b = reagents:Get(f)
       local col, row = (i - 1) % cols, floor((i - 1) / cols)
