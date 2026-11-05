@@ -2,7 +2,8 @@
 -- is part of a quest of yours not done yet: read from the game's own tooltip for it (the objective
 -- lines under the quest's title). Nameplates the game keeps to itself (in dungeons) are left alone.
 -- On by default; a box turns it off (Leatrix Plus's Interface page, or the game's options for
--- Clara Combo Points without Leatrix Plus).
+-- Clara Combo Points without Leatrix Plus). With Questie's own icon on the plate (its bag, left of
+-- the mark), the progress stands above that icon rather than behind it.
 
 local ADDON, ns = ...
 
@@ -53,6 +54,29 @@ local function Mark(plate)
   return mark
 end
 
+-- Questie's icon on this plate, if it shows one (its frames are named after it)
+local function QuestieIcon(plate)
+  if not plate.GetChildren then return nil end
+  for _, child in ipairs({ plate:GetChildren() }) do
+    local name = child.GetName and child:GetName()
+    if type(name) == "string" and name:find("^Questie") and child:IsShown() then return child end
+  end
+  return nil
+end
+
+-- The progress: left of the mark, or above Questie's icon when it shows one there
+local function PlaceText(plate, mark)
+  local questie = QuestieIcon(plate)
+  if mark.over == questie then return end
+  mark.over = questie
+  mark.text:ClearAllPoints()
+  if questie then
+    mark.text:SetPoint("BOTTOM", questie, "TOP", 0, 1)
+  else
+    mark.text:SetPoint("RIGHT", mark, "LEFT", -1, 0)
+  end
+end
+
 local function Update(unit)
   local plate = Plate(unit)
   if not plate then return end
@@ -60,7 +84,10 @@ local function Update(unit)
   if progress then
     local mark = Mark(plate)
     mark.text:SetText(progress)
+    PlaceText(plate, mark)
     mark:Show()
+    -- (Questie may put its icon there a moment later)
+    if C_Timer and C_Timer.After then C_Timer.After(.2, function() if mark:IsShown() then PlaceText(plate, mark) end end) end
   elseif plate.claraQuest then
     plate.claraQuest:Hide()
   end
