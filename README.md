@@ -79,7 +79,7 @@ La fenêtre se déplace en la tirant (par son titre ou un endroit vide), et peut
 
 Chaque curseur a une case à côté pour taper la valeur exacte (Entrée pour valider ; la valeur est gardée dans les limites du curseur).
 
-Commandes rapides : `/cl lock`, `/cl unlock`, `/cl hide` / `/cl show` (cacher / réafficher tout l'addon), `/cl scale 120`, `/cl reset` (remet **tout** l'addon par défaut, après une demande de confirmation : les onglets de toutes les classes et la fenêtre d'options ; les profils enregistrés et la langue sont gardés), `/cl reset pos` (fenêtre d'options au milieu de l'écran). `/cl debug` affiche dans le chat ce que surveille chaque icône (unité, ID donnés au jeu), utile pour signaler un souci.
+Commandes rapides : `/cl lock`, `/cl unlock`, `/cl hide` / `/cl show` (cacher / réafficher tout l'addon), `/cl scale 120`, `/cl reset` (remet **tout** l'addon par défaut, après une demande de confirmation : les onglets de toutes les classes et la fenêtre d'options ; les profils enregistrés et la langue sont gardés), `/cl reset pos` (fenêtre d'options au milieu de l'écran). `/cl souris` (ou `/cl mouse`) : mets la souris sur un endroit qui ne réagit pas ; 3 secondes plus tard, une fenêtre liste **tous les cadres sous la souris**, comme `/fstack` mais en entier (strate, niveau, nom, ce qu'il prend de la souris, taille, place, son parent et **le fichier qui l'a créé**), le cadre qui reçoit la souris marqué `-->` ; le texte est déjà sélectionné : **Ctrl+C** pour le copier et le coller ailleurs. `/cl debug` affiche dans le chat ce que surveille chaque icône (unité, ID donnés au jeu), utile pour signaler un souci.
 
 **Menu du portrait** (clic droit sur le portrait de ton personnage) :
 
