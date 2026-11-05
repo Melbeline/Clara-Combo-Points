@@ -82,6 +82,7 @@ Modules\Money\MoneyUI.lua
 Modules\TullaRange\TullaRange.lua
 Modules\TullaRange\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
+Modules\BarScale\BarScale.lua
 Modules\IdTip\IdTip.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
 Modules\EnemyCasts\EnemyCasts.lua
