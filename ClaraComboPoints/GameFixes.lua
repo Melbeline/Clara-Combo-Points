@@ -12,6 +12,7 @@
 -- keeps for each character, once for each character; those of the whole account, once.
 -- And the unit menu's loot method line (the group's leader): a left-click on it, Free for All.
 -- And the target and focus frames' health and power values at the right end of their bars.
+-- And a loot window left empty closed (a corpse clicked again and again while its items were on their way).
 
 local ADDON, ns = ...
 
@@ -283,6 +284,55 @@ texts:RegisterEvent("PLAYER_REGEN_ENABLED") -- (moved by the game in a fight: pu
 texts:SetScript("OnEvent", function(_, event)
   if event ~= "PLAYER_FOCUS_CHANGED" then ns:PlaceBarTexts("target") end
   if event ~= "PLAYER_TARGET_CHANGED" then ns:PlaceBarTexts("focus") end
+end)
+
+---------------------------------------------------------------------------
+-- An empty loot window closed. With some lag (or a corpse clicked again and again) the corpse is opened
+-- a second time while the items of the first opening are still on their way to the bags: they leave
+-- this one too, the server has closed the loot already, and the game, which closes the window as its
+-- last item is taken or as one walks away, keeps it open with nothing in it. Looked at a moment after it
+-- opens and after each item taken: nothing left, closed.
+
+local lootOpen, lootLook
+
+local function LootEmpty()
+  local n = type(GetNumLootItems) == "function" and GetNumLootItems() or 0
+  if type(n) ~= "number" or (issecretvalue and issecretvalue(n)) then return false end
+  for i = 1, n do
+    local kind = type(GetLootSlotType) == "function" and GetLootSlotType(i)
+    if kind == nil or (issecretvalue and issecretvalue(kind)) or kind ~= 0 then return false end
+  end
+  return true
+end
+
+local function LootShown()
+  local frame = _G.LootFrame
+  return type(frame) == "table" and type(frame.IsShown) == "function" and frame:IsShown() == true
+end
+
+local function LootLook()
+  lootLook = nil
+  if not (lootOpen or LootShown()) or not LootEmpty() then return end
+  lootOpen = nil
+  if type(CloseLoot) == "function" then CloseLoot() end
+  -- (the loot closed by the server already: the game's window, still waiting for word of it a moment later,
+  -- hidden here)
+  C_Timer.After(0.5, function()
+    if LootShown() and LootEmpty() then _G.LootFrame:Hide() end
+  end)
+end
+
+local loot = CreateFrame("Frame")
+loot:RegisterEvent("LOOT_OPENED")
+loot:RegisterEvent("LOOT_SLOT_CLEARED")
+loot:RegisterEvent("LOOT_CLOSED")
+loot:SetScript("OnEvent", function(_, event)
+  if event == "LOOT_CLOSED" then lootOpen = nil return end
+  if event == "LOOT_OPENED" then lootOpen = true end
+  if (lootOpen or LootShown()) and not lootLook then
+    lootLook = true
+    C_Timer.After(0.3, LootLook)
+  end
 end)
 
 ---------------------------------------------------------------------------
@@ -645,6 +695,18 @@ function ns:ChatReport()
   end
   out[#out + 1] = ""
   out[#out + 1] = Line("CombatLogQuickButtonFrame_Custom", _G.CombatLogQuickButtonFrame_Custom)
+  -- the game's chat functions replaced by an addon (its name): their code then runs in the middle of the game's
+  local replaced = {}
+  if type(issecurevariable) == "function" then
+    for _, name in ipairs({ "FCF_StartAlertFlash", "FCF_StopAlertFlash", "FCFManager_StopFlashOnDedicatedWindows",
+      "FCF_FadeInChatFrame", "FCF_FadeOutChatFrame", "FCFTab_UpdateAlpha", "FCF_OnUpdate", "FCF_Tab_OnClick",
+      "FCF_SelectDockFrame", "FCFDock_UpdateTabs", "UIFrameFade", "UIFrameFadeIn", "UIFrameFadeOut",
+      "UIFrameFade_OnUpdate", "UIFrameFadeRemoveFrame" }) do
+      local ok, secure, by = pcall(issecurevariable, name)
+      if ok and secure == false then replaced[#replaced + 1] = ("%s (%s)"):format(name, tostring(by)) end
+    end
+  end
+  out[#out + 1] = "replaced chat functions: " .. (#replaced > 0 and table.concat(replaced, ", ") or "none")
   local dc = LibStub and LibStub("AceAddon-3.0", true)
   dc = dc and dc:GetAddon("DynamicCam", true)
   out[#out + 1] = ("DynamicCam: %s, situation %s"):format(dc and (dc.IsEnabled and tostring(dc:IsEnabled()) or "yes") or "none",
