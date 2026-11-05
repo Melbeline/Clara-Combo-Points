@@ -169,7 +169,7 @@ function ns:RefreshQol()
 end
 
 -- The modules whose box waits for a reload (turned on or off, or taking over from their own addon)
-ns:AddReloadCheck(function()
+if ns.AddReloadCheck then ns:AddReloadCheck(function()
   local names = {}
   for _, m in ipairs(ns.QOL_MODULES or {}) do
     local now, wanted = state[m.key], ns:QolEnabled(m.key)
@@ -178,7 +178,7 @@ ns:AddReloadCheck(function()
     end
   end
   return names
-end)
+end) end
 
 -- What a module's state says, in a line.
 function ns:QolStatusText(m)

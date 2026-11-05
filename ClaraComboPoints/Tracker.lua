@@ -41,6 +41,7 @@ local MISSING_ALPHA = .45
 local GCD = 1.5              -- a cooldown this short is only the global cooldown
 local ABBREV = 120           -- countdown: "2m" from two minutes up, "1:59" below
 local MASK_ATLAS = "UI-HUD-CoolDownManager-Mask" -- keeps the icon art inside the frame (fills the icon)
+local CHECKED_FILE = "Interface\\Buttons\\CheckButtonHilight" -- an action button's checked look
 -- where each icon looks for its aura (on = the entry's condition; auto for plain entries)
 local LOOKUPS = {
   auto   = { { "player", "HELPFUL" }, { "target", "HARMFUL" }, { "player", "HARMFUL" } },
@@ -156,6 +157,21 @@ local function LayoutFrame(owner, pieces, w, h)
   end
 end
 
+-- An action button's checked art, as the game's own buttons draw it (else the classic art).
+local function CheckedArt(tex)
+  local button = _G.ActionButton1
+  local ok, real = pcall(function() return button and button.GetCheckedTexture and button:GetCheckedTexture() end)
+  real = ok and real or nil
+  local atlas = real and real.GetAtlas and real:GetAtlas()
+  if type(atlas) == "string" and atlas ~= "" then
+    tex:SetAtlas(atlas)
+  else
+    local file = real and real.GetTexture and real:GetTexture()
+    tex:SetTexture((type(file) == "number" or (type(file) == "string" and file ~= "")) and file or CHECKED_FILE)
+  end
+  tex:SetBlendMode("ADD")
+end
+
 local function NewSlot(row)
   local slot = CreateFrame("Frame", nil, row)
   slot.icon = slot:CreateTexture(nil, "ARTWORK")
@@ -178,6 +194,12 @@ local function NewSlot(row)
   slot.over:SetFrameLevel(slot:GetFrameLevel() + 6)
   slot.frame = {}
   for i = 1, FrameArt() and #PIECES or 1 do slot.frame[i] = slot.over:CreateTexture(nil, "OVERLAY") end
+  -- in that form, stance or stealth (or the spell queued, Auto Shot on): checked, like on the
+  -- action bars (their own art)
+  slot.checked = slot.over:CreateTexture(nil, "OVERLAY", nil, 1)
+  slot.checked:SetAllPoints()
+  CheckedArt(slot.checked)
+  slot.checked:Hide()
   slot.count = slot.over:CreateFontString(nil, "OVERLAY")
   ns:EditableSlot(slot) -- (editing on the HUD, below)
   return slot
@@ -424,6 +446,40 @@ local function LearnAuraID(slot, aura)
   ns:SyncAuraButtons()
 end
 
+-- The spell's form, stance or stealth on (Stealth, Prowl, Cat Form, Battle Stance, Devotion
+-- Aura...), the spell queued (Heroic Strike) or repeating (Auto Shot, Shoot): checked, as an
+-- action button shows it.
+local IsCurrentSpell = (C_Spell and C_Spell.IsCurrentSpell) or IsCurrentSpell
+local IsAutoRepeatSpell = (C_Spell and C_Spell.IsAutoRepeatSpell) or IsAutoRepeatSpell
+local function SpellOn(fn, spell)
+  if not fn or spell == nil then return false end
+  local ok, v = pcall(fn, spell)
+  return ok and Bool(v)
+end
+local function FormOn(name)
+  if not GetNumShapeshiftForms or not GetShapeshiftFormInfo then return false end
+  local ok, n = pcall(GetNumShapeshiftForms)
+  if not ok or not Plain(n) then return false end
+  for i = 1, n do
+    local okI, _, active, _, spellID = pcall(GetShapeshiftFormInfo, i)
+    if okI and Bool(active) and Plain(spellID) and ns:SpellName(spellID) == name then return true end
+  end
+  return false
+end
+local function Checked(slot)
+  if slot.item or not slot.name or ns.preview then return false end
+  return SpellOn(IsCurrentSpell, slot.name) or SpellOn(IsAutoRepeatSpell, slot.name)
+    or (type(slot.spell) == "number" and SpellOn(IsCurrentSpell, slot.spell))
+    or FormOn(slot.name)
+end
+ns.IconChecked = function(_, slot) return Checked(slot) end
+
+local function ShowChecked(slot, on)
+  if slot.isChecked == on then return end
+  slot.isChecked = on
+  if slot.checked then slot.checked:SetShown(on) end
+end
+
 local Enchanted -- below: a weapon imbue's enchantment on the swipe
 
 local function SetSlot(slot, look, aura, unit, enchant)
@@ -434,6 +490,7 @@ local function SetSlot(slot, look, aura, unit, enchant)
   local running
   if ns.preview then
     -- a sample: lit, with a cooldown under way
+    ShowChecked(slot, false)
     slot.icon:SetTexture(slot.spellIcon)
     slot.icon:SetDesaturated(false)
     slot:SetAlpha(1)
@@ -491,7 +548,9 @@ local function SetSlot(slot, look, aura, unit, enchant)
     local charges = Charges(slot)
     if charges ~= nil then slot.count:SetText(charges) end
   end
-  local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown
+  local checked = Checked(slot)
+  ShowChecked(slot, checked)
+  local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown or checked
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
   slot:SetShown(lit or look.missing)
@@ -516,6 +575,27 @@ function ns:UpdateIcons()
         end
         if slot.name and not enchant then aura, unit, otherRank = FindAura(slot) end
         SetSlot(slot, look, aura, unit, enchant)
+      end
+    end
+  end
+end
+
+-- A form, stance or stealth changed, a spell queued: the icons drawn again only if one of them
+-- turns checked or unchecked (these events come often; no aura read for nothing).
+function ns:CheckIcons()
+  if not self.db then return end
+  if not self.hud:IsShown() then
+    dirty = true -- (read when shown)
+    return
+  end
+  for _, side in ipairs(self.SIDES) do
+    for _, row in pairs(rows[side]) do
+      for i = 1, #(row.spells or NONE) do
+        local slot = row.slots[i]
+        if slot and (Checked(slot) and true or false) ~= (slot.isChecked and true or false) then
+          dirty = true
+          return
+        end
       end
     end
   end
