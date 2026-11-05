@@ -131,6 +131,8 @@ local function Joined()
 end
 
 local restoring = false
+local ORDER_WINDOW, MAX_SWAPS = 180, 20 -- (seconds after login; swaps a session)
+local loginAt, swapsDone = nil, 0
 local function Swap(a, b)
   local swap = C_ChatInfo and C_ChatInfo.SwapChatChannelsByChannelIndex
   if not swap or a == b then return false end
@@ -170,12 +172,20 @@ local function ApplyChannels()
     for _, key in ipairs(wanted) do if key == ch.key then listed = true break end end
     if not listed then wanted[#wanted + 1] = ch.key end
   end
-  for pos, key in ipairs(wanted) do
+  -- One swap a pass: the game's list changes only once the server has done it (CHANNEL_UI_UPDATE brings the next
+  -- pass); only in the minutes after login (later moves are the player's own), a handful at most.
+  if GetTime() - (loginAt or 0) < ORDER_WINDOW and swapsDone < MAX_SWAPS then
     local now = Joined()
-    local here = now[pos]
-    if here and here.key ~= key then
-      for _, ch in ipairs(now) do
-        if ch.key == key then Swap(ch.index, here.index) break end
+    for pos, key in ipairs(wanted) do
+      local here = now[pos]
+      if here and here.key ~= key then
+        for _, ch in ipairs(now) do
+          if ch.key == key then
+            if Swap(ch.index, here.index) then swapsDone = swapsDone + 1 end
+            break
+          end
+        end
+        break
       end
     end
   end
@@ -215,6 +225,7 @@ channelEvents:SetScript("OnEvent", function(self, event)
   end
   if event == "PLAYER_ENTERING_WORLD" and not self.hooked then
     self.hooked = true
+    loginAt = GetTime()
     -- a colour picked for a channel: kept for its name
     if ChangeChatColor then
       hooksecurefunc("ChangeChatColor", function(chatType, r, g, b)
