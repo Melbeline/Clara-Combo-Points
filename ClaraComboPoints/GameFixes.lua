@@ -195,10 +195,13 @@ function ns:PlaceBarTexts(unit)
   local main = frame and frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
   local container = main and main.HealthBarsContainer
   local health = container and container.HealthBar
-  if not (health and container.RightText) or ClassicFrames(unit) then return false end
+  -- the value the game writes: the bar's own string, else the container's
+  local value = health and health.RightText
+  if type(value) ~= "table" then value = container and container.RightText end
+  if type(value) ~= "table" or ClassicFrames(unit) then return false end
   if InCombatLockdown and InCombatLockdown() and frame:IsProtected() then return false end
-  container.RightText:ClearAllPoints()
-  container.RightText:SetPoint("RIGHT", health, "RIGHT", -2, 0)
+  value:ClearAllPoints()
+  value:SetPoint("RIGHT", health, "RIGHT", -2, 0)
   local mana = main.ManaBar
   if mana and mana.RightText then
     -- its right end under the health's: the power bar runs a little further right, under the frame's art
@@ -235,15 +238,16 @@ local tipFor -- the frame the tooltip of ours is shown for
 local function TipUnit(frame)
   local unit = frame.displayedUnit or frame.unit or (frame.GetAttribute and frame:GetAttribute("unit"))
   if type(unit) ~= "string" or issecretTip(unit) or unit == "" then return nil end
-  local exists = UnitExists(unit)
-  if issecretTip(exists) or not exists then return nil end
+  local ok, exists = pcall(UnitExists, unit)
+  if not ok or issecretTip(exists) or not exists then return nil end
   return unit
 end
 
 local function ShowUnitTip(frame, unit, compact)
   if not (GameTooltip and GameTooltip_SetDefaultAnchor) then return end
   GameTooltip_SetDefaultAnchor(GameTooltip, tipOwner)
-  if not GameTooltip:SetUnit(unit) then return end
+  local ok, set = pcall(GameTooltip.SetUnit, GameTooltip, unit)
+  if not ok or (not issecretTip(set) and set == false) then return end
   if not compact and UNIT_POPUP_RIGHT_CLICK and GameTooltip_AddInstructionLine then
     if GameTooltip_AddBlankLineToTooltip then GameTooltip_AddBlankLineToTooltip(GameTooltip) end
     GameTooltip_AddInstructionLine(GameTooltip, UNIT_POPUP_RIGHT_CLICK)
@@ -266,22 +270,30 @@ local function Portrait(frame)
   local portrait = container.PlayerPortrait or container.Portrait
   if type(portrait) == "table" and portrait.IsMouseOver then return portrait end
 end
-local function Usable(f) return type(f) == "table" and f.IsVisible and f.IsMouseOver and f:IsVisible() end
+-- (a secret answer counts as no: this client refuses to compare or test one)
+local function Yes(f, method, ...)
+  local fn = type(f) == "table" and f[method]
+  if type(fn) ~= "function" then return false end
+  local ok, v = pcall(fn, f, ...)
+  if not ok or issecretTip(v) then return false end
+  return v == true
+end
+local function Usable(f) return Yes(f, "IsVisible") end
 local function UnderMouse()
   for _, name in ipairs(TIP_FRAMES) do
     local f = _G[name]
     if Usable(f) then
       local portrait = Portrait(f)
-      if f:IsMouseOver() or (portrait and portrait:IsVisible() and portrait:IsMouseOver()) then return f, false end
+      if Yes(f, "IsMouseOver") or (portrait and Yes(portrait, "IsVisible") and Yes(portrait, "IsMouseOver")) then return f, false end
     end
   end
   for i = 1, 5 do
     local f = _G["CompactPartyFrameMember" .. i]
-    if Usable(f) and f:IsMouseOver() then return f, true end
+    if Usable(f) and Yes(f, "IsMouseOver") then return f, true end
   end
   for i = 1, 40 do
     local f = _G["CompactRaidFrame" .. i]
-    if Usable(f) and f:IsMouseOver() then return f, true end
+    if Usable(f) and Yes(f, "IsMouseOver") then return f, true end
   end
 end
 
@@ -402,8 +414,11 @@ local function Call(f, method, ...)
 end
 local function NameOf(f)
   if not f then return "nil" end
-  local name = Call(f, "GetDebugName") or Call(f, "GetName")
-  if name == nil or secretR(name) or name == "" then return tostring(f) end
+  local name = Call(f, "GetDebugName")
+  if secretR(name) then return "(secret)" end
+  if type(name) ~= "string" or name == "" then name = Call(f, "GetName") end
+  if secretR(name) then return "(secret)" end
+  if type(name) ~= "string" or name == "" then return tostring(f) end
   return name
 end
 local function Num(v) v = Plain(v) return type(v) == "number" and ("%.0f"):format(v) or tostring(v) end
@@ -420,12 +435,12 @@ local function Describe(f, focus)
     tostring(Plain(Call(f, "GetFrameStrata"))), NameOf(f), takes ~= "" and takes or "no mouse", Num(w), Num(h),
     Num(left), Num(bottom))
   local point, rel, relPoint, x, y = Call(f, "GetPoint", 1)
-  if point then
-    lines[#lines + 1] = ("        point: %s %s %s %s %s"):format(tostring(Plain(point)), NameOf(type(rel) == "table" and rel or nil),
+  if not secretR(point) and point then
+    lines[#lines + 1] = ("        point: %s %s %s %s %s"):format(tostring(Plain(point)), NameOf((not secretR(rel) and type(rel) == "table") and rel or nil),
       tostring(Plain(relPoint)), Num(x), Num(y))
   end
   local source = Call(f, "GetSourceLocation")
-  if source and not secretR(source) then lines[#lines + 1] = "        source: " .. tostring(source) end
+  if not secretR(source) and source then lines[#lines + 1] = "        source: " .. tostring(source) end
   local parent = Call(f, "GetParent")
   if parent then lines[#lines + 1] = "        parent: " .. NameOf(parent) end
   return table.concat(lines, "\n")
@@ -489,7 +504,7 @@ function ns:MouseReport()
   local guard = 0
   while f and guard < 200000 do
     guard = guard + 1
-    if f ~= reportBox and Call(f, "IsVisible") == true and Call(f, "IsMouseOver") == true then
+    if f ~= reportBox and Plain(Call(f, "IsVisible")) == true and Plain(Call(f, "IsMouseOver")) == true then
       list[#list + 1] = f
       local level = Plain(Call(f, "GetFrameLevel"))
       keys[f] = (STRATA_ORDER[Plain(Call(f, "GetFrameStrata"))] or 0) * 100000 + (type(level) == "number" and level or 0)
