@@ -190,27 +190,84 @@ local function ClassicFrames(unit)
   return uf and uf.active and uf.On and uf.On(unit) and true or false
 end
 
+-- Each value's spot (font string -> { unit, bar, x }): put back there when something else moves it (the game
+-- re-lays its frame), never while ClassicUI's frames hold the unit (they keep their own).
+local barTextSpots = setmetatable({}, { __mode = "k" })
+local placingBarText = false
+local barTextMoves, barTextFrameAt = 0, 0
+local function PutBarText(fs)
+  local spot = barTextSpots[fs]
+  if not spot or ClassicFrames(spot.unit) then return end
+  local frame = _G[TEXT_FRAMES[spot.unit]]
+  if InCombatLockdown and InCombatLockdown() and frame and frame:IsProtected() then return end
+  -- (never a tug of war with another keeper: a few moves a frame at most)
+  local now = GetTime()
+  if now ~= barTextFrameAt then barTextFrameAt, barTextMoves = now, 0 end
+  barTextMoves = barTextMoves + 1
+  if barTextMoves > 12 then return end
+  placingBarText = true
+  fs:ClearAllPoints()
+  fs:SetPoint("RIGHT", spot.bar, "RIGHT", spot.x, 0)
+  placingBarText = false
+end
+local function BarTextMoved(fs)
+  if placingBarText then return end
+  local spot = barTextSpots[fs]
+  if not spot or ClassicFrames(spot.unit) then return end
+  local ok, point, rel = pcall(fs.GetPoint, fs, 1)
+  if ok and fs:GetNumPoints() == 1 and point == "RIGHT" and rel == spot.bar then return end
+  PutBarText(fs)
+end
+local function KeepBarText(fs, unit, bar, x)
+  if type(fs) ~= "table" or type(fs.SetPoint) ~= "function" then return false end
+  local known = barTextSpots[fs]
+  barTextSpots[fs] = { unit = unit, bar = bar, x = x }
+  if not known then hooksecurefunc(fs, "SetPoint", BarTextMoved) end
+  PutBarText(fs)
+  return true
+end
+
 function ns:PlaceBarTexts(unit)
   local frame = _G[TEXT_FRAMES[unit]]
   local main = frame and frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
   local container = main and main.HealthBarsContainer
   local health = container and container.HealthBar
-  -- the value the game writes: the bar's own string, else the container's
-  local value = health and health.RightText
-  if type(value) ~= "table" then value = container and container.RightText end
-  if type(value) ~= "table" or ClassicFrames(unit) then return false end
+  if type(health) ~= "table" or ClassicFrames(unit) then return false end
   if InCombatLockdown and InCombatLockdown() and frame:IsProtected() then return false end
-  value:ClearAllPoints()
-  value:SetPoint("RIGHT", health, "RIGHT", -2, 0)
+  -- the value the game writes: the bar's own string and the container's (whichever it uses), both at the bar's end
+  local done = false
+  if KeepBarText(health.RightText, unit, health, -2) then done = true end
+  if container.RightText ~= health.RightText and KeepBarText(container.RightText, unit, health, -2) then done = true end
   local mana = main.ManaBar
-  if mana and mana.RightText then
+  if type(mana) == "table" and type(mana.RightText) == "table" then
     -- its right end under the health's: the power bar runs a little further right, under the frame's art
     local hr, mr = health:GetRight(), mana:GetRight()
     local x = (hr and mr) and (hr - mr - 2) or -10
-    mana.RightText:ClearAllPoints()
-    mana.RightText:SetPoint("RIGHT", mana, "RIGHT", x, 0)
+    KeepBarText(mana.RightText, unit, mana, x)
   end
-  return true
+  return done
+end
+
+-- Where each of the target's and focus's texts stands (for /cl souris): which one shows the value
+function ns:BarTextsReport(Line)
+  local out = {}
+  for _, unit in ipairs({ "target", "focus" }) do
+    local frame = _G[TEXT_FRAMES[unit]]
+    local main = frame and frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
+    local container = main and main.HealthBarsContainer
+    local health = container and container.HealthBar
+    local mana = main and main.ManaBar
+    out[#out + 1] = ("%s frame texts (ClassicUI's frames: %s)"):format(unit, tostring(ClassicFrames(unit)))
+    if type(health) == "table" then
+      for _, pair in ipairs({ { "bar.TextString", health.TextString }, { "bar.LeftText", health.LeftText },
+        { "bar.RightText", health.RightText }, { "container.HealthBarText", container.HealthBarText },
+        { "container.LeftText", container.LeftText }, { "container.RightText", container.RightText },
+        { "mana.RightText", type(mana) == "table" and mana.RightText or nil } }) do
+        out[#out + 1] = "    " .. Line(pair[1], pair[2])
+      end
+    end
+  end
+  return out
 end
 
 local texts = CreateFrame("Frame")
@@ -518,6 +575,16 @@ function ns:MouseReport()
   out[#out + 1] = "mouse focus: " .. (foci and foci[1] and NameOf(foci[1]) or "none (the world)")
   out[#out + 1] = ""
   for _, frame in ipairs(list) do out[#out + 1] = Describe(frame, isFocus[frame]) end
+  out[#out + 1] = ""
+  local function TextLine(label, fs)
+    if type(fs) ~= "table" or type(fs.GetText) ~= "function" then return label .. ": none" end
+    local text = Call(fs, "GetText")
+    local point, rel, relPoint, x, y = Call(fs, "GetPoint", 1)
+    return ("%s: %s, shown %s, %s %s %s %s,%s, left %s"):format(label, secretR(text) and "(secret)" or tostring(text),
+      tostring(Plain(Call(fs, "IsShown"))), tostring(Plain(point)), NameOf((not secretR(rel) and type(rel) == "table") and rel or nil),
+      tostring(Plain(relPoint)), Num(x), Num(y), Num(Call(fs, "GetLeft")))
+  end
+  for _, line in ipairs(ns.BarTextsReport and ns:BarTextsReport(TextLine) or {}) do out[#out + 1] = line end
   local text = table.concat(out, "\n")
   -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
   if ns.sv then ns.sv.mouseReport = text end

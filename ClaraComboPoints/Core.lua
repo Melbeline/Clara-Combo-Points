@@ -2354,8 +2354,8 @@ function ns:RefreshMenuLine()
   if menuLine and menuLine:IsVisible() then FillMenuLine(menuLine) end
 end
 
-local function MenuLineDescription()
-  local description = MenuUtil.CreateFrame()
+local function MenuLineDescription(description)
+  description = description or MenuUtil.CreateFrame()
   description:AddInitializer(function(frame)
     local f = MenuLine()
     f:SetParent(frame)
@@ -2417,20 +2417,24 @@ local function AddMenuEntries(_, root)
       root:CreateButton(L.RELOAD_UI, ReloadInterface)
     end
   end
-  -- the section: the classes the HUD is for. Each part on its own: one that fails in this client
-  -- leaves the others (and says why, once, in the chat).
-  if menu.line ~= false and ns.enabled and ns.db and MenuUtil.CreateButton then
-    local section = {}
-    Part(function()
-      if MenuUtil.CreateDivider then section[#section + 1] = MenuUtil.CreateDivider() end
-      if MenuUtil.CreateTitle then section[#section + 1] = MenuUtil.CreateTitle("Clara Combo Points") end
-    end)
-    if MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame then -- the opacity, the lock and show boxes
-      Part(function() section[#section + 1] = MenuLineDescription() end)
+  -- the section: the classes the HUD is for. Made by the menu itself (root:Create...: an entry made apart and filled
+  -- after, as More... was, broke in this client and took the whole section away), at the menu's end, then moved
+  -- above Other Options. Each part on its own: one that fails leaves the others (and says why, once, in the chat).
+  if menu.line ~= false and ns.enabled and ns.db and root.CreateTitle and root.CreateButton then
+    local made = {}
+    local function Keep(description) if description then made[#made + 1] = description end return description end
+    Part(function() if root.CreateDivider then Keep(root:CreateDivider()) end end)
+    Part(function() Keep(root:CreateTitle("Clara Combo Points")) end)
+    if MinimalSliderWithSteppersMixin then -- the opacity, the lock and show boxes
+      Part(function()
+        local line = root.CreateFrame and root:CreateFrame() or (MenuUtil.CreateFrame and root:Insert(MenuUtil.CreateFrame()))
+        if line then Keep(MenuLineDescription(line)) end
+      end)
     end
     -- the rest, used now and then, under More...: its own menu
-    local more = MenuUtil.CreateButton(L.MENU_MORE)
-    if more.CreateCheckbox then
+    local more
+    Part(function() more = Keep(root:CreateButton(L.MENU_MORE)) end)
+    if more and more.CreateCheckbox then
       Part(function()
         if MeterSetting() ~= nil then -- the game's damage meter
           more:CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
@@ -2456,23 +2460,32 @@ local function AddMenuEntries(_, root)
         end
       end)
     end
-    if more.CreateButton then
-      more:CreateButton(L.MENU_OPTIONS, function() ns:OpenOptions() end)
-      section[#section + 1] = more
+    if more and more.CreateButton then
+      Part(function() more:CreateButton(L.MENU_OPTIONS, function() ns:OpenOptions() end) end)
     end
-    if #section == 0 then return end
-    local at, previous
-    local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER
-    for index, description in root:EnumerateElementDescriptions() do
-      if other and MenuUtil.GetElementText(description) == other then
-        at = previous and MenuUtil.GetElementText(previous) == nil and index - 1 or index -- (its divider first)
-        break
+    -- above Other Options (its divider first): the menu's own list, reordered; else left at the end
+    Part(function()
+      local list = rawget(root, "elementDescriptions") or rawget(root, "elements")
+      if type(list) ~= "table" or #made == 0 then return end
+      local mine = {}
+      for _, d in ipairs(made) do mine[d] = true end
+      local rest = {}
+      for _, d in ipairs(list) do if not mine[d] then rest[#rest + 1] = d end end
+      local at
+      local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER
+      for index, d in ipairs(rest) do
+        if other and MenuUtil.GetElementText(d) == other then
+          local previous = rest[index - 1]
+          at = (previous and MenuUtil.GetElementText(previous) == nil) and index - 1 or index
+          break
+        end
       end
-      previous = description
-    end
-    for i, description in ipairs(section) do
-      if at then root:Insert(description, at + i - 1) else root:Insert(description) end
-    end
+      if not at then return end
+      for i = #list, 1, -1 do list[i] = nil end
+      for i = 1, at - 1 do list[#list + 1] = rest[i] end
+      for _, d in ipairs(made) do list[#list + 1] = d end
+      for i = at, #rest do list[#list + 1] = rest[i] end
+    end)
   end
 end
 
