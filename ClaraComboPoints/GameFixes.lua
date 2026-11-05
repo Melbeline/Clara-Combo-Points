@@ -484,26 +484,30 @@ function ns:MouseReport()
   for _, f in ipairs(foci or {}) do if f then isFocus[f] = true end end
   local x, y = GetCursorPosition()
   local scale = UIParent:GetEffectiveScale()
-  local list = {}
+  local list, keys = {}, {}
   local f = EnumerateFrames and EnumerateFrames()
-  while f do
-    if f ~= reportBox and Call(f, "IsVisible") == true and Call(f, "IsMouseOver") == true then list[#list + 1] = f end
-    f = EnumerateFrames(f)
+  local guard = 0
+  while f and guard < 200000 do
+    guard = guard + 1
+    if f ~= reportBox and Call(f, "IsVisible") == true and Call(f, "IsMouseOver") == true then
+      list[#list + 1] = f
+      local level = Plain(Call(f, "GetFrameLevel"))
+      keys[f] = (STRATA_ORDER[Plain(Call(f, "GetFrameStrata"))] or 0) * 100000 + (type(level) == "number" and level or 0)
+    end
+    local ok, nextFrame = pcall(EnumerateFrames, f)
+    f = ok and nextFrame or nil
   end
-  table.sort(list, function(a, b)
-    local sa, sb = STRATA_ORDER[Plain(Call(a, "GetFrameStrata"))] or 0, STRATA_ORDER[Plain(Call(b, "GetFrameStrata"))] or 0
-    if sa ~= sb then return sa > sb end
-    local la, lb = Plain(Call(a, "GetFrameLevel")), Plain(Call(b, "GetFrameLevel"))
-    if type(la) == "number" and type(lb) == "number" and la ~= lb then return la > lb end
-    return false
-  end)
+  table.sort(list, function(a, b) return keys[a] > keys[b] end)
   local out = {}
   out[#out + 1] = ("Clara %s  ·  cursor %.0f, %.0f  ·  %d frames under it"):format(ns.VERSION or "", x / scale, y / scale, #list)
   out[#out + 1] = "mouse focus: " .. (foci and foci[1] and NameOf(foci[1]) or "none (the world)")
   out[#out + 1] = ""
   for _, frame in ipairs(list) do out[#out + 1] = Describe(frame, isFocus[frame]) end
+  local text = table.concat(out, "\n")
+  -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
+  if ns.sv then ns.sv.mouseReport = text end
   local box = ReportBox()
-  box.text = table.concat(out, "\n")
+  box.text = text
   box.title:SetText(L.MOUSE_REPORT_TITLE)
   box.hint:SetText(L.MOUSE_REPORT_HINT)
   box.edit:SetText(box.text)
@@ -513,7 +517,23 @@ function ns:MouseReport()
   return box.text
 end
 
+local function Say(text, r, g, b)
+  if UIErrorsFrame and UIErrorsFrame.AddMessage then UIErrorsFrame:AddMessage(text, r or 1, g or .82, b or 0, 1, 1.5) end
+end
 function ns:MouseReportSoon()
   print("|cffffd200Clara|r: " .. L.MOUSE_REPORT_SOON)
-  C_Timer.After(3, function() ns:MouseReport() end)
+  -- the count on the middle of the screen: 3, 2, 1, then taken
+  for i = 3, 1, -1 do C_Timer.After(3 - i, function() Say(tostring(i)) end) end
+  C_Timer.After(3, function()
+    local ok, result = xpcall(function() return ns:MouseReport() end, function(e) return tostring(e) end)
+    if ok then
+      local n = 0
+      for _ in tostring(result):gmatch("\n    ") do n = n + 1 end
+      Say(L.MOUSE_REPORT_DONE, .2, 1, .2)
+      print("|cffffd200Clara|r: " .. L.MOUSE_REPORT_SAVED)
+    else
+      print("|cffff6060Clara|r: /cl souris: " .. tostring(result))
+      Say("Clara: /cl souris: " .. tostring(result), 1, .3, .3)
+    end
+  end)
 end
