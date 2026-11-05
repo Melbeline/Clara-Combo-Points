@@ -92,6 +92,14 @@ local function attach()
     title.Text = title.art:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title.Text:SetWordWrap(false)
     title.Text:SetText(wt.L.TITLE)
+    -- (Clara Combo Points) the window's own title (the profession's name) unseen under ours while the page shows: with
+    -- ClassicUI's look the two were written over each other
+    local function NativeTitle(alpha)
+        local native = book.TitleContainer and book.TitleContainer.TitleText
+        if native and native.SetAlpha then native:SetAlpha(alpha) end
+    end
+    page:HookScript("OnShow", function() NativeTitle(0) end)
+    page:HookScript("OnHide", function() NativeTitle(1) end)
 
     local portrait = CreateFrame("Frame", "WhatsTrainingCraftingPortrait", page)
     portrait:SetAllPoints(book.PortraitContainer)

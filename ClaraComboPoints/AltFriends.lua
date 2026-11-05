@@ -89,8 +89,33 @@ end
 
 function AltFriends.Online(name)
   if IsMe(name) then return true end
-  local seen = ns.Sync and ns.Sync.seen and ns.Sync.seen[KeyOf(name)]
+  local S = ns.Sync
+  if S and S.Online then return S.Online(KeyOf(name)) end
+  local seen = S and S.seen and S.seen[KeyOf(name)]
   return type(seen) == "number" and GetTime() - seen < HEARD
+end
+
+-- The name the game knows the character by (its first name: the surname is the player's own touch)
+local function GameName(name) return name:match("^(%S+)") or name end
+AltFriends.GameName = GameName
+
+-- One of the player's characters: in this list, or known to the gold tracker (the account's characters,
+-- and the other accounts' through the sync). name: as the game gives it (a first name, maybe a realm).
+function AltFriends.IsAlt(name)
+  if type(name) ~= "string" or name == "" or (issecretvalue and issecretvalue(name)) then return false end
+  local first = (name:match("^([^%-%s]+)") or name):lower()
+  if IsMe(name) or first == (UnitName("player") or ""):lower() then return false end
+  for _, alt in pairs(List() or {}) do
+    if GameName(alt.name):lower() == first then return true end
+  end
+  local money = ns.Money and ns.Money.db and ns.Money.db.chars
+  if type(money) == "table" and money[KeyOf(first:sub(1, 1):upper() .. first:sub(2))] then return true end
+  if type(money) == "table" then
+    for key in pairs(money) do
+      if type(key) == "string" and (key:match("^([^%-]+)") or ""):lower() == first then return true end
+    end
+  end
+  return false
 end
 
 function AltFriends.Facts(name)
@@ -273,10 +298,14 @@ local function Menu(catcher)
   if not (alt and MenuUtil and MenuUtil.CreateContextMenu) then return end
   MenuUtil.CreateContextMenu(catcher, function(_, root)
     root:CreateTitle(alt.name)
-    if AltFriends.Online(alt.name) and not IsMe(alt.name) then
+    if not IsMe(alt.name) then
       root:CreateButton(WHISPER or "Whisper", function()
         local tell = (ChatFrameUtil and ChatFrameUtil.SendTell) or ChatFrame_SendTell
-        if tell then tell(alt.name) end
+        if tell then tell(GameName(alt.name)) end
+      end)
+      root:CreateButton(PARTY_INVITE or INVITE or "Invite", function()
+        local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
+        if invite then invite(GameName(alt.name)) end
       end)
     end
     root:CreateButton(L.ALT_REMOVE, function() AltFriends.Remove(alt.name) end)
@@ -365,10 +394,49 @@ local function Hook()
 end
 AltFriends.Hook = Hook
 
+---------------------------------------------------------------------------
+-- Coming and going: said in the chat as the game says it of a friend, the list redrawn
+---------------------------------------------------------------------------
+local wasOnline = {} -- lower-case whole name -> online when last looked
+local settled = false -- (the first moments after login: the ones already online heard, not announced)
+local function Announce(alt, online)
+  local frame = DEFAULT_CHAT_FRAME
+  if not (frame and frame.AddMessage) then return end
+  local info = ChatTypeInfo and ChatTypeInfo.SYSTEM
+  local r, g, b = info and info.r or 1, info and info.g or 1, info and info.b or 0
+  local text
+  if online then
+    text = (ERR_FRIEND_ONLINE_SS or "|Hplayer:%s|h[%s]|h has come online."):format(GameName(alt.name), alt.name)
+  else
+    text = (ERR_FRIEND_OFFLINE_S or "%s has gone offline."):format(alt.name)
+  end
+  frame:AddMessage(text, r, g, b)
+end
+local function Look(announce)
+  local changed = false
+  for key, alt in pairs(List() or {}) do
+    if not IsMe(alt.name) then
+      local on = AltFriends.Online(alt.name) and true or false
+      if wasOnline[key] ~= nil and wasOnline[key] ~= on then
+        changed = true
+        if announce and settled then Announce(alt, on) end
+      end
+      wasOnline[key] = on
+    end
+  end
+  if changed then AltFriends.Refresh() end
+end
+AltFriends.Look = Look
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self)
   self:UnregisterAllEvents()
   List()
   Hook()
+  Look(false)
+  C_Timer.After(20, function() settled = true end)
+  if ns.Sync and ns.Sync.OnPresence then ns.Sync.OnPresence(function() Look(true) end) end
+  -- (one that left without a word: gone once not heard for a while)
+  C_Timer.NewTicker(20, function() Look(true) end)
 end)

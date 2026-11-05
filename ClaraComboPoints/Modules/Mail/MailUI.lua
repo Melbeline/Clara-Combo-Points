@@ -62,7 +62,7 @@ end
 ---------------------------------------------------------------------------
 -- The list
 ---------------------------------------------------------------------------
-local Refresh
+local Refresh, Anchor
 
 local function SortName(id)
   if id == "last" then return L.MAIL_SORT_LAST end
@@ -192,11 +192,31 @@ local function Row(parent, r)
   return f
 end
 
--- The cells' places: the window's width shared out (it follows the mail window's).
+-- The widest name listed, as a cell's label shows it (+ the button's margins): no name is cut.
+local measure
+local function NeedCell()
+  if not measure then
+    measure = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    measure:Hide()
+  end
+  local widest = 0
+  local list = M.Sorted()
+  for _, entry in ipairs(list) do
+    measure:SetText(entry.name)
+    widest = math.max(widest, measure:GetStringWidth() or 0)
+  end
+  return math.ceil(widest) + 16
+end
+-- The window's width for those cells (at least the mail window's)
+local function NeedWidth()
+  return 2 * PAD + ARROWS_W + COLS * NeedCell() + (COLS - 1) * GAP
+end
+
+-- The cells' places: the window's width shared out (it follows the mail window's, wider when a name needs it).
 local function Place()
   local w = panel:GetWidth()
   local inner = w - 2 * PAD - ARROWS_W
-  local cellW = math.floor((inner - (COLS - 1) * GAP) / COLS)
+  local cellW = math.max(math.floor((inner - (COLS - 1) * GAP) / COLS), NeedCell())
   local top = -(TITLE_H + SORT_H + 10)
   for r = 1, ROWS do
     local y = top - (r - 1) * ROW_H
@@ -250,7 +270,13 @@ function Refresh()
   emptyText:SetShown(#list == 0)
   sortButton.text:SetText(SortName(M.db.sort))
 end
-M.Changed = function() Refresh() end
+M.Changed = function()
+  if panel and panel:IsShown() then
+    Anchor()
+    Place()
+  end
+  Refresh()
+end
 
 ---------------------------------------------------------------------------
 -- Sort by, Add/remove categories, Export / Import
@@ -386,7 +412,7 @@ end
 local function Height() return TITLE_H + SORT_H + 10 + ROWS * ROW_H + 8 end
 
 -- Above the mail window, as wide as it; beside it when the screen has no room above.
-local function Anchor()
+function Anchor()
   local mail = MailFrame
   panel:ClearAllPoints()
   local top, screenTop = mail:GetTop(), UIParent:GetTop()
@@ -394,12 +420,17 @@ local function Anchor()
   if top and screenTop then
     room = screenTop * UIParent:GetEffectiveScale() / panel:GetEffectiveScale() - top
   end
+  local need = NeedWidth()
   if room >= Height() + 4 then
     panel:SetPoint("BOTTOMLEFT", mail, "TOPLEFT", 0, 2)
-    panel:SetPoint("BOTTOMRIGHT", mail, "TOPRIGHT", 0, 2)
+    if need > (mail:GetWidth() or 0) then
+      panel:SetWidth(need) -- (a long name: wider than the mail window)
+    else
+      panel:SetPoint("BOTTOMRIGHT", mail, "TOPRIGHT", 0, 2)
+    end
   else
     panel:SetPoint("TOPLEFT", mail, "TOPRIGHT", 4, 0)
-    panel:SetWidth(math.max(338, mail:GetWidth() or 338))
+    panel:SetWidth(math.max(338, mail:GetWidth() or 338, need))
   end
   panel:SetHeight(Height())
 end
