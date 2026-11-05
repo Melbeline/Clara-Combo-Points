@@ -150,6 +150,27 @@ local function TextHolder(frame, above)
     return Child(frame, "texts", (above or frame):GetFrameLevel() + 3)
 end
 
+-- Each text's spot on our bar: put back there when something else moves it (the game's frame code, or Clara's
+-- placing for the game's own frames, which can run before ours at login), so a value never stands out by the portrait.
+local textSpots = setmetatable({}, { __mode = "k" })   -- client font string -> { point, bar, x, y }
+local placing = false
+local function PlaceText(fs)
+    local spot = textSpots[fs]
+    if not spot then return end
+    placing = true
+    fs:ClearAllPoints()
+    fs:SetPoint(spot[1], spot[2], spot[1], spot[3], spot[4])
+    placing = false
+end
+local function TextMoved(fs)
+    if placing then return end
+    local spot = textSpots[fs]
+    if not spot then return end
+    local point, rel = fs:GetPoint(1)
+    if fs:GetNumPoints() == 1 and point == spot[1] and rel == spot[2] then return end
+    PlaceText(fs)
+end
+
 -- offsets: { point, x, y } per text; offsets.font a font object for all of them (small bars).
 local function AttachTexts(bar, texts, offsets, textParent)
     for i, fs in ipairs(texts) do
@@ -157,9 +178,10 @@ local function AttachTexts(bar, texts, offsets, textParent)
             fs:SetParent(textParent or bar)
             fs:SetDrawLayer("OVERLAY")
             if offsets.font then fs:SetFontObject(offsets.font) end
-            fs:ClearAllPoints()
             local o = offsets[i]
-            fs:SetPoint(o[1], bar, o[1], o[2], o[3])
+            textSpots[fs] = { o[1], bar, o[2], o[3] }
+            PlaceText(fs)
+            ns.HookMethod(fs, "SetPoint", TextMoved)
         end
     end
 end
