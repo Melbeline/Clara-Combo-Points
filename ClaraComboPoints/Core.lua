@@ -563,6 +563,29 @@ function ns:SpellName(spell)
   if ok and type(name) == "string" and not issecretvalue(name) and name ~= "" then return name end
 end
 
+-- A character's whole name: "First Surname" on WoW Forever, whatever the name settings show
+-- (UnitName follows them: one's own surname hidden, it gives the first name alone). Elsewhere the
+-- name alone (there the second value is a realm).
+function ns:FullName(unit)
+  unit = unit or "player"
+  local name, surname
+  if UnitNameUnmodified then
+    local ok, a, b = pcall(UnitNameUnmodified, unit)
+    if ok then name, surname = a, b end
+  end
+  if issecretvalue(name) or type(name) ~= "string" or name == "" then
+    name, surname = UnitName(unit)
+    if issecretvalue(name) or type(name) ~= "string" or name == "" then return nil end
+  end
+  local consts = Constants and Constants.CharacterNameSeparatorConsts
+  local sep = consts and consts.CHARACTERNAME_SURNAME_SEPARATOR
+  if type(sep) == "string" and not issecretvalue(surname) and type(surname) == "string" and surname ~= ""
+    and not name:find(sep, 1, true) then
+    return name .. sep .. surname
+  end
+  return name
+end
+
 -- Aura data by spell name (every rank), or nil if absent or hidden from addons.
 function ns:FindAura(unit, name, filter)
   if not GetAuraDataBySpellName or not name then return end

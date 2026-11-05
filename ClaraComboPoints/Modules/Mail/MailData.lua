@@ -6,6 +6,7 @@
 -- account-wide (ClaraMailDB), and passed to another account as a line of text (export / import).
 
 local ADDON, ns = ...
+local issecretvalue = issecretvalue or function() return false end
 local L = ns.L
 
 if not ns:QolRuns("mail") then return end
@@ -68,15 +69,21 @@ local function Clean(db)
   if type(db.own) == "table" then
     for key, on in pairs(db.own) do if type(key) == "string" and on == true then own[key] = true end end
   end
+  -- the account's characters by their GUID: the key each was last listed under (one character, one entry)
+  local guids = {}
+  if type(db.guids) == "table" then
+    for guid, key in pairs(db.guids) do if type(guid) == "string" and type(key) == "string" then guids[guid] = key end end
+  end
   local sort = type(db.sort) == "string" and (db.sort == "last" or known[db.sort]) and db.sort or "last"
   local nextId = type(db.nextId) == "number" and db.nextId >= 1 and math.floor(db.nextId) or 1
   return { categories = categories, recipients = recipients, items = items, own = own, sort = sort, nextId = nextId,
-    open = db.open == true or nil }
+    open = db.open == true or nil, guids = guids }
 end
 
 function M.Init()
   ClaraMailDB = Clean(ClaraMailDB)
   M.db = ClaraMailDB
+  if M.MergeFirstNames then M.MergeFirstNames() end
 end
 
 -- a name's key in the list: its letters as typed, lower case (the game's names are not case-sensitive)
@@ -251,13 +258,65 @@ function M.Sorted(sort)
   return first, n
 end
 
--- This character in the list as Main/alt from level 3 (once: taken off by hand, it stays off).
+-- One character listed twice (its first name alone, from when the game's settings hid its surname,
+-- and its whole name): one entry, under the whole name, its categories, its last mail and the
+-- items given to it kept.
+local function Merge(from, to, shown)
+  local db = M.db
+  local a = db.recipients[from]
+  if from == to or not a then return false end
+  local b = db.recipients[to]
+  if b then
+    for id in pairs(a.cats) do b.cats[id] = true end
+    b.last = math.max(b.last or 0, a.last or 0)
+  else
+    b = a
+    db.recipients[to] = b
+  end
+  if shown then b.name = shown end
+  db.recipients[from] = nil
+  if db.own[from] and not db.own[to] then db.own[to] = true end
+  for id, item in pairs(db.items) do
+    if item.who and Key(item.who) == from then item.who = b.name end
+  end
+  return true
+end
+M.Merge = Merge
+
+-- The account's characters listed by their first name alone: under their whole name when it is the
+-- only one in the list that starts so ("Elle" and "Elle Woods": one character).
+function M.MergeFirstNames()
+  local merged = false
+  for key in pairs(M.db.own) do
+    if M.db.recipients[key] and not key:find(" ", 1, true) then
+      local match, count = nil, 0
+      for other in pairs(M.db.recipients) do
+        if other:sub(1, #key + 1) == key .. " " then match, count = other, count + 1 end
+      end
+      if count == 1 and Merge(key, match) then merged = true end
+    end
+  end
+  return merged
+end
+
+-- This character in the list as Main/alt from level 3 (once: taken off by hand, it stays off), under
+-- its whole name; listed before under another name (its GUID tells), one entry again.
 function M.AddOwn()
   local level = UnitLevel and UnitLevel("player")
-  local name = UnitName and UnitName("player")
-  if type(level) ~= "number" or level < OWN_LEVEL or type(name) ~= "string" then return false end
+  local name = ns:FullName("player")
+  if type(name) ~= "string" then return false end
   local key = Key(name)
-  if not key or M.db.own[key] then return false end
+  if not key then return false end
+  local guid = UnitGUID and UnitGUID("player")
+  if type(guid) == "string" and not issecretvalue(guid) then
+    local before = M.db.guids[guid]
+    if before and before ~= key then Merge(before, key, name) end
+    M.db.guids[guid] = key
+  end
+  local first = name:match("^(%S+)%s")
+  if first then Merge(Key(first), key, name) end
+  if M.db.recipients[key] then M.db.recipients[key].name = name end -- (the game's capitals)
+  if type(level) ~= "number" or level < OWN_LEVEL or M.db.own[key] then return false end
   M.db.own[key] = true
   local r = Entry(name)
   if r then r.cats.mainalt = M.CategoryName("mainalt") and true or nil end
