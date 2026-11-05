@@ -26,6 +26,7 @@ SpellNames.lua
 Who.lua
 Flyout.lua
 GameFixes.lua
+AltFriends.lua
 WheelPages.lua
 UnitBoxes.lua
 Disenchant.lua

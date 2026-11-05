@@ -210,6 +210,7 @@ La page **Clara** elle-même a, tout en haut, **Replacer la fenêtre d'options**
 
 ## Corrections du jeu
 
+- **Tes rerolls dans la liste d'amis** : WoW Forever garde les amis personnages du jeu (le serveur les accepte et prévient quand ils se connectent) mais sa fenêtre d'amis ne montre que les amis Battle.net. Un bouton **Ajouter reroll** (Add Alt), entre **Ajouter un ami** et **Envoyer un message** (les trois de la même largeur), demande le **prénom et le nom** du personnage, avec les suggestions du champ **À** du courrier (tes personnages compris). Ces personnages apparaissent dans la liste **au-dessus des amis Battle.net hors ligne**, comme le jeu les dessine : connectés ou non, niveau, classe et zone, infobulle, et leur menu du clic droit (chuchoter, inviter, retirer). Avec l'interface du jeu comme avec ClassicUI.
 - **Cadres de raid qui sautent en haut de l'écran** : à chaque mise à jour du raid (un membre ou un familier qui arrive ou s'en va, un changement de groupe…), le jeu donne un instant à leur conteneur une taille de 3000 × 3000, puis le remesure d'après ses cadres affichés ; l'Edit Mode le garde dans l'écran, donc pendant ce temps il est poussé tout en haut. Interface masquée (Alt-Z), aucun cadre n'est affiché, la mesure échoue et les cadres de raid réapparaissent en haut de l'écran. L'addon le remesure dès que ses cadres sont de nouveau affichés (interface réaffichée, hors combat) si sa taille est restée fausse : les cadres reviennent à leur place.
 
 ## Vitesse d'attaque, menace et distance sur la cible et le focus
