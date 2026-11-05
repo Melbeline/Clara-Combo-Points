@@ -177,6 +177,7 @@ local refreshers = {}
 function ns:RefreshQol()
   for _, fn in ipairs(refreshers) do fn() end
 end
+function ns:OnQolRefresh(fn) refreshers[#refreshers + 1] = fn end -- (the options window's Improvements tab too)
 
 -- The modules whose box waits for a reload (turned on or off, or taking over from their own addon)
 if ns.AddReloadCheck then ns:AddReloadCheck(function()
@@ -273,6 +274,8 @@ local function Block(sheet, m, page)
     return y - 18
   end
 end
+
+ns.QolBlock = Block -- (the options window's Improvements tab shows the same, one module a page: Options.lua)
 
 -- A theme's page: its title, a line on the boxes, its modules (they scroll), Reload UI
 local function BuildTheme(page, theme)

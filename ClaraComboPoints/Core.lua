@@ -1714,13 +1714,16 @@ local function CleanWindow(sv)
   if not (Finite(w.alpha) and w.alpha >= ns.MIN_WINDOW_ALPHA and w.alpha <= 1) then w.alpha = 1 end
   if not (Finite(w.w) and w.w >= ns.MIN_WINDOW_W and w.w <= ns.MAX_WINDOW_W) then w.w = nil end
   if not (Finite(w.h) and w.h >= ns.MIN_WINDOW_H and w.h <= ns.MAX_WINDOW_H) then w.h = nil end
-  -- the class tab and the page shown last (Options.lua: opened again on them)
+  -- the tab and the page shown last (Options.lua: opened again on them); QOL: the Improvements
+  -- tab, on the module of qol
   local TABS = { PRIEST = true, MAGE = true, WARLOCK = true, DRUID = true, ROGUE = true, HUNTER = true, SHAMAN = true,
-    PALADIN = true, WARRIOR = true }
+    PALADIN = true, WARRIOR = true, QOL = true }
   if not TABS[w.tab] then w.tab = nil end
   if not (Finite(w.page) and w.page >= 1 and w.page <= 10 and w.page == math.floor(w.page)) then w.page = nil end
+  if type(w.qol) ~= "string" or #w.qol > 40 then w.qol = nil end
   for k in pairs(w) do
-    if k ~= "left" and k ~= "top" and k ~= "scale" and k ~= "alpha" and k ~= "w" and k ~= "h" and k ~= "tab" and k ~= "page" then w[k] = nil end
+    if k ~= "left" and k ~= "top" and k ~= "scale" and k ~= "alpha" and k ~= "w" and k ~= "h" and k ~= "tab" and k ~= "page"
+      and k ~= "qol" then w[k] = nil end
   end
 end
 

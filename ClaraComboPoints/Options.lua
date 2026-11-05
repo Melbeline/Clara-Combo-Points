@@ -294,6 +294,22 @@ local function Button(parent, label, w, h, onClick)
   return b
 end
 
+-- A tooltip's border (the look of Clara's boxes, close to ClassicUI's): bronze, over a dark fill.
+local TIP_EDGE = {
+  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  tile = true, tileSize = 16, edgeSize = 12,
+  insets = { left = 3, right = 3, top = 3, bottom = 3 },
+}
+local BRONZE_R, BRONZE_G, BRONZE_B = .72, .58, .34
+local function TipLook(frame, alpha, r, g, b)
+  frame:SetBackdrop(TIP_EDGE)
+  frame:SetBackdropColor(0, 0, 0, alpha or .5)
+  frame:SetBackdropBorderColor(r or BRONZE_R, g or BRONZE_G, b or BRONZE_B, 1)
+end
+
+-- A tab of the window: the game's tab (its text, its sizing) drawn in that border, under it (a frame of
+-- ours just below the tab's level): bronze, gold when chosen, lighter under the mouse.
 local function Tab(parent, label, onClick)
   local t = CreateFrame("Button", nil, parent, "PanelTopTabButtonTemplate")
   OnRelabel(function()
@@ -301,11 +317,37 @@ local function Tab(parent, label, onClick)
     PanelTemplates_TabResize(t, 0)
   end)
   t:SetScript("OnClick", function(self) ClickSound(); onClick(self) end)
+  t:SetFrameLevel(parent:GetFrameLevel() + 4)
   local level = t:GetFrameLevel()
+  for _, region in ipairs(t.GetRegions and { t:GetRegions() } or {}) do
+    if region.IsObjectType and region:IsObjectType("Texture") then region:SetAlpha(0) end -- (the game's art)
+  end
+  local look = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+  look:SetPoint("TOPLEFT", t, "TOPLEFT", 2, -3)
+  look:SetPoint("BOTTOMRIGHT", t, "BOTTOMRIGHT", -2, 1)
+  look:SetFrameLevel(level - 1)
+  look.claraChrome = true -- (the window's own, not a group of a page)
+  t.look = look
+  local function Paint(self)
+    local hover = self.IsMouseOver and self:IsMouseOver()
+    if self.chosen then
+      TipLook(look, .9, GOLD_R, GOLD_G, GOLD_B)
+      look:SetBackdropColor(.16, .13, .05, .95)
+    else
+      TipLook(look, .75)
+      if hover then look:SetBackdropBorderColor(.95, .82, .5, 1) end
+    end
+  end
+  t:HookScript("OnEnter", Paint)
+  t:HookScript("OnLeave", Paint)
   function t:SetActive(on)
+    self.chosen = on and true or nil
     if on then PanelTemplates_SelectTab(self) else PanelTemplates_DeselectTab(self) end
     self:SetFrameLevel(level + (on and 2 or 0)) -- over its neighbours when they overlap (a narrow window)
+    look:SetFrameLevel(self:GetFrameLevel() - 1)
+    Paint(self)
   end
+  Paint(t)
   return t
 end
 
@@ -2161,7 +2203,7 @@ local function IconsPage(p, icons, OnRefresh)
   ghost = DragGhost(p)
   catalog = Catalog(p)
   OnRefresh(function()
-    catalog:Sync(page == ICONS_PAGE)
+    catalog:Sync(page == ICONS_PAGE and not p.qolActive)
     catalogBtn:SetActive(catalog:IsShown())
   end)
 end
@@ -3181,13 +3223,11 @@ end
 -- deletes one.
 ---------------------------------------------------------------------------
 local function HeaderGroup(p)
-  local box = CreateFrame("Frame", nil, p)
+  local box = CreateFrame("Frame", nil, p, "BackdropTemplate")
   box:SetHeight(HEADER_BOX_H)
   box:SetFrameLevel(p:GetFrameLevel() + 1)
-  local fill = box:CreateTexture(nil, "BACKGROUND")
-  fill:SetAllPoints()
-  fill:SetColorTexture(0, 0, 0, .25)
-  AddBorder(box, .72, .58, .34, .85) -- (the groups' bronze, one pixel)
+  TipLook(box, .45) -- (a tooltip's border in the groups' bronze)
+  box.claraChrome = true -- (the window's own, not a group of a page)
   return box
 end
 
@@ -3430,6 +3470,138 @@ local function PortraitControls(p, portrait)
   return specMenu
 end
 
+---------------------------------------------------------------------------
+-- The Improvements tab: the modules built in (QoL.lua), listed on the left like the pages of a
+-- class, one page each, as on their theme's page in the game's options (Esc > Options > AddOns >
+-- Clara): the box that turns it on or off (from the next reload), where it stands, what it does,
+-- its main switches and the button to its own options.
+---------------------------------------------------------------------------
+-- its name on its tab, in gold (the class tabs: in their class's colour)
+function ns.QolTabLabel() -- (on ns: Build is at its 60 upvalues)
+  return ("|cff%02x%02x%02x%s|r"):format(floor(GOLD_R * 255 + .5), floor(GOLD_G * 255 + .5), floor(GOLD_B * 255 + .5),
+    L.QOL_TAB)
+end
+
+function ns.BuildQolView(p, OnRefresh)
+  local mods = ns.QOL_MODULES or {}
+  local view = CreateFrame("Frame", nil, p)
+  view:SetPoint("TOPLEFT", 12, NAV_TOP)
+  view:SetPoint("BOTTOMRIGHT", -12, 40)
+  view:Hide()
+  local list = Box(view)
+  list:SetPoint("TOPLEFT")
+  list:SetPoint("BOTTOMLEFT")
+  list:SetWidth(NAV_W - 16)
+  -- the list scrolls (the wheel, or its two arrows) while the window is shorter than it
+  local scroller = CreateFrame("ScrollFrame", nil, list)
+  scroller:SetPoint("TOPLEFT", 0, -2)
+  scroller:SetPoint("BOTTOMRIGHT", 0, 2)
+  local rows = CreateFrame("Frame", nil, scroller)
+  rows:SetSize(NAV_W - 16, #mods * NAV_ROW_H + 4)
+  scroller:SetScrollChild(rows)
+  local function Arrow(dir, delta)
+    local a = CreateFrame("Button", nil, list)
+    a:SetSize(18, 18)
+    a:SetFrameLevel(scroller:GetFrameLevel() + 10)
+    a:SetPoint(dir == "Up" and "TOPRIGHT" or "BOTTOMRIGHT", list, dir == "Up" and "TOPRIGHT" or "BOTTOMRIGHT", -3,
+      dir == "Up" and -3 or 3)
+    a:SetNormalTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Up")
+    a:SetPushedTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Down")
+    a:SetHighlightTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. dir .. "Button-Highlight", "ADD")
+    a:SetScript("OnClick", function() ClickSound(); scroller:Scroll(delta) end)
+    a:Hide()
+    return a
+  end
+  local up, down = Arrow("Up", 1), Arrow("Down", -1)
+  function scroller:Place(y)
+    local range = max(0, rows:GetHeight() - (self:GetHeight() or 0))
+    y = max(0, min(range, y))
+    self:SetVerticalScroll(y)
+    up:SetShown(y > 0)
+    down:SetShown(y < range - .5)
+  end
+  function scroller:Scroll(delta) self:Place(self:GetVerticalScroll() - delta * NAV_ROW_H) end
+  scroller:EnableMouseWheel(true)
+  scroller:SetScript("OnMouseWheel", scroller.Scroll)
+  scroller:SetScript("OnSizeChanged", function(self) self:Place(self:GetVerticalScroll()) end)
+
+  -- the module shown: the one shown last (sv.window.qol), else the first
+  local shown = 1
+  for i, m in ipairs(mods) do if m.key == ns.sv.window.qol then shown = i end end
+  local buttons, sheets, lays = {}, {}, {}
+  for i, m in ipairs(mods) do
+    local b = NavButton(rows, i, "QOL_NAV_" .. m.key:upper(), "QOL_NAVDESC_" .. m.key:upper(), function()
+      shown = i
+      ns.sv.window.qol = m.key -- (opened again on it)
+      p:Refresh()
+    end)
+    b.page = nil -- (not one of a class's pages)
+    if not L["QOL_NAV_" .. m.key:upper()] then b.name:SetText(m.name) end
+    b:SetPoint("TOPLEFT", rows, "TOPLEFT", 4, -2 - (i - 1) * NAV_ROW_H)
+    buttons[i] = b
+    -- its page: the module in a group box, the line on the boxes and Reload UI under it
+    local sheet = CreateFrame("Frame", nil, view)
+    sheet:SetPoint("TOPLEFT", list, "TOPRIGHT", 14, 0)
+    sheet:SetPoint("BOTTOMRIGHT")
+    sheet:Hide()
+    local box = CreateFrame("Frame", nil, sheet, "BackdropTemplate")
+    box:SetPoint("TOPLEFT")
+    box:SetPoint("TOPRIGHT")
+    GroupLook(box)
+    local inner = CreateFrame("Frame", nil, sheet)
+    inner:SetFrameLevel(box:GetFrameLevel() + 4)
+    inner:SetPoint("TOPLEFT", box, "TOPLEFT", PAD, -PAD)
+    inner:SetPoint("TOPRIGHT", box, "TOPRIGHT", -PAD, -PAD)
+    inner:SetHeight(1)
+    local lay = ns.QolBlock(inner, m, {})
+    for _, child in ipairs(inner.GetChildren and { inner:GetChildren() } or {}) do -- (ClassicUI's look on its boxes and button)
+      if child.GetObjectType and child:GetObjectType() == "CheckButton" then ns:DressCheck(child) else ns:DressButton(child) end
+    end
+    local hint = Wrapped(sheet, Tr("QOL_HINT"), 100)
+    hint:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 4, -10)
+    hint:SetPoint("RIGHT", sheet, "RIGHT", -4, 0)
+    local reload = Button(sheet, Tr("RELOAD_UI"), 200, 24, function()
+      if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+    end)
+    reload:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -4, -10)
+    sheets[i] = sheet
+    lays[i] = function()
+      local width = (sheet:GetWidth() or 0) - 2 * PAD
+      if width <= 0 then width = COL_W end
+      local y = lay(-4, width)
+      inner:SetHeight(max(1, -y))
+      box:SetHeight(-y + 2 * PAD - 10)
+      local now = ns:QolState(m.key)
+      reload:SetShown(((now == "on") ~= ns:QolEnabled(m.key) and now ~= "standalone" and now ~= "unavailable")
+        or ns:QolTakesOver(m.key)) -- (its own addon runs this session: the built-in one from the next reload)
+    end
+  end
+  local function Lay()
+    if not view:IsShown() then return end
+    if lays[shown] then lays[shown]() end
+  end
+  if ns.OnQolRefresh then ns:OnQolRefresh(Lay) end -- (a box or a switch clicked)
+  view:SetScript("OnSizeChanged", Lay)
+  OnRefresh(function()
+    view:SetShown(p.qolActive == true)
+    for i, b in ipairs(buttons) do
+      b:SetActive(i == shown)
+      sheets[i]:SetShown(i == shown)
+    end
+    if p.qolActive then
+      Lay()
+      scroller:Place(scroller:GetVerticalScroll())
+    end
+  end)
+  -- the module shown in the list's view (opened again on it, far down the list)
+  function view:ShowChosen()
+    local h = scroller:GetHeight() or 0
+    if h > 0 then scroller:Place((shown - 1) * NAV_ROW_H - h / 2 + NAV_ROW_H / 2) end
+  end
+  p.qolView = view
+  return view
+end
+
 local function Build()
   relabels = {}
   local p = CreateFrame("Frame", "ClaraComboPointsOptions", UIParent, "PortraitFrameTemplate")
@@ -3475,6 +3647,7 @@ local function Build()
     end, function()
       ns:EndTyping() -- (a number being typed belongs to the tab it was typed on)
       editing = class
+      p.qolActive = nil
       ns.sv.window.tab = class -- (opened again on it)
       specMenu:Hide()
       ClosePicker()
@@ -3496,7 +3669,23 @@ local function Build()
     t:HookScript("OnEvent", Keep)
     tabs[i] = t
   end
-  ns:DressWindow(p, { tabs = tabs }) -- (Look.lua: ClassicUI's old window with ClassicUI)
+  -- after them, the Improvements tab: the modules built in (BuildQolView)
+  local qolTab = Tab(p, ns.QolTabLabel, function()
+    ns:EndTyping()
+    p.qolActive = true
+    ns.sv.window.tab = "QOL" -- (opened again on it)
+    specMenu:Hide()
+    ClosePicker()
+    p:Refresh()
+  end)
+  qolTab:SetPoint("LEFT", tabs[#tabs], "RIGHT", 4, 0)
+  qolTab.isQol = true
+  local function KeepQol(self) if self.fixedWidth then PanelTemplates_TabResize(self, 0, self.fixedWidth) end end
+  qolTab:HookScript("OnShow", KeepQol)
+  qolTab:HookScript("OnEvent", KeepQol)
+  tabs[#tabs + 1] = qolTab
+  p.qolTab = qolTab
+  ns:DressWindow(p, { backing = false }) -- (Look.lua: ClassicUI's old window with ClassicUI, our dark background kept)
   -- all as wide as the widest if the row still fits; else each at its own width; if even that
   -- is too wide (a long language, a narrow window), all narrowed alike (the game's tab shortens
   -- its text)
@@ -3663,17 +3852,21 @@ local function Build()
   OnRefresh(function() opacity:Set(floor(ns.sv.window.alpha * 100 + .5)) end)
   p.grip = SizeGrip(p, WindowTarget)
   OnRefresh(function()
-    for _, t in ipairs(tabs) do t:SetActive(t.class == editing) end
+    for _, t in ipairs(tabs) do t:SetActive((t.isQol and p.qolActive) or (not p.qolActive and t.class == editing)) end
     for _, f in ipairs(flags) do f:SetActive(f.lang == ns.lang) end
     if portrait then portrait:SetTexture(PortraitIcon(editing)) end
   end)
   OnRefresh(function()
+    local classTab = not p.qolActive -- (the Improvements tab has its own pages: BuildQolView)
+    nav:SetShown(classTab)
+    body:SetShown(classTab)
     for i, content in ipairs(pages) do
-      content:SetShown(i == page)
-      content.back:SetShown(i == page)
+      content:SetShown(classTab and i == page)
+      content.back:SetShown(classTab and i == page)
     end
     for _, b in ipairs(navButtons) do b:SetActive(b.page == page) end
   end)
+  ns.BuildQolView(p, OnRefresh)
 
   GeneralPage(p, pages[1], OnRefresh)
   BarsPage(p, pages[2], OnRefresh)
@@ -3746,7 +3939,9 @@ local function Build()
   p:SetScript("OnShow", function(self)
     PlaceWindow()
     self:SetAlpha(ns.optionsHost and 1 or ns.sv.window.alpha)
-    editing = ns.sv.window.tab or ns.homeClass or "ROGUE"
+    local tab = ns.sv.window.tab
+    self.qolActive = tab == "QOL" or nil -- (the Improvements tab: on the class of this character behind it)
+    editing = (not self.qolActive and tab) or ns.homeClass or "ROGUE"
     if ns.sv.window.page and pages[ns.sv.window.page] then page = ns.sv.window.page end
     resetAll.armed = nil
     status:SetText("")
@@ -3754,6 +3949,9 @@ local function Build()
     ns:SetActiveProfile(editing)
     ns:SetOptionsOpen(true)
     if InCombatLockdown() then self:Refresh() else ns:SetPreview(true) end
+    if self.qolActive and C_Timer and C_Timer.After then -- (once the list has its height)
+      C_Timer.After(0, function() if self:IsShown() and self.qolActive then self.qolView:ShowChosen() end end)
+    end
   end)
   p:SetScript("OnHide", function()
     ns:EndTyping()

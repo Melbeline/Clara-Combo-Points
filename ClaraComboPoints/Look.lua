@@ -108,7 +108,7 @@ function ns:DressWindow(frame, opts)
   AtFirstShow(frame, function()
     local cui = ClassicUI()
     if cui then
-      Try(cui.SkinWindow, frame, { portrait = opts.portrait, scrollBars = false })
+      Try(cui.SkinWindow, frame, { portrait = opts.portrait, scrollBars = false, backing = opts.backing })
       for _, tab in ipairs(opts.tabs or {}) do Try(cui.SkinTopTab, tab) end
     elseif OLD_LOOK and frame.NineSlice then
       for _, key in ipairs(PIECES) do
