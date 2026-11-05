@@ -284,7 +284,7 @@ Les polices de `Media/Fonts` viennent de Google Fonts, sous licence SIL Open Fon
 - **BuyEmAll Classic** 1.0.4, de Jordy141 (réécrit pour le code des marchands de WoW Forever).
 - **WeaponSwingTimer** 1.60.1 (version Forever), de WatchYourSixx, avec les bibliothèques Ace3 (LibStub, CallbackHandler-1.0, AceDB-3.0).
 - **DialogKey (Numy Edition)** 1.2.62, de Numy (d'après Foxthorn, N01ch et FuriousProgrammer), sous licence GNU GPL v3 (voir `Modules/DialogKey/LICENSE`), avec ses bibliothèques (Ace3, NumyAceEvent-3.0) ; sa vérification de version (LibVersionCheck, qui annonce aux autres joueurs la version utilisée) est retirée.
-- **MinimapDrawer** 1.10.0 (fourni par Melbeline).
+- **MinimapDrawer** 1.11.0 (fourni par Melbeline ; la version standalone : github.com/Melbeline/MinimapDrawer).
 - **idTip** 12.1.4, de silverwind.
 - **Solo Raid Frame NV** 2.5, de Spridan.
 - **DoesItDie** v0.9.0, de Joe Greive, sous licence MIT (voir `Modules/DoesItDie/LICENSE`) ; son style « la barre de vie elle-même » et le rouge sombre du jeu sont ajoutés par Clara.
