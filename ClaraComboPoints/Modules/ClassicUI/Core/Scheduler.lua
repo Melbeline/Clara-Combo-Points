@@ -479,6 +479,13 @@ end
 
 local function MoveHelper(pointA, relA, pointB, relB, fn)
     local helper = CreateFrame("Frame", nil, UIParent)
+    -- Each spans most of the screen: under everything (the lowest layer) and never the mouse's, so no frame below it (a
+    -- unit frame's portrait, a button) loses its clicks or its tooltip, and /fstack lists them last.
+    helper:SetFrameStrata("BACKGROUND")
+    helper:SetFrameLevel(0)
+    helper:EnableMouse(false)
+    if helper.SetMouseClickEnabled then pcall(helper.SetMouseClickEnabled, helper, false) end
+    if helper.SetMouseMotionEnabled then pcall(helper.SetMouseMotionEnabled, helper, false) end
     local entry = { helper, pointA, relA, pointB, relB }
     moveHelpers[#moveHelpers + 1] = entry
     if not helpersLoose then PinHelper(entry) end
