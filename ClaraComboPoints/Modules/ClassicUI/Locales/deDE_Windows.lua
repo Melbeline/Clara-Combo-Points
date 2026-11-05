@@ -176,3 +176,6 @@ L["OPT_DROP_TARGETS"] = "Ziele"
 L["OPT_eliteUnitPlayers"] = "Spieler"
 L["OPT_eliteUnitNPCs"] = "NSCs"
 L["OPT_eliteUnits_TIP"] = "Welche Einheiten auf dem Ziel- und Fokusfenster den Drachen tragen."
+-- (Clara Combo Points) Social/WhoList.lua: the grips between the column heads
+L["WHO_COLUMN_GRIP"] = "Ziehen, um die Spalten breiter oder schmaler zu machen"
+L["WHO_COLUMN_GRIP_RESET"] = "Rechtsklick: alle Spalten wieder in ihrer Breite"

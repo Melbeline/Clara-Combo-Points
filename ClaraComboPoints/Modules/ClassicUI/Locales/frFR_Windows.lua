@@ -176,3 +176,6 @@ L["OPT_DROP_TARGETS"] = "Cibles"
 L["OPT_eliteUnitPlayers"] = "Joueurs"
 L["OPT_eliteUnitNPCs"] = "PNJ"
 L["OPT_eliteUnits_TIP"] = "Quelles unités portent le dragon sur les cadres de cible et de focalisation."
+-- (Clara Combo Points) Social/WhoList.lua: the grips between the column heads
+L["WHO_COLUMN_GRIP"] = "Glisser pour élargir ou rétrécir les colonnes"
+L["WHO_COLUMN_GRIP_RESET"] = "Clic droit : toutes les colonnes à leur largeur d'origine"

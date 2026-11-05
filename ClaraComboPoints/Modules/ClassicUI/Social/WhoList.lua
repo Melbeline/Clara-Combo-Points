@@ -145,14 +145,16 @@ local function Row_OnDoubleClick(self)
     if self.entry then ns.Whisper(self.entry.name) end
 end
 
--- Forever's surnames cut names short: over a cut one, the whole name (and the middle column, when that is cut too).
+-- (Clara Combo Points) Over any row, short name or long (Forever's surnames cut some short): the whole name, the
+-- character's race, and the middle column when that is cut.
 local function Row_OnEnter(self)
     local entry = self.entry
-    local nameCut, fieldCut = entry and self.Name:IsTruncated(), entry and self.Zone:IsTruncated()
-    if not (nameCut or fieldCut) then return end
+    if not entry then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText(entry.name, 1, 0.82, 0)
-    if fieldCut then GameTooltip:AddLine(self.Zone:GetText(), 1, 1, 1) end
+    if entry.race and entry.race ~= "" then GameTooltip:AddLine(entry.race, 1, 1, 1) end
+    local fieldCut = self.Zone:IsTruncated()
+    if fieldCut and self.Zone:GetText() ~= entry.race then GameTooltip:AddLine(self.Zone:GetText(), 1, 1, 1) end
     GameTooltip:Show()
 end
 
@@ -210,18 +212,8 @@ end
 
 ---------------------------------------------------------------- the panel
 
-local function SortRow(label, field)
-    return { label, radio = function() return sort.field == field end,
-        pick = function() sort.field = field Refresh() end }
-end
-
-local function OrderRow(label, reverse)
-    return { label, radio = function() return sort.reverse == reverse end,
-        pick = function() sort.reverse = reverse Refresh() end }
-end
-
 -- The game's Who filters (class, race, zone) under rows that sort at once: Class by class, Race, Zone and Guild by the
--- second column, which then shows that field; then Sort By.
+-- second column, which then shows that field. (Clara Combo Points: no Sort By, the column heads sort.)
 local function FilterEntries(header)
     local function Column(key)
         for _, field in ipairs(WHO_FIELDS) do
@@ -243,11 +235,6 @@ local function FilterEntries(header)
     entries[#entries + 1] = { GUILD or "Guild", radio = ColumnRadio("guild"), pick = function() Column("guild") end,
         close = true }
     class.close, race.close, zone.close = true, true, true -- (Clara Combo Points: the list sorted, the menu shut)
-    entries[#entries + 1] = { WHO_SORT_LABEL or "Sort By", sub = {
-        SortRow(NAME or "Name", "name"), SortRow(CLASS or "Class", "class"), SortRow(LEVEL or "Level", "level"),
-        { divider = true },
-        OrderRow(WHO_SORT_ASCENDING_LABEL or "Ascending", false), OrderRow(WHO_SORT_DESCENDING_LABEL or "Descending", true),
-    } }
     return entries
 end
 
@@ -275,6 +262,122 @@ local function FieldArrow(header, column)
         menu:Toggle(header)
     end)
 end
+
+-- (Clara Combo Points) The columns widened or narrowed by dragging the grip between two heads: the one on the left takes
+-- what the one on the right gives (the four keep the list's width); kept in the profile (db.whoWidths). A right-click
+-- on a grip puts every column back.
+local MIN_W = { name = 40, zone = 50, level = 24, class = 40 }
+local GRIP_W = 8
+local TEXT_GAP = 6 -- (as the rows' texts: SocialWindow.lua)
+
+local function Widths()
+    local saved = ns.db and type(ns.db.whoWidths) == "table" and ns.db.whoWidths
+    local widths, total, sum = {}, 0, 0
+    for _, column in ipairs(COLUMNS) do total = total + column.w end
+    for i, column in ipairs(COLUMNS) do
+        local w = saved and tonumber(saved[column.key]) or column.w
+        widths[i] = math.max(MIN_W[column.key] or 20, math.floor(w + 0.5))
+        sum = sum + widths[i]
+    end
+    if sum ~= total then -- (a saved set that no longer fits: the game's)
+        for i, column in ipairs(COLUMNS) do widths[i] = column.w end
+    end
+    return widths
+end
+
+local function ApplyWidths(widths)
+    if not panel then return end
+    local x = COLUMNS[1].x
+    for i, column in ipairs(COLUMNS) do
+        local w = widths[i]
+        if panel.headers and panel.headers[i] then panel.headers[i]:SetWidth(w) end
+        local key = column.key:gsub("^%l", string.upper)
+        for _, row in ipairs(panel.rows or {}) do
+            local text = row[key]
+            if text then
+                text:ClearAllPoints()
+                text:SetPoint("LEFT", row, "LEFT", x, 0)
+                text:SetWidth(w - TEXT_GAP)
+            end
+        end
+        x = x + w
+    end
+end
+
+local function SaveWidths(widths)
+    ns.db.whoWidths = {}
+    local same = true
+    for i, column in ipairs(COLUMNS) do
+        ns.db.whoWidths[column.key] = widths[i]
+        if widths[i] ~= column.w then same = false end
+    end
+    if same then ns.db.whoWidths = nil end
+end
+
+local function GripTip(grip)
+    GameTooltip:SetOwner(grip, "ANCHOR_TOP")
+    GameTooltip:SetText(L["WHO_COLUMN_GRIP"], 1, 1, 1)
+    GameTooltip:AddLine(L["WHO_COLUMN_GRIP_RESET"], 0.8, 0.8, 0.8)
+    GameTooltip:Show()
+end
+
+local function ColumnGrips()
+    if type(panel.headers) ~= "table" or #panel.headers < #COLUMNS then return end
+    for i = 1, #COLUMNS - 1 do
+        local left = panel.headers[i]
+        local grip = ns.NewFrame("Button", nil, panel.headerRow)
+        grip:SetSize(GRIP_W, 20)
+        grip:SetPoint("CENTER", left, "RIGHT", 0, 0)
+        grip:SetFrameLevel(left:GetFrameLevel() + 5)
+        grip:RegisterForClicks("RightButtonUp")
+        local line = grip:CreateTexture(nil, "OVERLAY")
+        line:SetColorTexture(1, 0.82, 0, 0.6)
+        line:SetPoint("TOP", grip, "TOP", 0, -2)
+        line:SetPoint("BOTTOM", grip, "BOTTOM", 0, 2)
+        line:SetWidth(2)
+        line:Hide()
+        grip.line = line
+        grip:SetScript("OnEnter", function(self) self.line:Show() GripTip(self) end)
+        grip:SetScript("OnLeave", function(self) if not self.dragging then self.line:Hide() end ns.HideTip() end)
+        grip:SetScript("OnClick", function()
+            ns.db.whoWidths = nil
+            ApplyWidths(Widths())
+        end)
+        grip:SetScript("OnMouseDown", function(self, button)
+            if button ~= "LeftButton" then return end
+            local widths = Widths()
+            local scale = self:GetEffectiveScale()
+            self.dragging = { widths = widths, from = (GetCursorPosition()) / scale, a = widths[i], b = widths[i + 1] }
+            ns.HideTip()
+            self:SetScript("OnUpdate", function(me)
+                local drag = me.dragging
+                if not drag then return end
+                local delta = (GetCursorPosition()) / scale - drag.from
+                local pair = drag.a + drag.b
+                local minA, minB = MIN_W[COLUMNS[i].key] or 20, MIN_W[COLUMNS[i + 1].key] or 20
+                local a = math.floor(math.max(minA, math.min(pair - minB, drag.a + delta)) + 0.5)
+                if a ~= drag.widths[i] then
+                    drag.widths[i], drag.widths[i + 1] = a, pair - a
+                    ApplyWidths(drag.widths)
+                end
+            end)
+        end)
+        grip:SetScript("OnMouseUp", function(self, button)
+            if button ~= "LeftButton" or not self.dragging then return end
+            SaveWidths(self.dragging.widths)
+            self.dragging = nil
+            self:SetScript("OnUpdate", nil)
+            if not self:IsMouseOver() then self.line:Hide() end
+        end)
+        grip:SetScript("OnHide", function(self)
+            if self.dragging then SaveWidths(self.dragging.widths) end
+            self.dragging = nil
+            self:SetScript("OnUpdate", nil)
+            self.line:Hide()
+        end)
+    end
+end
+ns.WhoColumnWidths = function() return Widths() end -- (for the tests)
 
 -- The bar runs the pane's full height, down beside the count to the search line.
 local function Build()
@@ -310,7 +413,8 @@ local function Build()
     panel.divider:SetPoint("BOTTOM", panel.refresh, "TOP", 0, 3)
     S.Span(panel.divider, host)
 
-    local headerRow = S.HeaderRow(panel, host, COLUMNS, Header_OnClick, FieldArrow)
+    local headerRow, headers = S.HeaderRow(panel, host, COLUMNS, Header_OnClick, FieldArrow)
+    panel.headerRow, panel.headers = headerRow, headers
     panel.listBox = S.ListBox(panel, host, headerRow, panel.divider)
 
     panel.found = panel.listBox:CreateFontString(nil, "ARTWORK")
@@ -330,6 +434,8 @@ local function Build()
         row:HookScript("OnEnter", Row_OnEnter)
         row:HookScript("OnLeave", ns.HideTip)
     end
+    ColumnGrips()
+    ApplyWidths(Widths())
 
     panel:SetScript("OnShow", function()
         -- Results come to this window, not the chat frame.

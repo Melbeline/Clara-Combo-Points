@@ -232,3 +232,6 @@ L["OPT_DROP_TARGETS"] = "Targets"
 L["OPT_eliteUnitPlayers"] = "Players"
 L["OPT_eliteUnitNPCs"] = "NPCs"
 L["OPT_eliteUnits_TIP"] = "Which units wear the dragon on the target and focus frames."
+-- (Clara Combo Points) Social/WhoList.lua: the grips between the column heads
+L["WHO_COLUMN_GRIP"] = "Drag to widen or narrow the columns"
+L["WHO_COLUMN_GRIP_RESET"] = "Right-click: every column back to its width"
