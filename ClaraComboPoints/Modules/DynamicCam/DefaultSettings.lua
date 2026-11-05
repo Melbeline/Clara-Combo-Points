@@ -116,7 +116,7 @@ DynamicCam.defaults = {
     -- Standard settings (for when no situation is overriding them).
     standardSettings = {
 
-      reactiveZoomEnabled = true,
+      reactiveZoomEnabled = false, -- (Clara: Use Reactive Zoom off by default)
       reactiveZoomAddIncrementsAlways = 1,
       reactiveZoomAddIncrements = 2.5,
       reactiveZoomIncAddDifference = 1.2,
@@ -124,8 +124,8 @@ DynamicCam.defaults = {
 
       -- cvars
       cvars = {
-        cameraDistanceMaxZoomFactor = tonumber(GetCVarDefault("cameraDistanceMaxZoomFactor")),
-        cameraZoomSpeed = tonumber(GetCVarDefault("cameraZoomSpeed")),
+        cameraDistanceMaxZoomFactor = 50 / 15, -- (Clara: Maximum Camera Distance 50 yards by default)
+        cameraZoomSpeed = 15, -- (Clara: Camera Zoom Speed 15 by default)
 
         cameraYawMoveSpeed = tonumber(GetCVarDefault("cameraYawMoveSpeed")),
         cameraPitchMoveSpeed = tonumber(GetCVarDefault("cameraPitchMoveSpeed")),
@@ -134,7 +134,7 @@ DynamicCam.defaults = {
         test_cameraOverShoulder = tonumber(GetCVarDefault("test_cameraOverShoulder")),
 
         test_cameraDynamicPitch = tonumber(GetCVarDefault("test_cameraDynamicPitch")),
-        test_cameraDynamicPitchBaseFovPad = tonumber(GetCVarDefault("test_cameraDynamicPitchBaseFovPad")),
+        test_cameraDynamicPitchBaseFovPad = 0.99, -- (Clara: Pitch (on ground) at 0.99 by default)
         test_cameraDynamicPitchBaseFovPadFlying = tonumber(GetCVarDefault("test_cameraDynamicPitchBaseFovPadFlying")),
         test_cameraDynamicPitchBaseFovPadDownScale = tonumber(GetCVarDefault("test_cameraDynamicPitchBaseFovPadDownScale")),
         test_cameraDynamicPitchSmartPivotCutoffDist = tonumber(GetCVarDefault("test_cameraDynamicPitchSmartPivotCutoffDist")),

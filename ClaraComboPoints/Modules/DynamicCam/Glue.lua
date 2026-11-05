@@ -1,10 +1,13 @@
 -- Clara Combo Points - DynamicCam's camera in one click (the portrait's menu, the Improvements
--- tab), in the copy that runs (built in, or the standalone DynamicCam): ticked, its Vertical Pitch
--- and Head Tracking on; unticked, both off. Its Zoom Increments: the player's for each (kept when
--- the box leaves it, given back when it comes back to it; the first time 0.2 yards a wheel tick
--- ticked, 2 unticked). Set in its standard settings, and in the situations that set them
--- themselves; the box shows its standard settings (ticked when both are on). DynamicCam itself
--- keeps running.
+-- tab), in the copy that runs (built in, or the standalone DynamicCam). Ticked: DynamicCam runs,
+-- its Vertical Pitch and Head Tracking on, its Pitch (on ground) at 0.99 (as its own Enable box
+-- does, and its default). Unticked: DynamicCam turned off altogether at once (no reload: nothing of
+-- it at work, the game's own zoom), the camera settings it had changed given back to the game (as
+-- they were before it ran, else the game's defaults), the game's camera zooming at 15 out to
+-- 50 yards. Kept for the next sessions (an "off" DynamicCam is not started at login). Its Zoom
+-- Increments: the player's for each state (kept when the box leaves it, given back when it comes
+-- back to it; the first time 0.2 yards a wheel tick ticked, 2 unticked). Set in its standard
+-- settings, and in the situations that set them themselves.
 -- The max camera distance set in the game's options (or by another addon): DynamicCam takes it as
 -- its own Maximum Camera Distance, rather than putting its own back at the next zoom.
 
@@ -21,6 +24,7 @@ local FEATURES = { "test_cameraDynamicPitch", "test_cameraHeadMovementStrength" 
 -- the player's own for each, kept in Clara's settings (the standard one and the situations' own)
 local FIRST_INCREMENTS = { [true] = 0.2 - 1, [false] = 2 - 1 }
 local KEPT = { [true] = "cameraZoom", [false] = "cameraZoomOff" }
+local PITCH, PITCH_ON = "test_cameraDynamicPitchBaseFovPad", 0.99 -- (Pitch (on ground), once ticked)
 
 local function Standard(cam)
   local profile = cam and cam.db and cam.db.profile
@@ -29,13 +33,14 @@ local function Standard(cam)
 end
 
 -- the box's values in a settings table (the standard ones: all; a situation's: those it sets itself;
--- increments nil: its Zoom Increments left)
-local function Put(settings, on, all, increments)
+-- increments nil: its Zoom Increments left; pitch: its Pitch (on ground) set, the box just ticked)
+local function Put(settings, on, all, increments, pitch)
   local cvars = type(settings) == "table" and settings.cvars
   if type(cvars) ~= "table" then return end
   for _, cvar in ipairs(FEATURES) do
     if all or cvars[cvar] ~= nil then cvars[cvar] = on and 1 or 0 end
   end
+  if pitch and (all or cvars[PITCH] ~= nil) then cvars[PITCH] = pitch end
   if increments and (all or settings.reactiveZoomAddIncrementsAlways ~= nil) then
     settings.reactiveZoomAddIncrementsAlways = increments
   end
@@ -62,14 +67,61 @@ local function Notify()
   end
 end
 
-function ns:CameraAvailable() return Standard(Cam()) ~= nil end
-function ns:CameraOn()
-  local standard = Standard(Cam())
-  if not standard then return false end
+-- The camera settings DynamicCam sets (its standard ones and its situations').
+local function CameraCVars(cam)
+  local cvars = {}
+  local profile = cam and cam.db and cam.db.profile
+  if type(profile) ~= "table" then return cvars end
+  local standard = profile.standardSettings and profile.standardSettings.cvars
+  for cvar in pairs(type(standard) == "table" and standard or {}) do cvars[cvar] = true end
+  for _, situation in pairs(type(profile.situations) == "table" and profile.situations or {}) do
+    local own = type(situation) == "table" and situation.situationSettings and situation.situationSettings.cvars
+    for cvar in pairs(type(own) == "table" and own or {}) do cvars[cvar] = true end
+  end
+  return cvars
+end
+
+-- The game's values of those before DynamicCam runs (kept: sv.cameraWas).
+local function RememberGameCamera(cam, sv)
+  local was = {}
+  for cvar in pairs(CameraCVars(cam)) do
+    local ok, value = pcall(GetCVar, cvar)
+    if ok and type(value) == "string" then was[cvar] = value end
+  end
+  sv.cameraWas = was
+end
+
+-- DynamicCam off: the game's own camera (the values kept, else the game's defaults), zooming at 15
+-- out to 50 yards (its max distance in yards is 15 times the setting).
+local OFF_CAMERA = { cameraZoomSpeed = "15", cameraDistanceMaxZoomFactor = tostring(50 / 15) }
+local function GameCamera(cam, sv)
+  local was = type(sv.cameraWas) == "table" and sv.cameraWas or {}
+  for cvar in pairs(CameraCVars(cam)) do
+    local value = was[cvar]
+    if value == nil and GetCVarDefault then
+      local ok, default = pcall(GetCVarDefault, cvar)
+      value = ok and default or nil
+    end
+    if value ~= nil and OFF_CAMERA[cvar] == nil then pcall(SetCVar, cvar, value) end
+  end
+  for cvar, value in pairs(OFF_CAMERA) do pcall(SetCVar, cvar, value) end
+end
+
+local function FeaturesOn(standard)
   for _, cvar in ipairs(FEATURES) do
     if tonumber(standard.cvars[cvar]) ~= 1 then return false end
   end
   return true
+end
+
+function ns:CameraAvailable() return Standard(Cam()) ~= nil end
+-- Ticked: DynamicCam running, its Vertical Pitch and Head Tracking on.
+function ns:CameraOn()
+  local cam = Cam()
+  local standard = Standard(cam)
+  if not standard or (self.sv and self.sv.cameraDisabled) then return false end
+  if cam.IsEnabled and not cam:IsEnabled() then return false end
+  return FeaturesOn(standard)
 end
 function ns:SetCameraOn(on)
   local cam = Cam()
@@ -81,16 +133,54 @@ function ns:SetCameraOn(on)
   if switch and self.sv then Keep(self.sv, not on, standard, situations) end
   local kept = self.sv and type(self.sv[KEPT[on]]) == "table" and self.sv[KEPT[on]] or {}
   local keptSituations = type(kept.situations) == "table" and kept.situations or {}
-  Put(standard, on, true, switch and (tonumber(kept.standard) or FIRST_INCREMENTS[on]) or nil)
+  local pitch = switch and on and PITCH_ON or nil
+  Put(standard, on, true, switch and (tonumber(kept.standard) or FIRST_INCREMENTS[on]) or nil, pitch)
   for id, situation in pairs(situations) do
     if type(situation) == "table" then
-      Put(situation.situationSettings, on, false, switch and (tonumber(keptSituations[id]) or FIRST_INCREMENTS[on]) or nil)
+      Put(situation.situationSettings, on, false, switch and (tonumber(keptSituations[id]) or FIRST_INCREMENTS[on]) or nil, pitch)
     end
   end
-  if cam:IsEnabled() and cam.ApplySettings then cam:ApplySettings() end
+  if self.sv then self.sv.cameraDisabled = not on end
+  if on then
+    if cam.IsEnabled and not cam:IsEnabled() then
+      if self.sv then RememberGameCamera(cam, self.sv) end
+      cam:Enable()
+    elseif cam.ApplySettings then
+      cam:ApplySettings()
+    end
+  else
+    if cam.IsEnabled and cam:IsEnabled() then cam:Disable() end
+    GameCamera(cam, self.sv or {})
+  end
   Notify()
   if self.RefreshQol then self:RefreshQol() end
 end
+
+-- At login: an "off" DynamicCam not started (decided the first time from its own settings: off
+-- unless its Vertical Pitch and Head Tracking were both on).
+local starter = CreateFrame("Frame")
+starter:RegisterEvent("ADDON_LOADED")
+starter:RegisterEvent("PLAYER_LOGIN")
+starter:SetScript("OnEvent", function(self, event, name)
+  local sv = type(ClaraComboPointsDB) == "table" and ClaraComboPointsDB or nil
+  local cam = Cam()
+  if event == "ADDON_LOADED" then
+    if name ~= ADDON then return end
+    if cam and sv and sv.cameraDisabled == true and cam.SetEnabledState then cam:SetEnabledState(false) end
+    return
+  end
+  self:UnregisterAllEvents()
+  local standard = Standard(cam)
+  if not (sv and standard) then return end
+  if sv.cameraDisabled == nil then sv.cameraDisabled = not FeaturesOn(standard) end
+  if not sv.cameraDisabled then return end
+  if cam.IsEnabled and cam:IsEnabled() then
+    cam:Disable()
+    GameCamera(cam, sv)
+  elseif cam.SetEnabledState then
+    cam:SetEnabledState(false)
+  end
+end)
 
 -- the its theme's page: the box, and DynamicCam's own window
 ns:SetQolSwitches("dynamiccam", {

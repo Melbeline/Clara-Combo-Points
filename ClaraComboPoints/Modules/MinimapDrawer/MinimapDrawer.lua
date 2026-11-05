@@ -1484,6 +1484,8 @@ hotspot:SetClampedToScreen(true)
 hotspot:EnableMouse(true)
 hotspot:RegisterForClicks("LeftButtonUp")
 hotspot:RegisterForDrag("LeftButton")
+-- (Clara Combo Points: over the player frame's level, a right-click goes through to the frame: its menu)
+if hotspot.SetPassThroughButtons then pcall(hotspot.SetPassThroughButtons, hotspot, "RightButton") end
 
 -- Disque rouge visible uniquement en mode déplacement
 ring = hotspot:CreateTexture(nil, "OVERLAY")
@@ -1731,6 +1733,13 @@ end)
 
 -- Tout le cadre du joueur compte : portrait, nom, barre de vie, barre de mana. On accroche le
 -- cadre lui-même et ses barres (au cas où elles captent la souris dans cette version du client).
+-- (Clara Combo Points: only the bars that take their clicks already: a mouse script set on one turns
+-- its clicks on, and the frame under it, the right-click's menu included, would get none.)
+local function TakesClicks(f)
+    if f.IsMouseClickEnabled then return f:IsMouseClickEnabled() and true or false end
+    return f.IsMouseEnabled and f:IsMouseEnabled() and true or false
+end
+
 local function HookPlayerFrame()
     local pf = _G.PlayerFrame
     if not pf then return end
@@ -1743,7 +1752,7 @@ local function HookPlayerFrame()
         main and main.ManaBarArea, main and main.ManaBarArea and main.ManaBarArea.ManaBar,
     }
     for _, f in pairs(targets) do
-        if type(f) == "table" and f.HookScript and f.HasScript then
+        if type(f) == "table" and f.HookScript and f.HasScript and (f == pf or TakesClicks(f)) then
             pcall(f.HookScript, f, "OnMouseUp", function(_, button) OnMiddleRelease(button) end)
         end
     end
