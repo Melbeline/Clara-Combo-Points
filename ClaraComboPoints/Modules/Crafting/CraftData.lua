@@ -119,6 +119,23 @@ function C.SetFilter(key, on) db.filter[key] = on and true or nil end
 -- Characters
 ---------------------------------------------------------------------------
 -- A character's key: Name-Realm (the realm as the game writes it in names, without spaces)
+-- (Clara Combo Points) The account's characters are kept by the first name the game gives them
+-- (UnitName: on WoW Forever the surname comes apart). A whole name typed ("Clara Moon", in the mail's
+-- To field) is that character: its key ("Clara-Realm"), when the account has exactly one so named.
+local function OwnFirst(full, where)
+  local first = type(full) == "string" and full:match("^(%S+)%s+%S")
+  if not first then return nil end
+  local want = (first .. "-" .. (where or realm or "")):lower()
+  local found
+  for key, c in pairs(db.chars) do
+    if not c.remote and key:lower() == want then
+      if found then return nil end
+      found = key
+    end
+  end
+  return found
+end
+
 local function KeyOf(name)
   if type(name) ~= "string" or name == "" or issecret(name) then return nil end
   name = name:gsub("^%s+", ""):gsub("%s+$", "")
@@ -126,9 +143,31 @@ local function KeyOf(name)
   for key in pairs(db.chars) do
     if key:lower() == name:lower() then return key end
   end
-  return name
+  local base, where = name:match("^(.-)%-([^%-]*)$")
+  return OwnFirst(base, where) or name
 end
 C.KeyOf = KeyOf
+
+-- Mails to the account's characters recorded under a whole name by earlier versions: under the
+-- character's own key again (one character, one entry), at every start.
+local function MergeWholeNames()
+  local merged = false
+  for key, c in pairs(db.chars) do
+    if c.remote then
+      local base, where = key:match("^(.-)%-([^%-]*)$")
+      local own = OwnFirst(base, where)
+      if own and own ~= key then
+        for uid, s in pairs(db.sends) do
+          if s.to == key then s.to = own; if C.Touched then C.Touched("s", uid) end end
+        end
+        db.chars[key] = nil
+        merged = true
+      end
+    end
+  end
+  return merged
+end
+C.MergeWholeNames = MergeWholeNames
 
 local function ShortName(key)
   local name, where = key:match("^(.-)%-(.*)$")
@@ -582,6 +621,7 @@ local function Start()
     mine.class = select(2, UnitClass("player"))
   end
   C.me = me
+  MergeWholeNames()
   for uid, s in pairs(db.sends) do
     if time() - s.at > MAIL_KEEP then db.sends[uid] = nil end
   end
