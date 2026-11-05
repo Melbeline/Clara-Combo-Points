@@ -218,3 +218,164 @@ texts:SetScript("OnEvent", function(_, event)
   if event ~= "PLAYER_FOCUS_CHANGED" then ns:PlaceBarTexts("target") end
   if event ~= "PLAYER_TARGET_CHANGED" then ns:PlaceBarTexts("focus") end
 end)
+
+---------------------------------------------------------------------------
+-- Unit frames: the unit's tooltip over the whole frame (portrait, name, level, edges and bars) for
+-- the player, target, focus and pet frames and the party and raid frames; and the portrait and the
+-- name clickable (target, menu) even where another frame of the low layer (the chat) lies over them.
+-- The tooltip's owner is a frame of ours: the unit frame's own refresh had left it empty.
+---------------------------------------------------------------------------
+local issecretTip = issecretvalue or function() return false end
+local TIP_FRAMES = { "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame" }
+local tipOwner = CreateFrame("Frame", nil, UIParent)
+tipOwner:SetSize(1, 1)
+tipOwner:SetPoint("CENTER")
+local tipFor -- the frame the tooltip of ours is shown for
+
+local function TipUnit(frame)
+  local unit = frame.displayedUnit or frame.unit or (frame.GetAttribute and frame:GetAttribute("unit"))
+  if type(unit) ~= "string" or issecretTip(unit) or unit == "" then return nil end
+  local exists = UnitExists(unit)
+  if issecretTip(exists) or not exists then return nil end
+  return unit
+end
+
+local function ShowUnitTip(frame, unit, compact)
+  if not (GameTooltip and GameTooltip_SetDefaultAnchor) then return end
+  GameTooltip_SetDefaultAnchor(GameTooltip, tipOwner)
+  if not GameTooltip:SetUnit(unit) then return end
+  if not compact and UNIT_POPUP_RIGHT_CLICK and GameTooltip_AddInstructionLine then
+    if GameTooltip_AddBlankLineToTooltip then GameTooltip_AddBlankLineToTooltip(GameTooltip) end
+    GameTooltip_AddInstructionLine(GameTooltip, UNIT_POPUP_RIGHT_CLICK)
+  end
+  GameTooltip:Show()
+  tipFor = frame
+end
+ns.ShowUnitTip = ShowUnitTip
+
+local function HideUnitTip()
+  if GameTooltip and GameTooltip:IsOwned(tipOwner) then GameTooltip:Hide() end
+  tipFor = nil
+end
+
+-- the frame under the mouse: a unit frame (its portrait too, where the game's art lies outside it), or
+-- a party or raid frame
+local function Portrait(frame)
+  local container = frame.PlayerFrameContainer or frame.TargetFrameContainer
+  if type(container) ~= "table" then return nil end
+  local portrait = container.PlayerPortrait or container.Portrait
+  if type(portrait) == "table" and portrait.IsMouseOver then return portrait end
+end
+local function Usable(f) return type(f) == "table" and f.IsVisible and f.IsMouseOver and f:IsVisible() end
+local function UnderMouse()
+  for _, name in ipairs(TIP_FRAMES) do
+    local f = _G[name]
+    if Usable(f) then
+      local portrait = Portrait(f)
+      if f:IsMouseOver() or (portrait and portrait:IsVisible() and portrait:IsMouseOver()) then return f, false end
+    end
+  end
+  for i = 1, 5 do
+    local f = _G["CompactPartyFrameMember" .. i]
+    if Usable(f) and f:IsMouseOver() then return f, true end
+  end
+  for i = 1, 40 do
+    local f = _G["CompactRaidFrame" .. i]
+    if Usable(f) and f:IsMouseOver() then return f, true end
+  end
+end
+
+-- the mouse on the frame itself, on one of its parts, on nothing, or on a frame of the low layer lying
+-- over it (the chat): not on a window over it
+local function Free(frame)
+  local foci = GetMouseFoci and GetMouseFoci()
+  local focus = foci and foci[1] or (GetMouseFocus and GetMouseFocus())
+  if not focus or focus == WorldFrame then return true end
+  local p = focus
+  for _ = 1, 12 do
+    if not p then break end
+    if p == frame then return true end
+    p = p.GetParent and p:GetParent()
+  end
+  local strata = focus.GetFrameStrata and focus:GetFrameStrata()
+  return strata == "LOW" or strata == "BACKGROUND"
+end
+
+-- no tooltip, or an empty one (a buff's, a bar's numbers: theirs, left alone)
+local function TipEmpty()
+  if not GameTooltip:IsShown() then return true end
+  local line = GameTooltipTextLeft1
+  local text = line and line:GetText()
+  if issecretTip(text) then return false end
+  return text == nil or text == ""
+end
+
+local watch = CreateFrame("Frame")
+local tipWait = 0
+watch:SetScript("OnUpdate", function(_, elapsed)
+  tipWait = tipWait + elapsed
+  if tipWait < .1 then return end
+  tipWait = 0
+  if not GameTooltip then return end
+  local frame, compact = UnderMouse()
+  if frame then
+    local unit = TipUnit(frame)
+    if unit and Free(frame) and ((GameTooltip:IsOwned(tipOwner) and tipFor ~= frame) or TipEmpty()) then
+      ShowUnitTip(frame, unit, compact)
+    end
+  elseif tipFor then
+    HideUnitTip()
+  end
+end)
+
+-- Over the portrait and the name: a button of ours (the game's secure one: target, menu), above the
+-- low layer, so a chat lying over the frame takes neither the click nor the mouse.
+local CATCH_PAD = 2
+local function Catch(frame, region, pad)
+  if not (frame and region) then return end
+  local b = CreateFrame("Button", nil, frame, "SecureUnitButtonTemplate")
+  b:SetPoint("TOPLEFT", region, "TOPLEFT", -pad, pad)
+  b:SetPoint("BOTTOMRIGHT", region, "BOTTOMRIGHT", pad, -pad)
+  b:SetAttribute("unit", frame.unit or (frame.GetAttribute and frame:GetAttribute("unit")))
+  b:SetAttribute("*type1", "target")
+  b:SetAttribute("*type2", "togglemenu")
+  b:RegisterForClicks("AnyUp")
+  b:SetFrameLevel(frame:GetFrameLevel() + 30)
+  b:SetScript("OnEnter", function()
+    local unit = TipUnit(frame)
+    if unit then ShowUnitTip(frame, unit) end
+  end)
+  b:SetScript("OnLeave", HideUnitTip)
+  return b
+end
+
+local function CatchAll()
+  if ns.unitCatchers then return true end
+  if InCombatLockdown and InCombatLockdown() then return false end
+  ns.unitCatchers = {}
+  for _, name in ipairs({ "PlayerFrame", "TargetFrame", "FocusFrame" }) do
+    local f = _G[name]
+    if type(f) == "table" then
+      pcall(function()
+        local portrait = Portrait(f)
+        local content = f.PlayerFrameContent or f.TargetFrameContent
+        local main = type(content) == "table" and (content.PlayerFrameContentMain or content.TargetFrameContentMain) or nil
+        local label = (name == "PlayerFrame" and _G.PlayerName) or (type(main) == "table" and main.Name) or nil
+        for _, spot in ipairs({ { portrait, CATCH_PAD + 4 }, { label, CATCH_PAD } }) do
+          if type(spot[1]) == "table" then
+            local ok, b = pcall(Catch, f, spot[1], spot[2])
+            if ok and b then ns.unitCatchers[#ns.unitCatchers + 1] = b end
+          end
+        end
+      end)
+    end
+  end
+  return true
+end
+
+local catchEvents = CreateFrame("Frame")
+catchEvents:RegisterEvent("PLAYER_LOGIN")
+catchEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+catchEvents:SetScript("OnEvent", function(self)
+  if CatchAll() then self:UnregisterAllEvents() end
+end)

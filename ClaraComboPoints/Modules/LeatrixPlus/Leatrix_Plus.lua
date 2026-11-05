@@ -529,6 +529,10 @@
 		-- Do nothing if name is empty (such as whispering from the Battle.net app)
 		if not name then return end
 
+		-- (Clara Combo Points) the player's own characters count as friends: Clara's list of them in the friends
+		-- window, and those the gold tracker knows (WoW Forever's friends list takes none of them)
+		if ClaraNS.AltFriends and ClaraNS.AltFriends.IsAlt and ClaraNS.AltFriends.IsAlt(name) then return true end
+
 		-- Update friends list
 		C_FriendList.ShowFriends()
 

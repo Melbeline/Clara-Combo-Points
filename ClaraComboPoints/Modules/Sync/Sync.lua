@@ -462,7 +462,9 @@ local function Join()
   if not S.On() then return end
   local id = GetChannelName(channelName)
   if id and id > 0 then
+    local first = channelId == nil
     channelId = id
+    if first then C_Timer.After(1, function() if S.Hello then S.Hello() end end) end -- (the others hear this one come)
     for i = 1, NUM_CHAT_WINDOWS or 10 do
       local frame = _G["ChatFrame" .. i]
       if frame and frame.RemoveChannel then pcall(frame.RemoveChannel, frame, channelName) end
@@ -509,6 +511,20 @@ end
 ---------------------------------------------------------------------------
 local greeted = {}    -- character -> when greeted last
 S.seen = {}           -- character -> when heard last
+
+-- Presence: each of the player's characters online says so every minute on the channel, and bye when it
+-- logs out; heard within PRESENT seconds, it is online. Listeners (the alts in the friends list) hear it
+-- come and go.
+S.PRESENT = 150
+local presenceListeners = {}
+function S.OnPresence(fn) presenceListeners[#presenceListeners + 1] = fn end
+function S.Presence(key, online)
+  for _, fn in ipairs(presenceListeners) do pcall(fn, key, online) end
+end
+function S.Online(key)
+  local at = S.seen[key]
+  return type(at) == "number" and GetTime() - at < S.PRESENT
+end
 
 local function Hello(to)
   if not S.On() then return end
@@ -619,7 +635,15 @@ local function Handle(sender, chatType, text)
   end
   -- signed: one of ours (the channel's are trusted by the key itself)
   if not sdb.trusted[key] then sdb.trusted[key] = true end
+  if msg.t == "Q" then -- (logging out)
+    local was = S.seen[key]
+    S.seen[key] = nil
+    if was then S.Presence(key, false) end
+    return
+  end
+  local was = S.seen[key]
   S.seen[key] = GetTime()
+  if not was or GetTime() - was > S.PRESENT then S.Presence(key, true) end
   if msg.t == "H" then
     OnHello(key, msg)
   elseif msg.t == "B" and K[msg.k] then
@@ -698,7 +722,18 @@ events:SetScript("OnEvent", function(_, event, ...)
   elseif event == "PLAYER_ENTERING_WORLD" then
     joinTries = 0
     C_Timer.After(5, Join)
+  elseif event == "PLAYER_LOGOUT" then
+    -- bye, at once (the queue would not be sent any more): the others see this one go
+    if not (S.On() and channelId and sdb) then return end
+    local payload = ns.Encode64(ns.Serialize({ t = "Q" }))
+    local text = "Qb0" .. "1/1:" .. Hex(Hash(sdb.key .. payload)) .. payload
+    pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, "CHANNEL", tostring(channelId))
   end
+end)
+
+-- Still here: said on the channel every minute (the others count this one online while they hear it)
+C_Timer.NewTicker(60, function()
+  if S.On() and channelId and #queue == 0 then Send({ t = "P" }) end
 end)
 
 local function Start()
@@ -723,7 +758,7 @@ local function Start()
   if Gd then Gd.Touched = Touched end
   if Pr then Pr.Touched = Touched end
   if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
-  for _, e in ipairs({ "CHAT_MSG_ADDON", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD" }) do events:RegisterEvent(e) end
+  for _, e in ipairs({ "CHAT_MSG_ADDON", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT" }) do events:RegisterEvent(e) end
   C_Timer.After(8, function() Hello() end)
 end
 
