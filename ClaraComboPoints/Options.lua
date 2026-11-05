@@ -1593,15 +1593,31 @@ local function TextDialog(p)
     end
   end)
   edit:SetScript("OnEscapePressed", function() f:Hide() end)
-  -- a click anywhere in the box puts the cursor in the text
+  -- a click anywhere in the box puts the cursor in the text (the box and its scrolling area: the text
+  -- itself is only as tall as its lines), at its end to paste after it
+  local function FocusText()
+    if edit:HasFocus() then return end
+    edit:SetFocus()
+    if not f.readOnly then edit:SetCursorPosition(#(edit:GetText() or "")) end
+  end
   inset:EnableMouse(true)
-  inset:SetScript("OnMouseDown", function() edit:SetFocus() end)
+  inset:SetScript("OnMouseDown", FocusText)
+  scroll:EnableMouse(true)
+  scroll:SetScript("OnMouseDown", FocusText)
 
   local status = Text(f, "", "GameFontHighlightSmall")
   status:SetPoint("BOTTOMLEFT", 16, 44)
   status:SetWidth(TEXT_W - 32)
 
-  local action = Button(f, "", 150, 22, function() if f.onAction then f.onAction(edit:GetText()) end end)
+  local action = Button(f, "", 180, 22, function()
+    local text = edit:GetText() or ""
+    if not f.readOnly and not text:find("%S") then -- (nothing pasted yet: said, rather than "not a profile")
+      f:ShowStatus(false, L.TEXT_PASTE_FIRST)
+      edit:SetFocus()
+      return
+    end
+    if f.onAction then f.onAction(text) end
+  end)
   action:SetPoint("BOTTOMLEFT", 16, 14)
   local closeBtn = Button(f, Tr("CLOSE"), 110, 22, function() f:Hide() end)
   closeBtn:SetPoint("BOTTOMRIGHT", -16, 14)
@@ -1614,14 +1630,21 @@ local function TextDialog(p)
     end
   end)
   edit:SetScript("OnEditFocusGained", function(self) if readOnly then self:HighlightText() end end)
+  -- the export copied by the player's Ctrl+C (the game keeps the clipboard from addons): said
+  edit:SetScript("OnKeyDown", function(_, key)
+    if readOnly and key == "C" and IsControlKeyDown and IsControlKeyDown() then f:ShowStatus(true, L.TEXT_COPIED) end
+  end)
   f:SetScript("OnHide", function()
     edit:ClearFocus()
     readOnly = nil
+    f.readOnly = nil
   end)
 
+  -- All of it selected, to copy with Ctrl+C (the game lets no addon write to the clipboard).
   function f:SelectAll()
     edit:SetFocus()
     edit:HighlightText()
+    f:ShowStatus(true, L.TEXT_SELECTED)
   end
 
   function f:ShowStatus(ok, msg)
@@ -1634,6 +1657,7 @@ local function TextDialog(p)
     if self.SetTitle then self:SetTitle(title) else self.TitleContainer.TitleText:SetText(title) end
     hint:SetText(hintText)
     readOnly = text
+    self.readOnly = text
     edit:SetText(text or "")
     scroll:SetVerticalScroll(0)
     status:SetText("")
