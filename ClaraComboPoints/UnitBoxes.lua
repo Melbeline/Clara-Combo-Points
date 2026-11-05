@@ -8,10 +8,11 @@
 --   lead while it attacks you), in the threat color; the game shows its own only with the
 --   threatShowNumeric setting, hidden while this one shows; a box in the game's options
 --   (Esc > Options > AddOns > Clara Combo Points) turns it off;
---   the distance to an enemy, from WeaponSwingTimer's range bands ("8-15 m"), in their colors (a
---   hunter's by default).
--- Centered over the name bar, never past its right end (the portrait is there); the longer box
--- drawn with the same border, its ends as drawn and its straight middle stretched.
+--   the distance to an enemy, from WeaponSwingTimer's range bands ("8-15", no unit), in their
+--   colors (a hunter's by default).
+-- Only the boxes showing, close together (a box hidden leaves no gap), centered over the name bar,
+-- never past its right end (the portrait is there): narrower when the three would not fit over it.
+-- Their border in three, its ends as drawn and its straight middle stretched to the box's width.
 -- And a boss's swing timer: a mark crossing its name bar from one swing to the next, before or
 -- behind the name. The combat log is closed to addons: its swings are the hits seen on its target
 -- (you, your pet, your group or raid), their pace its attack speed (else the time between two).
@@ -22,8 +23,9 @@ local ADDON, ns = ...
 local L = ns.L
 
 local BOX_W, BOX_H, FILL_W, FILL_H, FILL_Y, TEXT_Y = 49, 18, 37, 14, -3, -4 -- (the game's own)
-local WIDTH = { speed = BOX_W, threat = BOX_W, range = 60 }
-local GAP = 4
+local WIDTH = { speed = BOX_W, threat = BOX_W, range = BOX_W }
+local GAP = 1
+local MIN_W = 34 -- (narrower than this, "100%" or "1.25s" would not fit in the fill)
 local TEX_W = 64 -- (the border's file; its ends 9 wide, its straight middle from 9 to 40)
 local END_W = 9
 local BORDER = "Interface\\TargetingFrame\\NumericThreatBorder"
@@ -57,7 +59,7 @@ local function Parts(unit)
   return main.ReputationColor, contextual, main
 end
 
--- The threat box as the game draws it; longer: its border in three (ends, middle stretched)
+-- The threat box as the game draws it, its border in three (ends, middle stretched): any width
 local function NewBox(parent, width)
   local box = CreateFrame("Frame", nil, parent)
   box:SetSize(width, BOX_H)
@@ -65,12 +67,7 @@ local function NewBox(parent, width)
   box.fill:SetTexture(FILL)
   box.fill:SetSize(width - (BOX_W - FILL_W), FILL_H)
   box.fill:SetPoint("TOP", box, "TOP", 0, FILL_Y)
-  if width == BOX_W then
-    box.border = box:CreateTexture(nil, "ARTWORK")
-    box.border:SetTexture(BORDER)
-    box.border:SetTexCoord(unpack(BORDER_COORDS))
-    box.border:SetAllPoints(box)
-  else
+  do
     local bottom = BORDER_COORDS[4]
     local pieces = { { 0, END_W / TEX_W, "TOPLEFT" }, { (BOX_W - END_W) / TEX_W, BOX_W / TEX_W, "TOPRIGHT" } }
     box.ends = {}
@@ -148,28 +145,50 @@ local function Box(spot, kind)
   return box
 end
 
--- Side by side, centered over the name bar, never past its right end: placed again only when the
--- boxes wanted change
+-- Side by side, the ones showing only (close together), centered over the name bar, never past its
+-- right end: placed again only when the boxes showing change
 local function Layout(spot)
   local wanted = { speed = SpeedOn(), threat = spot.base and ns:ThreatBox() or (not spot.base and spot.threatOn),
     range = RangeOn() }
   local list = {}
   for _, kind in ipairs({ "speed", "threat", "range" }) do
-    if wanted[kind] and Box(spot, kind) then list[#list + 1] = kind end
+    local box = wanted[kind] and Box(spot, kind)
+    if box and box:IsShown() then list[#list + 1] = kind end
   end
   local key = table.concat(list, "/") .. ":" .. tostring(spot.width) .. ":" .. tostring(spot.threat)
   if spot.placed == key then return end
   spot.placed = key
-  local total = -GAP
-  for _, kind in ipairs(list) do total = total + WIDTH[kind] + GAP end
+  -- their width: the game's, narrower so that they fit over the name bar (ClassicUI's own threat box kept)
+  local fixed, free = 0, 0
+  for _, kind in ipairs(list) do
+    if kind == "threat" and not spot.base then fixed = fixed + (Box(spot, kind):GetWidth() or BOX_W) else free = free + 1 end
+  end
+  local w = BOX_W
+  if free > 0 and (spot.width or 0) > 0 then
+    w = math.max(MIN_W, math.min(BOX_W, math.floor((spot.width - GAP * (#list - 1) - fixed) / free)))
+  end
+  local widths, total = {}, -GAP
+  for _, kind in ipairs(list) do
+    local box = Box(spot, kind)
+    if kind == "threat" and not spot.base then
+      widths[kind] = box:GetWidth() or BOX_W
+    else
+      widths[kind] = w
+      if math.abs((box:GetWidth() or 0) - w) > .01 then
+        box:SetWidth(w)
+        box.fill:SetWidth(w - (BOX_W - FILL_W))
+      end
+    end
+    total = total + widths[kind] + GAP
+  end
   local left = spot.x - total / 2
   local right = spot.x + spot.width / 2
   if left + total > right then left = right - total end
   for _, kind in ipairs(list) do
     local box = Box(spot, kind)
     if spot.base or kind ~= "threat" then box:ClearAllPoints() end
-    box:SetPoint("BOTTOM", spot.anchor, "TOP", left + WIDTH[kind] / 2, spot.y)
-    left = left + WIDTH[kind] + GAP
+    box:SetPoint("BOTTOM", spot.anchor, "TOP", left + widths[kind] / 2, spot.y)
+    left = left + widths[kind] + GAP
   end
 end
 
@@ -207,6 +226,7 @@ local function UpdateThreat(unit)
     threat.fill:SetVertexColor(GetThreatStatusColor(status))
   end
   SetShown(threat, value ~= nil)
+  Layout(spot) -- (the boxes showing, close together)
 end
 
 ---------------------------------------------------------------------------
@@ -295,8 +315,7 @@ end
 local function Label(box, short)
   if box.short == short and box.lang == ns.lang then return end
   box.short, box.lang = short, ns.lang
-  box.text:SetText(short .. " " .. L.RANGE_UNIT)
-  if box.text:GetStringWidth() > box:GetWidth() - (BOX_W - FILL_W) then box.text:SetText(short) end -- (no room for the unit)
+  box.text:SetText(short) -- (the band alone: "8-35")
 end
 
 local function UpdateRange(unit, spot)
@@ -326,6 +345,7 @@ local function UpdateBoxes(unit)
   Layout(spot)
   UpdateSpeed(unit, spot)
   UpdateRange(unit, spot)
+  Layout(spot) -- (the boxes showing now, close together)
   Told(spot)
   return UnitExists(unit) and (SpeedOn() or RangeOn())
 end

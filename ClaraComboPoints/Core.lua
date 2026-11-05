@@ -1801,6 +1801,15 @@ local function InitDB()
   if sv.quietLogin ~= false then sv.quietLogin = nil end -- (on unless turned off: QuietLogin.lua)
   if sv.whoNames ~= false then sv.whoNames = nil end -- (on unless turned off: Who.lua)
   if sv.noBlink ~= false then sv.noBlink = nil end -- (on unless turned off: GameFixes.lua)
+  -- the game's options Clara sets once (GameFixes.lua): for the account, and each character's
+  if type(sv.gameDefaults) ~= "number" then sv.gameDefaults = nil end
+  if type(sv.gameDefaultsChars) == "table" then
+    for who, v in pairs(sv.gameDefaultsChars) do
+      if type(who) ~= "string" or type(v) ~= "number" then sv.gameDefaultsChars[who] = nil end
+    end
+  else
+    sv.gameDefaultsChars = nil
+  end
   if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
   -- the interface improvements turned off (QoL.lua): only "false" is kept
   if type(sv.qol) == "table" then

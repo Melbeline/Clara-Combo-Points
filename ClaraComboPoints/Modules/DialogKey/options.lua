@@ -22,13 +22,14 @@ ns.defaultOptions = {
     treatNumpadAsNumbers = true,
     numKeysForGossip = true,
     numKeysForQuestRewards = true,
-    dontClickSummons = true,
-    dontClickDuels = true,
-    dontClickRevives = true,
-    dontClickReleases = true,
-    dontAcceptInvite = true,
-    dontAcceptAbandonVote = true,
-    dontAcceptVoteKick = true,
+    -- (Clara Combo Points: its Popup Blacklist's defaults, every "Don't" off, the class revive on)
+    dontClickSummons = false,
+    dontClickDuels = false,
+    dontClickRevives = false,
+    dontClickReleases = false,
+    dontAcceptInvite = false,
+    dontAcceptAbandonVote = false,
+    dontAcceptVoteKick = false,
     dontAcceptInstanceLocks = false,
     useSoulstoneRez = true,
     handleCraftingOrders = true,
@@ -40,9 +41,17 @@ ns.defaultOptions = {
 }
 
 --- @param dialogKey DialogKey
+local CLARA_DEFAULTS = 1 -- (Clara Combo Points: its Popup Blacklist set once to these defaults, then the player's own)
+local POPUP_KEYS = { "dontClickSummons", "dontClickDuels", "dontClickRevives", "dontClickReleases", "dontAcceptInvite",
+    "dontAcceptAbandonVote", "dontAcceptVoteKick", "dontAcceptInstanceLocks", "useSoulstoneRez" }
+
 function ns:InitDB(dialogKey)
     for k, v in pairs(self.defaultOptions) do
         if dialogKey.db[k] == nil then dialogKey.db[k] = v end
+    end
+    if (tonumber(dialogKey.db.claraDefaults) or 0) < CLARA_DEFAULTS then
+        for _, k in ipairs(POPUP_KEYS) do dialogKey.db[k] = self.defaultOptions[k] end
+        dialogKey.db.claraDefaults = CLARA_DEFAULTS
     end
     if select(2, next(dialogKey.db.customFrames)) == true then -- unordered list
         local i = 1
