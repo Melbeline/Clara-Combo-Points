@@ -3,7 +3,7 @@ if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
 
 -- (Clara Combo Points) Clara's boxes over the classic target and focus frames (its UnitBoxes.lua: the attack speed,
--- the distance) in this art: the threat percent's border, drawn longer for a longer box (the ends as drawn, the
+-- the distance) in this art: the threat percent's border, drawn in three for any width (the ends as drawn, the
 -- straight middle stretched). Clara places them with the threat percent's own box (ThreatNumber.lua) over the name
 -- box, and fills them; while one shows, the name steps up for it as for the threat percent.
 
@@ -27,10 +27,7 @@ local function Build(frame, width)
     ns.SetTex(box.fill, "statusBar")
     box.fill:SetSize(width - (BOX_W - FILL_W), FILL_H)
     box.fill:SetPoint("TOP", box, "TOP", 0, FILL_Y)
-    if width == BOX_W then
-        box.border = Piece(box, 0, BOX_W)
-        box.border:SetAllPoints(box)
-    else
+    do -- (in three, whatever its width: Clara makes it narrower when the three would not fit over the name box)
         local left, right = Piece(box, 0, END_W), Piece(box, BOX_W - END_W, BOX_W)
         left:SetSize(END_W, BOX_H)
         left:SetPoint("TOPLEFT", box, "TOPLEFT")
