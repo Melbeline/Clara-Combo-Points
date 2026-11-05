@@ -1950,7 +1950,8 @@ function ns:PLAYER_LOGIN()
   events:RegisterEvent("SPELL_UPDATE_COOLDOWN") -- spell cooldowns and charges on the icons
   events:RegisterEvent("SPELL_UPDATE_CHARGES")
   -- a form, stance or stealth on, a spell queued or repeating: its icon checked (Tracker.lua)
-  for _, e in ipairs({ "UPDATE_SHAPESHIFT_FORM", "ACTIONBAR_UPDATE_STATE", "START_AUTOREPEAT_SPELL", "STOP_AUTOREPEAT_SPELL" }) do
+  for _, e in ipairs({ "UPDATE_SHAPESHIFT_FORM", "ACTIONBAR_UPDATE_STATE", "START_AUTOREPEAT_SPELL", "STOP_AUTOREPEAT_SPELL",
+    "SPELL_UPDATE_ICON", "ACTIONBAR_SLOT_CHANGED" }) do
     pcall(events.RegisterEvent, events, e) -- (not every event in every client build)
   end
   if self.isRogue or self.isDruid then -- combo points
@@ -2025,6 +2026,11 @@ function ns:ACTIONBAR_UPDATE_STATE()
 end
 ns.START_AUTOREPEAT_SPELL = ns.ACTIONBAR_UPDATE_STATE
 ns.STOP_AUTOREPEAT_SPELL = ns.ACTIONBAR_UPDATE_STATE
+ns.SPELL_UPDATE_ICON = ns.ACTIONBAR_UPDATE_STATE -- (a spell's icon now the star: Shadowmeld, an aspect on)
+function ns:ACTIONBAR_SLOT_CHANGED()
+  if self.ActionBarsChanged then self:ActionBarsChanged() end -- (Tracker.lua: which buttons hold which spell)
+  self:MarkIconsDirty() -- (once on the next frame: the bars' slots change by dozens at login)
+end
 
 function ns:PLAYER_TARGET_CHANGED()
   UpdateCombo()
