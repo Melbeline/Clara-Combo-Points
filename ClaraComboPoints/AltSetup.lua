@@ -518,7 +518,7 @@ end
 local pending -- a profile to put on this character once out of combat and Edit Mode ready
 local waiter = CreateFrame("Frame")
 local reloadDue -- a profile put on this session, the reload it asked for not done yet
-ns:AddReloadCheck(function() return reloadDue and L.ALTS_RELOAD_PROFILE:format(reloadDue) end)
+if ns.AddReloadCheck then ns:AddReloadCheck(function() return reloadDue and L.ALTS_RELOAD_PROFILE:format(reloadDue) end) end
 
 local function Finish(name, asked)
   local p = ns:AltProfile(name)

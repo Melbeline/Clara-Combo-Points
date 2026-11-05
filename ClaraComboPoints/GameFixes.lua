@@ -12,6 +12,9 @@
 -- keeps for each character, once for each character; those of the whole account, once.
 -- And the unit menu's loot method line (the group's leader): a left-click on it, Free for All.
 -- And the target and focus frames' health and power values at the right end of their bars.
+-- And the character window's right-hand stats list: it opens on Ranged for a hunter, on Spell for
+-- a priest, a mage and a warlock (the game keeps one choice for the whole account); the other
+-- classes as the game has it.
 
 local ADDON, ns = ...
 
@@ -218,3 +221,41 @@ texts:SetScript("OnEvent", function(_, event)
   if event ~= "PLAYER_FOCUS_CHANGED" then ns:PlaceBarTexts("target") end
   if event ~= "PLAYER_TARGET_CHANGED" then ns:PlaceBarTexts("focus") end
 end)
+
+---------------------------------------------------------------------------
+-- The character window's right-hand stats list, by class
+---------------------------------------------------------------------------
+local RIGHT_STATS = { HUNTER = "PLAYERSTAT_RANGED_COMBAT", PRIEST = "PLAYERSTAT_SPELL_COMBAT",
+  MAGE = "PLAYERSTAT_SPELL_COMBAT", WARLOCK = "PLAYERSTAT_SPELL_COMBAT" }
+ns.RIGHT_STATS = RIGHT_STATS
+
+-- Each time the window opens on the character's sheet: the class's list (then the player's pick
+-- while it stays open).
+function ns:RightStatsOnShow()
+  local _, class = UnitClass("player")
+  local wanted = RIGHT_STATS[class]
+  local get = (C_CVar and C_CVar.GetCVar) or GetCVar
+  local set = (C_CVar and C_CVar.SetCVar) or SetCVar
+  if not wanted or not get or not set then return false end
+  local ok, now = pcall(get, "playerStatRightDropdown")
+  if not ok or now == nil then return false end -- (a client without the list)
+  if now ~= wanted then pcall(set, "playerStatRightDropdown", wanted) end
+  if UpdatePaperdollStats and _G.PlayerStatFrameRight1 then pcall(UpdatePaperdollStats, "PlayerStatFrameRight", wanted) end
+  local dropdown = _G.PlayerStatFrameRightDropdown
+  if dropdown and dropdown.GenerateMenu then pcall(dropdown.GenerateMenu, dropdown) end -- (its text)
+  return true
+end
+
+local function HookSheet()
+  if not (PaperDollFrame and PaperDollFrame.HookScript) then return false end
+  PaperDollFrame:HookScript("OnShow", function() ns:RightStatsOnShow() end)
+  return true
+end
+if not HookSheet() then -- (the game's window not made yet: at login)
+  local later = CreateFrame("Frame")
+  later:RegisterEvent("PLAYER_LOGIN")
+  later:SetScript("OnEvent", function(self)
+    self:UnregisterAllEvents()
+    HookSheet()
+  end)
+end

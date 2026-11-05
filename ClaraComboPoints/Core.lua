@@ -1942,6 +1942,10 @@ function ns:PLAYER_LOGIN()
   events:RegisterUnitEvent("UNIT_AURA", "player", "target")
   events:RegisterEvent("SPELL_UPDATE_COOLDOWN") -- spell cooldowns and charges on the icons
   events:RegisterEvent("SPELL_UPDATE_CHARGES")
+  -- a form, stance or stealth on, a spell queued or repeating: its icon checked (Tracker.lua)
+  for _, e in ipairs({ "UPDATE_SHAPESHIFT_FORM", "ACTIONBAR_UPDATE_STATE", "START_AUTOREPEAT_SPELL", "STOP_AUTOREPEAT_SPELL" }) do
+    pcall(events.RegisterEvent, events, e) -- (not every event in every client build)
+  end
   if self.isRogue or self.isDruid then -- combo points
     events:RegisterUnitEvent("UNIT_HEALTH", "target")
     events:RegisterUnitEvent("UNIT_FLAGS", "target")
@@ -1949,7 +1953,6 @@ function ns:PLAYER_LOGIN()
   end
   if self.isDruid then
     events:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player") -- power type changes with the form
-    events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
   end
   if self.isDruid or self.isWarrior then -- rage about to be spent
     events:RegisterEvent("CURRENT_SPELL_CAST_CHANGED")
@@ -2005,7 +2008,16 @@ function ns:UNIT_DISPLAYPOWER()
     UpdatePower()
   end
 end
-ns.UPDATE_SHAPESHIFT_FORM = ns.UNIT_DISPLAYPOWER
+function ns:UPDATE_SHAPESHIFT_FORM()
+  if self.isDruid then self:UNIT_DISPLAYPOWER() end -- (the form's power on the bar)
+  self:CheckIcons() -- the form's icon checked (Tracker.lua)
+end
+
+function ns:ACTIONBAR_UPDATE_STATE()
+  self:CheckIcons()
+end
+ns.START_AUTOREPEAT_SPELL = ns.ACTIONBAR_UPDATE_STATE
+ns.STOP_AUTOREPEAT_SPELL = ns.ACTIONBAR_UPDATE_STATE
 
 function ns:PLAYER_TARGET_CHANGED()
   UpdateCombo()
@@ -2054,6 +2066,7 @@ ns.SPELL_UPDATE_CHARGES = ns.SPELL_UPDATE_COOLDOWN
 function ns:CURRENT_SPELL_CAST_CHANGED()
   UpdateQueued()
   UpdateCost()
+  self:CheckIcons() -- a queued spell's icon checked
 end
 
 function ns:UNIT_SPELLCAST_START()
@@ -2120,6 +2133,7 @@ end
 ns.DISPLAY_SIZE_CHANGED = ns.UI_SCALE_CHANGED
 
 function ns:MarkIconsDirty() end -- Tracker.lua
+function ns:CheckIcons() end
 function ns:TargetChanged() end
 function ns:AurasReadable() end
 function ns:SyncAuraButtons() end
