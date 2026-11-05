@@ -407,6 +407,28 @@ local function RefreshAddonButton(ldbi, name, button)
     if hidden and button:IsShown() then button:Hide() end
 end
 
+-- (Clara Combo Points) The client shows its mail icon only when its new-mail animation ends, and hides it (the animation
+-- stopped) whenever the mail button is hidden: moved into our home while hidden (a first login, the mail event before our
+-- layout), the button came back with no icon until the next mail event, its tooltip still there. Shown again here.
+local MAIL_RECHECK = 1 -- seconds after a mail event (its animation lasts half a second)
+local function MailIconBack(mail)
+    if not (mail and MiniMapMailIcon and mail:IsShown()) then return end
+    if (mail.NewMailAnim and mail.NewMailAnim:IsPlaying()) or (mail.MailReminderAnim and mail.MailReminderAnim:IsPlaying()) then return end
+    if HasNewMail and HasNewMail() and not MiniMapMailIcon:IsShown() then MiniMapMailIcon:Show() end
+end
+MM.MailIconBack = MailIconBack
+local mailWatch
+local function WatchMail(mail)
+    ns.HookScriptOnce(mail, "OnShow", MailIconBack)
+    if mailWatch then return end
+    mailWatch = CreateFrame("Frame")
+    mailWatch:RegisterEvent("UPDATE_PENDING_MAIL")
+    mailWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+    mailWatch:SetScript("OnEvent", function()
+        C_Timer.After(MAIL_RECHECK, function() MailIconBack(mail) end)
+    end)
+end
+
 local function Layout()
     local cluster = MinimapCluster
     local backdrop = MinimapBackdrop
@@ -542,6 +564,8 @@ local function Layout()
                 MiniMapMailIcon:SetTexture("Interface\\Icons\\INV_Letter_15")
                 MiniMapMailIcon:SetSize(18, 18)
                 ns.SetPointOnce(MiniMapMailIcon, "TOPLEFT", indicator.MailFrame, "TOPLEFT", 7, -6)
+                WatchMail(indicator.MailFrame)
+                MailIconBack(indicator.MailFrame)
             end
         end
         if indicator.CraftingOrderFrame then
