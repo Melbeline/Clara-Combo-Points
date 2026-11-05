@@ -1802,7 +1802,13 @@ local function InitDB()
   if sv.whoNames ~= false then sv.whoNames = nil end -- (on unless turned off: Who.lua)
   if sv.noBlink ~= false then sv.noBlink = nil end -- (on unless turned off: GameFixes.lua)
   if sv.buyemallConfirm ~= false then sv.buyemallConfirm = nil end -- (BuyEmAll asks first unless turned off)
-  sv.cameraOff, sv.cameraWas = nil, nil -- (an earlier DynamicCam box's, no longer used: Modules/DynamicCam/Glue.lua)
+  sv.cameraOff = nil -- (an earlier DynamicCam box's, no longer used: Modules/DynamicCam/Glue.lua)
+  if type(sv.cameraDisabled) ~= "boolean" then sv.cameraDisabled = nil end -- (DynamicCam off from the box: Glue.lua)
+  if type(sv.cameraWas) == "table" then -- (the game's camera before DynamicCam ran: Glue.lua)
+    for k, v in pairs(sv.cameraWas) do if type(k) ~= "string" or type(v) ~= "string" then sv.cameraWas[k] = nil end end
+  else
+    sv.cameraWas = nil
+  end
   -- the player's DynamicCam Zoom Increments with the Dynamic camera box ticked, and unticked (the same)
   for _, key in ipairs({ "cameraZoom", "cameraZoomOff" }) do
     local kept = sv[key]

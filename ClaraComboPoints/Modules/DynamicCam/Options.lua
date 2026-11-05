@@ -680,6 +680,8 @@ local function CreateSettingsTab(tabOrder, forSituations, forExport)
                   function(_, newValue)
                     if newValue then
                       DynamicCam:SetSettingsValue(1, forSituations and SID, "cvars", "test_cameraDynamicPitch")
+                      -- (Clara: turned on, Pitch (on ground) at 0.99, as the portrait menu's Dynamic camera box does)
+                      DynamicCam:SetSettingsValue(0.99, forSituations and SID, "cvars", "test_cameraDynamicPitchBaseFovPad")
                     else
                       DynamicCam:SetSettingsValue(0, forSituations and SID, "cvars", "test_cameraDynamicPitch")
                     end
