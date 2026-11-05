@@ -2372,6 +2372,13 @@ end
 -- (Esc > Options > AddOns): "Reload UI" just above Edit Mode, and its own section just above the
 -- game's "Other Options" (which stays last, Leave Party at the very bottom; no such part: at the
 -- end).
+local menuFailed -- (said once a session)
+local function Part(fn)
+  local ok, err = pcall(fn)
+  if ok or menuFailed then return end
+  menuFailed = true
+  print("|cffff6060Clara|r: portrait menu: " .. tostring(err))
+end
 local function AddMenuEntries(_, root)
   if ns.TipResetInstances then ns.TipResetInstances(root) end -- (its tooltip: the instances entered, Layers.lua)
   local menu = ns.sv and ns.sv.menu or {}
@@ -2389,28 +2396,50 @@ local function AddMenuEntries(_, root)
       root:CreateButton(L.RELOAD_UI, ReloadInterface)
     end
   end
-  -- the section: the classes the HUD is for, in clients with the game's slider
-  if menu.line ~= false and ns.enabled and ns.db and MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame
-    and MenuUtil.CreateDivider and MenuUtil.CreateTitle and MenuUtil.CreateCheckbox then
-    local section = { MenuUtil.CreateDivider(), MenuUtil.CreateTitle("Clara Combo Points"), MenuLineDescription() }
+  -- the section: the classes the HUD is for. Each part on its own: one that fails in this client
+  -- leaves the others (and says why, once, in the chat).
+  if menu.line ~= false and ns.enabled and ns.db and MenuUtil.CreateButton then
+    local section = {}
+    Part(function()
+      if MenuUtil.CreateDivider then section[#section + 1] = MenuUtil.CreateDivider() end
+      if MenuUtil.CreateTitle then section[#section + 1] = MenuUtil.CreateTitle("Clara Combo Points") end
+    end)
+    if MinimalSliderWithSteppersMixin and MenuUtil.CreateFrame then -- the opacity, the lock and show boxes
+      Part(function() section[#section + 1] = MenuLineDescription() end)
+    end
     -- the rest, used now and then, under More...: its own menu
     local more = MenuUtil.CreateButton(L.MENU_MORE)
-    if MeterSetting() ~= nil then -- the game's damage meter
-      more:CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
-        function() ns:SetDamageMeterShown(not ns:DamageMeterShown()) end)
+    if more.CreateCheckbox then
+      Part(function()
+        if MeterSetting() ~= nil then -- the game's damage meter
+          more:CreateCheckbox(L.MENU_DAMAGE_METER, function() return ns:DamageMeterShown() end,
+            function() ns:SetDamageMeterShown(not ns:DamageMeterShown()) end)
+        end
+      end)
+      Part(function()
+        if ns.CameraAvailable and ns:CameraAvailable() then -- DynamicCam's camera (built in or standalone)
+          more:CreateCheckbox(L.MENU_CAMERA, function() return ns:CameraOn() end,
+            function() ns:SetCameraOn(not ns:CameraOn()) end)
+        end
+      end)
+      Part(function()
+        if ns.FishingModeOffered and ns:FishingModeOffered() then -- (FishingMode.lua)
+          local fishing = more:CreateCheckbox(L.MENU_FISHING_MODE, function() return ns:FishingMode() end,
+            function() ns:SetFishingMode(not ns:FishingMode()) end)
+          if fishing and fishing.SetTooltip then
+            fishing:SetTooltip(function(tooltip)
+              GameTooltip_SetTitle(tooltip, L.MENU_FISHING_MODE)
+              GameTooltip_AddNormalLine(tooltip, L.FISHING_MODE_TIP:format(ns:FishingBoost()))
+            end)
+          end
+        end
+      end)
     end
-    if ns.FishingModeOffered and ns:FishingModeOffered() then -- (FishingMode.lua)
-      local fishing = more:CreateCheckbox(L.MENU_FISHING_MODE, function() return ns:FishingMode() end,
-        function() ns:SetFishingMode(not ns:FishingMode()) end)
-      if fishing.SetTooltip then
-        fishing:SetTooltip(function(tooltip)
-          GameTooltip_SetTitle(tooltip, L.MENU_FISHING_MODE)
-          GameTooltip_AddNormalLine(tooltip, L.FISHING_MODE_TIP:format(ns:FishingBoost()))
-        end)
-      end
+    if more.CreateButton then
+      more:CreateButton(L.MENU_OPTIONS, function() ns:OpenOptions() end)
+      section[#section + 1] = more
     end
-    more:CreateButton(L.MENU_OPTIONS, function() ns:OpenOptions() end)
-    section[#section + 1] = more
+    if #section == 0 then return end
     local at, previous
     local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER
     for index, description in root:EnumerateElementDescriptions() do

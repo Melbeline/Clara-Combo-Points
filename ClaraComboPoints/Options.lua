@@ -340,13 +340,22 @@ local function Tab(parent, label, onClick)
   end
   t:HookScript("OnEnter", Paint)
   t:HookScript("OnLeave", Paint)
+  -- its label in the middle of the border (the game's tab sets it low, or high when chosen, for its own art)
+  local function Centre(self)
+    local fs = self.Text or (self.GetFontString and self:GetFontString())
+    if not fs then return end
+    fs:ClearAllPoints()
+    fs:SetPoint("CENTER", look, "CENTER", 0, 0)
+  end
   function t:SetActive(on)
     self.chosen = on and true or nil
     if on then PanelTemplates_SelectTab(self) else PanelTemplates_DeselectTab(self) end
+    Centre(self)
     self:SetFrameLevel(level + (on and 2 or 0)) -- over its neighbours when they overlap (a narrow window)
     look:SetFrameLevel(self:GetFrameLevel() - 1)
     Paint(self)
   end
+  t:HookScript("OnShow", Centre)
   Paint(t)
   return t
 end
