@@ -379,3 +379,141 @@ catchEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
 catchEvents:SetScript("OnEvent", function(self)
   if CatchAll() then self:UnregisterAllEvents() end
 end)
+
+---------------------------------------------------------------------------
+-- /cl souris (/cl mouse): every frame under the mouse, as /fstack lists them, with what /fstack shows
+-- only for one (where it was made: its source), in a window whose text is all selected, to copy
+-- (Ctrl+C). Taken 3 seconds after the command, the time to put the mouse on the spot.
+---------------------------------------------------------------------------
+local L = ns.L
+local STRATA_ORDER = { WORLD = 0, BACKGROUND = 1, LOW = 2, MEDIUM = 3, HIGH = 4, DIALOG = 5, FULLSCREEN = 6,
+  FULLSCREEN_DIALOG = 7, TOOLTIP = 8 }
+local secretR = issecretvalue or function() return false end
+local function Plain(v)
+  if secretR(v) then return "?" end
+  return v
+end
+local function Call(f, method, ...)
+  local fn = f[method]
+  if type(fn) ~= "function" then return nil end
+  local ok, a, b, c, d, e = pcall(fn, f, ...)
+  if not ok then return nil end
+  return a, b, c, d, e
+end
+local function NameOf(f)
+  if not f then return "nil" end
+  local name = Call(f, "GetDebugName") or Call(f, "GetName")
+  if name == nil or secretR(name) or name == "" then return tostring(f) end
+  return name
+end
+local function Num(v) v = Plain(v) return type(v) == "number" and ("%.0f"):format(v) or tostring(v) end
+
+local function Describe(f, focus)
+  local lines = {}
+  local mouse = Call(f, "IsMouseEnabled")
+  local click, motion = Call(f, "IsMouseClickEnabled"), Call(f, "IsMouseMotionEnabled")
+  local w, h = Call(f, "GetSize")
+  local left, bottom = Call(f, "GetLeft"), Call(f, "GetBottom")
+  local takes = (Plain(click) == true and "click" or "") .. (Plain(motion) == true and "+hover" or "")
+  if takes == "" and Plain(mouse) == true then takes = "mouse" end
+  lines[1] = ("%s<%s> %s %s  [%s]  %sx%s at %s,%s"):format(focus and "--> " or "    ", Num(Call(f, "GetFrameLevel")),
+    tostring(Plain(Call(f, "GetFrameStrata"))), NameOf(f), takes ~= "" and takes or "no mouse", Num(w), Num(h),
+    Num(left), Num(bottom))
+  local point, rel, relPoint, x, y = Call(f, "GetPoint", 1)
+  if point then
+    lines[#lines + 1] = ("        point: %s %s %s %s %s"):format(tostring(Plain(point)), NameOf(type(rel) == "table" and rel or nil),
+      tostring(Plain(relPoint)), Num(x), Num(y))
+  end
+  local source = Call(f, "GetSourceLocation")
+  if source and not secretR(source) then lines[#lines + 1] = "        source: " .. tostring(source) end
+  local parent = Call(f, "GetParent")
+  if parent then lines[#lines + 1] = "        parent: " .. NameOf(parent) end
+  return table.concat(lines, "\n")
+end
+
+local reportBox
+local function ReportBox()
+  if reportBox then return reportBox end
+  local f = CreateFrame("Frame", "ClaraMouseReport", UIParent, "BackdropTemplate")
+  f:SetSize(760, 520)
+  f:SetPoint("CENTER")
+  f:SetFrameStrata("FULLSCREEN_DIALOG")
+  f:SetToplevel(true)
+  f:EnableMouse(true)
+  f:SetMovable(true)
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  if f.SetBackdrop then
+    f:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+    f:SetBackdropColor(0, 0, 0, .92)
+    f:SetBackdropBorderColor(.72, .58, .34, 1)
+  end
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.title:SetPoint("TOPLEFT", 14, -12)
+  f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  f.hint:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -4)
+  f.hint:SetPoint("RIGHT", -40, 0)
+  f.hint:SetJustifyH("LEFT")
+  local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", -2, -2)
+  local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 12, -48)
+  scroll:SetPoint("BOTTOMRIGHT", -32, 12)
+  local edit = CreateFrame("EditBox", nil, scroll)
+  edit:SetMultiLine(true)
+  edit:SetAutoFocus(false)
+  edit:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+  edit:SetWidth(700)
+  edit:SetScript("OnEscapePressed", function() f:Hide() end)
+  edit:SetScript("OnTextChanged", function(self, user) if user then self:SetText(f.text or "") self:HighlightText() end end)
+  edit:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+  scroll:SetScrollChild(edit)
+  f.edit = edit
+  f:SetScript("OnMouseUp", function() edit:SetFocus() edit:HighlightText() end)
+  if UISpecialFrames then table.insert(UISpecialFrames, "ClaraMouseReport") end
+  if ns.DressDialog then ns:DressDialog(f, { close = close }) end
+  reportBox = f
+  return f
+end
+
+function ns:MouseReport()
+  local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+  local isFocus = {}
+  for _, f in ipairs(foci or {}) do if f then isFocus[f] = true end end
+  local x, y = GetCursorPosition()
+  local scale = UIParent:GetEffectiveScale()
+  local list = {}
+  local f = EnumerateFrames and EnumerateFrames()
+  while f do
+    if f ~= reportBox and Call(f, "IsVisible") == true and Call(f, "IsMouseOver") == true then list[#list + 1] = f end
+    f = EnumerateFrames(f)
+  end
+  table.sort(list, function(a, b)
+    local sa, sb = STRATA_ORDER[Plain(Call(a, "GetFrameStrata"))] or 0, STRATA_ORDER[Plain(Call(b, "GetFrameStrata"))] or 0
+    if sa ~= sb then return sa > sb end
+    local la, lb = Plain(Call(a, "GetFrameLevel")), Plain(Call(b, "GetFrameLevel"))
+    if type(la) == "number" and type(lb) == "number" and la ~= lb then return la > lb end
+    return false
+  end)
+  local out = {}
+  out[#out + 1] = ("Clara %s  ·  cursor %.0f, %.0f  ·  %d frames under it"):format(ns.VERSION or "", x / scale, y / scale, #list)
+  out[#out + 1] = "mouse focus: " .. (foci and foci[1] and NameOf(foci[1]) or "none (the world)")
+  out[#out + 1] = ""
+  for _, frame in ipairs(list) do out[#out + 1] = Describe(frame, isFocus[frame]) end
+  local box = ReportBox()
+  box.text = table.concat(out, "\n")
+  box.title:SetText(L.MOUSE_REPORT_TITLE)
+  box.hint:SetText(L.MOUSE_REPORT_HINT)
+  box.edit:SetText(box.text)
+  box:Show()
+  box.edit:SetFocus()
+  box.edit:HighlightText()
+  return box.text
+end
+
+function ns:MouseReportSoon()
+  print("|cffffd200Clara|r: " .. L.MOUSE_REPORT_SOON)
+  C_Timer.After(3, function() ns:MouseReport() end)
+end
