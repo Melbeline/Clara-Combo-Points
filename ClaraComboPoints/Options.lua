@@ -78,7 +78,7 @@ local FONT_MENU_H = 360 -- the list of fonts scrolls past this height
 local panel           -- the window, built the first time it opens
 local host            -- the game's options page it fills while it is shown there (ns.CorePage), else nil
 local editing         -- class profile shown in the window
-local page = 1        -- page shown
+local page = 1        -- page shown (the last one shown, kept: ns.sv.window.page)
 local selSide, selK = "above", 1 -- icon row that "Add" fills
 local relabels        -- text setters (run again on language change)
 
@@ -3475,6 +3475,7 @@ local function Build()
     end, function()
       ns:EndTyping() -- (a number being typed belongs to the tab it was typed on)
       editing = class
+      ns.sv.window.tab = class -- (opened again on it)
       specMenu:Hide()
       ClosePicker()
       resetAll.armed = nil
@@ -3557,6 +3558,7 @@ local function Build()
     navButtons[i] = NavButton(nav, i, def[1], def[2], function()
       if page ~= i then body:SetVerticalScroll(0) end -- another page: from its top
       page = i
+      ns.sv.window.page = i -- (opened again on it)
       if i == ICONS_PAGE and catalog then catalog.closed = nil end -- (the class spells panel shut by hand: open again)
       p:Refresh()
     end)
@@ -3739,12 +3741,13 @@ local function Build()
     self:Reflow()
   end
 
-  -- Opening the options shows this character's tab, with everything lit so colour changes
-  -- are visible straight away.
+  -- Opening the options shows the tab and page shown last (else this character's tab, its first page),
+  -- with everything lit so colour changes are visible straight away.
   p:SetScript("OnShow", function(self)
     PlaceWindow()
     self:SetAlpha(ns.optionsHost and 1 or ns.sv.window.alpha)
-    editing = ns.homeClass or "ROGUE"
+    editing = ns.sv.window.tab or ns.homeClass or "ROGUE"
+    if ns.sv.window.page and pages[ns.sv.window.page] then page = ns.sv.window.page end
     resetAll.armed = nil
     status:SetText("")
     self.ClearProfileMessages()
