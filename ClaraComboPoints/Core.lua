@@ -2524,6 +2524,8 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
     Print(L.SYNC_STATUS:format(s.online, s.trusted, s.channel and L.SYNC_CHANNEL_YES or L.SYNC_CHANNEL_NO))
   elseif cmd == "help" then
     Print(L.HELP)
+  elseif cmd == "souris" or cmd == "mouse" or cmd == "maus" then
+    ns:MouseReportSoon()
   elseif cmd == "debug" then
     for _, line in ipairs(ns:DebugIcons()) do Print(line) end
     for _, line in ipairs(ns.DebugClicks and ns:DebugClicks() or {}) do Print(line) end
