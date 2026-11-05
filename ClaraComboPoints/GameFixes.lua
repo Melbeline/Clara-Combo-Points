@@ -11,6 +11,7 @@
 -- Targeting off, Auto Loot on, NPC Names on None, the bags separate (not combined). Those the game
 -- keeps for each character, once for each character; those of the whole account, once.
 -- And the unit menu's loot method line (the group's leader): a left-click on it, Free for All.
+-- And the target and focus frames' health and power values at the right end of their bars.
 
 local ADDON, ns = ...
 
@@ -176,3 +177,44 @@ end
 if Menu and Menu.ModifyMenu then
   for _, tag in ipairs({ "MENU_UNIT_SELF", "MENU_UNIT_PARTY", "MENU_UNIT_RAID_PLAYER" }) do Menu.ModifyMenu(tag, LootLine) end
 end
+
+---------------------------------------------------------------------------
+-- The target and focus frames' numbers: the health's and the power's right one (the value) at the
+-- right end of its own bar, rather than out by the portrait. Not on ClassicUI's frames (its own).
+---------------------------------------------------------------------------
+local TEXT_FRAMES = { target = "TargetFrame", focus = "FocusFrame" }
+
+local function ClassicFrames(unit)
+  local cui = ns.ClassicUIPrivate
+  local uf = cui and cui.UF
+  return uf and uf.active and uf.On and uf.On(unit) and true or false
+end
+
+function ns:PlaceBarTexts(unit)
+  local frame = _G[TEXT_FRAMES[unit]]
+  local main = frame and frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
+  local container = main and main.HealthBarsContainer
+  local health = container and container.HealthBar
+  if not (health and container.RightText) or ClassicFrames(unit) then return false end
+  if InCombatLockdown and InCombatLockdown() and frame:IsProtected() then return false end
+  container.RightText:ClearAllPoints()
+  container.RightText:SetPoint("RIGHT", health, "RIGHT", -2, 0)
+  local mana = main.ManaBar
+  if mana and mana.RightText then
+    -- its right end under the health's: the power bar runs a little further right, under the frame's art
+    local hr, mr = health:GetRight(), mana:GetRight()
+    local x = (hr and mr) and (hr - mr - 2) or -10
+    mana.RightText:ClearAllPoints()
+    mana.RightText:SetPoint("RIGHT", mana, "RIGHT", x, 0)
+  end
+  return true
+end
+
+local texts = CreateFrame("Frame")
+texts:RegisterEvent("PLAYER_ENTERING_WORLD")
+texts:RegisterEvent("PLAYER_TARGET_CHANGED")
+texts:RegisterEvent("PLAYER_FOCUS_CHANGED")
+texts:SetScript("OnEvent", function(_, event)
+  if event ~= "PLAYER_FOCUS_CHANGED" then ns:PlaceBarTexts("target") end
+  if event ~= "PLAYER_TARGET_CHANGED" then ns:PlaceBarTexts("focus") end
+end)
