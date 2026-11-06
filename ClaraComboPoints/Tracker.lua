@@ -41,7 +41,8 @@ local MISSING_ALPHA = .45
 local GCD = 1.5              -- a cooldown this short is only the global cooldown
 local ABBREV = 120           -- countdown: "2m" from two minutes up, "1:59" below
 local MASK_ATLAS = "UI-HUD-CoolDownManager-Mask" -- keeps the icon art inside the frame (fills the icon)
-local CHECKED_FILE = "Interface\\Buttons\\CheckButtonHilight" -- an action button's checked look
+local CHECKED_ATLAS = "UI-HUD-ActionBar-IconFrame-Mouseover" -- the game's action and stance buttons checked: a gold border
+local CHECKED_FILE = "Interface\\Buttons\\CheckButtonHilight" -- (without that atlas: the classic checked look)
 local ACTIVE_ICON = "Interface\\Icons\\Spell_Nature_WispSplode" -- (when the game shows none of its own: see ActiveIcon)
 local ACTION_SLOTS = 180     -- the action bars' slots read for a spell's icon as they show it
 -- where each icon looks for its aura (on = the entry's condition; auto for plain entries)
@@ -115,31 +116,35 @@ ns.RowName = function(_, side, k) return RowName(side, k) end
 ---------------------------------------------------------------------------
 -- Frames
 ---------------------------------------------------------------------------
--- The button frame art, cut in nine so it fits square icons and combo-point-shaped cells
--- alike (corners keep their size, edges stretch). Without atlas info: drawn whole.
-local frameArt
-local function FrameArt()
-  if frameArt == nil then
-    frameArt = false
+-- The button frame art (and the checked border over it), cut in nine so it fits square icons and
+-- combo-point-shaped cells alike (corners keep their size, edges stretch). Without atlas info: drawn whole.
+local arts = {} -- atlas -> its file and texture coordinates (false: no atlas info)
+local function AtlasArt(atlas)
+  local art = arts[atlas]
+  if art == nil then
+    art = false
     if C_Texture and C_Texture.GetAtlasInfo then
-      local ok, info = pcall(C_Texture.GetAtlasInfo, FRAME_ATLAS)
+      local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
       if ok and type(info) == "table" and info.file and Plain(info.leftTexCoord) then
-        frameArt = { file = info.file, info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord }
+        art = { file = info.file, info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord }
       end
     end
+    arts[atlas] = art
   end
-  return frameArt
+  return art
 end
+local function FrameArt() return AtlasArt(FRAME_ATLAS) end
 
 local PIECES = { -- column, row (1 = left/top, 2 = middle, 3 = right/bottom)
   { 1, 1 }, { 2, 1 }, { 3, 1 }, { 1, 2 }, { 3, 2 }, { 1, 3 }, { 2, 3 }, { 3, 3 },
 }
 
-local function LayoutFrame(owner, pieces, w, h)
-  local art = FrameArt()
+local function LayoutFrame(owner, pieces, w, h, atlas)
+  atlas = atlas or FRAME_ATLAS
+  local art = AtlasArt(atlas)
   if not art then
     pieces[1]:SetAllPoints()
-    pieces[1]:SetAtlas(FRAME_ATLAS)
+    pieces[1]:SetAtlas(atlas)
     return
   end
   local c = min(w, h) * CORNER
@@ -159,7 +164,7 @@ local function LayoutFrame(owner, pieces, w, h)
   end
 end
 
--- An action button's checked art, as the game's own buttons draw it (else the classic art).
+-- Without the game's checked atlas: an action button's checked art as drawn (else the classic art).
 local function CheckedArt(tex)
   local button = _G.ActionButton1
   local ok, real = pcall(function() return button and button.GetCheckedTexture and button:GetCheckedTexture() end)
@@ -196,11 +201,18 @@ local function NewSlot(row)
   slot.over:SetFrameLevel(slot:GetFrameLevel() + 6)
   slot.frame = {}
   for i = 1, FrameArt() and #PIECES or 1 do slot.frame[i] = slot.over:CreateTexture(nil, "OVERLAY") end
-  -- in that form, stance or stealth (or the spell queued, Auto Shot on): checked, like on the
-  -- action bars (their own art)
-  slot.checked = slot.over:CreateTexture(nil, "OVERLAY", nil, 1)
+  -- in that form, stance or stealth (or the spell queued, Auto Shot on): checked, as the game's action and
+  -- stance buttons show it, their gold border cut like the frame (not the classic square ClassicUI puts on
+  -- its bars: the icon under it looked pale)
+  slot.checked = CreateFrame("Frame", nil, slot.over)
   slot.checked:SetAllPoints()
-  CheckedArt(slot.checked)
+  slot.checked.pieces = {}
+  local cut = AtlasArt(CHECKED_ATLAS)
+  for i = 1, cut and #PIECES or 1 do
+    local piece = slot.checked:CreateTexture(nil, "OVERLAY", nil, 1)
+    slot.checked.pieces[i] = piece
+    if cut then piece:SetBlendMode("ADD") else piece:SetAllPoints() CheckedArt(piece) end
+  end
   slot.checked:Hide()
   slot.count = slot.over:CreateFontString(nil, "OVERLAY")
   ns:EditableSlot(slot) -- (editing on the HUD, below)
@@ -309,6 +321,7 @@ function ns:LayoutIcons()
           slot.w, slot.h = w, size
           Crop(slot.icon, w, size)
           LayoutFrame(slot, slot.frame, w, size)
+          if AtlasArt(CHECKED_ATLAS) then LayoutFrame(slot.checked, slot.checked.pieces, w, size, CHECKED_ATLAS) end
           local inset = min(w, size) * 3 / 45
           slot.cd:ClearAllPoints()
           slot.cd:SetPoint("TOPLEFT", inset, -inset)
@@ -448,12 +461,12 @@ local function LearnAuraID(slot, aura)
   ns:SyncAuraButtons()
 end
 
--- The spell's form, stance or stealth on (Stealth, Prowl, Cat Form, Battle Stance, Devotion
--- Aura...), the spell queued (Heroic Strike) or repeating (Auto Shot, Shoot): checked, as an
--- action button shows it. A form, a stealth, Shadowmeld, an aspect, a paladin's aura, Shadowform
--- or Ghost Wolf on also takes the action bars' icon for it (the white star): known on by the game's form
--- (stance bar), its aura, or the star the game's own buttons show for it (Shadowmeld, the aspects: no form,
--- no aura of theirs to be read on WoW Forever).
+-- The spell's form, stance or stealth on (Stealth, Prowl, Cat Form, Battle Stance, Devotion Aura...), the spell
+-- queued (Heroic Strike) or repeating (Auto Shot, Shoot): checked, as the game's action and stance buttons show it
+-- (their gold border). A spell whose button shows another icon while on (Shadowmeld, the aspects: the white star)
+-- takes that icon instead, alone, as its button: no form nor aura of theirs to be read on WoW Forever, the game's
+-- own buttons tell, read through C_ActionBar (the old GetActionTexture is there only with the game's deprecation
+-- fallbacks on).
 local IsCurrentSpell = (C_Spell and C_Spell.IsCurrentSpell) or IsCurrentSpell
 local IsAutoRepeatSpell = (C_Spell and C_Spell.IsAutoRepeatSpell) or IsAutoRepeatSpell
 local function SpellOn(fn, spell)
@@ -490,60 +503,95 @@ local function IsStar(icon)
   return starID ~= false and icon == starID
 end
 
--- The action bars' slots holding each spell (by name), read again when the bars change
+-- An action button's icon as the game shows it now (read live)
+local function ActionTexture(action)
+  local fn = (C_ActionBar and C_ActionBar.GetActionTexture) or GetActionTexture
+  if not fn then return end
+  local ok, icon = pcall(fn, action)
+  if ok and icon ~= nil and not issecretvalue(icon) then return icon end
+end
+
+-- The action bars' slots holding each spell (by name), read again when the bars change (not kept while the bars
+-- read empty: not known yet at login)
 local actionsByName
 local function ActionsOf(name)
   if not actionsByName then
-    actionsByName = {}
+    local found, any = {}, false
     if GetActionInfo then
       for action = 1, ACTION_SLOTS do
         local ok, kind, id = pcall(GetActionInfo, action)
-        if ok and kind == "spell" and Plain(id) then
-          local spellName = ns:SpellName(id)
-          if spellName then
-            actionsByName[spellName] = actionsByName[spellName] or {}
-            table.insert(actionsByName[spellName], action)
+        if ok and not issecretvalue(kind) and kind ~= nil then
+          any = true
+          if kind == "spell" and Plain(id) then
+            local spellName = ns:SpellName(id)
+            if spellName then
+              found[spellName] = found[spellName] or {}
+              table.insert(found[spellName], action)
+            end
           end
         end
       end
     end
+    if not any then return NONE end
+    actionsByName = found
   end
   return actionsByName[name] or NONE
 end
 function ns:ActionBarsChanged() actionsByName = nil end
 
--- On as the game's own buttons show it: the star instead of its icon (Shadowmeld, an aspect...), on the
--- spell itself or on an action button holding it
+-- The slots holding the icon's spell: by its name (every rank), else as the game finds it
+local function SpellActions(slot)
+  local list = ActionsOf(slot.name)
+  if #list == 0 and type(slot.spell) == "number" and C_ActionBar and C_ActionBar.FindSpellActionButtons then
+    local ok, found = pcall(C_ActionBar.FindSpellActionButtons, slot.spell)
+    if ok and not issecretvalue(found) and type(found) == "table" then return found end
+  end
+  return list
+end
+
+-- The game has the spell on (Shadowmeld, an aspect) or queued (Heroic Strike), or casts it
+local function Current(slot)
+  return SpellOn(IsCurrentSpell, slot.name) or (type(slot.spell) == "number" and SpellOn(IsCurrentSpell, slot.spell))
+end
+
+-- The icon the game's own buttons show for it while on when it is not its own (the star of Shadowmeld, of the
+-- aspects): on an action button holding it, or as the spell's icon. nil otherwise.
 local function ShownOn(slot)
-  if slot.item or not slot.name or ns.preview then return false end
+  if slot.item or not slot.name or ns.preview then return end
   local GetSpellTextureNow = C_Spell and C_Spell.GetSpellTexture
   if GetSpellTextureNow and slot.spell ~= nil then
     local ok, icon = pcall(GetSpellTextureNow, slot.spell)
-    if ok and IsStar(icon) then return true end
+    if ok and IsStar(icon) then return icon end
   end
-  if GetActionTexture then
-    for _, action in ipairs(ActionsOf(slot.name)) do
-      local ok, icon = pcall(GetActionTexture, action)
-      if ok and IsStar(icon) then return true end
+  local current
+  for _, action in ipairs(SpellActions(slot)) do
+    local icon = ActionTexture(action)
+    if icon ~= nil then
+      if IsStar(icon) then return icon end
+      -- (the star not known by its file ID: another icon than its own on its button while the game has it on)
+      if current == nil then current = Current(slot) end
+      if current and slot.spellIcon ~= nil and slot.spellIcon ~= QUESTION_MARK and icon ~= slot.spellIcon then return icon end
     end
   end
-  return false
 end
 
-local function Checked(slot)
-  if slot.item or not slot.name or ns.preview then return false end
-  return SpellOn(IsCurrentSpell, slot.name) or SpellOn(IsAutoRepeatSpell, slot.name)
-    or (type(slot.spell) == "number" and SpellOn(IsCurrentSpell, slot.spell))
-    or FormOn(slot.name) or ShownOn(slot)
+-- What the form, action bar and spell events change on an icon: on (a form, a toggle, queued or repeating), and
+-- the other icon its button shows while on
+local function Look(slot)
+  if slot.item or not slot.name or ns.preview then return false, nil end
+  local shown = ShownOn(slot)
+  local on = shown ~= nil or FormOn(slot.name) or SpellOn(IsAutoRepeatSpell, slot.name) or Current(slot)
+  return on and true or false, shown
 end
+local function Checked(slot) return (Look(slot)) end
 ns.IconChecked = function(_, slot) return Checked(slot) end
 
--- On as a form is: the game's form (stance bar), or an aura you cast on yourself that lasts until
--- it is cancelled (no duration: Shadowmeld, Stealth, the aspects, Trueshot Aura, the paladins'
+-- On as a form is: the game's form (stance bar), the other icon its button shows, or an aura you cast on yourself
+-- that lasts until it is cancelled (no duration: Shadowmeld, Stealth, the aspects, Trueshot Aura, the paladins'
 -- auras...). Not another player's aura on you, not a timed buff.
 local function FormLike(slot, aura, unit)
   if slot.item or not slot.name or ns.preview then return false end
-  if FormOn(slot.name) or ShownOn(slot) then return true end
+  if FormOn(slot.name) or ShownOn(slot) ~= nil then return true end
   if not aura or unit ~= "player" then return false end
   local source = aura.sourceUnit
   if issecretvalue(source) or source ~= "player" then return false end
@@ -552,29 +600,27 @@ local function FormLike(slot, aura, unit)
 end
 ns.IconFormLike = function(_, slot, aura, unit) return FormLike(slot, aura, unit) end
 
--- The icon the game shows for it while on: its form's on the stance bar (Stealth's, a druid form's,
--- a stance's), else its button's on the action bars (Shadowmeld's star...), else the star.
+-- The icon the game shows for it while on, and whether it is its form's: its form's on the stance bar (Stealth's,
+-- a druid form's, a stance's), else the other icon its button shows (Shadowmeld's star...), else its button's own,
+-- else the star.
 local function ActiveIcon(slot)
   if GetNumShapeshiftForms and GetShapeshiftFormInfo then
     local ok, n = pcall(GetNumShapeshiftForms)
     for i = 1, (ok and Plain(n)) or 0 do
       local okI, icon, active, _, spellID = pcall(GetShapeshiftFormInfo, i)
       if okI and Bool(active) and Plain(spellID) and ns:SpellName(spellID) == slot.name
-        and not issecretvalue(icon) and icon then return icon end
+        and not issecretvalue(icon) and icon then return icon, true end
     end
   end
-  if GetActionInfo and GetActionTexture then
-    for action = 1, ACTION_SLOTS do
-      local ok, kind, id = pcall(GetActionInfo, action)
-      if ok and kind == "spell" and Plain(id) and ns:SpellName(id) == slot.name then
-        local okT, icon = pcall(GetActionTexture, action)
-        if okT and icon and not issecretvalue(icon) then return icon end
-      end
-    end
+  local shown = ShownOn(slot)
+  if shown ~= nil then return shown, false end
+  for _, action in ipairs(SpellActions(slot)) do
+    local icon = ActionTexture(action)
+    if icon ~= nil then return icon, false end
   end
-  return ACTIVE_ICON
+  return ACTIVE_ICON, false
 end
-ns.IconActiveTexture = function(_, slot) return ActiveIcon(slot) end
+ns.IconActiveTexture = function(_, slot) return (ActiveIcon(slot)) end
 
 local function ShowChecked(slot, on)
   if slot.isChecked == on then return end
@@ -593,7 +639,7 @@ local function SetSlot(slot, look, aura, unit, enchant)
   if ns.preview then
     -- a sample: lit, with a cooldown under way
     ShowChecked(slot, false)
-    slot.spellChecked = false
+    slot.spellChecked, slot.spellShown = false, nil
     slot.icon:SetTexture(slot.spellIcon)
     slot.icon:SetDesaturated(false)
     slot:SetAlpha(1)
@@ -652,11 +698,18 @@ local function SetSlot(slot, look, aura, unit, enchant)
     if charges ~= nil then slot.count:SetText(charges) end
   end
   local formOn = FormLike(slot, aura, unit)
-  if formOn then slot.icon:SetTexture(ActiveIcon(slot)) end
-  slot.spellChecked = Checked(slot) -- (what the form and action bar events can read again: ns:CheckIcons)
-  local checked = formOn or slot.spellChecked
-  ShowChecked(slot, checked)
-  local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown or checked
+  local onIcon, fromForm
+  if formOn then
+    onIcon, fromForm = ActiveIcon(slot)
+    slot.icon:SetTexture(onIcon)
+  end
+  slot.spellChecked, slot.spellShown = Look(slot) -- (what the form, action bar and spell events read again: ns:CheckIcons)
+  -- another icon than its own while on (the star): that icon alone, as its button shows it; else checked, the
+  -- buttons' gold border (a form, a stance, a spell queued or repeating)
+  local swapped = formOn and not fromForm and onIcon ~= slot.spellIcon
+  local on = formOn or slot.spellChecked
+  ShowChecked(slot, on and not swapped)
+  local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown or on
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
   slot:SetShown(lit or look.missing)
@@ -686,8 +739,8 @@ function ns:UpdateIcons()
   end
 end
 
--- A form, stance or stealth changed, a spell queued: the icons drawn again only if one of them
--- turns checked or unchecked (these events come often; no aura read for nothing).
+-- A form, stance or stealth changed, a spell queued: the icons drawn again only if one of them turns on or off,
+-- or its button's star shows or goes (these events come often; no aura read for nothing).
 function ns:CheckIcons()
   if not self.db then return end
   if not self.hud:IsShown() then
@@ -698,9 +751,12 @@ function ns:CheckIcons()
     for _, row in pairs(rows[side]) do
       for i = 1, #(row.spells or NONE) do
         local slot = row.slots[i]
-        if slot and (Checked(slot) and true or false) ~= (slot.spellChecked and true or false) then
-          dirty = true
-          return
+        if slot then
+          local on, shown = Look(slot) -- (on or off, or the star shown on its button or gone)
+          if on ~= (slot.spellChecked and true or false) or shown ~= slot.spellShown then
+            dirty = true
+            return
+          end
         end
       end
     end
