@@ -90,11 +90,15 @@ end
 -- The middle-click menu
 ---------------------------------------------------------------------------
 local function MouseFocus()
+  local focus
   if GetMouseFoci then
     local foci = GetMouseFoci()
-    return foci and foci[1]
+    focus = foci and foci[1]
+  else
+    focus = GetMouseFocus and GetMouseFocus()
   end
-  return GetMouseFocus and GetMouseFocus()
+  if focus and focus.IsForbidden and focus:IsForbidden() then return end -- (the game's secure dialogs: not ours to read)
+  return focus
 end
 
 -- The bag item under the mouse, and its button: the game's slot (and the bags made of its buttons),

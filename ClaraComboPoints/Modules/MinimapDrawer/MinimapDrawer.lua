@@ -1005,6 +1005,8 @@ local function CapturedUnderMouse()
     end
     local depth = 0
     while f and depth < 4 do
+        -- (a frame the game forbids to addons, such as its secure trade or mail confirmation: never touched)
+        if f.IsForbidden and f:IsForbidden() then return nil end
         if captured[f] then return f end
         f = f.GetParent and f:GetParent() or nil
         depth = depth + 1
