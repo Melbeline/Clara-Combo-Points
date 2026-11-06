@@ -12386,6 +12386,36 @@
 
 			TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, ShowTip)
 
+			-- (Clara Combo Points: a player's class always on the level line, after the race: "Level 10 Night Elf Priest".
+			-- WoW Forever gives the class a line of its own: taken out before it is added (the game's own way to leave a
+			-- line out), the class put after the race on the level line already there, so it is never lost even when the
+			-- tooltip is not rewritten above (modifier keys held...).)
+			if TooltipDataProcessor.AddLinePreCall then
+				local function PlayerClass(tooltip)
+					local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
+					unit = ok and Safe(unit) or nil
+					if type(unit) == "string" and Safe(UnitIsPlayer(unit)) then return Safe((UnitClass(unit))) end
+					local info = tooltip.processingInfo
+					local guid = info and info.tooltipData and Safe(info.tooltipData.guid)
+					if type(guid) == "string" and guid:find("^Player%-") and GetPlayerInfoByGUID then
+						return Safe((GetPlayerInfoByGUID(guid)))
+					end
+				end
+				TooltipDataProcessor.AddLinePreCall(TooltipDataProcessor.AllTypes, function(tooltip, lineData)
+					if tooltip ~= GameTooltip or type(lineData) ~= "table" or lineData.rightText ~= nil then return end
+					local text = Safe(lineData.leftText)
+					if type(text) ~= "string" or text == "" then return end
+					local className = PlayerClass(tooltip)
+					if not className or text ~= className then return end
+					local line, levelText = FindLevelLine(2)
+					if not line then return end
+					if not levelText:find(className, 1, true) then
+						_G["GameTooltipTextLeft" .. line]:SetText(levelText .. " " .. className)
+					end
+					return true
+				end)
+			end
+
 		end
 
 		----------------------------------------------------------------------
