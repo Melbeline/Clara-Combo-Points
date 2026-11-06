@@ -416,9 +416,10 @@ local function Free(frame)
   local foci = GetMouseFoci and GetMouseFoci()
   local focus = foci and foci[1] or (GetMouseFocus and GetMouseFocus())
   if not focus or focus == WorldFrame then return true end
+  if focus.IsForbidden and focus:IsForbidden() then return false end -- (the game's secure dialogs: a window over it)
   local p = focus
   for _ = 1, 12 do
-    if not p then break end
+    if not p or (p.IsForbidden and p:IsForbidden()) then break end
     if p == frame then return true end
     p = p.GetParent and p:GetParent()
   end

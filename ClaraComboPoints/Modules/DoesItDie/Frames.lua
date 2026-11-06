@@ -199,6 +199,7 @@ end
 local function findCandidate(kind)
     local focus = mouseFocus()
     if not focus or focus == WorldFrame or focus == pickFrame then return nil end
+    if focus.IsForbidden and focus:IsForbidden() then return nil end -- (the game's secure dialogs: never touched)
     local root = ns.frameRoot(focus)
     local best, bestArea
     local function consider(region, isBar)
