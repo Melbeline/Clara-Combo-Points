@@ -2012,6 +2012,7 @@ function ns:PLAYER_LOGOUT()
 end
 
 function ns:PLAYER_ENTERING_WORLD()
+  if self.ActionBarsChanged then self:ActionBarsChanged() end -- (the bars read again: known by now)
   self:ApplyScale()
   self:UpdateVisibility()
   self:UpdatePowerMode()
@@ -2047,7 +2048,9 @@ function ns:ACTIONBAR_UPDATE_STATE()
 end
 ns.START_AUTOREPEAT_SPELL = ns.ACTIONBAR_UPDATE_STATE
 ns.STOP_AUTOREPEAT_SPELL = ns.ACTIONBAR_UPDATE_STATE
-ns.SPELL_UPDATE_ICON = ns.ACTIONBAR_UPDATE_STATE -- (a spell's icon now the star: Shadowmeld, an aspect on)
+-- a spell's icon changed (the star on its button: Shadowmeld, an aspect on or off): the icons drawn again, as
+-- the game's own buttons are
+function ns:SPELL_UPDATE_ICON() self:MarkIconsDirty() end
 function ns:ACTIONBAR_SLOT_CHANGED()
   if self.ActionBarsChanged then self:ActionBarsChanged() end -- (Tracker.lua: which buttons hold which spell)
   self:MarkIconsDirty() -- (once on the next frame: the bars' slots change by dozens at login)
