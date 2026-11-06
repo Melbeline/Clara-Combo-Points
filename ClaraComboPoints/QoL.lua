@@ -11,7 +11,8 @@ local L = ns.L
 
 -- The modules, in the order they are listed. standalone: the addon it comes from (the built-in one runs
 -- instead of it, from the next reload: it is turned off for the character); theme: the page it is on
--- (combat, interface, quests, economy).
+-- (combat, interface, quests, economy); keep: its own addon is never turned off (newer than the built-in one:
+-- while it is enabled, it runs and the built-in one steps aside).
 ns.QOL_MODULES = {
   { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic", theme = "economy" },
   { key = "leatrix", name = "Leatrix Plus", standalone = "Leatrix_Plus", theme = "interface" },
@@ -38,6 +39,8 @@ ns.QOL_MODULES = {
   { key = "lfgforever", name = "LFG Forever", standalone = "LFGForever", theme = "quests" },
   { key = "enemycasts", name = "Enemy Casts", theme = "combat" }, -- (Clara's own)
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
+  { key = "fishing", name = "Fishing", standalone = "EasyFishing", title = "Easy Fishing", keep = true, theme = "economy" },
+  { key = "unitscan", name = "UnitScan", theme = "quests" }, -- (Clara's own, heard with UnitScan Hardcore)
   { key = "reverseengineering", name = "Reverse Engineering", standalone = "ReverseEngineering", theme = "economy" },
 }
 
@@ -90,7 +93,7 @@ for _, m in ipairs(ns.QOL_MODULES) do modules[m.key] = m end
 
 -- Its own addon runs this session, and the built-in one takes over from the next reload?
 function ns:QolTakesOver(key)
-  return modules[key].standalone ~= nil and state[key] == "standalone" and Wanted(key)
+  return modules[key].standalone ~= nil and not modules[key].keep and state[key] == "standalone" and Wanted(key)
 end
 
 -- A module's own addon turned off (or back on) for this character, from the next reload; the
@@ -141,7 +144,7 @@ function ns:SetQolEnabled(key, on)
   if on then self.sv.qol[key] = nil else self.sv.qol[key] = false end
   if next(self.sv.qol) == nil then self.sv.qol = nil end
   local m = modules[key]
-  if m.standalone and state[key] ~= "unavailable" then
+  if m.standalone and not m.keep and state[key] ~= "unavailable" then
     if not on then
       StandaloneOn(m, true)
     elseif state[key] == "standalone" then
@@ -158,6 +161,11 @@ function ns:OpenQol(key)
   if openers[key] then return openers[key]() end
 end
 function ns:CanOpenQol(key) return openers[key] ~= nil end
+-- Fishing: Easy Fishing's page while it runs, else Clara's own page (its fishing mode box); UnitScan: its page
+openers.fishing = function()
+  if state.fishing == "standalone" then ns:OpenSettingsTo("Easy Fishing") else ns:OpenSettingsTo(ns.settingsCategory) end
+end
+openers.unitscan = function() if ns.OpenScanPage then ns:OpenScanPage() end end
 
 -- A module's main switches, on its page of its theme's page of Clara Combo Points' options:
 -- { { label = locale key, get = function, set = function(on) }, ... }
@@ -183,7 +191,7 @@ if ns.AddReloadCheck then ns:AddReloadCheck(function()
   local names = {}
   for _, m in ipairs(ns.QOL_MODULES or {}) do
     local now, wanted = state[m.key], ns:QolEnabled(m.key)
-    if (now == "on" and not wanted) or (now == "off" and wanted) or (now == "standalone" and wanted) then
+    if (now == "on" and not wanted) or (now == "off" and wanted) or (now == "standalone" and wanted and not m.keep) then
       names[#names + 1] = m.name
     end
   end
@@ -195,8 +203,8 @@ function ns:QolStatusText(m)
   local now = state[m.key]
   local wanted = self:QolEnabled(m.key)
   if now == "unavailable" then return L.QOL_UNAVAILABLE end
-  if now == "standalone" and wanted then return L.QOL_TAKEOVER:format(m.name, m.name) end
-  if now == "standalone" then return L.QOL_STANDALONE:format(m.name) end
+  if now == "standalone" and wanted and not m.keep then return L.QOL_TAKEOVER:format(m.name, m.name) end
+  if now == "standalone" then return L.QOL_STANDALONE:format(m.title or m.name) end
   if now == "on" and not wanted then return L.QOL_OFF_NEXT end
   if now == "off" and wanted then return L.QOL_ON_NEXT end
   return now == "on" and L.QOL_ON or L.QOL_OFF

@@ -236,7 +236,9 @@ Les fonctions d'autres addons, intégrées à Clara, **seulement dans WoW Foreve
 - **Combat** : WeaponSwingTimer, tullaRange, Solo Raid Frame, Enhanced Raid Frames, DoesItDie, Actions ennemies.
 - **Interface** : Leatrix Plus, DynamicCam, MinimapDrawer, Names, Tooltip Anchor, idTip.
 - **Quêtes et progression** : NodeSight, DialogKey, XToLevel, What's Training?, LFG Forever, et UnitScan.
-- **Économie et métiers** : BuyEmAll, Courrier, Or des personnages, LootOptimizer Forever (à côté de lui), Prix de l'HV partagés, Sniper, Reverse Engineering.
+- **Économie et métiers** : BuyEmAll, Courrier, Or des personnages, LootOptimizer Forever (à côté de lui), Prix de l'HV partagés, Sniper, Pêche, Reverse Engineering.
+
+**Pêche** (une touche pour pêcher et ferrer, le mode pêche) et **UnitScan** ont chacun leur case, comme les autres modules. Tant que l'addon **Easy Fishing** est activé, c'est lui qui tourne à la place du module Pêche : contrairement aux autres addons d'origine, il n'est jamais désactivé, car il est plus récent (haut-parleur et volume des effets sonores dans le menu du portrait).
 
 | Module | Ce qu'il fait | Commande |
 |---|---|---|

@@ -177,7 +177,7 @@ events:SetScript("OnEvent", function(self, event, _, _, spellID)
   if event == "PLAYER_LOGIN" then
     self:UnregisterEvent("PLAYER_LOGIN")
     Settings(false) -- (given back, should the game have closed while fishing)
-    if not ns.FOREVER then return end
+    if not ns.FOREVER or not ns:QolRuns("fishing") then return end -- (the module off, or Easy Fishing runs)
     self:RegisterEvent("SPELLS_CHANGED")
     self:RegisterEvent("PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_LOGOUT")
