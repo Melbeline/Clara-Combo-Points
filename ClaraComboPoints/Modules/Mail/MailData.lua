@@ -240,12 +240,25 @@ function M.Members(id)
 end
 
 -- The list as shown: newest first (never mailed: by name); sorted by a category, its characters
--- first (newest first among them). Returns the list and how many of it are that category's.
+-- first (newest first among them); the character logged in left out. Returns the list and how many of
+-- it are that category's.
+-- (the character logged in is left out: the game sends no mail to oneself)
+local function Me()
+  local me = {}
+  local key = Key(ns:FullName("player"))
+  if key then me[key] = true end
+  local guid = UnitGUID and UnitGUID("player")
+  if type(guid) == "string" and not issecretvalue(guid) and M.db.guids[guid] then me[M.db.guids[guid]] = true end
+  return me
+end
 function M.Sorted(sort)
   sort = sort or M.db.sort
   local first, rest = {}, {}
-  for _, r in pairs(M.db.recipients) do
-    if sort ~= "last" and r.cats[sort] then first[#first + 1] = r else rest[#rest + 1] = r end
+  local me = Me()
+  for key, r in pairs(M.db.recipients) do
+    if not me[key] then
+      if sort ~= "last" and r.cats[sort] then first[#first + 1] = r else rest[#rest + 1] = r end
+    end
   end
   local function Newer(a, b)
     if a.last ~= b.last then return a.last > b.last end
