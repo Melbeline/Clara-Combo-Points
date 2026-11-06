@@ -15834,7 +15834,8 @@
 				local mouseFoci = GetMouseFoci()
 				if mouseFoci then
 					local frame = mouseFoci[#mouseFoci]
-					local ftype = frame:GetObjectType()
+					if frame and frame.IsForbidden and frame:IsForbidden() then return end -- (Clara Combo Points: a frame the game forbids)
+					local ftype = frame and frame:GetObjectType()
 					if frame and ftype and ftype == "Button" then
 						frame:Click()
 					else
@@ -15847,7 +15848,8 @@
 				local mouseFoci = GetMouseFoci()
 				if mouseFoci then
 					local frame = mouseFoci[#mouseFoci]
-					local ftype = frame:GetObjectType()
+					if frame and frame.IsForbidden and frame:IsForbidden() then return end -- (Clara Combo Points: a frame the game forbids)
+					local ftype = frame and frame:GetObjectType()
 					if frame and ftype then
 						local fname = frame:GetName()
 						local issecure, tainted = issecurevariable(fname)
