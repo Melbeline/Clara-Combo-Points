@@ -212,7 +212,9 @@ local function Build()
     boostValue:SetText("×" .. v)
     if not self.silent then ns:SetFishingBoost(v) end
   end)
-  updates[#updates + 1] = function()
+  updates[#updates + 1] = function() -- (the module off, or Easy Fishing runs: not here)
+    local shown = ns:QolRuns("fishing")
+    fishing:SetShown(shown) boostLabel:SetShown(shown) boost:SetShown(shown) boostValue:SetShown(shown)
     boost.silent = true
     boost:SetValue(ns:FishingBoost())
     boost.silent = false

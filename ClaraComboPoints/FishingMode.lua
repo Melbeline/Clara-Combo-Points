@@ -100,6 +100,7 @@ end
 
 -- Fishing learned (its line in the menus), or the mode on (to turn it off)
 function ns:FishingModeOffered()
+  if not (self.QolRuns and self:QolRuns("fishing")) then return false end -- (the module off, or Easy Fishing runs)
   if self:FishingMode() then return true end
   if GetProfessions then
     local _, _, _, fish = GetProfessions()
@@ -205,6 +206,7 @@ events:SetScript("OnEvent", function(self, event)
   if event == "PLAYER_LOGIN" then
     self:UnregisterEvent("PLAYER_LOGIN")
     Restore() -- (given back, should the game have closed in fishing mode)
+    if not ns:QolRuns("fishing") then return end -- (the module off, or Easy Fishing runs: given back only)
     if ns:FishingMode() then Apply() end
     -- the professions window, once the game loads it
     if EventUtil and EventUtil.ContinueOnAddOnLoaded then EventUtil.ContinueOnAddOnLoaded("Blizzard_Professions", DressBook) end
