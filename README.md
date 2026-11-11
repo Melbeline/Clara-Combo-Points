@@ -207,6 +207,8 @@ La page **Clara** elle-même a, tout en haut, **Replacer la fenêtre d'options**
 
 **Fenêtre de butin vide fermée** : avec un peu de latence (ou un cadavre cliqué plusieurs fois), le cadavre est ouvert une seconde fois pendant que ses objets partent déjà dans les sacs ; ils quittent aussi cette fenêtre-là, et le jeu la laisse ouverte, vide, même en s'éloignant. Clara la ferme dès qu'il n'y reste plus rien (ni objet ni pièces).
 
+**Tracking rendu après la mort** : le jeu retire à la mort les sorts de pistage de la loupe de la minicarte (Découverte d'herbes, Découverte de gisements, les pistages du chasseur). Celui qui était actif juste avant est remis quand le personnage revit (rez sur place, corps rejoint, esprit soigneur), même après un rechargement pendant la mort. `C_Minimap.SetTracking` n'est pas une fonction protégée du jeu : Clara la tente aussitôt. Si le jeu ne la prend pas sans action du joueur, le pistage revient à la **première touche de déplacement** (ou une touche sans raccourci) **ou au premier clic dans le monde** : une touche, un pistage, la touche garde son propre effet ; une touche liée à un sort ou à l'interface n'est jamais utilisée. Si tu choisis toi-même un autre pistage entre-temps, il est gardé.
+
 **Options du jeu réglées une fois par Clara** (ses réglages par défaut, puis les tiens : l'addon n'y retouche plus) : **Sticky Targeting** désactivé (Échap > Options > Jeu > Contrôles), **Auto Loot** activé, **NPC Names** sur **None** (Plaques de nom), les **sacs séparés** (pas le sac combiné). Celles que le jeu garde pour chaque personnage sont réglées une fois sur chacun ; celles du compte, une fois.
 
 `/rl` recharge l'interface (comme `/reload`).
