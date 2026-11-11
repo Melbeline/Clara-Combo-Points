@@ -808,7 +808,9 @@ end
 -- Glisser-déposer : détacher une icône du menu / la rattacher
 ---------------------------------------------------------------------
 local DRAG_STRATA = "FULLSCREEN_DIALOG"  -- au-dessus de tout pendant le glisser
-local FREE_STRATA = "HIGH"               -- icône libre posée sur l'écran
+-- icône libre posée sur l'écran : la strate de la minicarte (au-dessus d'elle par son niveau), sous les fenêtres (sacs,
+-- personnage, quêtes...) ; en HIGH, l'icône d'AtlasLoot passait par-dessus les sacs
+local FREE_STRATA = "LOW"
 
 local function CursorOverMenu()
     if not menu:IsShown() then return false end
