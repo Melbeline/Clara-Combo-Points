@@ -107,9 +107,14 @@ local function MakeWatchers()
     FightValues()
 end
 
--- Not yet locked as the fight's first event dispatches: the values are set then, and on every login and load.
-ns.EventFrame({ "PLAYER_REGEN_DISABLED", "PLAYER_ENTERING_WORLD", "ADDON_LOADED" }, function(_, event)
-    if event ~= "PLAYER_REGEN_DISABLED" then MakeWatchers() end
+-- (Clara Combo Points: the watchers are no longer made. Hung on the map, a secure child made the map and its quest
+-- pane toggle protected, at all times with Era's look; the game's own code that opens, closes and relevels the map
+-- then ran tainted in a fight (by any addon's touch on its path) and was refused: the map would not open or close in a
+-- fight ("Button:SetFrameLevel() blocked"). Unprotected, the map opens and closes in a fight as the game's own; laid
+-- out of combat as before (a secure snippet may lay an unprotected frame then), at the game's own size if opened in
+-- a fight, Era's look laid again as the fight ends (Map/WorldMapClassic.lua).)
+local _ = MakeWatchers
+ns.EventFrame({ "PLAYER_REGEN_DISABLED", "PLAYER_ENTERING_WORLD", "ADDON_LOADED" }, function()
     FightValues()
 end)
 ns.OnToggle(function() FightValues() end)
