@@ -457,7 +457,7 @@ S.Trusted = Trusted
 ---------------------------------------------------------------------------
 local function ChannelName(key) return "ClaraSync" .. Hex(Hash(key)) end
 
-local joinTries = 0
+local joinTries, settleWaits = 0, 0
 local function Join()
   if not S.On() then return end
   local id = GetChannelName(channelName)
@@ -474,7 +474,11 @@ local function Join()
   -- after the game's channels and the ones the server rejoins (settled), to take the last number: never in front
   -- of the player's own (ChatPlace.lua keeps it after them too)
   local channels = ns.ChatChannels
-  if channels and channels.Settled and not channels.Settled() then C_Timer.After(3, Join) return end
+  if channels and channels.Settled and not channels.Settled() and settleWaits < 40 then -- (2 minutes at most)
+    settleWaits = settleWaits + 1
+    C_Timer.After(3, Join)
+    return
+  end
   joinTries = joinTries + 1
   if joinTries > 6 then return end
   if select("#", GetChannelList()) == 0 and joinTries < 5 then C_Timer.After(4, Join) return end
