@@ -1,10 +1,12 @@
--- Clara Combo Points - the mail module's window (MailData.lua holds its data): a button right of
--- the Send Mail window's To field opens, above it (beside it when there is no room above), the
+-- Clara Combo Points - the mail module's window (MailData.lua holds its data): a button at the Send Mail
+-- window's bottom right (above Cancel, right of Send Money / C.O.D.) opens, above it (beside it when there is no
+-- room above), the
 -- characters mail was sent to, three to a row, newest first (top left, then left to right); the
 -- mouse wheel shows older ones. A click puts the name in To; a right-click puts the character in
 -- categories (several at once). Sort by: the newest first, or a category's characters first, in a
 -- framed block. Add/remove categories: add one, delete one, reset them, or reset everything. Export /
--- Import (title bar): the whole of it as a line of text, for another account. The game's own window
+-- Import (title bar): the whole of it as a line of text, for another account. A search box under Sort by: only the
+-- names holding what is typed (case and accents ignored). The game's own window
 -- look; ClassicUI's when it runs (its ClaraMailSkin: Modules/ClassicUI/Windows/ClaraMail.lua).
 
 local ADDON, ns = ...
@@ -13,7 +15,7 @@ local M = ns.Mail
 if not M then return end
 
 local COLS, ROWS = 3, 5
-local TITLE_H, SORT_H = 24, 26  -- the title bar; the Sort by row under it
+local TITLE_H, SORT_H = 24, 50  -- the title bar; the Sort by row and the search box under it
 local ROW_H, NAME_H = 28, 22    -- a row of names; a name's button
 local GAP, PAD = 6, 12          -- between names; the window's margins
 local ARROWS_W = 20             -- the scroll arrows, right of the names
@@ -23,6 +25,8 @@ local panel, toggle, sortButton, manage, exportButton, importButton, emptyText, 
 local cells, rows = {}, {}
 local first = 0 -- rows scrolled past
 local textBox
+local query = "" -- the search box's text, as a search key (ns:SearchKey: case and accents ignored)
+local searchBox
 
 local function Skin(kind, frame)
   local classic = ns.ClassicUIPrivate -- (ClassicUI built in, running)
@@ -71,8 +75,22 @@ end
 
 -- The names in their cells: the sorted category's first, its last row filled with empty cells,
 -- then the others. Returns the cells and how many rows the category's take.
+local function Matches(r)
+  if query == "" then return true end
+  local key = r and r.name and (ns.SearchKey and ns:SearchKey(r.name) or r.name:lower())
+  return key ~= nil and key:find(query, 1, true) ~= nil
+end
+
 local function Layout()
-  local list, n = M.Sorted()
+  local all, total = M.Sorted()
+  -- (searched: only the names holding the text, the category's block and the others alike)
+  local list, n = {}, 0
+  for i = 1, #all do
+    if Matches(all[i]) then
+      list[#list + 1] = all[i]
+      if i <= total then n = n + 1 end
+    end
+  end
   local out = {}
   for i = 1, n do out[#out + 1] = list[i] end
   local blockRows = math.ceil(n / COLS)
@@ -268,6 +286,7 @@ function Refresh()
   upButton:SetEnabled(first > 0)
   downButton:SetEnabled(first + ROWS < total)
   emptyText:SetShown(#list == 0)
+  emptyText:SetText(query ~= "" and L.MAIL_SEARCH_NONE or L.MAIL_EMPTY)
   sortButton.text:SetText(SortName(M.db.sort))
 end
 M.Changed = function()
@@ -498,6 +517,22 @@ local function Build()
   manage:SetScript("OnClick", function(self) ClickSound(); ManageMenu(self) end)
   Skin("button", manage)
 
+  -- the search box: the game's own (magnifier, its grey "Search", the clear cross)
+  searchBox = CreateFrame("EditBox", "ClaraMailRecipientsSearch", panel, "SearchBoxTemplate")
+  searchBox:SetHeight(20)
+  searchBox:SetPoint("TOPLEFT", PAD + 6, -(TITLE_H + 31))
+  searchBox:SetPoint("RIGHT", panel, "RIGHT", -PAD - ARROWS_W, 0)
+  searchBox:SetAutoFocus(false)
+  searchBox:SetMaxLetters(32)
+  searchBox:HookScript("OnTextChanged", function(self)
+    local text = self:GetText() or ""
+    query = ns.SearchKey and ns:SearchKey(text) or text:lower()
+    first = 0
+    Refresh()
+  end)
+  searchBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  panel.search = searchBox
+
   -- the names, their rows' frames, the scroll arrows
   for r = 1, ROWS do Row(panel, r) end
   for i = 1, ROWS * COLS do Cell(panel, i) end
@@ -532,8 +567,13 @@ local function Build()
 
   -- the button by To: opens or shuts it
   toggle = CreateFrame("Button", "ClaraMailRecipientsButton", SendMailFrame)
-  toggle:SetSize(22, 22)
-  toggle:SetPoint("LEFT", SendMailNameEditBox, "RIGHT", 8, 0)
+  toggle:SetSize(24, 24)
+  -- the window's bottom right: above Cancel, right of Send Money / C.O.D.
+  if SendMailCancelButton then
+    toggle:SetPoint("BOTTOMRIGHT", SendMailCancelButton, "TOPRIGHT", -2, 6)
+  else
+    toggle:SetPoint("LEFT", SendMailNameEditBox, "RIGHT", 8, 0)
+  end
   local icon = toggle:CreateTexture(nil, "ARTWORK")
   icon:SetTexture("Interface\\Icons\\INV_Letter_15")
   icon:SetTexCoord(.06, .94, .06, .94)
@@ -577,6 +617,8 @@ function M.OnShow()
   if not (SendMailFrame and SendMailNameEditBox and MailFrame) then return end
   if not panel then Build() end
   first = 0
+  if searchBox and searchBox:GetText() ~= "" then searchBox:SetText("") end -- (each visit to the mailbox: all the names)
+  query = ""
   panel:SetShown(M.db.open == true)
   if panel:IsShown() then
     Anchor()
