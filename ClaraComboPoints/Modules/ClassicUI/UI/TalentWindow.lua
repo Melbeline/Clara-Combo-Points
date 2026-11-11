@@ -247,7 +247,8 @@ local function Button_OnClick(self, mouse)
         if link and not IsSecret(link) then ChatFrameUtil.InsertLink(link) end
         return
     end
-    if not talent or not tree or tree.inspect or InCombatLockdown() then return end
+    -- (in a fight too, as the game's own window: a click only stages; Apply asks the game)
+    if not talent or not tree or tree.inspect then return end
     if mouse == "RightButton" then
         if talent.canRefund then pcall(C_Traits.RefundRank, tree.configID, talent.nodeID) end
     elseif talent.canBuy then
@@ -255,6 +256,29 @@ local function Button_OnClick(self, mouse)
     end
     window.spec.refresh()
     if GameTooltip:IsOwned(self) then Button_OnEnter(self) end
+end
+
+-- Apply in a fight: the game's own rule, as its talent window has it (Blizzard_ClassTalentsFrame:
+-- GetConfigApplicationState): its class talents when C_ClassTalents.CanChangeTalents says they can change or only
+-- take new points (a level gained in the fight); another tree (the Legacy window's) when C_Traits.CanEditConfig
+-- allows it. Out of a fight, as before. Returns false and the game's own reason when it says no.
+function ns.TalentsMayApply(tree)
+    if not InCombatLockdown() then return true end
+    -- the class talents: a combat config (the game's own test, Blizzard_ClassTalentsFrame)
+    local info = tree.configID and C_Traits and C_Traits.GetConfigInfo and C_Traits.GetConfigInfo(tree.configID)
+    local types = Enum and Enum.TraitConfigType or {}
+    local class = info and (info.type == types.Combat or (types.CamelotCombat ~= nil and info.type == types.CamelotCombat))
+    if C_ClassTalents and C_ClassTalents.CanChangeTalents and (class or not tree.configID) then
+        local ok, canChange, canAdd, why = pcall(C_ClassTalents.CanChangeTalents)
+        if ok and (canChange or canAdd) then return true end
+        return false, ok and why or nil
+    end
+    if C_Traits and C_Traits.CanEditConfig and tree.configID then
+        local ok, can, why = pcall(C_Traits.CanEditConfig, tree.configID)
+        if ok and can then return true end
+        return false, ok and why or nil
+    end
+    return false
 end
 
 local function TalentButton(frame, index)
@@ -476,7 +500,12 @@ local function BuildFoot(frame, spec)
     frame.learn:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", -36, 101)
     frame.learn:SetScript("OnClick", function()
         local tree = frame.tree
-        if not tree or InCombatLockdown() then return end
+        if not tree then return end
+        local may, why = ns.TalentsMayApply(tree)
+        if not may then
+            if UIErrorsFrame then UIErrorsFrame:AddMessage(why or ERR_NOT_IN_COMBAT or "", 1, .1, .1) end
+            return
+        end
         spec.learn(tree)
         spec.refresh()
     end)
