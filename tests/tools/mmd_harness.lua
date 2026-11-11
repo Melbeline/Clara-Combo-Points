@@ -27,6 +27,8 @@ mockmeta = {
     if k == "IsEnabled" then return function() return true end end
     if k == "GetChildren" or k == "GetRegions" then return function() end end
     if k == "SetScript" then return function(self, ev, fn) self.__scripts[ev] = fn end end
+    if k == "SetFrameStrata" then return function(self, v) rawset(self, "__strata", v) end end
+    if k == "SetFrameLevel" then return function(self, v) rawset(self, "__level", v) end end
     if k == "GetScript" then return function(self, ev) return self.__scripts[ev] end end
     if k == "HookScript" then return function(self, ev, fn) local o = self.__scripts[ev]; self.__scripts[ev] = function(...) if o then o(...) end return fn(...) end end end
     if k == "GetTexture" then return function() return 0 end end
@@ -283,7 +285,14 @@ sw[1].set(true); sw[2].set(true)
 assert(ns:CanOpenQol("minimapdrawer"), "its drawer opens from the tab")
 ns:OpenQol("minimapdrawer")
 assert(#addonCalls == 0, "no addon turned off or on")
-print("built in: runs, its circle on the level text, its drawer beside it, quiet, its switches")
+-- its circle under every window (UIParent's level in their strata), over the low strata (minimap, player frame)
+assert(rawget(hotspot, "__strata") == "MEDIUM" and rawget(hotspot, "__level") == 1, "circle: MEDIUM at UIParent's level, got "
+  .. tostring(rawget(hotspot, "__strata")) .. " " .. tostring(rawget(hotspot, "__level")))
+env.SlashCmdList.MINIMAPDRAWER("unlock")
+assert(rawget(hotspot, "__strata") == "DIALOG" and rawget(hotspot, "__level") == 100, "move mode: over the drawer's veil")
+env.SlashCmdList.MINIMAPDRAWER("lock")
+assert(rawget(hotspot, "__strata") == "MEDIUM" and rawget(hotspot, "__level") == 1, "locked again: back under the windows")
+print("built in: runs, its circle on the level text, its drawer beside it, quiet, its switches, under the windows")
 
 -- 2. Placed by hand earlier: kept where it was put
 ns = Session({ saved = { hotspot = { x = 300, y = 400, size = 40 }, menuPos = { x = 700, y = 500 } } })
