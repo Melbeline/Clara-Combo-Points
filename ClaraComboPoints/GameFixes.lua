@@ -648,6 +648,10 @@ function ns:MouseReport()
       tostring(Plain(relPoint)), Num(x), Num(y), Num(Call(fs, "GetLeft")))
   end
   for _, line in ipairs(ns.BarTextsReport and ns:BarTextsReport(TextLine) or {}) do out[#out + 1] = line end
+  if ns.HudIconsReport then
+    local ok, lines = pcall(ns.HudIconsReport, ns)
+    if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
+  end
   local text = table.concat(out, "\n")
   -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
   if ns.sv then ns.sv.mouseReport = text end
