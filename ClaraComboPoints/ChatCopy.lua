@@ -3,8 +3,9 @@
 -- text by its number). Web addresses in the chat are links: a click on one, the same. The game lets
 -- no addon write to the clipboard, so the text comes up selected in a small box at the mouse:
 -- Ctrl+C copies it and closes the box (Escape, or a click elsewhere, closes it too).
--- In the menu, Copy Chat Message stands before Copy Character Name when its name is the shorter of
--- the two, last otherwise.
+-- In the menu, Copy Chat Message is last: the game lets an addon add only after its own entries (one put
+-- higher moves the game's, which are then refused what they do: Copy Character Name's clipboard). Not in
+-- combat: the menu's buttons made for an addon's entries are refused their frame level then.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -75,33 +76,14 @@ local function Plain(text)
   return text
 end
 
-local measure
-local function Width(text)
-  if not measure then
-    measure = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    measure:Hide()
-  end
-  measure:SetText(text)
-  local w = measure:GetStringWidth()
-  if not w or w <= 0 then return strlenutf8 and strlenutf8(text) or #text end
-  return w
-end
-
 local function AddCopyLine(_, root, contextData)
+  if InCombatLockdown() then return end
   local lineID = contextData and contextData.lineID
   if not lineID or issecret(lineID) or not (C_ChatInfo and C_ChatInfo.GetChatLineText) then return end
-  local button = MenuUtil.CreateButton(L.COPY_CHAT_MESSAGE, function()
+  root:CreateButton(L.COPY_CHAT_MESSAGE, function()
     local ok, text = pcall(C_ChatInfo.GetChatLineText, lineID)
     if ok and type(text) == "string" and not issecret(text) then ns.ShowCopyBox(Plain(text)) end
   end)
-  -- before Copy Character Name if shorter, last otherwise
-  local at
-  if COPY_CHARACTER_NAME and Width(L.COPY_CHAT_MESSAGE) < Width(COPY_CHARACTER_NAME) then
-    for index, description in root:EnumerateElementDescriptions() do
-      if MenuUtil.GetElementText(description) == COPY_CHARACTER_NAME then at = index break end
-    end
-  end
-  if at then root:Insert(button, at) else root:Insert(button) end
 end
 
 if Menu and Menu.ModifyMenu and MenuUtil and MenuUtil.CreateButton then
