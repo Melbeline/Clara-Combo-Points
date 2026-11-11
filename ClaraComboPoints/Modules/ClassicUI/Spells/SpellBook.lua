@@ -1409,6 +1409,7 @@ local function CreateBook()
                 lineContainer[line] = c
             end
         end
+        pages.hasPet = hasPet -- (the pet's pages armed: its tab works; UpdateBookTabs)
         if hasPet then
             index = index + 1
             local c = containers[index] or NewContainer(index)
@@ -1668,6 +1669,21 @@ local function CreateBook()
     function f:UpdateBookTabs()
         local narrow = ns.BookCollectionsTab and ns.BookCollectionsTab() or false
         local petCount, token = PetSpellCount()
+        -- A pet tamed (or let go) with the book open: its pages armed again at once, out of combat; in combat its
+        -- secure pages can't be made, so its tab waits for the fight's end (built then: the follow frame above),
+        -- never shown dead (a tab with no page: a click did nothing until the book was opened again).
+        local pages = self.Pages
+        if pages and pages.built and (petCount > 0) ~= (pages.hasPet == true) then
+            if InCombatLockdown() then
+                pages.dirty = true
+                if petCount > 0 then petCount = 0 end
+            elseif self.BuildPages and not self.buildingForPet then
+                pages.dirty = true
+                self.buildingForPet = true
+                self:BuildPages()
+                self.buildingForPet = nil
+            end
+        end
         LayTabs(narrow, petCount > 0)
         narrow = laidNarrow
         -- Spellbook, Professions, then the optional pet tab, so the fixed two keep
