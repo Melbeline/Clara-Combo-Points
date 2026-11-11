@@ -204,7 +204,7 @@ ns.DB_DEFAULTS = {
     -- Bar 1's Hide Bar Art as the player ticked it on our layout (Bar/BandBare.lua).
     barArtHidden = false,
     statusBarBacking = true,
-    xpTipRested = false,
+    xpTipRested = true,
     spellBookCollectionsTab = true,
     focusBuffsOnTop = false, petBuffsOnTop = false,
     panelAchievements = true,

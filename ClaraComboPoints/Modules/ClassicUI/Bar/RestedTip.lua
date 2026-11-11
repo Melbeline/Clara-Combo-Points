@@ -3,33 +3,38 @@ if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
 local L = ns.L
 
--- Rested XP in the XP bar's tooltip (option, off by default): a line under the client's title (#182).
+-- Rested XP in the XP bar's tooltip (option, on by default): on the client's rest line, after its name
+-- ("Rested  xp : 1600 - 10%": the rested XP left, and what it is of the level), as 1.x players read it.
 
-local kept = {}   -- the client's lines after its title: text, r, g, b each
+local function Escape(text) return (text:gsub("[%%%(%)%.%+%-%*%?%[%]%^%$]", "%%%0")) end
 
 local function RestedLine()
     if not (ns.db and ns.db.xpTipRested == true) then return end
-    if not GameTooltip:IsShown() or GameTooltip:GetOwner() ~= UIParent then return end
+    if not GameTooltip:IsShown() then return end
     local rest, most = GetXPExhaustion(), UnitXPMax("player")
     if not rest or ns.AnySecret(rest, most) or rest <= 0 or most <= 0 then return end
-    local first = _G.GameTooltipTextLeft1
-    local title = first and first:GetText()
-    if not title or ns.IsSecret(title) then return end
-    local count = 0
+    local _, stateName = GetRestState()
+    if type(stateName) ~= "string" or ns.IsSecret(stateName) or stateName == "" then return end
+    local head = L["UI_RESTED_XP_INLINE"]:format(stateName, BreakUpLargeNumbers(rest), math.floor(rest / most * 100 + .5))
     for i = 2, GameTooltip:NumLines() do
         local line = _G["GameTooltipTextLeft" .. i]
-        local r, g, b = line:GetTextColor()
-        kept[count + 1], kept[count + 2], kept[count + 3], kept[count + 4] = line:GetText() or " ", r, g, b
-        count = count + 4
+        local text = line and line:GetText()
+        if type(text) == "string" and not ns.IsSecret(text) and text:find("^" .. Escape(stateName)) then
+            if text:find(head, 1, true) then return end -- (already there)
+            line:SetText((text:gsub("^" .. Escape(stateName), (head:gsub("%%", "%%%%")), 1)))
+            GameTooltip:Show()
+            return
+        end
     end
-    GameTooltip_SetTitle(GameTooltip, title)
-    GameTooltip:AddLine(L["UI_RESTED_XP_LINE"]:format(BreakUpLargeNumbers(rest), string.format("%.1f", rest / most * 100)),
-        1, 1, 1, true)
-    for i = 1, count, 4 do GameTooltip:AddLine(kept[i], kept[i + 1], kept[i + 2], kept[i + 3], true) end
-    GameTooltip:Show()
 end
 
 ns.EventFrame("PLAYER_LOGIN", function()
+    -- (on by default: put on once for those who had it off from before)
+    local sv = ClaraNS.sv
+    if ns.db and sv and not sv.cuiRestedOn then
+        ns.db.xpTipRested = true
+        sv.cuiRestedOn = true
+    end
     for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
         for _, bar in pairs(container and container.bars or {}) do
             if bar.ExhaustionTick then ns.HookScriptOnce(bar, "OnEnter", RestedLine) end
