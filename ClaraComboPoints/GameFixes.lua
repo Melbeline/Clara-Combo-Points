@@ -15,6 +15,7 @@
 -- And a loot window left empty closed (a corpse clicked again and again while its items were on their way).
 -- And the minimap's tracking (Find Herbs, Find Minerals, a hunter's tracking) given back after a death.
 -- And the quest tracker folded again as it was left (the whole tracker and each of its sections).
+-- And /played always answered in the chat (in a fight it showed nothing).
 
 local ADDON, ns = ...
 
@@ -952,4 +953,40 @@ foldEvents:SetScript("OnEvent", function(self, event, isLogin, isReload)
   elseif isLogin or isReload then -- (the game's tracker set up on the same event: a moment later)
     C_Timer.After(1, function() Fold() end)
   end
+end)
+
+---------------------------------------------------------------------------
+-- /played always answered. In a fight the game's answer (TIME_PLAYED_MSG) came, and no chat window showed it.
+-- Looked at the next frame: a line with the game's own "Total time played" text written meanwhile in a chat
+-- window means it was shown; else written in the main chat window by the game's own function, as it writes it.
+---------------------------------------------------------------------------
+local playedSeen = 0 -- lines of the game's /played text written in the chat windows
+local playedPrefix = type(TIME_PLAYED_TOTAL) == "string" and TIME_PLAYED_TOTAL:match("^(.-)%%") or nil
+local watchedChats = {}
+local function WatchChat(frame)
+  if not frame or watchedChats[frame] or not frame.AddMessage or not playedPrefix or playedPrefix == "" then return end
+  watchedChats[frame] = true
+  hooksecurefunc(frame, "AddMessage", function(_, text)
+    if type(text) == "string" and not issecretvalue(text) and text:find(playedPrefix, 1, true) then
+      playedSeen = playedSeen + 1
+    end
+  end)
+end
+
+local played = CreateFrame("Frame")
+played:RegisterEvent("PLAYER_LOGIN")
+played:RegisterEvent("TIME_PLAYED_MSG")
+played:SetScript("OnEvent", function(_, event, total, level)
+  if event == "PLAYER_LOGIN" then
+    for i = 1, NUM_CHAT_WINDOWS or 10 do WatchChat(_G["ChatFrame" .. i]) end
+    return
+  end
+  if not playedPrefix then return end
+  local before = playedSeen
+  C_Timer.After(0, function()
+    if playedSeen > before then return end -- (shown by the game)
+    if issecretvalue(total) or issecretvalue(level) or type(total) ~= "number" or type(level) ~= "number" then return end
+    local Display = ChatFrameUtil and ChatFrameUtil.DisplayTimePlayed or ChatFrame_DisplayTimePlayed
+    if DEFAULT_CHAT_FRAME and Display then pcall(Display, DEFAULT_CHAT_FRAME, total, level) end
+  end)
 end)
