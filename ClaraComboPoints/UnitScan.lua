@@ -4,7 +4,8 @@
 -- means only: your target, the mouseover, the nameplates as they come, your group's targets. Then a
 -- sound (twice), the screen's edges flashing red, the game's icon flashing in the taskbar (even with
 -- Clara's "don't flash" box: let through for this alert only, put back once you are in the game
--- again), and a window: a click on it targets the creature (/targetexact, out of combat).
+-- again), and a window: a click on it targets the creature (out of combat): by its name (/targetexact), and by its
+-- nameplate while one shows it (/target [@nameplateN]: whatever its name reads in this client, wherever it stands).
 -- Other players' sightings: those of UnitScan Hardcore Forever (its hidden channel ushccomms, and its
 -- messages in the guild and the group) are always heard; on your map (and your layer, when
 -- NovaWorldBuffs knows both), close by: the alert; further: a line in the chat with a map pin. Yours go
@@ -273,13 +274,33 @@ local function Windows()
   Place(plain)
 end
 
+-- The click's macro: the name, then the nameplate showing this very creature, if one does (its GUID)
+local function PlateOf(guid)
+  if type(guid) ~= "string" then return nil end
+  for i = 1, 40 do
+    local unit = "nameplate" .. i
+    local g = UnitGUID(unit)
+    if g and not issecret(g) and g == guid then return unit end
+  end
+end
+local function Macro()
+  local text = "/targetexact " .. current.name
+  local plate = PlateOf(current.guid)
+  if plate then text = text .. "\n/target [@" .. plate .. "]" end
+  return text
+end
+-- (a nameplate come or gone while the window shows, out of combat: the click follows)
+local function Retarget()
+  if current and secure and secure:IsShown() and not InCombatLockdown() then secure:SetAttribute("macrotext1", Macro()) end
+end
+
 local function Show()
   if not current then return end
   Windows()
   local window = plain
   if not InCombatLockdown() then
     window = secure
-    secure:SetAttribute("macrotext1", "/targetexact " .. current.name)
+    secure:SetAttribute("macrotext1", Macro())
     plain:Hide()
     Place(secure)
   end
@@ -295,8 +316,8 @@ regen:SetScript("OnEvent", function(self)
   if current and plain and plain:IsShown() then Show() end
 end)
 
-local function Window(name, sub)
-  current = { name = name, sub = sub, untilAt = GetTime() + SHOWN_FOR }
+local function Window(name, sub, guid)
+  current = { name = name, sub = sub, guid = guid, untilAt = GetTime() + SHOWN_FOR }
   Show()
   if InCombatLockdown() then regen:RegisterEvent("PLAYER_REGEN_ENABLED") end
 end
@@ -307,14 +328,14 @@ end
 local alerted, shared, told = {}, {}, {}   -- key -> when: the alert, sent (or heard), the far line
 local Share
 
-local function Found(name, key, sub, mine, npc)
+local function Found(name, key, sub, mine, npc, guid)
   local now = GetTime()
   if (alerted[key] and now - alerted[key] < COOLDOWN) or (UnitOnTaxi and UnitOnTaxi("player")) then return end
   alerted[key] = now
   if ns:ScanOption("sound") then Sound() end
   if ns:ScanOption("flash") then Flash() end
   if ns:ScanOption("taskbar") then Taskbar() end
-  Window(name, sub)
+  Window(name, sub, guid)
   if mine and npc and ns:ScanOption("send") then Share(name, key) end
 end
 ns.ScanFound = Found -- (for the test button and the tests)
@@ -340,13 +361,18 @@ local function Look(unit)
   local id = NpcID(unit)
   if id and ns.RARES and ns.RARES[id] and ns:ScanOption("rares") then
     local class = UnitClassification(unit)
-    Found(name, "#" .. id, not issecret(class) and class == "rareelite" and L.SCAN_RARE_ELITE or L.SCAN_RARE, true, true)
+    local guid = UnitGUID(unit)
+    if issecret(guid) then guid = nil end
+    Found(name, "#" .. id, not issecret(class) and class == "rareelite" and L.SCAN_RARE_ELITE or L.SCAN_RARE, true, true, guid)
     return
   end
   local names = Names()
   if (names and next(names)) or HuntKey() then
     local key = ns:SearchKey(name)
-    if (names and names[key]) or HuntKey() == key then Found(name, key, L.SCAN_SEEN, true, true) end
+    if (names and names[key]) or HuntKey() == key then
+      local guid = UnitGUID(unit)
+      Found(name, key, L.SCAN_SEEN, true, true, not issecret(guid) and guid or nil)
+    end
   end
 end
 
@@ -670,6 +696,9 @@ local events = CreateFrame("Frame")
 events:SetScript("OnEvent", function(_, event, a1, a2, a3, a4, ...)
   if event == "NAME_PLATE_UNIT_ADDED" then
     Look(a1)
+    Retarget()
+  elseif event == "NAME_PLATE_UNIT_REMOVED" then
+    C_Timer.After(0, Retarget)
   elseif event == "PLAYER_TARGET_CHANGED" then
     Look("target")
   elseif event == "UPDATE_MOUSEOVER_UNIT" then
@@ -688,7 +717,7 @@ end)
 
 local function Start()
   if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
-  for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "UNIT_TARGET",
+  for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "UNIT_TARGET",
     "CHAT_MSG_CHANNEL", "CHAT_MSG_ADDON", "PLAYER_ENTERING_WORLD" }) do
     events:RegisterEvent(event)
   end
