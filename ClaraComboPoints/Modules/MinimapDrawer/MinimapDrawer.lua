@@ -1479,9 +1479,14 @@ menu:SetScript("OnHide", function() editBox:ClearFocus() end)
 ---------------------------------------------------------------------
 -- Zone sensible (cercle du niveau)
 ---------------------------------------------------------------------
+-- (Clara Combo Points: in the windows' strata at UIParent's own level, so under every window (bags, character, quests:
+-- all a level above it) and over the whole low strata (minimap, player frame, chat), however high a click raises them;
+-- in HIGH it lay over the bags, and a click on a bag's close button there opened the drawer)
+local HOTSPOT_STRATA = "MEDIUM"
+local function HotspotLevel() return UIParent:GetFrameLevel() end
 hotspot = CreateFrame("Button", "MinimapDrawerHotspot", UIParent)
-hotspot:SetFrameStrata("HIGH")
-hotspot:SetFrameLevel(50)
+hotspot:SetFrameStrata(HOTSPOT_STRATA)
+hotspot:SetFrameLevel(HotspotLevel())
 hotspot:SetSize(DEFAULT_HOTSPOT_SIZE, DEFAULT_HOTSPOT_SIZE)
 hotspot:SetMovable(true)
 hotspot:SetClampedToScreen(true)
@@ -1699,8 +1704,8 @@ local function SetUnlocked(flag, keepOpen)
     hotspot:EnableMouseWheel(flag)
     -- En mode déplacement, la zone passe au-dessus du voile : on peut toujours l'attraper,
     -- même si le menu a été posé par-dessus.
-    hotspot:SetFrameStrata(flag and "DIALOG" or "HIGH")
-    hotspot:SetFrameLevel(flag and 100 or 50)
+    hotspot:SetFrameStrata(flag and "DIALOG" or HOTSPOT_STRATA)
+    hotspot:SetFrameLevel(flag and 100 or HotspotLevel())
     overlay:SetShown(flag)
     if flag then
         ring:Show()
