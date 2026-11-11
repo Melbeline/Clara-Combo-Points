@@ -5,6 +5,7 @@
 -- folder: ICKSTU, WANJ; 123456789#1 shown as WoW1), or one the player gives it. Shown by a right click on
 -- the money at the bottom of the backpack (MoneyUI.lua). Saved in ClaraMoneyDB, for the account.
 local ADDON, ns = ...
+local issecretvalue = issecretvalue or function() return false end
 
 local G = {}
 ns.Money = nil -- (set below when the module runs: the sync takes the gold only then)
@@ -24,6 +25,7 @@ local function CleanChar(rec, at)
   if type(rec) ~= "table" then return nil end
   local out = {
     n = type(rec.n) == "string" and rec.n or nil,
+    s = type(rec.s) == "string" and rec.s ~= "" and rec.s:sub(1, 48) or nil, -- (its surname: WoW Forever's names)
     r = type(rec.r) == "string" and rec.r or "",
     c = type(rec.c) == "string" and rec.c or nil,
     l = type(rec.l) == "number" and math.floor(rec.l) or 0,
@@ -119,6 +121,14 @@ local function Me()
 end
 G.Me = Me
 
+-- This character's surname (WoW Forever: "First Surname"), or nil
+local function Surname()
+  if not UnitNameUnmodified then return nil end
+  local ok, _, surname = pcall(UnitNameUnmodified, "player")
+  if not ok or type(surname) ~= "string" or issecretvalue(surname) or surname == "" then return nil end
+  return surname
+end
+
 local function Record()
   if not G.db then return end
   local key, name, realm = Me()
@@ -126,9 +136,10 @@ local function Record()
   local money = GetMoney and GetMoney() or 0
   local level = UnitLevel and UnitLevel("player") or 0
   local _, class = UnitClass("player")
+  local surname = Surname()
   local old = G.db.chars[key]
-  if old and old.m == money and old.l == level and old.c == class and old.a == G.db.me then return end
-  G.db.chars[key] = { n = name, r = realm, c = class, l = level, m = money, a = G.db.me, at = time() }
+  if old and old.m == money and old.l == level and old.c == class and old.a == G.db.me and old.s == surname then return end
+  G.db.chars[key] = { n = name, s = surname, r = realm, c = class, l = level, m = money, a = G.db.me, at = time() }
   G.db.gone[key] = nil
   if G.Touched then G.Touched("g", key) end
   if G.Changed then G.Changed() end
@@ -171,6 +182,18 @@ function G.Accounts()
   end)
   return list
 end
+
+-- When an account's characters were last heard of (the newest of their records), or nil
+function G.Updated(id)
+  local newest
+  for _, rec in pairs(G.db.chars) do
+    if rec.a == id and type(rec.at) == "number" and rec.at > 1 and (not newest or rec.at > newest) then newest = rec.at end
+  end
+  return newest
+end
+
+-- A character's whole name: "First Surname" (the first name alone for a record made before surnames were kept)
+function G.FullName(rec) return rec.s and (rec.n .. " " .. rec.s) or rec.n end
 
 function G.Total(id)
   local sum = 0
