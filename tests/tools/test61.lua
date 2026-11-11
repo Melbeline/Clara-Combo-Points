@@ -41,9 +41,12 @@ local function Count(prefix) local n = 0 for _, l in ipairs(tip._lines) do if l:
 -- the game's raid-style party frame: hidden solo, shown in a group (the game's rule)
 CompactPartyFrame = CreateFrame("Frame", "CompactPartyFrame", UIParent)
 CompactPartyFrame:Hide()
+CompactPartyFrame._protected = true -- (its unit buttons are the game's secure ones)
+function SecureHandlerSetFrameRef(frame, name, ref) frame:SetAttribute("frameref-" .. name, ref) end
 local gameRuns = 0
 function CompactPartyFrame:UpdateVisibility()
   gameRuns = gameRuns + 1
+  if S.inCombat then self._shown = IsInGroup() and true or false return end -- (the game's own secure code: allowed)
   self:SetShown(IsInGroup() and true or false)
 end
 
@@ -104,13 +107,41 @@ check(CompactPartyFrame:IsShown(), "solo: the raid-style party frame shown (the 
 S.group = "party"
 CompactPartyFrame:UpdateVisibility()
 check(CompactPartyFrame:IsShown(), "in a group: the game's rule")
+local function Run() local n = 0 while M.timers and #M.timers > 0 and n < 100 do M.RunTimer() n = n + 1 end end
+Run()
+-- the game's secure state driver: its value as the game would resolve it, the snippet run as its restricted code would
+local driver, drive
+for f, d in pairs(M.stateDrivers) do if d[1] == "solo" then driver, drive = f, d[2] end end
+check(driver ~= nil and drive == "[group] grouped; [combat] fight; solo", "a secure state driver on the group (" .. tostring(drive) .. ")")
+local function Resolve()
+  local state = IsInGroup() and "grouped" or (S.inCombat and "fight" or "solo")
+  local snippet = driver:GetAttribute("_onstate-solo")
+  -- (the restricted environment's frame handle: Show allowed on a protected frame in combat)
+  local function Handle(f) return { IsShown = function() return f:IsShown() end, IsProtected = function() return f:IsProtected() end, Show = function() f._shown = true end } end
+  local handle = { GetFrameRef = function(_, name) return Handle(driver:GetAttribute("frameref-" .. name)) end }
+  local fn = assert(loadstring("local self, stateid, newstate = ...\n" .. snippet))
+  fn(handle, "solo", state)
+end
 S.group = nil; S.inCombat = true
-CompactPartyFrame:SetShown(false)
-CompactPartyFrame:UpdateVisibility()
-check(not CompactPartyFrame:IsShown(), "left the group in combat: not touched")
+local blockedBefore = #M.blocked
+CompactPartyFrame._shown = false -- (hidden by the game's own secure code, as the group ends in the fight)
+CompactPartyFrame:UpdateVisibility(); Run()
+check(not CompactPartyFrame:IsShown(), "left the group in combat: not shown by the addon's own code (protected then)")
+Resolve()
+check(CompactPartyFrame:IsShown(), "the game's state driver shows it at once, in combat")
+local mine = 0
+for i = blockedBefore + 1, #M.blocked do if M.blocked[i]:find("CompactPartyFrame") then mine = mine + 1 end end
+check(mine == 0, "nothing of the addon's refused by the game in the fight")
+CompactPartyFrame._shown = false
 S.inCombat = false
-M.Fire("PLAYER_REGEN_ENABLED")
+M.Fire("PLAYER_REGEN_ENABLED"); Run()
 check(CompactPartyFrame:IsShown(), "out of combat: shown")
+-- an invitation declined: the group told gone after the game's update (hidden directly by its raid container)
+S.group = "party"; CompactPartyFrame:UpdateVisibility(); Run()
+CompactPartyFrame:Hide() -- (the container's unused group frame: Hide, not UpdateVisibility)
+S.group = nil
+Run()
+check(CompactPartyFrame:IsShown(), "hidden directly, the group gone a moment later: shown again")
 
 out("")
 out(fails .. " failure(s)")

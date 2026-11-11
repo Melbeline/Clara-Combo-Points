@@ -44,9 +44,9 @@ out("== the portrait's menu")
 local menu = M.OpenUnitMenu("SELF")
 local texts = M.UnitMenuTexts()
 local order = table.concat(texts, " | ")
-check(order:find("<divider> | Clara Combo Points | <frame> | More... | <divider> | Other Options | Reload UI | Edit Mode | Voice Chat | Leave Party", 1, true) ~= nil
-  and order:sub(-11) == "Leave Party",
-  "the addon's section just above Other Options (Reload UI above Edit Mode), Leave Party last (" .. order .. ")")
+check(order:find("Other Options | Edit Mode | Voice Chat | Leave Party | <divider> | Clara Combo Points | Reload UI | <frame> | More...", 1, true) ~= nil
+  and order:sub(-7) == "More...",
+  "the game's entries as they are (none moved), the addon's section after them: Reload UI, the line, More... (" .. order .. ")")
 local lineFrame
 for i, d in ipairs(menu.root.elements) do if d.kind == "frame" then lineFrame = menu.frames[i] end end
 local line

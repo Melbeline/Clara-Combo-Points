@@ -6,7 +6,12 @@ local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c th
 -- Blizzard menu API, as in Blizzard_Menu (proxies carry .text, Insert(desc, index))
 HUD_EDIT_MODE_MENU = "Edit Mode"
 local callbacks = {}
-Menu = { ModifyMenu = function(tag, fn) callbacks[tag] = fn end }
+local lists = {}
+Menu = { ModifyMenu = function(tag, fn)
+  lists[tag] = lists[tag] or {}
+  table.insert(lists[tag], fn)
+  callbacks[tag] = function(...) for _, f in ipairs(lists[tag]) do f(...) end end
+end }
 MenuUtil = {
   GetElementText = function(d) return d.text end,
   CreateButton = function(text, fn) return { text = text, fn = fn } end,
@@ -33,30 +38,35 @@ M.LoadAddon(ADDON_DIR, ns)
 M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN")
 check(callbacks.MENU_UNIT_SELF ~= nil, "hooked the player's own portrait menu (MENU_UNIT_SELF) only")
 -- (and the menu of a name in the chat: Copy Chat Message, ChatCopy.lua)
-local n = 0 for tag in pairs(callbacks) do if tag ~= "MENU_UNIT_FRIEND" and tag ~= "MENU_UNIT_BN_FRIEND" then n = n + 1 end end
-check(n == 1 and callbacks.MENU_UNIT_FRIEND ~= nil, "no other menu touched (but the chat name's, for Copy Chat Message)")
+local others = {}
+for tag in pairs(callbacks) do
+  if not (tag == "MENU_UNIT_SELF" or tag == "MENU_UNIT_FRIEND" or tag == "MENU_UNIT_BN_FRIEND" or tag == "MENU_UNIT_PARTY"
+    or tag == "MENU_UNIT_RAID_PLAYER" or tag == "MENU_FCF_TAB" or tag == "MENU_PROFESSIONS_FILTER") then others[#others + 1] = tag end
+end
+check(#others == 0 and callbacks.MENU_UNIT_FRIEND ~= nil, "no other menu touched (the chat name's: Copy Chat Message; the group's: its loot line; the chat tab's; the professions filter) " .. table.concat(others, ","))
 
-local root = Root({ "Lola", "Target Marker Icon", "Set Focus", "Self Highlight", "Player vs. Player", "Loot Options",
-  "Pass on Loot: No", "Instance Options", "Reset all instances", "Other Options", "Edit Mode", "Voice Chat" })
+local GAME = { "Lola", "Target Marker Icon", "Set Focus", "Self Highlight", "Player vs. Player", "Loot Options",
+  "Pass on Loot: No", "Instance Options", "Reset all instances", "Other Options", "Edit Mode", "Voice Chat", "Leave Party" }
+local root = Root(GAME)
 callbacks.MENU_UNIT_SELF(nil, root, {})
 out("  " .. texts(root))
-check(root.items[11].text == "Reload UI" and root.items[10].text == "Other Options" and root.items[12].text == "Edit Mode",
-  "Reload UI between the Other Options title and Edit Mode")
-root.items[11].fn()
+local same = true
+for i, t in ipairs(GAME) do if root.items[i].text ~= t then same = false end end
+check(same, "the game's own entries left where they are (none moved: Leave Party still the last of them)")
+check(root.items[#GAME + 1] and root.items[#GAME + 1].text == "Reload UI", "Reload UI after them, at the menu's end")
+root.items[#GAME + 1].fn()
 check(reloads == 1, "clicking it reloads the interface")
 
-local root2 = Root({ "Lola", "Set Focus" })
-callbacks.MENU_UNIT_SELF(nil, root2, {})
-check(root2.items[3] and root2.items[3].text == "Reload UI", "no Edit Mode entry: added at the end")
+S.inCombat = true
+local fight = Root(GAME)
+callbacks.MENU_UNIT_SELF(nil, fight, {})
+check(#fight.items == #GAME, "in combat: nothing added to the menu (the game blocked an addon's entries then)")
+S.inCombat = false
 
 ns:SetLanguage("frFR")
 local root3 = Root({ "Lola", "Other Options", "Edit Mode" })
 callbacks.MENU_UNIT_SELF(nil, root3, {})
-check(root3.items[3].text == "Recharger l'interface", "label follows the addon language")
-HUD_EDIT_MODE_MENU = "Mode Édition"
-local root4 = Root({ "Lola", "Autres options", "Mode Édition", "Discussion vocale" })
-callbacks.MENU_UNIT_SELF(nil, root4, {})
-check(root4.items[3].text == "Recharger l'interface" and root4.items[4].text == "Mode Édition", "found Edit Mode on a French client by Blizzard's own string")
+check(root3.items[4].text == "Recharger l'interface", "label follows the addon language")
 
 S.class = "WARRIOR"
 out(string.format("\n%d failure(s)", fails))

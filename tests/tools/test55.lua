@@ -20,6 +20,11 @@ local loaded = {}
 C_AddOns = C_AddOns or {}
 C_AddOns.IsAddOnLoaded = function(name) return loaded[name] == true end
 
+GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end -- (WoW Forever: the modules run; all off but Fishing)
+ClaraComboPointsDB = { qol = {} }
+for _, k in ipairs({ "lfgforever", "whatstraining", "doesitdie", "enhancedraidframes", "buyemall", "leatrix", "nodesight", "wst",
+  "dynamiccam", "dialogkey", "xtolevel", "minimapdrawer", "mail", "classicui", "tullarange", "names", "tooltipanchor", "idtip",
+  "soloraidframe", "enemycasts", "reverseengineering", "unitscan" }) do ClaraComboPointsDB.qol[k] = false end
 local ns = {}
 S.class = "MAGE"; S.locale = "enUS"
 M.LoadAddon(ADDON_DIR, ns)
@@ -40,10 +45,22 @@ local function FindLine()
   M.OpenUnitMenu("SELF")
   for _, fn in ipairs(M.menuModifiers.MENU_UNIT_SELF) do
     local found
-    local root = { elements = {} }
-    function root:EnumerateElementDescriptions() return ipairs(self.elements) end
-    function root:Insert(d, i) if i then table.insert(self.elements, i, d) else table.insert(self.elements, d) end return d end
-    function root:CreateButton(t, c) return self:Insert({ text = t, callback = c }) end
+    -- (the game's menu description, as Blizzard_Menu has it: each Create... adds at the end)
+    local function Description(fields)
+      local d = fields or {}
+      d.elements = {}
+      function d:EnumerateElementDescriptions() return ipairs(self.elements) end
+      function d:Insert(e, i) if i then table.insert(self.elements, i, e) else table.insert(self.elements, e) end return e end
+      function d:CreateButton(t, c) return self:Insert(Description({ text = t, callback = c })) end
+      function d:CreateTitle(t) return self:Insert(Description({ text = t, title = true })) end
+      function d:CreateDivider() return self:Insert(Description({ divider = true })) end
+      function d:CreateCheckbox(t, isSelected, setSelected)
+        return self:Insert(Description({ text = t, isSelected = isSelected, setSelected = setSelected, SetTooltip = function() end }))
+      end
+      function d:CreateFrame() return self:Insert(Description({ AddInitializer = function() end, AddResetter = function() end })) end
+      return d
+    end
+    local root = Description()
     fn(UIParent, root, {})
     for _, more in ipairs(root.elements) do
       for i, d in ipairs(more.elements or {}) do if d.text == "Fishing mode" then return d, i, more.elements end end

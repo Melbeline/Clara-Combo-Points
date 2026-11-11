@@ -124,7 +124,7 @@ local G = setmetatable(env, { __index = function(t, k)
 end })
 local function CreateFrame(ftype, name, parent, template)
   local f = Mock("frame")
-  rawset(f, "__type", ftype); rawset(f, "__parent", parent)
+  rawset(f, "__type", ftype); rawset(f, "__parent", parent); rawset(f, "__template", template)
   frames[#frames + 1] = f
   -- (a name already taken keeps its value: XToLevel names its frame as its own table, and runs)
   if type(name) == "string" and rawget(env, name) == nil then rawset(env, name, f) end

@@ -62,9 +62,9 @@ local function InMore(text)
 end
 local moreAt
 for i, t in ipairs(texts) do if t == "More..." then moreAt = i end end
-check(moreAt and texts[moreAt - 1] == "<frame>" and texts[moreAt + 1] == "<divider>" and texts[moreAt + 2] == "Other Options",
-  "More... last in the Clara Combo Points section, just above Other Options: " .. table.concat(texts, " | "))
-check(texts[#texts] == "Leave Party", "Leave Party still last")
+check(moreAt and texts[moreAt - 1] == "<frame>" and moreAt == #texts,
+  "More... last in the Clara Combo Points section, at the menu's end: " .. table.concat(texts, " | "))
+check(texts[moreAt - 5] == "Leave Party", "the game's own entries left as they are (Leave Party the last of them)")
 local d = InMore("Show damage meter")
 check(d ~= nil and More().elements[#More().elements].text == "Options", "the damage meter box under More..., Options last")
 check(d.isSelected() == true, "ticked: the meter shown")

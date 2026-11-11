@@ -239,20 +239,20 @@ function root:Insert(d, at) if at then table.insert(self.items, at, d) else tabl
 for _, t in ipairs({ "Agrodealer", "Interact", "Whisper", "Other Options", "Ignore", "Report Player", "Copy Character Name" }) do
   root:Insert({ text = t })
 end
+function root:CreateButton(text, fn) local d = { text = text, callback = fn } self:Insert(d) return d end
 menus.MENU_UNIT_FRIEND(UIParent, root, { lineID = 42, name = "Agrodealer" })
 local names = {} for i, d in ipairs(root.items) do names[i] = d.text end
-check(names[7] == "Copy Chat Message" and names[8] == "Copy Character Name", "shorter than Copy Character Name: just before it")
-local copy = root.items[7]
+check(names[7] == "Copy Character Name" and names[8] == "Copy Chat Message", "last, after the game's own entries (none moved)")
+local copy = root.items[8]
 copy.callback()
 local box = ClaraChatCopyBox
 check(box and box:IsShown() and box.edit:GetText() == "LFM 1 healer [Sword] 5v5 yolo", "a click: that line's message, without its markup, in the box")
 box:Hide()
--- longer than Copy Character Name: last
-ns.L.COPY_CHAT_MESSAGE = "Copy this whole chat message here"
+S.inCombat = true
 root.items = {}
-for _, t in ipairs({ "Report Player", "Copy Character Name", "Report AFK" }) do root:Insert({ text = t }) end
 menus.MENU_UNIT_FRIEND(UIParent, root, { lineID = 42 })
-check(root.items[#root.items].text == "Copy this whole chat message here", "longer than Copy Character Name: last")
+check(#root.items == 0, "in combat: not added (the game blocks an addon's menu entries then)")
+S.inCombat = false
 root.items = {}
 menus.MENU_UNIT_FRIEND(UIParent, root, {})
 check(#root.items == 0, "a name with no chat line (the friends list): nothing added")
