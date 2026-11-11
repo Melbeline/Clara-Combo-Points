@@ -42,6 +42,7 @@ end)
 -- picked for it in Chat settings, else the game's colour for channels (FFC0C0), L2P's 00A9FF.
 ---------------------------------------------------------------------------
 local DEFAULT_COLORS = { l2p = { 0, 169 / 255, 1 } }
+local loginAt -- (GetTime() at login)
 local CHANNEL_COLOR = { 1, 192 / 255, 192 / 255 } -- (FFC0C0, the game's own for a channel)
 
 local function Store()
@@ -63,6 +64,10 @@ local function Key(name)
   return (name:gsub("%s+%-%s+.*$", "")):lower()
 end
 
+-- The addons' hidden channels (UnitScan Hardcore's ushccomms, Clara Sync's): never among the player's own, always
+-- after them (joined last: UnitScan.lua, Sync.lua)
+local function Hidden(key) return key == "ushccomms" or key:find("^clarasync") ~= nil end
+
 -- The channels joined, by number: { { index = 1, key = "l2p", name = "L2P" }, ... }
 local function Joined()
   local list = {}
@@ -71,14 +76,23 @@ local function Joined()
   for i = 1, #raw, 3 do
     local index, name = raw[i], raw[i + 1]
     local key = Key(name)
-    if type(index) == "number" and key then list[#list + 1] = { index = index, key = key, name = name } end
+    if type(index) == "number" and key then list[#list + 1] = { index = index, key = key, name = name, hidden = Hidden(key) } end
   end
   return list
 end
 
+-- The channels settled after login (the game's and the ones the server rejoins come one by one for a few seconds):
+-- an addon's hidden channel is joined only then, to take the last number
+local lastChannelChange = 0
+local function Settled()
+  local now = GetTime()
+  if loginAt == nil then return false end
+  return now - loginAt >= 60 or (now - loginAt >= 10 and now - lastChannelChange >= 6)
+end
+
 local restoring = false
 local ORDER_WINDOW, MAX_SWAPS = 180, 20 -- (seconds after login; swaps a session)
-local loginAt, swapsDone = nil, 0
+local swapsDone = 0
 local function Swap(a, b)
   local swap = C_ChatInfo and C_ChatInfo.SwapChatChannelsByChannelIndex
   if not swap or a == b then return false end
@@ -93,10 +107,10 @@ local function KeepOrder()
   local c = Store()
   if not c then return end
   local order = {}
-  for _, ch in ipairs(Joined()) do order[#order + 1] = ch.key end
+  for _, ch in ipairs(Joined()) do if not ch.hidden then order[#order + 1] = ch.key end end
   -- the ones not joined now keep their place after them
   for _, key in ipairs(c.order) do
-    local seen = false
+    local seen = Hidden(key)
     for _, k in ipairs(order) do if k == key then seen = true break end end
     if not seen then order[#order + 1] = key end
   end
@@ -111,12 +125,14 @@ local function ApplyChannels()
   local joined = Joined()
   local wanted = {}
   for _, key in ipairs(c.order) do
-    for _, ch in ipairs(joined) do if ch.key == key then wanted[#wanted + 1] = key break end end
+    for _, ch in ipairs(joined) do if ch.key == key and not ch.hidden then wanted[#wanted + 1] = key break end end
   end
-  for _, ch in ipairs(joined) do
-    local listed = false
-    for _, key in ipairs(wanted) do if key == ch.key then listed = true break end end
-    if not listed then wanted[#wanted + 1] = ch.key end
+  for pass = 1, 2 do -- (the player's own channels, then the hidden ones, last)
+    for _, ch in ipairs(joined) do
+      local listed = false
+      for _, key in ipairs(wanted) do if key == ch.key then listed = true break end end
+      if not listed and (pass == 1) ~= ch.hidden then wanted[#wanted + 1] = ch.key end
+    end
   end
   -- One swap a pass: the game's list changes only once the server has done it (CHANNEL_UI_UPDATE brings the next
   -- pass); only in the minutes after login (later moves are the player's own), a handful at most.
@@ -139,7 +155,7 @@ local function ApplyChannels()
   -- had before; the communities' channels are left to the game)
   if not ChangeChatColor then return end
   for _, ch in ipairs(Joined()) do
-    local color = not ch.key:find("^community:") and (c.colors[ch.key] or DEFAULT_COLORS[ch.key] or CHANNEL_COLOR)
+    local color = not ch.key:find("^community:") and not ch.hidden and (c.colors[ch.key] or DEFAULT_COLORS[ch.key] or CHANNEL_COLOR)
     local info = ChatTypeInfo and ChatTypeInfo["CHANNEL" .. ch.index]
     if type(color) == "table" and info
       and (math.abs((info.r or 0) - color[1]) > .004 or math.abs((info.g or 0) - color[2]) > .004 or math.abs((info.b or 0) - color[3]) > .004) then
@@ -165,26 +181,44 @@ local channelEvents = CreateFrame("Frame")
 channelEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
 channelEvents:RegisterEvent("CHANNEL_UI_UPDATE")
 channelEvents:RegisterEvent("PLAYER_LOGOUT")
-channelEvents:SetScript("OnEvent", function(self, event)
+channelEvents:RegisterEvent("UPDATE_CHAT_COLOR")
+-- A colour picked by the player: the chat settings or the colour picker open
+local function Picking()
+  local config, picker = _G.ChatConfigFrame, _G.ColorPickerFrame
+  return (config and config.IsShown and config:IsShown()) or (picker and picker.IsShown and picker:IsShown()) or false
+end
+local function KeepColor(chatType, r, g, b)
+  local index = type(chatType) == "string" and tonumber(chatType:match("^CHANNEL(%d+)$"))
+  local c = Store()
+  if not (index and c and r and g and b) then return end
+  for _, ch in ipairs(Joined()) do
+    if ch.index == index and not ch.hidden then c.colors[ch.key] = { r, g, b } end
+  end
+end
+local recolorAt = 0
+channelEvents:SetScript("OnEvent", function(self, event, arg1, r, g, b)
   if event == "PLAYER_LOGOUT" then -- (the order as it stands at the end of the session, however it was set)
     if #Joined() > 0 then KeepOrder() end
     return
   end
+  if event == "UPDATE_CHAT_COLOR" then
+    if restoring or type(arg1) ~= "string" or not arg1:find("^CHANNEL%d") then return end
+    if Picking() then KeepColor(arg1, r, g, b) return end -- (the player's: kept for the channel's name)
+    -- the game (or another addon) put a number's colour back on a channel: its own colour again, a moment later
+    if GetTime() - recolorAt < 1 then return end
+    recolorAt = GetTime()
+    C_Timer.After(.5, function() if not InCombatLockdown() then ApplyChannels() end end)
+    return
+  end
+  if event == "CHANNEL_UI_UPDATE" then lastChannelChange = GetTime() end
   if event == "PLAYER_ENTERING_WORLD" and not self.hooked then
     self.hooked = true
     loginAt = GetTime()
     -- a colour picked for a channel (in Chat settings, the game's colour picker): kept for its name
     if ChangeChatColor then
       hooksecurefunc("ChangeChatColor", function(chatType, r, g, b)
-        if restoring or type(chatType) ~= "string" then return end
-        local config = _G.ChatConfigFrame
-        if not (config and config.IsShown and config:IsShown()) then return end
-        local index = tonumber(chatType:match("^CHANNEL(%d+)$"))
-        local c = Store()
-        if not (index and c) then return end
-        local key
-        for _, ch in ipairs(Joined()) do if ch.index == index then key = ch.key end end
-        if key and r and g and b then c.colors[key] = { r, g, b } end
+        if restoring or not Picking() then return end
+        KeepColor(chatType, r, g, b)
       end)
     end
     -- the order changed by dragging: kept
@@ -197,4 +231,4 @@ channelEvents:SetScript("OnEvent", function(self, event)
   end
   ChannelsSoon()
 end)
-ns.ChatChannels = { Apply = ApplyChannels, KeepOrder = KeepOrder, Key = Key }
+ns.ChatChannels = { Apply = ApplyChannels, KeepOrder = KeepOrder, Key = Key, Settled = Settled, Hidden = Hidden }

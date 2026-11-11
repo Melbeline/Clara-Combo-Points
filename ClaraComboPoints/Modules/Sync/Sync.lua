@@ -471,6 +471,10 @@ local function Join()
     end
     return
   end
+  -- after the game's channels and the ones the server rejoins (settled), to take the last number: never in front
+  -- of the player's own (ChatPlace.lua keeps it after them too)
+  local channels = ns.ChatChannels
+  if channels and channels.Settled and not channels.Settled() then C_Timer.After(3, Join) return end
   joinTries = joinTries + 1
   if joinTries > 6 then return end
   if select("#", GetChannelList()) == 0 and joinTries < 5 then C_Timer.After(4, Join) return end
