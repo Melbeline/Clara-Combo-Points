@@ -11,7 +11,7 @@ local G = ns.Money
 if not G then return end
 local L = ns.L
 
-local COL_W, STRIP_W, ROW_H, HEAD_H, MAX_ROWS = 200, 18, 18, 22, 24
+local COL_W, STRIP_W, ROW_H, HEAD_H, MAX_ROWS = 250, 18, 18, 22, 24 -- (wide enough for first name and surname)
 local PAD, GAP, TOP_H, FOOT_H = 14, 8, 50, 52
 local frame
 local cols = {}
@@ -54,6 +54,14 @@ StaticPopupDialogs.CLARA_MONEY_FORGET = {
   timeout = 0, whileDead = true, hideOnEscape = true,
 }
 
+-- How long ago, in the largest unit: "5 min", "3 h", "2 d"
+local function Ago(at)
+  local d = math.max(0, time() - at)
+  if d < 3600 then return L.MONEY_AGO_MIN:format(math.max(1, math.floor(d / 60))) end
+  if d < 86400 then return L.MONEY_AGO_H:format(math.floor(d / 3600)) end
+  return L.MONEY_AGO_D:format(math.floor(d / 86400))
+end
+
 ---------------------------------------------------------------------------
 -- A column
 ---------------------------------------------------------------------------
@@ -63,7 +71,7 @@ local function RowTooltip(row)
   local rec = row.key and G.db.chars[row.key]
   if not rec then return end
   GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-  GameTooltip:SetText(rec.n .. (rec.r ~= "" and (" - " .. rec.r) or ""), ClassColor(rec.c))
+  GameTooltip:SetText(G.FullName(rec) .. (rec.r ~= "" and (" - " .. rec.r) or ""), ClassColor(rec.c))
   GameTooltip:AddLine((LEVEL or "Level") .. " " .. rec.l, 1, 1, 1)
   GameTooltip:AddLine(Coins(rec.m), 1, 1, 1)
   if rec.at and rec.at > 1 then GameTooltip:AddLine(L.MONEY_SEEN:format(date("%d/%m/%Y %H:%M", rec.at)), 0.6, 0.6, 0.6) end
@@ -204,6 +212,12 @@ local function Col(id)
   end)
   col.total = box:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   col.total:SetPoint("TOPRIGHT", col.body, "BOTTOMRIGHT", -4, -4)
+  -- another account's: when its characters were last heard of (the sync's age, at a glance)
+  col.age = box:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  col.age:SetPoint("TOPLEFT", col.body, "BOTTOMLEFT", 4, -4)
+  col.age:SetPoint("RIGHT", col.total, "LEFT", -4, 0)
+  col.age:SetJustifyH("LEFT")
+  col.age:SetWordWrap(false)
   -- hidden: a thin strip, a click shows the column again
   col.strip = CreateFrame("Button", nil, frame)
   col.strip:SetWidth(STRIP_W)
@@ -316,13 +330,15 @@ function Refresh()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", col.body, "TOPLEFT", 0, -(r - 1 - col.offset) * ROW_H)
         row:SetShown(r > col.offset and r <= col.offset + MAX_ROWS)
-        row.name:SetText(("|cff9d9d9d%d|r %s"):format(rec.l, rec.n))
+        row.name:SetText(("|cff9d9d9d%d|r %s"):format(rec.l, G.FullName(rec)))
         row.name:SetTextColor(ClassColor(rec.c))
         row.money:SetText(Coins(rec.m))
         row.mark:SetShown(key == me)
       end
       for r = #col.keys + 1, #col.rows do col.rows[r].key = nil; col.rows[r]:Hide() end
       col.total:SetText(Coins(G.Total(id)))
+      local updated = id ~= G.db.me and G.Updated(id)
+      col.age:SetText(updated and L.MONEY_AGE:format(Ago(updated)) or "")
       rows = math.max(rows, shown)
       x = x + COL_W + GAP
     end
