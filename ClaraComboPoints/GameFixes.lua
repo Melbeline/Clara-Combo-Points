@@ -13,6 +13,7 @@
 -- And the unit menu's loot method line (the group's leader): a left-click on it, Free for All.
 -- And the target and focus frames' health and power values at the right end of their bars.
 -- And a loot window left empty closed (a corpse clicked again and again while its items were on their way).
+-- And the minimap's tracking (Find Herbs, Find Minerals, a hunter's tracking) given back after a death.
 
 local ADDON, ns = ...
 
@@ -743,3 +744,152 @@ function ns:MouseReportSoon()
     end
   end)
 end
+
+---------------------------------------------------------------------------
+-- The minimap's tracking given back after a death. The game drops its tracking spells at death (Find Herbs,
+-- Find Minerals, a hunter's Track Beasts...): the ones on just before are turned back on once the character
+-- lives again. C_Minimap.SetTracking is not one of the game's protected functions (its documentation gives it
+-- no restriction): tried at once. One the game does not take then (a spell it casts only on a key press or a
+-- click) is turned on at the next movement key, unbound key or click in the world: one press, one tracking;
+-- the key's own move, or the camera's, is left as it is. A key that does something else (a spell, an
+-- interface key) is never used: its own action stays its own. One tracking a press (the game's global
+-- cooldown between two); given up once the player picks another tracking, or after ten tries.
+-- Kept in the saved settings for each character: a reload while dead gives them back too.
+---------------------------------------------------------------------------
+local MOVE_KEYS = { MOVEFORWARD = true, MOVEBACKWARD = true, TURNLEFT = true, TURNRIGHT = true, STRAFELEFT = true,
+  STRAFERIGHT = true, JUMP = true, TOGGLEAUTORUN = true, MOVEANDSTEER = true, [""] = true }
+local TRACK_GAP, TRACK_TRIES = 1.6, 10
+local tracked = {}  -- the tracking spells on, as last seen alive (spell ID or name -> true)
+local lost          -- the ones to give back (a list), or nil
+local tries, lastTry = 0, 0
+local trackCatch    -- the frame that hears the keys while some are still to give back
+
+local function Alive() return not (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) end
+local function TrackKey(info) return info.spellID or info.name end
+-- The tracking spells on now: key -> its index in the game's list; and each one's index
+local function TrackingNow()
+  local on, index = {}, {}
+  if not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo) then return on, index end
+  for i = 1, C_Minimap.GetNumTrackingTypes() or 0 do
+    local ok, info = pcall(C_Minimap.GetTrackingInfo, i)
+    if ok and type(info) == "table" and info.type == "spell" and TrackKey(info) ~= nil then
+      index[TrackKey(info)] = i
+      if info.active then on[TrackKey(info)] = i end
+    end
+  end
+  return on, index
+end
+
+local function Me() return ns.FullName and ns:FullName("player") or (UnitName and UnitName("player")) end
+local function SaveLost()
+  local sv = ns.sv
+  if not sv then return end
+  local me = Me()
+  if not me then return end
+  sv.trackingLost = type(sv.trackingLost) == "table" and sv.trackingLost or {}
+  sv.trackingLost[me] = lost and #lost > 0 and lost or nil
+  if not next(sv.trackingLost) then sv.trackingLost = nil end
+end
+
+-- Those still to give back: the ones the game has, not on now
+local function Missing()
+  if not lost then return {} end
+  local on, index = TrackingNow()
+  local missing = {}
+  for _, key in ipairs(lost) do
+    if not on[key] and index[key] then missing[#missing + 1] = { key = key, index = index[key] } end
+  end
+  return missing, on
+end
+
+local function Done()
+  lost, tries = nil, 0
+  SaveLost()
+  if trackCatch then trackCatch:Hide() end
+end
+
+local GiveOne
+local function Check()
+  if not lost then return end
+  if not Alive() then return end
+  local missing = Missing()
+  if #missing == 0 or tries >= TRACK_TRIES then Done() return end
+  -- still some: the next press (the game took nothing without one), or at once if the last one went through
+  if trackCatch then trackCatch:Show() end
+end
+
+-- One tracking turned on (the first one missing); looked at again after the global cooldown
+function GiveOne(byKey)
+  if not lost or not Alive() then return end
+  local now = GetTime and GetTime() or 0
+  if now - lastTry < TRACK_GAP then return end
+  local missing = Missing()
+  if #missing == 0 then Done() return end
+  lastTry, tries = now, tries + 1
+  pcall(C_Minimap.SetTracking, missing[1].index, true)
+  C_Timer.After(TRACK_GAP, function()
+    if not lost then return end
+    local left = Missing()
+    if #left == 0 or tries >= TRACK_TRIES then Done()
+    elseif #left < #missing and not byKey then GiveOne(false) -- (taken without a press: the next one the same way)
+    else Check() end
+  end)
+end
+
+local function MakeCatch()
+  if trackCatch or InCombatLockdown() then return end -- (its keys passed on: set out of combat)
+  local f = CreateFrame("Frame", nil, UIParent)
+  f:Hide()
+  f:EnableKeyboard(true)
+  if f.SetPropagateKeyboardInput then f:SetPropagateKeyboardInput(true) end -- (every key goes on to the game)
+  f:SetScript("OnKeyDown", function(_, key)
+    if not lost then f:Hide() return end
+    local chord = CreateKeyChordStringUsingMetaKeyState and CreateKeyChordStringUsingMetaKeyState(key) or key
+    local action = GetBindingAction and GetBindingAction(chord, true) or ""
+    if MOVE_KEYS[action or ""] then GiveOne(true) end
+  end)
+  trackCatch = f
+  if WorldFrame and WorldFrame.HookScript then
+    WorldFrame:HookScript("OnMouseDown", function() if lost and trackCatch:IsShown() then GiveOne(true) end end)
+  end
+end
+
+local tracking = CreateFrame("Frame")
+tracking:RegisterEvent("PLAYER_LOGIN")
+tracking:RegisterEvent("PLAYER_DEAD")
+tracking:RegisterEvent("PLAYER_ALIVE")
+tracking:RegisterEvent("PLAYER_UNGHOST")
+tracking:RegisterEvent("MINIMAP_UPDATE_TRACKING")
+tracking:SetScript("OnEvent", function(self, event)
+  if event == "PLAYER_LOGIN" then
+    MakeCatch()
+    local me, sv = Me(), ns.sv
+    local kept = me and sv and type(sv.trackingLost) == "table" and sv.trackingLost[me]
+    if type(kept) == "table" and #kept > 0 then lost = kept end
+    if Alive() then
+      tracked = TrackingNow()
+      if lost then C_Timer.After(2, function() GiveOne(false) end) end
+    end
+  elseif event == "PLAYER_DEAD" then
+    local list = {}
+    for key in pairs(tracked) do list[#list + 1] = key end
+    if #list > 0 then lost, tries, lastTry = list, 0, 0 SaveLost() end
+  elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
+    MakeCatch()
+    if lost and Alive() then C_Timer.After(1, function() GiveOne(false) end) end -- (a release: still a ghost, nothing)
+  elseif event == "MINIMAP_UPDATE_TRACKING" then
+    -- what is on, a moment later and only alive (at death the game drops them before the character counts as dead)
+    C_Timer.After(.5, function()
+      if not Alive() then return end
+      local on = TrackingNow()
+      if lost then
+        local mine = {}
+        for _, key in ipairs(lost) do mine[key] = true end
+        for key in pairs(on) do
+          if not mine[key] then Done() break end -- (another one picked by the player: theirs)
+        end
+      end
+      tracked = on
+    end)
+  end
+end)
