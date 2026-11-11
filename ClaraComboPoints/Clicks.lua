@@ -14,6 +14,12 @@
 -- above come down onto the rage bar: Core.lua), so a druid has a second layer, placed for Bear
 -- Form; each layer only shows in its forms. Out of the forms the HUD shows in, a druid's layers
 -- keep the places they were given in them.
+-- Never a button where there may be nothing to click: an icon shown only while lit (its aura, its
+-- cooldown: "Show missing icons" off) can go in a fight, and its button, which nothing can hide then
+-- but the game's own secure state driver, would take the clicks over an empty spot. So those buttons
+-- are hidden in combat by that driver ([combat] hide): the mouse goes through the HUD's empty places.
+-- Icons always shown ("Show missing icons" on) keep their buttons in a fight. No button at all while
+-- the HUD is hidden, at 0 % opacity, or its icons unlocked for editing (their own drag and drop).
 
 local _, ns = ...
 
@@ -454,6 +460,7 @@ end
 local function Unchanged(db, on, shown)
   nowCount = 0
   Put(db); Put(on); Put(shown); Put(ns.isDruid); Put(ns.iconsOnBar); Put(UIParent:GetEffectiveScale())
+  Put(db and db.icons and db.icons.missing and true or false) -- (the buttons hidden in a fight or not)
   if shown then ns:ForEachIcon(PutSlot) end
   if ns.isDruid and db then PutDruid(db, shown) end
   if nowCount ~= seenCount then return false end
@@ -477,7 +484,7 @@ function ns:SyncClickers()
   if syncing or not self.hud or InCombatLockdown() then return end
   local db = self.db
   local on = self.enabled and db and db.locked and not self:EditingIcons()
-  local shown = on and self.hud:IsVisible() and self.iconLayer:IsVisible()
+  local shown = on and self.hud:IsVisible() and self.iconLayer:IsVisible() and (tonumber(db.alpha) or 1) > .02
   local t = GetTime()
   if Unchanged(db, on, shown) and not (t < recheckUntil and t - lastFull >= RECHECK) then return end
   lastFull = t
@@ -486,14 +493,21 @@ function ns:SyncClickers()
 end
 
 -- The places and clicks read in full, and the buttons placed when they changed.
+-- In a fight: the buttons of icons that may go (shown only while lit) hidden by the game's state driver
+local function FightDriver(driver)
+  if ns.db and ns.db.icons and ns.db.icons.missing then return driver end
+  return "[combat] hide; " .. (driver or "show")
+end
+
 function PlaceAll(self, db, on, shown)
   local bar = StanceBar()
+  local always = db and db.icons and db.icons.missing and "m" or "-"
   if not self.isDruid then
     local list = shown and Read(bar) or {}
-    local key = "1" .. Key(list)
+    local key = "1" .. always .. Key(list)
     if key == placed then return end
     placed = key
-    Place(1, list)
+    Place(1, list, FightDriver(nil))
     Place(2)
     return
   end
@@ -511,21 +525,21 @@ function PlaceAll(self, db, on, shown)
   local settings = DruidSettings()
   local forms = ("%s/%s"):format(tostring(bar.cat), tostring(bar.bear))
   if type(placed) == "table" and placed.current == current and placed.settings == settings and placed.forms == forms
-    and placed.onBar == self.iconsOnBar then
+    and placed.onBar == self.iconsOnBar and placed.always == always then
     return
   end
   local main, bear = DruidLists(bar)
-  placed = { current = current, settings = settings, forms = forms, onBar = self.iconsOnBar }
+  placed = { current = current, settings = settings, forms = forms, onBar = self.iconsOnBar, always = always }
   local catOnly = db.druidCatOnly
   if bear then
-    Place(1, main, catOnly and (bar.cat and ("[form:%d] show; hide"):format(bar.cat) or "hide")
-      or ("[form:%d] hide; show"):format(bar.bear))
-    Place(2, bear, ("[form:%d] show; hide"):format(bar.bear))
+    Place(1, main, FightDriver(catOnly and (bar.cat and ("[form:%d] show; hide"):format(bar.cat) or "hide")
+      or ("[form:%d] hide; show"):format(bar.bear)))
+    Place(2, bear, FightDriver(("[form:%d] show; hide"):format(bar.bear)))
   else -- the same places in every form
     local feral = {}
     if bar.cat then feral[#feral + 1] = bar.cat end
     if bar.bear then feral[#feral + 1] = bar.bear end
-    Place(1, main, catOnly and (#feral > 0 and ("[form:%s] show; hide"):format(table.concat(feral, "/")) or "hide") or nil)
+    Place(1, main, FightDriver(catOnly and (#feral > 0 and ("[form:%s] show; hide"):format(table.concat(feral, "/")) or "hide") or nil))
     Place(2)
   end
 end
