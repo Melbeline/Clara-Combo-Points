@@ -82,7 +82,7 @@ addon_data.hunter.default_settings = {
     show_border = false,
     classic_bars = true,
     one_bar = false,
-    cooldown_r = 1.0, cooldown_g = 0.45, cooldown_b = 0.65, cooldown_a = 1.0, -- (Clara Combo Points: pink, as it used to be)
+    cooldown_r = 1.0, cooldown_g = 0.41, cooldown_b = 0.71, cooldown_a = 1.0, -- (Clara Combo Points: hot pink, #FF69B4)
     auto_cast_r = 0.8, auto_cast_g = 0.0, auto_cast_b = 0.0, auto_cast_a = 1.0,
     clip_r = 1.0, clip_g = 0.0, clip_b = 0.0, clip_a = 0.7
 }
@@ -153,6 +153,12 @@ addon_data.hunter.LoadSettings = function()
             s.cooldown_r, s.cooldown_g, s.cooldown_b = d.cooldown_r, d.cooldown_g, d.cooldown_b
         end
         s.clara_pink = true
+    end
+    -- (Clara Combo Points) hot pink, the shot bar's colour by default: put on once (a colour picked after is kept)
+    if not s.clara_hotpink then
+        local d = addon_data.hunter.default_settings
+        s.cooldown_r, s.cooldown_g, s.cooldown_b, s.cooldown_a = d.cooldown_r, d.cooldown_g, d.cooldown_b, 1
+        s.clara_hotpink = true
     end
     
     -- One-time tooltip initialize

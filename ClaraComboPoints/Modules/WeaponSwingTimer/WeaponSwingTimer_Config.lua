@@ -227,31 +227,36 @@ addon_data.config.color_picker_factory = function(g_name, parent, r, g, b, a, te
     return color_picker
 end
 
+-- (Clara Combo Points) The game's picker reads "opacity" as the alpha itself in this client (its wheel's
+-- alpha: SetColorAlpha(opacity), GetColorAlpha); the old one's slider was 1 - alpha. Given 1 - alpha here, each
+-- change turned the bar's alpha over: after an odd number of them the bar (its colour and its swing) was invisible.
+local function PickerTakesAlpha()
+    return ColorPickerFrame.Content ~= nil and ColorPickerFrame.Content.ColorPicker ~= nil
+end
+
 addon_data.config.ShowColorPicker = function(settings, name, foreground_texture, on_change)
     local start_r = settings[name .. "_r"]
     local start_g = settings[name .. "_g"]
     local start_b = settings[name .. "_b"]
-    local start_a = settings[name .. "_a"]
+    local start_a = settings[name .. "_a"] or 1
+    if start_a <= 0 then start_a = 1 end -- (left invisible by the old turn-over: seen again)
+    local takesAlpha = PickerTakesAlpha()
 
     local function GetCurrentAlpha()
+        local value
         if ColorPickerFrame.GetColorAlpha then
-            local ok, alpha = pcall(
-                ColorPickerFrame.GetColorAlpha,
-                ColorPickerFrame
-            )
-            if ok and alpha ~= nil then
-                return alpha
-            end
+            local ok, v = pcall(ColorPickerFrame.GetColorAlpha, ColorPickerFrame)
+            if ok then value = v end
         end
-
-        if ColorPickerFrame.opacity ~= nil then
-            return 1 - ColorPickerFrame.opacity
-        end
-
-        return start_a or 1
+        if value == nil then value = ColorPickerFrame.opacity end
+        if type(value) ~= "number" then return start_a end
+        if not takesAlpha then value = 1 - value end -- (the old slider: 1 - alpha)
+        return math.max(0, math.min(1, value))
     end
 
+    local opening = true -- (the picker calls back while it is set up, its alpha still the last picker's: ignored)
     local function Apply()
+        if opening then return end
         local new_r, new_g, new_b = ColorPickerFrame:GetColorRGB()
         local new_a = GetCurrentAlpha()
 
@@ -269,7 +274,7 @@ addon_data.config.ShowColorPicker = function(settings, name, foreground_texture,
         g = start_g,
         b = start_b,
         hasOpacity = true,
-        opacity = 1 - (start_a or 1),
+        opacity = takesAlpha and start_a or (1 - start_a),
         swatchFunc = Apply,
         opacityFunc = Apply,
         cancelFunc = function()
@@ -282,6 +287,7 @@ addon_data.config.ShowColorPicker = function(settings, name, foreground_texture,
             if on_change then on_change(start_r, start_g, start_b, start_a) end
         end,
     })
+    opening = false
 end
 
 addon_data.config.UpdateConfigValues = function()
