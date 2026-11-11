@@ -17,6 +17,7 @@
 -- And the quest tracker folded again as it was left (the whole tracker and each of its sections).
 -- And /played always answered in the chat (in a fight it showed nothing).
 -- And the bags above AtlasLoot's window while it is open.
+-- And the stopwatch kept for each character through reloads and logouts, its time going on meanwhile.
 
 local ADDON, ns = ...
 
@@ -1081,4 +1082,69 @@ liftEvents:SetScript("OnEvent", function(self, event, name)
   HookAll()
   Look()
   LiftBags()
+end)
+
+---------------------------------------------------------------------------
+-- The stopwatch kept. The game's own stopwatch (/stopwatch, the clock's menu) is cleared and shut by a reload or
+-- a logout. Kept for each character: shown, running or paused, its time, and when it was left; back at the
+-- character's next login (or after the reload), the time spent away added while it was running (the computer's
+-- clock: a logout, another character played meanwhile, the game closed), as if it had never stopped; a paused
+-- one comes back as it was; a countdown that ran out meanwhile is not shown again. Another character has its own.
+---------------------------------------------------------------------------
+local function WatchKey() return UnitGUID and UnitGUID("player") or nil end
+
+local function KeepStopwatch()
+  local sv, key = ns.sv, WatchKey()
+  if not (sv and key) then return end
+  local frame, ticker = _G.StopwatchFrame, _G.StopwatchTicker
+  local entry
+  if frame and ticker then
+    local playing = Stopwatch_IsPlaying and Stopwatch_IsPlaying() and true or false
+    local timer = tonumber(ticker.timer) or 0
+    if frame:IsShown() or playing or timer > 0 then
+      entry = { shown = frame:IsShown() and true or false, playing = playing, timer = timer,
+        reverse = ticker.reverse and true or false, at = time(), gt = GetTime() }
+    end
+  end
+  sv.stopwatch = type(sv.stopwatch) == "table" and sv.stopwatch or {}
+  sv.stopwatch[key] = entry
+  if not next(sv.stopwatch) then sv.stopwatch = nil end
+end
+
+local function BringStopwatch(isReload)
+  local sv, key = ns.sv, WatchKey()
+  local entry = key and sv and type(sv.stopwatch) == "table" and sv.stopwatch[key]
+  if type(entry) ~= "table" then return end
+  if C_AddOns and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_TimeManager") and C_AddOns.LoadAddOn then
+    pcall(C_AddOns.LoadAddOn, "Blizzard_TimeManager")
+  end
+  local frame, ticker = _G.StopwatchFrame, _G.StopwatchTicker
+  if not (frame and ticker and StopwatchTicker_Update) then return end
+  local timer = tonumber(entry.timer) or 0
+  if entry.playing then
+    -- the time away: a reload measured to the millisecond (the computer's uptime goes on), else to the second
+    local away = time() - (tonumber(entry.at) or time())
+    local gone = GetTime() - (tonumber(entry.gt) or 0)
+    if isReload and entry.gt and gone >= 0 and gone < away + 2 then away = gone end
+    away = math.max(0, away)
+    timer = entry.reverse and timer - away or timer + away
+    if entry.reverse and timer <= 0 then -- (a countdown ended while away: over)
+      sv.stopwatch[key] = nil
+      return
+    end
+  end
+  ticker.timer = math.max(0, timer)
+  ticker.reverse = entry.reverse and true or false
+  StopwatchTicker_Update()
+  if entry.shown and not frame:IsShown() then frame:Show() end
+  if entry.playing and Stopwatch_Play then Stopwatch_Play() end
+end
+
+local watchEvents = CreateFrame("Frame")
+watchEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+watchEvents:RegisterEvent("PLAYER_LOGOUT")
+watchEvents:SetScript("OnEvent", function(_, event, isLogin, isReload)
+  if event == "PLAYER_LOGOUT" then KeepStopwatch() return end
+  if not (isLogin or isReload) then return end
+  C_Timer.After(1, function() BringStopwatch(isReload) end) -- (the game's own stopwatch cleared at its load first)
 end)

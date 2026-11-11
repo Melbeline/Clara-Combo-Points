@@ -205,6 +205,8 @@ La page **Clara** elle-même a, tout en haut, **Replacer la fenêtre d'options**
 
 **Sacs au-dessus d'AtlasLoot** : la fenêtre d'AtlasLoot est dans une strate au-dessus de celle des sacs, qui passaient dessous. Tant qu'elle est ouverte, les sacs prennent la strate juste au-dessus de la sienne (lue sur sa fenêtre, quelle que soit sa version) ; elle fermée, ils reprennent la leur.
 
+**Chronomètre gardé** : le chronomètre du jeu (`/stopwatch`, le menu de l'horloge) se fermait et repartait de zéro à chaque rechargement ou déconnexion. Il est gardé **pour chaque personnage** : affiché, lancé ou en pause, son temps, et l'heure où tu l'as quitté. À la prochaine connexion de ce personnage (ou après le `/reload`), il revient **avec le temps passé ailleurs** s'il tournait : rechargement (au millième), déconnexion, autre personnage joué entre-temps, jeu fermé (à la seconde, d'après l'horloge de l'ordinateur), comme s'il ne s'était jamais arrêté. En pause, il revient tel quel ; un compte à rebours fini pendant ton absence ne revient pas. Un autre personnage a le sien (aucun s'il ne s'en est pas servi). Un plantage du jeu n'enregistre rien (le jeu n'écrit les sauvegardes qu'à la déconnexion) : le chronomètre reprend alors là où il était à la dernière déconnexion.
+
 **Options du jeu réglées une fois par Clara** (ses réglages par défaut, puis les tiens : l'addon n'y retouche plus) : **Sticky Targeting** désactivé (Échap > Options > Jeu > Contrôles), **Auto Loot** activé, **NPC Names** sur **None** (Plaques de nom), les **sacs séparés** (pas le sac combiné). Celles que le jeu garde pour chaque personnage sont réglées une fois sur chacun ; celles du compte, une fois.
 
 `/rl` recharge l'interface (comme `/reload`).
