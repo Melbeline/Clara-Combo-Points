@@ -94,6 +94,23 @@ local function LoadAllSettings()
     addon_data.hunter.LoadSettings()
     addon_data.range.LoadSettings()
 	addon_data.castbar.LoadSettings()
+    -- (Clara Combo Points) colours the old colour picker left invisible (each change turned their alpha over,
+    -- Config.lua): seen again, once
+    local profile = addon_data.db and addon_data.db.profile
+    if profile and not profile.clara_alpha_fixed then
+        for _, part in ipairs({ "player", "target", "hunter", "range", "castbar" }) do
+            local settings = profile[part]
+            if type(settings) == "table" then
+                for key, value in pairs(settings) do
+                    if type(key) == "string" and key:match("_a$") and type(value) == "number" and value < 0.05
+                        and settings[key:sub(1, -3) .. "_r"] ~= nil then
+                        settings[key] = 1
+                    end
+                end
+            end
+        end
+        profile.clara_alpha_fixed = true
+    end
 end
 
 addon_data.core.RestoreAllDefaults = function()
