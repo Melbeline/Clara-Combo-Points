@@ -544,6 +544,15 @@
 	end
 
 	-- Check if a name is in your friends list, guild or community (does not check realm as realm is unknown for some checks)
+	-- (Clara Combo Points) the inviter's GUID in PARTY_INVITE_REQUEST, found by its form: WoW Forever 1.60.1 (build
+	-- 70840) put an isXShard before it, so its place moved
+	function LeaPlusLC:InviterGUID(...)
+		for i = 1, select("#", ...) do
+			local v = select(i, ...)
+			if type(v) == "string" and not (issecretvalue and issecretvalue(v)) and v:find("^Player%-") then return v end
+		end
+	end
+
 	function LeaPlusLC:FriendCheck(name, guid)
 
 		-- Do nothing if name is empty (such as whispering from the Battle.net app)
@@ -3241,7 +3250,7 @@
 			frame:SetScript("OnEvent", function(self, event, arg1, ...)
 
 				-- If a friend, accept if you're accepting friends and not queued
-				local void, void, void, void, void, guid = ...
+				local guid = LeaPlusLC:InviterGUID(...)
 				if (LeaPlusLC["AcceptPartyFriends"] == "On" and LeaPlusLC:FriendCheck(arg1, guid)) then
 					if not LeaPlusLC:IsInLFGQueue() then
 						AcceptGroup()
@@ -3290,7 +3299,7 @@
 			local frame = CreateFrame("FRAME")
 			frame:SetScript("OnEvent", function(self, event, arg1, ...)
 				-- If not a friend and you're blocking invites, decline
-				local void, void, void, void, void, guid = ...
+				local guid = LeaPlusLC:InviterGUID(...)
 				if LeaPlusLC["NoPartyInvites"] == "On" then
 					if LeaPlusLC:FriendCheck(arg1, guid) then
 						return

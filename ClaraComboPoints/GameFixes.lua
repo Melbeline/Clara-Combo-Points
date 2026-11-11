@@ -1152,3 +1152,67 @@ watchEvents:SetScript("OnEvent", function(_, event, isLogin, isReload)
   if not (isLogin or isReload) then return end
   C_Timer.After(1, function() BringStopwatch(isReload) end) -- (the game's own stopwatch cleared at its load first)
 end)
+
+---------------------------------------------------------------------------
+-- A system message the game repeats word for word while you do nothing: shown once. WoW Forever sends "You have been
+-- inactive for some time and will be logged out of the game..." again and again until the idle logout, filling the
+-- chat. Read by its repeat, not by its words (any language): the same text again, with nothing done since it first
+-- showed, is not shown again. Anything done (moving, a click, a cast, a new target, a fight) or ten minutes ends that
+-- quiet spell. The same line in several chat windows shows in each.
+---------------------------------------------------------------------------
+do
+  local AddFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
+  local issecretRepeat = issecretvalue or function() return false end
+  local QUIET_FOR = 600
+  local seen = {} -- text -> { line = its line ID, at = when it first showed }, while nothing is done
+  if AddFilter then
+    AddFilter("CHAT_MSG_SYSTEM", function(_, _, text, ...)
+      if type(text) ~= "string" or issecretRepeat(text) or text == "" then return false end
+      local line = select(10, ...)
+      if issecretRepeat(line) then line = nil end
+      local now = GetTime()
+      local first = seen[text]
+      if not first or now - first.at > QUIET_FOR then
+        seen[text] = { line = line, at = now }
+        return false
+      end
+      if line ~= nil and line == first.line then return false end -- (the first one, in another chat window)
+      return true
+    end)
+  end
+  local active = CreateFrame("Frame")
+  for _, e in ipairs({ "PLAYER_STARTED_MOVING", "GLOBAL_MOUSE_DOWN", "UNIT_SPELLCAST_SENT", "PLAYER_TARGET_CHANGED",
+    "PLAYER_REGEN_DISABLED" }) do
+    active:RegisterEvent(e)
+  end
+  active:SetScript("OnEvent", function() if next(seen) then wipe(seen) end end)
+end
+
+---------------------------------------------------------------------------
+-- The target's (and focus's) level beside the skull: since WoW Forever's build 70840 the game's battle pet check, run
+-- after its level check on every update, shows the level text again for any unit that is not a battle pet, so a
+-- target too high to tell (the skull) or a corpse shows the last level read beside the skull. Hidden again, as the
+-- game's own level check left it.
+---------------------------------------------------------------------------
+do
+  local issecretLevel = issecretvalue or function() return false end
+  local function Yes(fn, unit)
+    if type(fn) ~= "function" then return false end
+    local ok, v = pcall(fn, unit)
+    return ok and not issecretLevel(v) and v and true or false
+  end
+  local function KeepLevel(frame)
+    local unit = frame and frame.unit
+    local main = frame and frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
+    local text = main and main.LevelText
+    if not (unit and frame.showLevel and text and text.Hide) then return end
+    if Yes(UnitIsWildBattlePet, unit) or Yes(UnitIsBattlePetCompanion, unit) then return end
+    local okL, level = pcall(UnitEffectiveLevel, unit)
+    if not okL or issecretLevel(level) then return end
+    if Yes(UnitIsCorpse, unit) or (type(level) == "number" and level <= 0) then text:Hide() end
+  end
+  for _, name in ipairs({ "TargetFrame", "FocusFrame" }) do
+    local frame = _G[name]
+    if type(frame) == "table" and type(frame.CheckBattlePet) == "function" then hooksecurefunc(frame, "CheckBattlePet", KeepLevel) end
+  end
+end
