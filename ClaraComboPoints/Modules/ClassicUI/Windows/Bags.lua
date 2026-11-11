@@ -39,6 +39,11 @@ local STRIP_TOP, STRIP_END = 209, 232
 local STRIP_H = STRIP_END - STRIP_TOP
 -- The strip's inside from the window's left and right edges (the sheet hangs 64 past the left), and the row's inset.
 local STRIP_LEFT, STRIP_RIGHT, TOKEN_INSET = 21, -14, 3
+-- Gaps between bag windows. The client stacks them 8 apart and starts a column 11 to the left (ContainerFrame.lua). On
+-- our sheets the portrait ring is the outmost art (its top on the window's top, its left 2 inside the window's left; the
+-- art ends 2 inside the right), so windows close up till each ring just touches its neighbour, as 1.x stacked them.
+local CLIENT_STACK_Y, CLIENT_COLUMN_X = 8, -11
+local STACK_Y, COLUMN_X = 0, 4
 local EMPTY = ns.EMPTY
 local QUICK_RING_64 = { set = "raw", tint = true, coords = { 0, 1, 0, 1 }, w = 64, h = 64, point = "CENTER", y = -1 }
 
@@ -698,6 +703,34 @@ local function Frames()
     return frameList
 end
 
+-- The gaps the bag windows stand at: ours on our sheets, the client's on its own art (Bar/BandWatch.lua lays them too).
+function ns.BagGaps()
+    if active then return STACK_Y, COLUMN_X end
+    return CLIENT_STACK_Y, CLIENT_COLUMN_X
+end
+
+-- After the client's own pass (a bag opened or shut, the screen resized): only its anchors from one bag window to
+-- another, exactly as it sets them, take our gaps, so a window placed by anything else stays put.
+local gapsHooked = false
+local function Near(value, want) return type(value) == "number" and math.abs(value - want) < 0.01 end
+local function Tighten()
+    if not active then return end
+    local frames = Frames()
+    for i = 1, #frames do
+        local frame = frames[i]
+        if frame:IsShown() and frame:GetNumPoints() == 1 then
+            local point, rel, relPoint, x, y = frame:GetPoint(1)
+            if point == "BOTTOMRIGHT" and rel and frameSeen[rel] then
+                if relPoint == "TOPRIGHT" and Near(x, 0) and Near(y, CLIENT_STACK_Y) then
+                    frame:SetPoint(point, rel, relPoint, 0, STACK_Y)
+                elseif relPoint == "BOTTOMLEFT" and Near(x, CLIENT_COLUMN_X) and Near(y, 0) then
+                    frame:SetPoint(point, rel, relPoint, COLUMN_X, 0)
+                end
+            end
+        end
+    end
+end
+
 -- oneBag mirrors the client's combinedBags CVar (ns.ToggleChanged writes it), so
 -- a change in the game's options shows here too.
 local function ReadOneBag()
@@ -780,12 +813,17 @@ local function Apply()
         KeyRingButton:HookScript("PreClick", RingPreClick)
         KeyRingButton:HookScript("OnClick", RingClick)
     end
+    if not gapsHooked and type(UpdateContainerFrameAnchors) == "function" then
+        gapsHooked = true
+        hooksecurefunc("UpdateContainerFrameAnchors", function() ns.SafeCall(Tighten) end)
+    end
     local frames = Frames()
     if ns.debugSink then ns.Persist("bags: apply, frames " .. #frames) end
     for _, frame in ipairs(frames) do
         Hook(frame)
         if frame:IsShown() then Skin(frame) end
     end
+    Tighten()
     -- Our slots made now, out of combat, before a first open in a fight.
     if not InCombatLockdown() then
         ns.OwnReagentSlots()

@@ -442,6 +442,9 @@ local function WrapOpenBags(shown)
     local head, headLeft = first, right - first:GetWidth() * k
     local reach = bottom + first:GetHeight() * k
     local prev = first
+    -- The client's gaps, or ours on the 1.x bag sheets (Windows/Bags.lua).
+    local stackY, columnX = 8, -11
+    if ns.BagGaps then stackY, columnX = ns.BagGaps() end
     for i = 2, #shown do
         local frame = shown[i]
         -- The game's reagent window parked out of sight while our slots fill the combined bag (Windows/Bags.lua).
@@ -449,16 +452,16 @@ local function WrapOpenBags(shown)
             k = frame:GetEffectiveScale() / ui
             local w, h = frame:GetWidth() * k, frame:GetHeight() * k
             local wrap = prev.IsCombinedBagContainer and prev:IsCombinedBagContainer()
-            if not wrap then wrap = reach + 8 * k + h > top end
+            if not wrap then wrap = reach + stackY * k + h > top end
             local rel, relPoint, x, y
             if wrap then
-                right = headLeft - 11 * k
+                right = headLeft + columnX * k
                 headLeft, reach = right - w, bottom + h
-                rel, relPoint, x, y = head, "BOTTOMLEFT", -11, 0
+                rel, relPoint, x, y = head, "BOTTOMLEFT", columnX, 0
                 head = frame
             else
-                reach = reach + 8 * k + h
-                rel, relPoint, x, y = prev, "TOPRIGHT", 0, 8
+                reach = reach + stackY * k + h
+                rel, relPoint, x, y = prev, "TOPRIGHT", 0, stackY
             end
             -- Per frame while bags are open: a plain read, no secret values here.
             local p, r, rp, px, py = frame:GetPoint(1)
