@@ -14,6 +14,7 @@
 -- And the target and focus frames' health and power values at the right end of their bars.
 -- And a loot window left empty closed (a corpse clicked again and again while its items were on their way).
 -- And the minimap's tracking (Find Herbs, Find Minerals, a hunter's tracking) given back after a death.
+-- And the quest tracker folded again as it was left (the whole tracker and each of its sections).
 
 local ADDON, ns = ...
 
@@ -891,5 +892,64 @@ tracking:SetScript("OnEvent", function(self, event)
       end
       tracked = on
     end)
+  end
+end)
+
+---------------------------------------------------------------------------
+-- The quest tracker folded as it was left. The game opens it whole at each login and reload: the tracker and
+-- each of its sections (Quests, Achievements...) folded then are folded again, for each character. Read at
+-- logout (reading the game's tracker changes nothing in it); folded again by the game's own fold (as its
+-- header's button does), out of combat, and only what was folded: a tracker left open is never touched. The
+-- tracker is not one of the game's protected frames (no fight check anywhere in it; its quest item buttons
+-- keep their quest in attributes, which an addon's code does not taint).
+---------------------------------------------------------------------------
+local function TrackerSections()
+  local list, tracker = {}, ObjectiveTrackerFrame
+  if tracker and type(tracker.modules) == "table" then
+    for _, module in ipairs(tracker.modules) do
+      local name = module.GetName and module:GetName()
+      if name and module.IsCollapsed and module.SetCollapsed then list[#list + 1] = { name = name, module = module } end
+    end
+  end
+  return list
+end
+
+local function SaveFolds()
+  local tracker, sv, me = ObjectiveTrackerFrame, ns.sv, Me()
+  if not (tracker and tracker.IsCollapsed and sv and me) then return end
+  local folds = {}
+  if tracker:IsCollapsed() then folds.all = true end
+  for _, section in ipairs(TrackerSections()) do
+    if section.module:IsCollapsed() then folds[section.name] = true end
+  end
+  sv.trackerFolds = type(sv.trackerFolds) == "table" and sv.trackerFolds or {}
+  sv.trackerFolds[me] = next(folds) and folds or nil
+  if not next(sv.trackerFolds) then sv.trackerFolds = nil end
+end
+
+local foldEvents = CreateFrame("Frame")
+local function Fold(again)
+  if InCombatLockdown() then foldEvents:RegisterEvent("PLAYER_REGEN_ENABLED") return end
+  local tracker, sv, me = ObjectiveTrackerFrame, ns.sv, Me()
+  local folds = me and sv and type(sv.trackerFolds) == "table" and sv.trackerFolds[me]
+  if not (tracker and tracker.SetCollapsed and type(folds) == "table") then return end
+  local sections = TrackerSections()
+  if #sections == 0 and not again then C_Timer.After(2, function() Fold(true) end) return end -- (its sections not set yet)
+  for _, section in ipairs(sections) do
+    if folds[section.name] and not section.module:IsCollapsed() then section.module:SetCollapsed(true) end
+  end
+  if folds.all and not tracker:IsCollapsed() then tracker:SetCollapsed(true) end
+end
+
+foldEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+foldEvents:RegisterEvent("PLAYER_LOGOUT")
+foldEvents:SetScript("OnEvent", function(self, event, isLogin, isReload)
+  if event == "PLAYER_LOGOUT" then
+    SaveFolds()
+  elseif event == "PLAYER_REGEN_ENABLED" then
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    Fold()
+  elseif isLogin or isReload then -- (the game's tracker set up on the same event: a moment later)
+    C_Timer.After(1, function() Fold() end)
   end
 end)

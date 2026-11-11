@@ -209,6 +209,8 @@ La page **Clara** elle-même a, tout en haut, **Replacer la fenêtre d'options**
 
 **Tracking rendu après la mort** : le jeu retire à la mort les sorts de pistage de la loupe de la minicarte (Découverte d'herbes, Découverte de gisements, les pistages du chasseur). Celui qui était actif juste avant est remis quand le personnage revit (rez sur place, corps rejoint, esprit soigneur), même après un rechargement pendant la mort. `C_Minimap.SetTracking` n'est pas une fonction protégée du jeu : Clara la tente aussitôt. Si le jeu ne la prend pas sans action du joueur, le pistage revient à la **première touche de déplacement** (ou une touche sans raccourci) **ou au premier clic dans le monde** : une touche, un pistage, la touche garde son propre effet ; une touche liée à un sort ou à l'interface n'est jamais utilisée. Si tu choisis toi-même un autre pistage entre-temps, il est gardé.
 
+**Suivi de quêtes replié gardé** : le jeu rouvre le suivi d'objectifs en entier à chaque connexion et rechargement. Le suivi entier et chacune de ses sections (Quêtes, Hauts faits…) repliés à la déconnexion sont repliés de nouveau, pour chaque personnage, par le repli du jeu lui-même (comme son bouton), hors combat ; un suivi laissé ouvert n'est jamais touché.
+
 **Options du jeu réglées une fois par Clara** (ses réglages par défaut, puis les tiens : l'addon n'y retouche plus) : **Sticky Targeting** désactivé (Échap > Options > Jeu > Contrôles), **Auto Loot** activé, **NPC Names** sur **None** (Plaques de nom), les **sacs séparés** (pas le sac combiné). Celles que le jeu garde pour chaque personnage sont réglées une fois sur chacun ; celles du compte, une fois.
 
 `/rl` recharge l'interface (comme `/reload`).
