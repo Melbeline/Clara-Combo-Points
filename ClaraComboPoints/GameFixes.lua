@@ -160,7 +160,8 @@ end
 
 local changed = setmetatable({}, { __mode = "k" })
 local function LootLine(_, root)
-  if not (Leader() and root and root.EnumerateElementDescriptions) then return end
+  -- (not in combat: the game's menu as it is, nothing of an addon's in it then)
+  if InCombatLockdown() or not (Leader() and root and root.EnumerateElementDescriptions) then return end
   for _, description in root:EnumerateElementDescriptions() do
     local list = description.HasElements and select(2, pcall(description.HasElements, description))
     if list and description.AddInitializer and description.SetResponder then

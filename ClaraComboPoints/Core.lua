@@ -2399,9 +2399,12 @@ function ns:SetDamageMeterShown(on)
 end
 
 -- What this addon puts in the portrait's menu, each part turned off in the game's options
--- (Esc > Options > AddOns): "Reload UI" just above Edit Mode, and its own section just above the
--- game's "Other Options" (which stays last, Leave Party at the very bottom; no such part: at the
--- end).
+-- (Esc > Options > AddOns): its own section, "Reload UI" first, at the menu's end (no section: "Reload UI"
+-- alone there). The game lets an addon add only after its own entries: an entry put higher, or one of the
+-- game's moved, rewrites the menu's own list from the addon's code (the game's comment: "Element move will
+-- taint execution"), and the game's entries moved are then refused what they do (Leave Party, Edit Mode).
+-- Nothing is added in combat: the menu's buttons made for an addon's entries are refused their frame level
+-- then (the game blocked the addon), and the game's own entries stay as they are.
 local menuFailed -- (said once a session)
 local function Part(fn)
   local ok, err = pcall(fn)
@@ -2410,39 +2413,30 @@ local function Part(fn)
   print("|cffff6060Clara|r: portrait menu: " .. tostring(err))
 end
 local function AddMenuEntries(_, root)
+  if InCombatLockdown() then return end
   if ns.TipResetInstances then ns.TipResetInstances(root) end -- (its tooltip: the instances entered, Layers.lua)
   local menu = ns.sv and ns.sv.menu or {}
-  if menu.reload ~= false then
-    local editModeIndex
-    for index, description in root:EnumerateElementDescriptions() do
-      if HUD_EDIT_MODE_MENU and MenuUtil.GetElementText(description) == HUD_EDIT_MODE_MENU then
-        editModeIndex = index
-        break
-      end
-    end
-    if editModeIndex then
-      root:Insert(MenuUtil.CreateButton(L.RELOAD_UI, ReloadInterface), editModeIndex)
-    else -- no Edit Mode entry: at the end
-      root:CreateButton(L.RELOAD_UI, ReloadInterface)
-    end
-  end
   -- the section: the classes the HUD is for. Made by the menu itself (root:Create...: an entry made apart and filled
-  -- after, as More... was, broke in this client and took the whole section away), at the menu's end, then moved
-  -- above Other Options. Each part on its own: one that fails leaves the others (and says why, once, in the chat).
-  if menu.line ~= false and ns.enabled and ns.db and root.CreateTitle and root.CreateButton then
-    local made = {}
-    local function Keep(description) if description then made[#made + 1] = description end return description end
-    Part(function() if root.CreateDivider then Keep(root:CreateDivider()) end end)
-    Part(function() Keep(root:CreateTitle("Clara Combo Points")) end)
+  -- after, as More... was, broke in this client and took the whole section away). Each part on its own: one that
+  -- fails leaves the others (and says why, once, in the chat).
+  local section = menu.line ~= false and ns.enabled and ns.db and root.CreateTitle and root.CreateButton
+  if section or menu.reload ~= false then
+    Part(function() if root.CreateDivider then root:CreateDivider() end end)
+  end
+  if section then Part(function() root:CreateTitle("Clara Combo Points") end) end
+  if menu.reload ~= false then
+    Part(function() root:CreateButton(L.RELOAD_UI, ReloadInterface) end)
+  end
+  if section then
     if MinimalSliderWithSteppersMixin then -- the opacity, the lock and show boxes
       Part(function()
         local line = root.CreateFrame and root:CreateFrame() or (MenuUtil.CreateFrame and root:Insert(MenuUtil.CreateFrame()))
-        if line then Keep(MenuLineDescription(line)) end
+        if line then MenuLineDescription(line) end
       end)
     end
     -- the rest, used now and then, under More...: its own menu
     local more
-    Part(function() more = Keep(root:CreateButton(L.MENU_MORE)) end)
+    Part(function() more = root:CreateButton(L.MENU_MORE) end)
     if more and more.CreateCheckbox then
       Part(function()
         if MeterSetting() ~= nil then -- the game's damage meter
@@ -2472,29 +2466,6 @@ local function AddMenuEntries(_, root)
     if more and more.CreateButton then
       Part(function() more:CreateButton(L.MENU_OPTIONS, function() ns:OpenOptions() end) end)
     end
-    -- above Other Options (its divider first): the menu's own list, reordered; else left at the end
-    Part(function()
-      local list = rawget(root, "elementDescriptions") or rawget(root, "elements")
-      if type(list) ~= "table" or #made == 0 then return end
-      local mine = {}
-      for _, d in ipairs(made) do mine[d] = true end
-      local rest = {}
-      for _, d in ipairs(list) do if not mine[d] then rest[#rest + 1] = d end end
-      local at
-      local other = UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER
-      for index, d in ipairs(rest) do
-        if other and MenuUtil.GetElementText(d) == other then
-          local previous = rest[index - 1]
-          at = (previous and MenuUtil.GetElementText(previous) == nil) and index - 1 or index
-          break
-        end
-      end
-      if not at then return end
-      for i = #list, 1, -1 do list[i] = nil end
-      for i = 1, at - 1 do list[#list + 1] = rest[i] end
-      for _, d in ipairs(made) do list[#list + 1] = d end
-      for i = at, #rest do list[#list + 1] = rest[i] end
-    end)
   end
 end
 
