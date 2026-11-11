@@ -16,10 +16,22 @@ function ns.ChatPlace.Reset(chatFrame)
   if FCF_SavePositionAndDimensions then FCF_SavePositionAndDimensions(chatFrame) end
 end
 
+-- The chat's alerts (a Battle.net friend online or offline, the voice chat's): just above the general chat's tabs,
+-- rather than above its buttons on its left, where they lay over its lines. Their container is moved; it follows
+-- the chat wherever Edit Mode puts it.
+local function PlaceAlerts()
+  local alerts, tab = _G.ChatAlertFrame, _G.ChatFrame1Tab
+  if not (alerts and tab and alerts.ClearAllPoints) then return end
+  alerts:ClearAllPoints()
+  alerts:SetPoint("BOTTOMLEFT", tab, "TOPLEFT", 0, 4)
+end
+ns.ChatPlace.PlaceAlerts = PlaceAlerts
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:SetScript("OnEvent", function(self)
   self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+  PlaceAlerts()
   if ns.sv then ns.sv.chatPlace = nil end -- (a place kept outside Edit Mode before: Edit Mode's again)
   -- (after the other addons' entries, Leatrix Plus's made at login: the last one; a window out of the dock only)
   C_Timer.After(0, function()
