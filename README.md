@@ -213,6 +213,8 @@ La page **Clara** elle-même a, tout en haut, **Replacer la fenêtre d'options**
 
 **`/played` toujours affiché** : en combat, la réponse du jeu à `/played` arrivait sans qu'aucune fenêtre de chat ne l'affiche. Si aucune ligne « Temps de jeu total » n'apparaît dans le chat juste après la réponse, Clara l'écrit dans la fenêtre de chat principale avec la fonction du jeu elle-même (même texte, même couleur) ; affichée par le jeu, elle n'est jamais écrite deux fois.
 
+**Sacs au-dessus d'AtlasLoot** : la fenêtre d'AtlasLoot est dans une strate au-dessus de celle des sacs, qui passaient dessous. Tant qu'elle est ouverte, les sacs prennent la strate juste au-dessus de la sienne (lue sur sa fenêtre, quelle que soit sa version) ; elle fermée, ils reprennent la leur.
+
 **Options du jeu réglées une fois par Clara** (ses réglages par défaut, puis les tiens : l'addon n'y retouche plus) : **Sticky Targeting** désactivé (Échap > Options > Jeu > Contrôles), **Auto Loot** activé, **NPC Names** sur **None** (Plaques de nom), les **sacs séparés** (pas le sac combiné). Celles que le jeu garde pour chaque personnage sont réglées une fois sur chacun ; celles du compte, une fois.
 
 `/rl` recharge l'interface (comme `/reload`).
