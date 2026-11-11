@@ -210,6 +210,8 @@ La page **Clara** elle-même a, tout en haut, **Replacer la fenêtre d'options**
 
 **Suivi de quêtes replié gardé** : le jeu rouvre le suivi d'objectifs en entier à chaque connexion et rechargement. Le suivi entier et chacune de ses sections (Quêtes, Hauts faits…) repliés à la déconnexion sont repliés de nouveau, pour chaque personnage, par le repli du jeu lui-même (comme son bouton), hors combat ; un suivi laissé ouvert n'est jamais touché.
 
+**`/played` toujours affiché** : en combat, la réponse du jeu à `/played` arrivait sans qu'aucune fenêtre de chat ne l'affiche. Si aucune ligne « Temps de jeu total » n'apparaît dans le chat juste après la réponse, Clara l'écrit dans la fenêtre de chat principale avec la fonction du jeu elle-même (même texte, même couleur) ; affichée par le jeu, elle n'est jamais écrite deux fois.
+
 **Options du jeu réglées une fois par Clara** (ses réglages par défaut, puis les tiens : l'addon n'y retouche plus) : **Sticky Targeting** désactivé (Échap > Options > Jeu > Contrôles), **Auto Loot** activé, **NPC Names** sur **None** (Plaques de nom), les **sacs séparés** (pas le sac combiné). Celles que le jeu garde pour chaque personnage sont réglées une fois sur chacun ; celles du compte, une fois.
 
 `/rl` recharge l'interface (comme `/reload`).
