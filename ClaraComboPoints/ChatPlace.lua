@@ -16,22 +16,31 @@ function ns.ChatPlace.Reset(chatFrame)
   if FCF_SavePositionAndDimensions then FCF_SavePositionAndDimensions(chatFrame) end
 end
 
--- The chat's alerts (a Battle.net friend online or offline, the voice chat's): just above the general chat's tabs,
--- rather than above its buttons on its left, where they lay over its lines. Their container is moved; it follows
--- the chat wherever Edit Mode puts it.
-local function PlaceAlerts()
-  local alerts, tab = _G.ChatAlertFrame, _G.ChatFrame1Tab
-  if not (alerts and tab and alerts.ClearAllPoints) then return end
-  alerts:ClearAllPoints()
-  alerts:SetPoint("BOTTOMLEFT", tab, "TOPLEFT", 0, 4)
+-- The Battle.net toast (a friend online, offline): just above the general chat's tabs, rather than in the chat's
+-- alert column on its left, where it lay over the chat's lines. Only the toast: the column also holds the friends
+-- button, left where it is. Put back there each time the game lays its alerts out, and as it shows.
+local function PlaceToast()
+  local toast, tab = _G.BNToastFrame, _G.ChatFrame1Tab
+  if not (toast and tab and toast.ClearAllPoints) then return end
+  toast:ClearAllPoints()
+  toast:SetPoint("BOTTOMLEFT", tab, "TOPLEFT", 0, 4)
 end
-ns.ChatPlace.PlaceAlerts = PlaceAlerts
+ns.ChatPlace.PlaceToast = PlaceToast
+local toastHooked
+local function HookToast()
+  if toastHooked or not _G.BNToastFrame then return end
+  toastHooked = true
+  local alerts = _G.ChatAlertFrame
+  if alerts and type(alerts.UpdateAnchors) == "function" then hooksecurefunc(alerts, "UpdateAnchors", PlaceToast) end
+  _G.BNToastFrame:HookScript("OnShow", PlaceToast)
+  PlaceToast()
+end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:SetScript("OnEvent", function(self)
   self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-  PlaceAlerts()
+  HookToast()
   if ns.sv then ns.sv.chatPlace = nil end -- (a place kept outside Edit Mode before: Edit Mode's again)
   -- (after the other addons' entries, Leatrix Plus's made at login: the last one; a window out of the dock only)
   C_Timer.After(0, function()
