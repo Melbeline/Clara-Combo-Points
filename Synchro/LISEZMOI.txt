@@ -39,7 +39,10 @@ Installer
        - se lance tout de suite, caché, et à chaque ouverture de Windows (raccourci dans le
          dossier Démarrage). Aucune fenêtre, aucune boîte de copie.
   Le dossier de WoW est réglé sur F:\Jeux\World of Warcraft\_forever_ en haut des .bat ;
-  s'il n'est pas trouvé, le .bat le demande.
+  s'il n'est pas trouvé là, et que ce dossier Synchro a été mis dans Interface\AddOns de WoW,
+  le .bat trouve WoW tout seul (trois dossiers plus haut) ; sinon il le demande.
+  Ce dossier n'est pas un addon : dans Interface\AddOns, WoW l'ignore. Ce qui compte, c'est
+  le double-clic sur Installer.bat ; ensuite, ce dossier peut être supprimé.
 
   Si Windows affiche un avertissement en ouvrant un .bat téléchargé : clic droit sur le
   fichier > Propriétés > cocher « Débloquer » > OK.
