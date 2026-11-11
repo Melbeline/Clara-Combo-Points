@@ -18,6 +18,9 @@ SendMailFrame:SetAllPoints(MailFrame)
 SendMailNameEditBox = CreateFrame("EditBox", "SendMailNameEditBox", SendMailFrame)
 SendMailNameEditBox:SetSize(109, 25)
 SendMailNameEditBox:SetPoint("TOPLEFT", SendMailFrame, "TOPLEFT", 90, -30)
+SendMailCancelButton = CreateFrame("Button", "SendMailCancelButton", SendMailFrame)
+SendMailCancelButton:SetSize(80, 22)
+SendMailCancelButton:SetPoint("BOTTOMRIGHT", SendMailFrame, "BOTTOMRIGHT", -7, 4)
 local sent = {}
 function SendMail(name, subject, body) sent[#sent + 1] = name end
 local level, me = 2, "Lola Elle"
@@ -59,14 +62,14 @@ local function Order(sort)
   for _, r in ipairs(list) do t[#t + 1] = r.name end
   return table.concat(t, ", ")
 end
-check(Order("last") == "Lia Love, Lola Rose, Chloe Moon, Charlotte Ella, Lola Elle", "Last sent: newest first, never mailed last (" .. Order("last") .. ")")
+check(Order("last") == "Lia Love, Lola Rose, Chloe Moon, Charlotte Ella", "Last sent: newest first; this character, logged in, left out (the game refuses mail to oneself) (" .. Order("last") .. ")")
 M.Fire("MAIL_FAILED")
 
 -- the window: closed at first; the button by To opens it
 local panel, toggle = Mail.panel, Mail.toggle
 check(panel and toggle and not panel:IsShown(), "built with the mailbox; the list shut at first")
 local p, rel, rp, x = toggle:GetPoint(1)
-check(rel == SendMailNameEditBox and p == "LEFT" and rp == "RIGHT" and x == 8, "its button right of To")
+check(rel == SendMailCancelButton and p == "BOTTOMRIGHT" and rp == "TOPRIGHT", "its button at the window's bottom right, above Cancel")
 toggle:Click()
 check(panel:IsShown() and ClaraMailDB.open == true, "a click: the list shown (kept open for next time)")
 check(math.abs(panel:GetBottom() - (MailFrame:GetTop() + 2)) < 1 and math.abs(panel:GetLeft() - MailFrame:GetLeft()) < 1
@@ -93,16 +96,29 @@ local function Shown()
   return table.concat(t, ", "), list
 end
 local text, list = Shown()
-check(text == "Lia Love, Lola Rose, Chloe Moon, Charlotte Ella, Lola Elle", "shown left to right, then the next row (" .. text .. ")")
+check(text == "Lia Love, Lola Rose, Chloe Moon, Charlotte Ella", "shown left to right, then the next row (" .. text .. ")")
 check(math.abs(list[1]:GetTop() - list[3]:GetTop()) < 1 and list[4]:GetTop() < list[1]:GetTop() - 20, "three to a row")
 check(list[1]:GetRight() <= panel:GetRight() - 12 and list[3]:GetRight() <= panel:GetRight() - 20, "inside the window, clear of its arrows")
 
+-- the search box: only the names holding the text (case and accents ignored)
+local search = panel.search
+check(search ~= nil, "a search box under Sort by")
+search:SetText("LOLA"); search._scripts.OnTextChanged(search)
+check(Shown() == "Lola Rose", "searched \"LOLA\": Lola Rose (" .. Shown() .. ")")
+search:SetText("chlo\195\169"); search._scripts.OnTextChanged(search)
+check(Shown() == "Chloe Moon", "searched \"chloé\": Chloe (accents ignored) (" .. Shown() .. ")")
+search:SetText("zz"); search._scripts.OnTextChanged(search)
+check(Shown() == "", "nothing found: no name")
+search:SetText(""); search._scripts.OnTextChanged(search)
+check(Shown() == "Lia Love, Lola Rose, Chloe Moon, Charlotte Ella", "cleared: all the names again")
 -- a click: in To
 list[2]:Click("LeftButton")
 check(SendMailNameEditBox:GetText() == "Lola Rose", "a click: the name in To")
 -- its tooltip: its categories
-list[5]._scripts.OnEnter(list[5])
-check(GameTooltip._lines[1] == "Lola Elle" and GameTooltip._lines[2] == "Main/alt", "its tooltip: its categories")
+Mail.SetCategory("Charlotte Ella", "friend", true)
+list[4]._scripts.OnEnter(list[4])
+check(GameTooltip._lines[1] == "Charlotte Ella" and GameTooltip._lines[2] == "Friend", "its tooltip: its categories")
+Mail.SetCategory("Charlotte Ella", "friend", false)
 list[1]._scripts.OnEnter(list[1])
 check(GameTooltip._lines[2] == "No category", "none: said so")
 
@@ -151,7 +167,7 @@ local fits, where = HeaderFits()
 check(fits, "the header fits (" .. where .. ")")
 Pick(sortButton, "Bank alt")
 text, list = Shown()
-check(text == "Lia Love, Chloe Moon, Lola Rose, Charlotte Ella, Lola Elle", "Bank alt first (newest first among them), the rest after on a new row (" .. text .. ")")
+check(text == "Lia Love, Chloe Moon, Lola Rose, Charlotte Ella", "Bank alt first (newest first among them), the rest after on a new row (" .. text .. ")")
 check(math.abs(list[3]:GetTop() - list[1]:GetTop()) > 20, "the others start on the next row")
 local framed = 0
 for _, f in ipairs(M.frames) do if f._parent == panel and f.lines and f:IsShown() then framed = framed + 1 end end
@@ -230,7 +246,7 @@ text = Shown()
 check(text:sub(1, 19) == "Alt17, Alt16, Alt15", "the wheel: a row further (" .. text:sub(1, 30) .. ")")
 for _ = 1, 20 do wheel._scripts.OnMouseWheel(wheel, -1) end
 local _, last = Shown()
-check(last[#last]:GetText() == "Lola Elle", "down to the oldest")
+check(last[#last]:GetText() == "Charlotte Ella", "down to the oldest")
 
 -- the mailbox shut and opened again: the window as left
 M.Fire("MAIL_CLOSED"); M.Fire("MAIL_SHOW")

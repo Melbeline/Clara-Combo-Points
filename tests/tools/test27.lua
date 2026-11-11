@@ -240,6 +240,20 @@ for _, b in ipairs(shownButtons(1)) do wb[b.spellID] = b end
 check(wb[100] and wb[100]:GetAttribute("macrotext") == "/cast [form:1] Charge; Battle Stance", "Charge in Defensive Stance: Battle Stance first")
 check(wb[11597] and wb[11597]:GetAttribute("type1") == "spell", "Sunder Armor: cast as it is")
 check(driver(1) == nil and layers()[1]:IsShown(), "one layer, in every stance")
+-- icons shown only while lit ("Show missing auras" off): their buttons hidden in a fight by the game's state driver
+ns.db.icons.missing = false
+ns:LayoutIcons(); sync()
+check(driver(1) == "[combat] hide; show", "icons that may go in a fight: their buttons hidden then ([combat] hide): " .. tostring(driver(1)))
+ns.db.icons.missing = true
+ns:LayoutIcons(); sync()
+check(driver(1) == nil, "always shown again: the buttons in a fight too")
+-- the HUD at 0 % opacity: no button over it
+ns.db.alpha = 0
+ns:LayoutIcons(); sync()
+check(#shownButtons(1) == 0, "0 % opacity: no button, the clicks go through")
+ns.db.alpha = 1
+ns:LayoutIcons(); sync()
+check(#shownButtons(1) == 2, "opacity back: the buttons back")
 
 local function boot(class, setup)
   for k in pairs(S) do if k ~= "uiScale" and k ~= "physH" then S[k] = nil end end
