@@ -5,8 +5,10 @@
 -- mouse wheel shows older ones. A click puts the name in To; a right-click puts the character in
 -- categories (several at once). Sort by: the newest first, or a category's characters first, in a
 -- framed block. Add/remove categories: add one, delete one, reset them, or reset everything. Export /
--- Import (title bar): the whole of it as a line of text, for another account. A search box under Sort by: only the
--- names holding what is typed (case and accents ignored). The game's own window
+-- Import (title bar): the whole of it as a line of text, for another account. Under Sort by, a button for each
+-- category (and All): one click shows that category's characters alone. Sort by "By category": each category in a
+-- framed block of its own, its name above it, the others last. A search box under them: only the names holding
+-- what is typed (case and accents ignored). The game's own window
 -- look; ClassicUI's when it runs (its ClaraMailSkin: Modules/ClassicUI/Windows/ClaraMail.lua).
 
 local ADDON, ns = ...
@@ -15,7 +17,11 @@ local M = ns.Mail
 if not M then return end
 
 local COLS, ROWS = 3, 5
-local TITLE_H, SORT_H = 24, 50  -- the title bar; the Sort by row and the search box under it
+local TITLE_H, SORT_ROW_H, CHIP_H, SEARCH_H = 24, 26, 22, 24 -- the title bar; the Sort by row; a line of category
+-- buttons; the search box
+local chipLines = 1 -- lines of category buttons (they wrap)
+-- The height above the names: the title bar, Sort by, the category buttons, the search box
+local function Top() return TITLE_H + SORT_ROW_H + chipLines * CHIP_H + SEARCH_H end
 local ROW_H, NAME_H = 28, 22    -- a row of names; a name's button
 local GAP, PAD = 6, 12          -- between names; the window's margins
 local ARROWS_W = 20             -- the scroll arrows, right of the names
@@ -27,6 +33,8 @@ local first = 0 -- rows scrolled past
 local textBox
 local query = "" -- the search box's text, as a search key (ns:SearchKey: case and accents ignored)
 local searchBox
+local filter -- the category shown alone (its button), or nil: all
+local chips, titles = {}, {} -- the category buttons; the categories' names over their blocks (By category)
 
 local function Skin(kind, frame)
   local classic = ns.ClassicUIPrivate -- (ClassicUI built in, running)
@@ -70,6 +78,7 @@ local Refresh, Anchor
 
 local function SortName(id)
   if id == "last" then return L.MAIL_SORT_LAST end
+  if id == "bycat" then return L.MAIL_SORT_BYCAT end
   return M.CategoryName(id) or L.MAIL_SORT_LAST
 end
 
@@ -81,22 +90,56 @@ local function Matches(r)
   return key ~= nil and key:find(query, 1, true) ~= nil
 end
 
+local function Shown(r) return Matches(r) and (not filter or r.cats[filter] == true) end
+
+-- The list's lines: { names = { up to COLS entries }, block = framed, top = its frame's first line, bottom = its
+-- last } or { title = a category's name } (By category). Sorted by a category: its characters first, framed; By
+-- category: each category's in a block of its own, its name above it, then the others; the category button: that
+-- category's alone; the search: the names holding the text.
 local function Layout()
-  local all, total = M.Sorted()
-  -- (searched: only the names holding the text, the category's block and the others alike)
-  local list, n = {}, 0
-  for i = 1, #all do
-    if Matches(all[i]) then
-      list[#list + 1] = all[i]
-      if i <= total then n = n + 1 end
+  local lines = {}
+  local function AddNames(list, block)
+    local n = #list
+    for i = 1, n, COLS do
+      local line = { names = {}, block = block, top = block and i == 1, bottom = block and i + COLS > n }
+      for c = 1, COLS do line.names[c] = list[i + c - 1] end
+      lines[#lines + 1] = line
     end
   end
-  local out = {}
-  for i = 1, n do out[#out + 1] = list[i] end
-  local blockRows = math.ceil(n / COLS)
-  for _ = n + 1, blockRows * COLS do out[#out + 1] = false end
-  for i = n + 1, #list do out[#out + 1] = list[i] end
-  return out, blockRows
+  if M.db.sort == "bycat" then
+    local all, placed = M.Sorted("last"), {}
+    for _, c in ipairs(M.Categories()) do
+      if not filter or filter == c.id then
+        local list = {}
+        for _, r in ipairs(all) do
+          if r.cats[c.id] and Matches(r) then list[#list + 1] = r; placed[r] = true end
+        end
+        if #list > 0 then
+          lines[#lines + 1] = { title = c.name }
+          AddNames(list, true)
+        end
+      end
+    end
+    if not filter then
+      local list = {}
+      for _, r in ipairs(all) do if not placed[r] and Matches(r) then list[#list + 1] = r end end
+      if #list > 0 then
+        if #lines > 0 then lines[#lines + 1] = { title = L.MAIL_NO_CATEGORY } end
+        AddNames(list, false)
+      end
+    end
+    return lines
+  end
+  local all, total = M.Sorted()
+  local block, rest = {}, {}
+  for i, r in ipairs(all) do
+    if Shown(r) then
+      if i <= total then block[#block + 1] = r else rest[#rest + 1] = r end
+    end
+  end
+  AddNames(block, true)
+  AddNames(rest, false)
+  return lines
 end
 
 local function Scroll(delta)
@@ -230,18 +273,87 @@ local function NeedWidth()
   return 2 * PAD + ARROWS_W + COLS * NeedCell() + (COLS - 1) * GAP
 end
 
+-- The category buttons: All, then each category, on as many lines as the window's width needs (their names whole)
+local function LayChips()
+  local list = { { id = nil, name = L.MAIL_FILTER_ALL } }
+  local known = false
+  for _, c in ipairs(M.Categories()) do
+    list[#list + 1] = c
+    if c.id == filter then known = true end
+  end
+  if filter and not known then filter = nil end -- (its category deleted)
+  local width = panel:GetWidth() - 2 * PAD - ARROWS_W
+  local x, line = 0, 1
+  for i, c in ipairs(list) do
+    local b = chips[i]
+    if not b then
+      b = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+      b:SetHeight(CHIP_H - 2)
+      b:SetNormalFontObject(GameFontNormalSmall)
+      b:SetHighlightFontObject(GameFontHighlightSmall)
+      b:SetScript("OnClick", function(self)
+        ClickSound()
+        filter = (filter ~= self.id) and self.id or nil -- (its own button again: all)
+        first = 0
+        Refresh()
+      end)
+      b:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(self.id and L.MAIL_FILTER_TIP or L.MAIL_FILTER_ALL_TIP, 1, 1, 1, 1, true)
+        GameTooltip:Show()
+      end)
+      b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+      Skin("button", b)
+      chips[i] = b
+    end
+    b.id = c.id
+    b:SetText(c.name)
+    local fs = b:GetFontString()
+    local w = math.ceil((fs and fs:GetStringWidth() or 40) + 16)
+    if x > 0 and x + w > width then x, line = 0, line + 1 end
+    b:ClearAllPoints()
+    b:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD + x, -(TITLE_H + SORT_ROW_H + (line - 1) * CHIP_H))
+    b:SetWidth(w)
+    b:Show()
+    x = x + w + 4
+  end
+  for i = #list + 1, #chips do chips[i]:Hide() end
+  chipLines = line
+  chips.count = #list
+end
+
+-- The buttons' look: the category shown alone, pressed
+local function ChipStates()
+  for i = 1, chips.count or 0 do
+    local b = chips[i]
+    local on = b.id == filter
+    if on then b:LockHighlight() else b:UnlockHighlight() end
+    local fs = b:GetFontString()
+    if fs then
+      if on then fs:SetTextColor(1, 1, 1) else fs:SetTextColor(1, .82, 0) end
+    end
+  end
+end
+
+local function Height() return Top() + 10 + ROWS * ROW_H + 8 end
+
 -- The cells' places: the window's width shared out (it follows the mail window's, wider when a name needs it).
 local function Place()
+  LayChips()
+  panel:SetHeight(Height())
   local w = panel:GetWidth()
   local inner = w - 2 * PAD - ARROWS_W
   local cellW = math.max(math.floor((inner - (COLS - 1) * GAP) / COLS), NeedCell())
-  local top = -(TITLE_H + SORT_H + 10)
+  local top = -(Top() + 10)
   for r = 1, ROWS do
     local y = top - (r - 1) * ROW_H
     local row = rows[r]
     row:ClearAllPoints()
     row:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD - BLOCK_PAD, y + BLOCK_PAD)
     row:SetSize(COLS * cellW + (COLS - 1) * GAP + 2 * BLOCK_PAD, NAME_H + 2 * BLOCK_PAD)
+    titles[r]:ClearAllPoints()
+    titles[r]:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", PAD + 2, y - NAME_H + 2)
     for c = 1, COLS do
       local b = cells[(r - 1) * COLS + c]
       b:ClearAllPoints()
@@ -251,6 +363,18 @@ local function Place()
       if fs then fs:SetWidth(cellW - 10) end
     end
   end
+  -- under the category buttons: the search box, then the names, the arrows, the empty list's words
+  searchBox:ClearAllPoints()
+  searchBox:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD + 6, -(TITLE_H + SORT_ROW_H + chipLines * CHIP_H + 2))
+  searchBox:SetPoint("RIGHT", panel, "RIGHT", -PAD - ARROWS_W, 0)
+  panel.wheel:ClearAllPoints()
+  panel.wheel:SetPoint("TOPLEFT", PAD, -(Top() + 6))
+  panel.wheel:SetPoint("BOTTOMRIGHT", -PAD, 6)
+  upButton:ClearAllPoints()
+  upButton:SetPoint("TOPRIGHT", -PAD + 2, -(Top() + 10))
+  emptyText:ClearAllPoints()
+  emptyText:SetPoint("TOPLEFT", PAD, -(Top() + 14))
+  emptyText:SetPoint("RIGHT", -PAD - ARROWS_W, 0)
   -- the Sort by row: the list takes what the label and the button leave
   local label = panel.sortLabel
   local room = w - 2 * PAD - (label:GetStringWidth() or 40) - 6 - 8 - manage:GetWidth()
@@ -259,34 +383,43 @@ end
 
 function Refresh()
   if not (panel and panel:IsShown()) then return end
-  local list, blockRows = Layout()
-  local total = math.ceil(#list / COLS)
-  first = math.max(0, math.min(first, total - ROWS))
+  -- the categories changed (one added, renamed, deleted): their buttons laid out again
+  local sig = {}
+  for _, c in ipairs(M.Categories()) do sig[#sig + 1] = c.id .. "=" .. c.name end
+  sig = table.concat(sig, "|")
+  if sig ~= panel.chipSig then panel.chipSig = sig; Place() end
+  ChipStates()
+  local lines = Layout()
+  first = math.max(0, math.min(first, #lines - ROWS))
+  local names = 0
   for r = 1, ROWS do
-    local index = first + r
+    local line = lines[first + r]
     local row = rows[r]
-    local inBlock = index <= blockRows
-    row:SetShown(inBlock)
-    if inBlock then
-      row.lines.TOP:SetShown(index == 1)
-      row.lines.BOTTOM:SetShown(index == blockRows)
+    local boxed = line and line.block or false
+    row:SetShown(boxed)
+    if boxed then
+      row.lines.TOP:SetShown(line.top)
+      row.lines.BOTTOM:SetShown(line.bottom)
     end
+    titles[r]:SetText(line and line.title or "")
+    titles[r]:SetShown(line ~= nil and line.title ~= nil)
     for c = 1, COLS do
       local b = cells[(r - 1) * COLS + c]
-      local entry = list[(index - 1) * COLS + c]
+      local entry = line and line.names and line.names[c]
       b.entry = entry or nil
       if entry then
         b:SetText(entry.name)
         b:Show()
+        names = names + 1
       else
         b:Hide()
       end
     end
   end
   upButton:SetEnabled(first > 0)
-  downButton:SetEnabled(first + ROWS < total)
-  emptyText:SetShown(#list == 0)
-  emptyText:SetText(query ~= "" and L.MAIL_SEARCH_NONE or L.MAIL_EMPTY)
+  downButton:SetEnabled(first + ROWS < #lines)
+  emptyText:SetShown(#lines == 0)
+  emptyText:SetText((query ~= "" or filter) and L.MAIL_SEARCH_NONE or L.MAIL_EMPTY)
   sortButton.text:SetText(SortName(M.db.sort))
 end
 M.Changed = function()
@@ -304,6 +437,11 @@ local function SortMenu(self)
   ToggleMenu(self, function(_, root)
     root:CreateRadio(L.MAIL_SORT_LAST, function() return M.db.sort == "last" end, function()
       M.db.sort = "last"
+      first = 0
+      Refresh()
+    end)
+    root:CreateRadio(L.MAIL_SORT_BYCAT, function() return M.db.sort == "bycat" end, function()
+      M.db.sort = "bycat"
       first = 0
       Refresh()
     end)
@@ -428,7 +566,6 @@ local function ArrowButton(parent, dir, onClick)
   return b
 end
 
-local function Height() return TITLE_H + SORT_H + 10 + ROWS * ROW_H + 8 end
 
 -- Above the mail window, as wide as it; beside it when the screen has no room above.
 function Anchor()
@@ -519,9 +656,7 @@ local function Build()
 
   -- the search box: the game's own (magnifier, its grey "Search", the clear cross)
   searchBox = CreateFrame("EditBox", "ClaraMailRecipientsSearch", panel, "SearchBoxTemplate")
-  searchBox:SetHeight(20)
-  searchBox:SetPoint("TOPLEFT", PAD + 6, -(TITLE_H + 31))
-  searchBox:SetPoint("RIGHT", panel, "RIGHT", -PAD - ARROWS_W, 0)
+  searchBox:SetHeight(20) -- (placed under the category buttons: Place)
   searchBox:SetAutoFocus(false)
   searchBox:SetMaxLetters(32)
   searchBox:HookScript("OnTextChanged", function(self)
@@ -534,21 +669,25 @@ local function Build()
   panel.search = searchBox
 
   -- the names, their rows' frames, the scroll arrows
-  for r = 1, ROWS do Row(panel, r) end
+  for r = 1, ROWS do
+    Row(panel, r)
+    -- a category's name, over its block (By category)
+    titles[r] = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titles[r]:SetJustifyH("LEFT")
+    titles[r]:Hide()
+  end
   for i = 1, ROWS * COLS do Cell(panel, i) end
   local wheel = CreateFrame("Frame", nil, panel)
-  wheel:SetPoint("TOPLEFT", PAD, -(TITLE_H + SORT_H + 6))
-  wheel:SetPoint("BOTTOMRIGHT", -PAD, 6)
+  panel.wheel = wheel -- (placed under the category buttons and the search box: Place)
   wheel:SetFrameLevel(panel:GetFrameLevel())
   wheel:EnableMouseWheel(true)
   wheel:SetScript("OnMouseWheel", function(_, delta) Scroll(delta) end)
   upButton = ArrowButton(panel, "Up", function() Scroll(1) end)
-  upButton:SetPoint("TOPRIGHT", -PAD + 2, -(TITLE_H + SORT_H + 10))
+  -- (placed with the names: Place)
   downButton = ArrowButton(panel, "Down", function() Scroll(-1) end)
   downButton:SetPoint("BOTTOMRIGHT", -PAD + 2, 10)
   emptyText = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  emptyText:SetPoint("TOPLEFT", PAD, -(TITLE_H + SORT_H + 14))
-  emptyText:SetPoint("RIGHT", -PAD - ARROWS_W, 0)
+  -- (placed with the names: Place)
   emptyText:SetJustifyH("LEFT")
   emptyText:SetWordWrap(true)
   emptyText:SetText(L.MAIL_EMPTY)
@@ -618,7 +757,7 @@ function M.OnShow()
   if not panel then Build() end
   first = 0
   if searchBox and searchBox:GetText() ~= "" then searchBox:SetText("") end -- (each visit to the mailbox: all the names)
-  query = ""
+  query, filter = "", nil
   panel:SetShown(M.db.open == true)
   if panel:IsShown() then
     Anchor()
