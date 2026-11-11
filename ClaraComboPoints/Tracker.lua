@@ -528,16 +528,6 @@ local function WeaponIcon(icon)
   return false
 end
 
--- Another icon than its own that the game gives a spell while it is on (the star of Shadowmeld, of the aspects): the
--- star by its file, or any icon that is not the spell's original one (the game gives both) nor a weapon's. Read so,
--- the star's file ID need not be known (on WoW Forever it was not: the star was never seen).
-local function OtherIcon(icon, original)
-  if icon == nil or issecretvalue(icon) then return nil end
-  if IsStar(icon) then return icon end
-  if type(icon) ~= "number" or type(original) ~= "number" or issecretvalue(original) then return nil end
-  if icon ~= original and not WeaponIcon(icon) then return icon end
-end
-
 -- An action button's icon as the game shows it now (read live)
 local function ActionTexture(action)
   local fn = (C_ActionBar and C_ActionBar.GetActionTexture) or GetActionTexture
@@ -546,35 +536,59 @@ local function ActionTexture(action)
   if ok and icon ~= nil and not issecretvalue(icon) then return icon end
 end
 
--- The action bars' slots holding each spell (by name), read again when the bars change (not kept while the bars
--- read empty: not known yet at login)
+-- The spell an action button holds: a spell, or the one a macro shows (C_ActionBar.GetSpell reads both)
+local GetActionSpell = C_ActionBar and C_ActionBar.GetSpell
+local function SpellOfAction(action)
+  if GetActionSpell then
+    local ok, id = pcall(GetActionSpell, action)
+    if ok and Plain(id) and id > 0 then return id end
+  end
+  if not GetActionInfo then return nil end
+  local ok, kind, id = pcall(GetActionInfo, action)
+  if not ok or issecretvalue(kind) then return nil end
+  if kind == "spell" and Plain(id) then return id end
+  if kind == "macro" and Plain(id) and GetMacroSpell then
+    local okM, spell = pcall(GetMacroSpell, id)
+    if okM and Plain(spell) then return spell end
+  end
+end
+
+-- The action bars' slots holding each spell (by name), macros showing it included, read again when the bars
+-- change (not kept while the bars read empty: not known yet at login)
 local actionsByName
 local function ActionsOf(name)
   if not actionsByName then
     local found, any = {}, false
-    if GetActionInfo then
-      for action = 1, ACTION_SLOTS do
-        local ok, kind, id = pcall(GetActionInfo, action)
-        if ok and not issecretvalue(kind) and kind ~= nil then
+    for action = 1, ACTION_SLOTS do
+      local hasAction = true
+      if C_ActionBar and C_ActionBar.HasAction then
+        local ok, has = pcall(C_ActionBar.HasAction, action)
+        hasAction = ok and Truthy(has)
+      end
+      if hasAction then
+        local id = SpellOfAction(action)
+        if id then
           any = true
-          if kind == "spell" and Plain(id) then
-            local spellName = ns:SpellName(id)
-            if spellName then
-              found[spellName] = found[spellName] or {}
-              table.insert(found[spellName], action)
-            end
+          local spellName = ns:SpellName(id)
+          if spellName then
+            local key = Fold(spellName)
+            found[key] = found[key] or {}
+            table.insert(found[key], action)
           end
+        elseif GetActionInfo then
+          local ok, kind = pcall(GetActionInfo, action)
+          if ok and not issecretvalue(kind) and kind ~= nil then any = true end
         end
       end
     end
     if not any then return NONE end
     actionsByName = found
   end
-  return actionsByName[name] or NONE
+  return (name and actionsByName[Fold(name)]) or NONE
 end
 function ns:ActionBarsChanged() actionsByName = nil end
 
--- The slots holding the icon's spell: by its name (every rank), else as the game finds it
+-- The slots holding the icon's spell: by its name (every rank, macros too), else as the game finds it
 local function SpellActions(slot)
   local list = ActionsOf(slot.name)
   if #list == 0 and type(slot.spell) == "number" and C_ActionBar and C_ActionBar.FindSpellActionButtons then
@@ -597,47 +611,92 @@ local function Current(slot)
   return false
 end
 
--- The icon the game shows for it while on when it is not its own (the star of Shadowmeld, of the aspects): as the
--- spell's icon (the game gives its own beside it), or on an action button holding it (against the original icon of
--- the spell that button holds: a rank of its own). nil otherwise.
+-- Checked as the game checks its own buttons: its form on, the spell current (a button holding it checked: Stealth),
+-- or repeating. Shadowmeld's and the aspects' buttons are not checked while on: they only change image.
+local function GameChecked(slot)
+  return FormOn(slot.name) or SpellOn(IsAutoRepeatSpell, slot.name) or Current(slot)
+end
+
+-- Each spell's icon at rest, by spell ID: the game gives a spell another image while it is on (Shadowmeld's star,
+-- Stealth's face), to its icon and to the buttons holding it, its "original" icon included; so the image a spell
+-- had when first seen (at login, off) is what tells on from off.
 local GetSpellTextureNow = C_Spell and C_Spell.GetSpellTexture
+local restIcons = {}
+local function RestIcon(spellID)
+  if not Plain(spellID) then return nil end
+  local icon = restIcons[spellID]
+  if icon == nil and GetSpellTextureNow then
+    local ok, a, b = pcall(GetSpellTextureNow, spellID)
+    local v = ok and (Plain(b) or Plain(a)) or nil
+    if v then restIcons[spellID] = v end
+    icon = v
+  end
+  return icon
+end
+
+-- Another image than its own at rest (rest: the icon's own, and that of the spell the button holds): the star by its
+-- file, or any other, but never a weapon's (Attack, Auto Shot, Shoot show their weapon on their button).
+local function OtherThanRest(icon, restA, restB)
+  if icon == nil or issecretvalue(icon) then return nil end
+  if IsStar(icon) then return icon end
+  if type(icon) ~= "number" or WeaponIcon(icon) then return nil end
+  if type(restA) ~= "number" and type(restB) ~= "number" then return nil end
+  if icon ~= restA and icon ~= restB then return icon end
+end
+
+-- The image the game shows for it while on when it is not its own at rest (the star of Shadowmeld and the aspects,
+-- Stealth's face): on a button holding it (spells and macros: what you see on your bars), or as the spell's icon.
+-- nil otherwise.
 local function ShownOn(slot)
   if slot.item or not slot.name or ns.preview then return end
-  if GetSpellTextureNow and slot.spell ~= nil then
-    local ok, icon, original = pcall(GetSpellTextureNow, slot.spell)
-    local other = ok and OtherIcon(icon, original)
+  local own = Plain(slot.spellIcon)
+  for _, action in ipairs(SpellActions(slot)) do
+    local other = OtherThanRest(ActionTexture(action), own, RestIcon(SpellOfAction(action)))
     if other then return other end
   end
-  for _, action in ipairs(SpellActions(slot)) do
-    local icon = ActionTexture(action)
-    if icon ~= nil then
-      if IsStar(icon) then return icon end
-      local original
-      if GetActionInfo and GetSpellTextureNow then
-        local ok, kind, id = pcall(GetActionInfo, action)
-        if ok and kind == "spell" and Plain(id) then
-          local okT, _, orig = pcall(GetSpellTextureNow, id)
-          original = okT and orig or nil
-        end
-      end
-      local other = OtherIcon(icon, original)
-      if other then return other end
-    end
+  if GetSpellTextureNow and slot.spell ~= nil then
+    local ok, icon = pcall(GetSpellTextureNow, slot.spell)
+    local other = ok and OtherThanRest(icon, own, RestIcon(slot.spell))
+    if other then return other end
   end
 end
 
--- What the form, action bar and spell events change on an icon: on (a form, a toggle, queued or repeating), and
--- the other icon its button shows while on
+-- A spell the game checks while on (Stealth) and does not check now is off: what it shows now is its rest image
+-- (its first sight may have been while on: a reload while stealthed)
+local function LearnRest(slot)
+  if not slot.spellIcon or slot.item then return end
+  local icon
+  if GetSpellTextureNow and Plain(slot.spell) then
+    local ok, a = pcall(GetSpellTextureNow, slot.spell)
+    icon = ok and Plain(a) or nil
+  end
+  if not icon then return end
+  if Plain(slot.spell) then restIcons[slot.spell] = icon end
+  if slot.spellIcon ~= icon and type(slot.spellIcon) == "number" then slot.spellIcon = icon end
+  for _, action in ipairs(SpellActions(slot)) do
+    local id, tex = SpellOfAction(action), ActionTexture(action)
+    if id and Plain(tex) and not WeaponIcon(tex) then restIcons[id] = tex end
+  end
+end
+
+-- What the form, action bar and spell events change on an icon: on (a form, a toggle, queued or repeating), the
+-- other image its button shows while on, and whether the game checks it
 local function Look(slot)
-  if slot.item or not slot.name or ns.preview then return false, nil end
+  if slot.item or not slot.name or ns.preview then return false, nil, false end
+  local checked = GameChecked(slot) and true or false
+  if checked then
+    slot.everChecked = true
+  elseif slot.everChecked then
+    LearnRest(slot)
+  end
   local shown = ShownOn(slot)
-  local on = shown ~= nil or FormOn(slot.name) or SpellOn(IsAutoRepeatSpell, slot.name) or Current(slot)
-  return on and true or false, shown
+  local on = shown ~= nil or checked
+  return on, shown, checked
 end
 local function Checked(slot) return (Look(slot)) end
 ns.IconChecked = function(_, slot) return Checked(slot) end
 
--- On as a form is: the game's form (stance bar), the other icon its button shows, or an aura you cast on yourself
+-- On as a form is: the game's form (stance bar), the other image its button shows, or an aura you cast on yourself
 -- that lasts until it is cancelled (no duration: Shadowmeld, Stealth, the aspects, Trueshot Aura, the paladins'
 -- auras...). Not another player's aura on you, not a timed buff.
 local function FormLike(slot, aura, unit)
@@ -651,22 +710,23 @@ local function FormLike(slot, aura, unit)
 end
 ns.IconFormLike = function(_, slot, aura, unit) return FormLike(slot, aura, unit) end
 
--- The icon the game shows for it while on, and whether it is its form's: its form's on the stance bar (Stealth's,
--- a druid form's, a stance's), else the other icon its button shows (Shadowmeld's star...), else its button's own,
--- else the star.
+-- The image the game shows for it while on, as on your bars: the other image a button holding it shows (Stealth's
+-- face, Shadowmeld's star), else what that button shows now (its first sight was while on: a reload while
+-- stealthed), else its form's on the stance bar when not its own, else its own; the star when the game shows
+-- nothing of it.
 local function ActiveIcon(slot)
-  local form, formIcon = FormIndex(slot.name)
-  if form then
-    -- (the image the stance bar shows for it while on, whatever the game puts there, with its gold border)
-    return formIcon or slot.spellIcon, true
-  end
   local shown = ShownOn(slot)
-  if shown ~= nil then return shown, false end
+  if shown ~= nil then return shown end
   for _, action in ipairs(SpellActions(slot)) do
     local icon = ActionTexture(action)
-    if icon ~= nil then return icon, false end
+    if icon ~= nil and not WeaponIcon(icon) then return icon end
   end
-  return ACTIVE_ICON, false
+  local form, formIcon = FormIndex(slot.name)
+  if form then
+    if Plain(formIcon) and formIcon ~= slot.spellIcon and not WeaponIcon(formIcon) then return formIcon end
+    return slot.spellIcon
+  end
+  return ACTIVE_ICON
 end
 ns.IconActiveTexture = function(_, slot) return (ActiveIcon(slot)) end
 
@@ -746,17 +806,20 @@ local function SetSlot(slot, look, aura, unit, enchant)
     if charges ~= nil then slot.count:SetText(charges) end
   end
   local formOn = FormLike(slot, aura, unit)
-  local onIcon, fromForm
+  local onIcon
   if formOn then
-    onIcon, fromForm = ActiveIcon(slot)
+    onIcon = ActiveIcon(slot)
     slot.icon:SetTexture(onIcon)
   end
-  slot.spellChecked, slot.spellShown = Look(slot) -- (what the form, action bar and spell events read again: ns:CheckIcons)
-  -- another icon than its own while on (the star): that icon alone, as its button shows it; else checked, the
-  -- buttons' gold border (a form, a stance, a spell queued or repeating)
-  local swapped = formOn and not fromForm and onIcon ~= slot.spellIcon
+  local gameChecked
+  slot.spellChecked, slot.spellShown, gameChecked = Look(slot) -- (what the form, action bar and spell events read again: ns:CheckIcons)
+  slot.spellGameChecked = gameChecked
+  -- As the game's own button: its image while on (Shadowmeld's star, Stealth's face), and the gold border only when
+  -- the game checks it (Stealth, a form, a spell queued or repeating; not Shadowmeld nor the aspects). An aura of
+  -- yours with no duration and no other image (Trueshot Aura, a paladin aura) keeps the border, as before.
+  local swapped = formOn and onIcon ~= slot.spellIcon
   local on = formOn or slot.spellChecked
-  ShowChecked(slot, on and not swapped)
+  ShowChecked(slot, on and (gameChecked or not swapped))
   local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown or on
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
@@ -800,8 +863,9 @@ function ns:CheckIcons()
       for i = 1, #(row.spells or NONE) do
         local slot = row.slots[i]
         if slot then
-          local on, shown = Look(slot) -- (on or off, or the star shown on its button or gone)
-          if on ~= (slot.spellChecked and true or false) or shown ~= slot.spellShown then
+          local on, shown, checked = Look(slot) -- (on or off, the image its button shows, checked by the game)
+          if on ~= (slot.spellChecked and true or false) or shown ~= slot.spellShown
+            or checked ~= (slot.spellGameChecked and true or false) then
             dirty = true
             return
           end
@@ -1574,13 +1638,14 @@ function ns:HudIconsReport()
     local actions = {}
     for _, action in ipairs(SpellActions(slot)) do
       if #actions >= 4 then break end
-      actions[#actions + 1] = ("%s=%s%s"):format(action, V(ActionTexture(action)),
+      local id = SpellOfAction(action)
+      actions[#actions + 1] = ("%s:%s=%s(rest %s)%s"):format(action, V(id), V(ActionTexture(action)), V(id and restIcons[id]),
         (IsCurrentAction and SpellOn(IsCurrentAction, action)) and "*" or "")
     end
     local drawn = slot.icon and slot.icon.GetTexture and slot.icon:GetTexture()
-    lines[#lines + 1] = ("    %s (%s): own %s · game %s/%s · form %s %s · current %s · buttons %s · other %s · drawn %s%s"):format(
-      V(slot.name), V(slot.spell), V(slot.spellIcon), V(icon), V(original), V(form), V(formIcon), tostring(Current(slot)),
-      #actions > 0 and table.concat(actions, " ") or "none", V(ShownOn(slot)), V(drawn), slot.isChecked and " checked" or "")
+    lines[#lines + 1] = ("    %s (%s): own %s · game %s/%s · form %s %s · checked %s · buttons %s · other %s · drawn %s%s"):format(
+      V(slot.name), V(slot.spell), V(slot.spellIcon), V(icon), V(original), V(form), V(formIcon), tostring(GameChecked(slot)),
+      #actions > 0 and table.concat(actions, " ") or "none", V(ShownOn(slot)), V(drawn), slot.isChecked and " (gold border)" or "")
   end)
   if n == 0 then lines[#lines + 1] = "    none" end
   return lines
