@@ -21,13 +21,15 @@ local KIND_COLOR = {
 }
 
 -- Client pieces ours stands in for
-local CLIENT_PIECES = { "FilterDropdown", "FilterInputHint", "TrainButton", "trainingPoints", "skillStepButton",
+-- (not its training points: a pet trainer shows them in the money's place, the client's own, raised over ours as
+-- its money is: Era's "Training Points: N" by Train)
+local CLIENT_PIECES = { "FilterDropdown", "FilterInputHint", "TrainButton", "skillStepButton",
     "bottomInset", "BG", "Inset" }
 local CLIENT_SHRUNK = { "ScrollBox", "ScrollBar" }
 local CHANGED = { changed = true }
 local FOOT_EDGE = { "TopEdge", "TopLeftCorner", "TopRightCorner" }
 local TRAINER_EVENTS = { "TRAINER_SHOW", "TRAINER_UPDATE", "TRAINER_CLOSED", "TRAINER_DESCRIPTION_UPDATE",
-    "TRAINER_SERVICE_INFO_NAME_UPDATE", "PLAYER_MONEY" }
+    "TRAINER_SERVICE_INFO_NAME_UPDATE", "PLAYER_MONEY", "UNIT_PET_TRAINING_POINTS" }
 
 local function Services()
     local count = GetNumTrainerServices and GetNumTrainerServices() or 0
@@ -326,12 +328,21 @@ UpdateDetail = function()
         if ok and type(value) == "number" then cost = value end
         profession = ok and isProfession and true or false
     end
+    -- A pet trainer's cost is in training points (the client's own reading of it: Blizzard_TrainerUI)
+    local pet = C_Trainer and C_Trainer.GetTrainerType and Enum and Enum.TrainerType
+        and C_Trainer.GetTrainerType() == Enum.TrainerType.Pet
+    local have = money
+    if pet and C_PetInfo and C_PetInfo.GetPetTrainingPoints then
+        local total, used = C_PetInfo.GetPetTrainingPoints()
+        have = math.max((tonumber(total) or 0) - (tonumber(used) or 0), 0)
+    end
     if cost > 0 then
-        local coins = Coins(cost)
-        detail.cost:SetText((COSTS_LABEL or "Cost:") .. " " .. (cost > money and "|cffff2020" or "|cffffffff") .. coins .. "|r")
+        local shown = pet and (TRAINING_POINTS_ABBREV or "%s TP"):format(tostring(cost)) or Coins(cost)
+        detail.cost:SetText((COSTS_LABEL or "Cost:") .. " " .. (cost > have and "|cffff2020" or "|cffffffff") .. shown .. "|r")
     else
         detail.cost:SetText("")
     end
+    money = have
     local words = ""
     if GetTrainerServiceDescription then
         local ok, text = pcall(GetTrainerServiceDescription, line.index)
@@ -402,6 +413,11 @@ local function HideClientPieces(hide)
     local money = ClientMoney()
     if money and panel then
         SetLevelIf(money, panel:GetFrameLevel() + (hide and 8 or 0))
+    end
+    local points = host.trainingPoints
+    if points and panel then
+        SetLevelIf(points, panel:GetFrameLevel() + (hide and 8 or 0))
+        SetAlphaIf(points, 1)
     end
     -- Client list and bar sit over ours and relayout on each update: shrink, not move.
     for _, key in ipairs(CLIENT_SHRUNK) do
@@ -558,7 +574,7 @@ end
 local events = CreateFrame("Frame")
 events:SetScript("OnEvent", function(_, event)
     if not active then return end
-    if event == "TRAINER_CLOSED" or event == "PLAYER_MONEY" then
+    if event == "TRAINER_CLOSED" or event == "PLAYER_MONEY" or event == "UNIT_PET_TRAINING_POINTS" then
         -- A pending Open lands first, as when it ran at once.
         OpenNow()
         if event == "TRAINER_CLOSED" then
