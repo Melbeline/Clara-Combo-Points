@@ -263,7 +263,7 @@ if Gd then
     stamp = function(d, key) local r = d.money.chars[key]; return r and r.at or d.money.gone[key] or 0 end,
     get = function(d, key)
       local r = d.money.chars[key]
-      return r and { n = r.n, r = r.r, c = r.c, l = r.l, m = r.m, a = r.a } or nil
+      return r and { n = r.n, s = r.s, r = r.r, c = r.c, l = r.l, m = r.m, a = r.a } or nil
     end,
     put = function(key, rec, at)
       if type(key) ~= "string" then return end
@@ -694,6 +694,11 @@ local function TakeIncoming()
   if type(incoming) ~= "table" then return false end
   local any = false
   for folder, src in pairs(incoming) do
+    -- an older Windows script (before the gold): said once, to run its installer again
+    if type(src) == "table" and Gd and src.ClaraMoneyDB == nil and src.ClaraMailDB ~= nil and not S.saidOldScript then
+      S.saidOldScript = true
+      C_Timer.After(8, function() print("|cffffd200Clara|r: " .. ns.L.MONEY_SCRIPT_OLD) end)
+    end
     if type(src) == "table" then
       local d = {
         mail = M and type(src.ClaraMailDB) == "table" and M.Clean(src.ClaraMailDB) or (M and M.Clean(nil)),
