@@ -38,12 +38,10 @@ end)
 -- The chat channels' order and colours, kept by the channel's name (the game keeps them by
 -- number, and a custom channel rejoined at login takes the next free number: its place and its
 -- colour were lost). The order set by dragging in Chat settings > Channels, and the colour picked
--- for a channel, come back at each login. Each channel has its own colour, whatever its number: the one
--- picked for it in Chat settings, else the game's colour for channels (FFC0C0), L2P's 00A9FF.
+-- for a channel, come back at each login, as in 1.15.9: a channel keeps its place and the colour picked for it.
+-- No colour of Clara's: a channel never given one keeps the game's.
 ---------------------------------------------------------------------------
-local DEFAULT_COLORS = { l2p = { 0, 169 / 255, 1 } }
 local loginAt -- (GetTime() at login)
-local CHANNEL_COLOR = { 1, 192 / 255, 192 / 255 } -- (FFC0C0, the game's own for a channel)
 
 local function Store()
   local sv = ns.sv
@@ -151,11 +149,11 @@ local function ApplyChannels()
       end
     end
   end
-  -- the colours, on the numbers the channels have now: each its own (a number keeps the colour of the channel it
-  -- had before; the communities' channels are left to the game)
+  -- the colours picked, on the numbers the channels have now (a number keeps the colour of the channel it had
+  -- before); a channel never given one, and the communities' channels, left to the game
   if not ChangeChatColor then return end
   for _, ch in ipairs(Joined()) do
-    local color = not ch.key:find("^community:") and not ch.hidden and (c.colors[ch.key] or DEFAULT_COLORS[ch.key] or CHANNEL_COLOR)
+    local color = not ch.key:find("^community:") and not ch.hidden and c.colors[ch.key]
     local info = ChatTypeInfo and ChatTypeInfo["CHANNEL" .. ch.index]
     if type(color) == "table" and info
       and (math.abs((info.r or 0) - color[1]) > .004 or math.abs((info.g or 0) - color[2]) > .004 or math.abs((info.b or 0) - color[3]) > .004) then
@@ -204,7 +202,7 @@ channelEvents:SetScript("OnEvent", function(self, event, arg1, r, g, b)
   if event == "UPDATE_CHAT_COLOR" then
     if restoring or type(arg1) ~= "string" or not arg1:find("^CHANNEL%d") then return end
     if Picking() then KeepColor(arg1, r, g, b) return end -- (the player's: kept for the channel's name)
-    -- the game (or another addon) put a number's colour back on a channel: its own colour again, a moment later
+    -- the game (or another addon) put a number's colour back on a channel given one: its own again, a moment later
     if GetTime() - recolorAt < 1 then return end
     recolorAt = GetTime()
     C_Timer.After(.5, function() if not InCombatLockdown() then ApplyChannels() end end)
