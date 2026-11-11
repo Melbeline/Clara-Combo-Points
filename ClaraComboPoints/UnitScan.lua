@@ -507,14 +507,18 @@ local function HideChannel(name)
   end
 end
 
-local tries = 0
+local tries, settleWaits = 0, 0
 local function Join()
   local id, name = ChannelID()
   if id then HideChannel(name) return end
   -- after the game's channels and the ones the server rejoins (settled), to take the last number: never in front
   -- of the player's own (ChatPlace.lua keeps it after them too)
   local channels = ns.ChatChannels
-  if channels and channels.Settled and not channels.Settled() then C_Timer.After(3, Join) return end
+  if channels and channels.Settled and not channels.Settled() and settleWaits < 40 then -- (2 minutes at most)
+    settleWaits = settleWaits + 1
+    C_Timer.After(3, Join)
+    return
+  end
   tries = tries + 1
   if tries > 6 then return end
   -- after the game's own channels (General first), never before them
