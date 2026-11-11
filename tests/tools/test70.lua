@@ -34,7 +34,7 @@ S.class = "ROGUE"; S.locale = "enUS"
 M.LoadAddon(ADDON_DIR, ns)
 M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN")
 M.Fire("PLAYER_ENTERING_WORLD", true, false)
-for _ = 1, 5 do M.RunTimer() end
+for _ = 1, 50 do if M.timers and #M.timers > 0 then M.RunTimer() end end -- (every timer of the login: their order is not fixed)
 local G = ns.Money
 if not ns.Sync then -- (the Light version: no sync between accounts; this account only)
   out("== the Light version: this account's characters only")
@@ -125,5 +125,23 @@ check(G.Touched ~= nil, "the sync carries it")
 money = 2000000
 M.Fire("PLAYER_MONEY")
 check(G.db.chars["Lola-Forever"].m == 2000000, "the new gold kept")
+
+out("== the surname, the other accounts' age")
+UnitNameUnmodified = function(u) if u == "player" then return "Lola", "Rose" end return UnitName(u) end
+money = 2000001
+M.Fire("PLAYER_MONEY")
+check(G.db.chars["Lola-Forever"].s == "Rose" and G.FullName(G.db.chars["Lola-Forever"]) == "Lola Rose", "its surname kept: Lola Rose")
+check(G.FullName({ n = "Bob" }) == "Bob", "a record from before surnames: the first name alone")
+check(G.Updated("wanjwanj") ~= nil, "another account: when it was last heard of")
+local gold = ContainerFrame1.MoneyFrame.GoldButton
+gold:GetScript("OnMouseUp")(gold, "RightButton")
+local named, aged = false, false
+for _, f in ipairs(M.regions) do
+  local t = f.GetText and f:GetText()
+  if t and tostring(t):find("Lola Rose", 1, true) then named = true end
+  if t and tostring(t):find("ago", 1, true) then aged = true end
+end
+check(named, "shown with its surname in the gold window")
+check(aged, "another account's column: updated ... ago")
 
 out(fails .. " failure(s)")

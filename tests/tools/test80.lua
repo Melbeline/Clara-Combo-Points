@@ -57,7 +57,7 @@ out("== the colours")
 M.now = 400 -- (past the minutes after login: the order no longer put back, only the colours)
 S.channels = { "General - Elwynn Forest", "Trade - City", "L2P" }
 ns.ChatChannels.Apply(); Run()
-check(Color(2) == "1.00 0.75 0.75", "no colour picked: the default (FFC0C0) (" .. Color(2) .. ")")
+check(Color(2) == "1.00 1.00 1.00", "no colour picked: the game's own, untouched (no colour of Clara's) (" .. Color(2) .. ")")
 ChatConfigFrame:Show()
 ChangeChatColor("CHANNEL2", 0, 1, 0); Run()
 ChatConfigFrame:Hide()
@@ -68,6 +68,6 @@ M.Fire("UPDATE_CHAT_COLOR", "CHANNEL2", 1, .75, .75); Run()
 check(Color(2) == "0.00 1.00 0.00", "the game gave the number's colour again: the channel's own back (" .. Color(2) .. ")")
 -- Trade moves to number 3: its colour follows it
 C_ChatInfo.SwapChatChannelsByChannelIndex(2, 3); Run(); ns.ChatChannels.Apply(); Run()
-check(Color(3) == "0.00 1.00 0.00" and Color(2) == "0.00 0.66 1.00", "a channel moved: its colour with it, L2P's own where it went (" .. Color(3) .. " / " .. Color(2) .. ")")
+check(Color(3) == "0.00 1.00 0.00", "a channel moved: the colour picked for it goes with it (" .. Color(3) .. ")")
 out(string.format("\n%d failure(s)", fails))
 return fails

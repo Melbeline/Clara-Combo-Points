@@ -173,6 +173,32 @@ local framed = 0
 for _, f in ipairs(M.frames) do if f._parent == panel and f.lines and f:IsShown() then framed = framed + 1 end end
 check(framed == 1 and sortButton.text:GetText() == "Bank alt", "one framed row (the category's)")
 Pick(sortButton, "Last sent")
+-- the category buttons: one click, that category alone; again (or All): every name
+local chip, allChip
+for _, f in ipairs(M.frames) do
+  if f._parent == panel and f.GetText and f:IsShown() then
+    if f:GetText() == "Bank alt" and f ~= sortButton then chip = f end
+    if f:GetText() == "All" then allChip = f end
+  end
+end
+check(chip and allChip, "a button for each category, and All")
+chip:Click()
+check(Shown() == "Lia Love, Chloe Moon", "Bank alt's button: its characters alone (" .. Shown() .. ")")
+chip:Click()
+check(Shown() == "Lia Love, Lola Rose, Chloe Moon, Charlotte Ella", "clicked again: every name (" .. Shown() .. ")")
+-- By category: each category in its block, its name above it, the others last
+Mail.SetCategory("Lia Love", "friend", true)
+Pick(sortButton, "By category")
+local titlesShown = {}
+for _, r in ipairs(M.regions) do
+  if r._kind == "FontString" and r._parent == panel and r:IsShown() and (r:GetText() == "Bank alt" or r:GetText() == "Friend" or r:GetText() == "No category") then
+    titlesShown[#titlesShown + 1] = r:GetText()
+  end
+end
+check(#titlesShown == 3, "By category: the categories' names over their blocks, then No category (" .. table.concat(titlesShown, ", ") .. ")")
+check(sortButton.text:GetText() == "By category", "Sort by shows it")
+Mail.SetCategory("Lia Love", "friend", false)
+Pick(sortButton, "Last sent")
 
 -- Add/remove categories: add (a field, Enter or its button), delete, resets
 local manage

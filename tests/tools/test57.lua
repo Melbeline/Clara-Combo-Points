@@ -50,7 +50,8 @@ S.units.nameplate3 = { name = "Prince Nazjak", guid = "Creature-0-4395-0-25-2779
 M.Fire("NAME_PLATE_UNIT_ADDED", "nameplate3")
 Run()
 secure = ClaraScanButton
-check(secure and secure:IsShown() and secure:GetAttribute("macrotext1") == "/targetexact Prince Nazjak", "the window: a click targets it (/targetexact)")
+check(secure and secure:IsShown() and secure:GetAttribute("macrotext1") == "/targetexact Prince Nazjak\n/target [@nameplate3]",
+  "the window: a click targets it, by its name and by its nameplate (" .. tostring(secure:GetAttribute("macrotext1")) .. ")")
 check(secure.title:GetText() == "Prince Nazjak" and secure.sub:GetText() == "Rare in sight", "its name, and what it is")
 check(M.flashed == 1, "the game's icon flashed in the taskbar")
 check(CVARS.EnableBlinkApplicationIcon == "1", "the taskbar let through for it (Clara's box had it off)")
@@ -67,6 +68,9 @@ S.units.nameplate5 = { name = "Kobold Vermin", guid = "Creature-0-4395-0-25-6-00
 M.Fire("NAME_PLATE_UNIT_ADDED", "nameplate5")
 check(M.flashed == 1, "a creature not looked for: nothing")
 M.now = 1200
+S.units.nameplate3 = nil
+M.Fire("NAME_PLATE_UNIT_REMOVED", "nameplate3"); while M.timers and #M.timers > 0 do M.RunTimer() end
+check(secure:GetAttribute("macrotext1") == "/targetexact Prince Nazjak", "its nameplate gone: by its name alone")
 secure:GetScript("OnUpdate")(secure)
 check(not secure:IsShown(), "the window gone after a while")
 
@@ -75,7 +79,7 @@ SlashCmdList.CLARACOMBOPOINTS("scan Défias Pillager")
 check(Logged("Défias Pillager added"), "/cl scan Name: added (a line in the chat)")
 S.units.nameplate6 = { name = "Defias Pillager", guid = "Creature-0-4395-0-25-589-0000AB1" }
 M.Fire("NAME_PLATE_UNIT_ADDED", "nameplate6")
-check(M.flashed == 2 and secure:GetAttribute("macrotext1") == "/targetexact Defias Pillager", "any creature of that name, accents aside")
+check(M.flashed == 2 and secure:GetAttribute("macrotext1") == "/targetexact Defias Pillager\n/target [@nameplate6]", "any creature of that name, accents aside")
 SlashCmdList.CLARACOMBOPOINTS("scan defias pillager")
 check(#ns:ScanNames() == 0, "typed again: removed")
 S.units.nameplate7 = { name = "Thrall", guid = "Player-1-0000001", player = true, enemy = true, attackable = true, level = 60 }
@@ -153,7 +157,7 @@ M.Fire("NAME_PLATE_UNIT_ADDED", "nameplate10")
 check(secure:GetAttribute("macrotext1") == before, "the secure window left alone in a fight")
 S.inCombat = false
 M.Fire("PLAYER_REGEN_ENABLED")
-check(secure:IsShown() and secure:GetAttribute("macrotext1") == "/targetexact Brack", "the fight over: the window clickable")
+check(secure:IsShown() and secure:GetAttribute("macrotext1") == "/targetexact Brack\n/target [@nameplate10]", "the fight over: the window clickable")
 
 out("== the hunted mob")
 SlashCmdList.CLARACOMBOPOINTS("hunt Prince Nazjak")
