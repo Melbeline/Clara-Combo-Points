@@ -16,6 +16,7 @@
 -- And the minimap's tracking (Find Herbs, Find Minerals, a hunter's tracking) given back after a death.
 -- And the quest tracker folded again as it was left (the whole tracker and each of its sections).
 -- And /played always answered in the chat (in a fight it showed nothing).
+-- And the bags above AtlasLoot's window while it is open.
 
 local ADDON, ns = ...
 
@@ -989,4 +990,92 @@ played:SetScript("OnEvent", function(_, event, total, level)
     local Display = ChatFrameUtil and ChatFrameUtil.DisplayTimePlayed or ChatFrame_DisplayTimePlayed
     if DEFAULT_CHAT_FRAME and Display then pcall(Display, DEFAULT_CHAT_FRAME, total, level) end
   end)
+end)
+
+---------------------------------------------------------------------------
+-- The bags above AtlasLoot. Its window stands in a strata above the bags' (the game's: MEDIUM), so a bag opened
+-- while it is open went under it. While its window is shown, the bags take the strata just above its own; it
+-- closed, they get their own back. Whatever strata AtlasLoot's version uses (read from its window each time).
+-- Never on a frame the game protects in a fight (none of the game's bags is; then after the fight).
+---------------------------------------------------------------------------
+local STRATA = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
+local STRATA_RANK = {}
+for i, name in ipairs(STRATA) do STRATA_RANK[name] = i end
+local ATLASLOOT_FRAMES = { "AtlasLoot_GUI-Frame", "AtlasLootDefaultFrame", "AtlasLoot_Frame" }
+local bagStrata = setmetatable({}, { __mode = "k" }) -- each bag's own strata, while lifted
+local liftEvents = CreateFrame("Frame")
+
+local function AtlasLootShown()
+  for _, name in ipairs(ATLASLOOT_FRAMES) do
+    local f = _G[name]
+    if type(f) == "table" and f.IsShown and f:IsShown() then return f end
+  end
+end
+local function Bags()
+  local list = {}
+  if ContainerFrameUtil_EnumerateContainerFrames then
+    for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do list[#list + 1] = frame end
+  end
+  if ContainerFrameCombinedBags then list[#list + 1] = ContainerFrameCombinedBags end
+  return list
+end
+
+local function LiftBags()
+  local atlas = AtlasLootShown()
+  local want = atlas and STRATA[math.min(#STRATA - 1, (STRATA_RANK[atlas:GetFrameStrata()] or 3) + 1)]
+  for _, bag in ipairs(Bags()) do
+    if bag.SetFrameStrata and not (InCombatLockdown() and bag:IsProtected()) then
+      if want then
+        if not bagStrata[bag] then bagStrata[bag] = bag:GetFrameStrata() end
+        if (STRATA_RANK[bag:GetFrameStrata()] or 0) < STRATA_RANK[want] then bag:SetFrameStrata(want) end
+      elseif bagStrata[bag] then
+        bag:SetFrameStrata(bagStrata[bag])
+        bagStrata[bag] = nil
+      end
+    elseif InCombatLockdown() then
+      liftEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+    end
+  end
+end
+
+-- Hooked as each is there: the bags (their own show), AtlasLoot's window (made on its first opening)
+local hookedLift = setmetatable({}, { __mode = "k" })
+local function HookLift(frame)
+  if type(frame) ~= "table" or not frame.HookScript or hookedLift[frame] then return end
+  hookedLift[frame] = true
+  frame:HookScript("OnShow", LiftBags)
+  frame:HookScript("OnHide", LiftBags)
+end
+local function HookAll()
+  for _, bag in ipairs(Bags()) do HookLift(bag) end
+  for _, name in ipairs(ATLASLOOT_FRAMES) do HookLift(_G[name]) end
+end
+
+-- AtlasLoot makes its window on its first opening: looked for every 2 s once AtlasLoot is loaded, until found
+local lookTicker
+local function Look()
+  if lookTicker or not C_Timer.NewTicker then return end
+  lookTicker = C_Timer.NewTicker(2, function()
+    HookAll()
+    for _, name in ipairs(ATLASLOOT_FRAMES) do
+      if _G[name] then lookTicker:Cancel() LiftBags() return end
+    end
+  end)
+end
+local function AtlasLootLoaded()
+  local A = C_AddOns
+  for _, name in ipairs({ "AtlasLootClassic", "AtlasLoot" }) do
+    if A and A.IsAddOnLoaded and A.IsAddOnLoaded(name) then return true end
+  end
+end
+
+liftEvents:RegisterEvent("PLAYER_LOGIN")
+liftEvents:RegisterEvent("ADDON_LOADED")
+liftEvents:SetScript("OnEvent", function(self, event, name)
+  if event == "PLAYER_REGEN_ENABLED" then self:UnregisterEvent(event) LiftBags() return end
+  if event == "ADDON_LOADED" and not (type(name) == "string" and name:find("^AtlasLoot")) then return end
+  if event == "PLAYER_LOGIN" and not AtlasLootLoaded() then HookAll() return end
+  HookAll()
+  Look()
+  LiftBags()
 end)
