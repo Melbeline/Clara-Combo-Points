@@ -1014,7 +1014,10 @@ end
 local function Bags()
   local list = {}
   if ContainerFrameUtil_EnumerateContainerFrames then
-    for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do list[#list + 1] = frame end
+    for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
+      list[#list + 1] = frame
+      if #list >= 20 then break end -- (the game has 13 at most)
+    end
   end
   if ContainerFrameCombinedBags then list[#list + 1] = ContainerFrameCombinedBags end
   return list
@@ -1074,7 +1077,7 @@ liftEvents:RegisterEvent("ADDON_LOADED")
 liftEvents:SetScript("OnEvent", function(self, event, name)
   if event == "PLAYER_REGEN_ENABLED" then self:UnregisterEvent(event) LiftBags() return end
   if event == "ADDON_LOADED" and not (type(name) == "string" and name:find("^AtlasLoot")) then return end
-  if event == "PLAYER_LOGIN" and not AtlasLootLoaded() then HookAll() return end
+  if event == "PLAYER_LOGIN" and not AtlasLootLoaded() then return end -- (nothing to do without AtlasLoot)
   HookAll()
   Look()
   LiftBags()
