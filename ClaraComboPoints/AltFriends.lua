@@ -6,6 +6,8 @@
 -- last seen. Add Character, between Add Friend and Send Message (the three the same width), adds one by its
 -- first name and surname with the suggestions of the mail's To field (the account's characters among them).
 -- Over a row: its tooltip; right-click: whisper (online) or remove it from the list.
+-- The game's Add Friend window in the 1.x look, two lines: the game's (a BattleTag, or a name the Forever way)
+-- and one that adds a character to this list, the classic way.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -230,6 +232,300 @@ end
 function AltFriends.Ask()
   Dialog()
   StaticPopup_Show("CLARA_ADD_ALT")
+end
+
+---------------------------------------------------------------------------
+-- The game's Add Friend window in the 1.x look (the 1.15 client's): "Add Friend" and its "?", the Battle.net
+-- and faction icons with OR between, then two lines to type in. The top line is the game's own box, only
+-- moved: a BattleTag, or a name sent the Forever way, by its own Enter and Add Friend button (the game's code,
+-- untouched: an addon's code may not send a friend request). The bottom line adds a character to Clara's list,
+-- the classic way: at once, no request. Drawn over the game's window: its parts moved, restyled or hidden,
+-- none of its values written; its "?" page left as the game's.
+---------------------------------------------------------------------------
+local ADD_W, ADD_H = 384, 264      -- the 1.15 window (232 high), a line more
+local LINE_Y, LINE_STEP = -130, 32 -- the first line (where the 1.15 one is), the second under it
+local LINE_W = 280
+local BUTTON_COORDS = { 0, 0.625, 0, 0.6875 }
+
+local addPage, charBox, charAccept, leftIcon, leftFriend, leftHead, leftText, rightIcon
+
+local function GameAddFriend()
+  local frame, entry, box = AddFriendFrame, AddFriendEntryFrame, AddFriendNameEditBox
+  local accept, cancel = AddFriendEntryFrameAcceptButton, AddFriendEntryFrameCancelButton
+  if frame and entry and box and accept and cancel then return frame, entry, box, accept, cancel end
+end
+
+-- The 1.x red button (the 1.15 window's)
+local function PanelLook(button)
+  for _, part in ipairs({ { "Normal", "Up" }, { "Pushed", "Down" }, { "Disabled", "Disabled" }, { "Highlight", "Highlight" } }) do
+    local state, file = part[1], part[2]
+    button["Set" .. state .. "Texture"](button, "Interface\\Buttons\\UI-Panel-Button-" .. file)
+    local tex = button["Get" .. state .. "Texture"](button)
+    if tex then tex:SetTexCoord(unpack(BUTTON_COORDS)) end
+  end
+  local tex = button:GetHighlightTexture()
+  if tex and tex.SetBlendMode then tex:SetBlendMode("ADD") end
+end
+
+-- The 1.x box border (Common-Input-Border), on the box's three pieces
+local function InputLook(box, left, right, middle)
+  local file = "Interface\\Common\\Common-Input-Border"
+  left:SetTexture(file)
+  left:SetTexCoord(0, 0.0625, 0, 0.625)
+  left:ClearAllPoints()
+  left:SetWidth(8)
+  left:SetPoint("TOPLEFT", box, "TOPLEFT", -5, 0)
+  left:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", -5, 0)
+  right:SetTexture(file)
+  right:SetTexCoord(0.9375, 1, 0, 0.625)
+  right:ClearAllPoints()
+  right:SetWidth(8)
+  right:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, 0)
+  right:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", 0, 0)
+  middle:SetTexture(file)
+  middle:SetTexCoord(0.0625, 0.9375, 0, 0.625)
+  middle:ClearAllPoints()
+  middle:SetPoint("TOPLEFT", left, "TOPRIGHT")
+  middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
+end
+
+local function TopText()
+  local box = AddFriendNameEditBox
+  local ok, text = pcall(function() return box:GetText() end)
+  return ok and type(text) == "string" and not issecretvalue(text) and text or ""
+end
+
+-- The game's Add Friend button while the top line has text (its own state: the game's), ours for the bottom one
+local function AddButtons()
+  if not addPage then return end
+  local _, _, _, accept = GameAddFriend()
+  local top = TopText() ~= ""
+  accept:SetShown(top)
+  charAccept:SetShown(not top)
+  charAccept:SetEnabled(Normal(charBox:GetText()) ~= nil)
+end
+
+-- The bottom line's character added (and the window shut when the top line is empty and it asks to)
+local function AddCharacter(close)
+  if not charBox then return false end
+  local text = charBox:GetText()
+  if not Normal(text) then return false end
+  charBox:SetText("")
+  AltFriends.Add(text)
+  if close and TopText() == "" and AddFriendFrame and AddFriendFrame:IsShown() then
+    if StaticPopupSpecial_Hide then StaticPopupSpecial_Hide(AddFriendFrame) else AddFriendFrame:Hide() end
+  end
+  AddButtons()
+  return true
+end
+AltFriends.AddCharacter = AddCharacter
+
+-- The left column as the game wrote its own (BattleTag or Real ID, or Battle.net unavailable in red)
+local function MirrorLeft()
+  local entry = AddFriendEntryFrame
+  local holder = entry and entry.OptionsContainer and entry.OptionsContainer.LeftTextContainer
+  if not (holder and leftHead) then return end
+  local ok, title, desc, alpha, r, g, b = pcall(function()
+    local r, g, b = holder.Description:GetTextColor()
+    return holder.Title:GetText(), holder.Description:GetText(), holder.Title:GetAlpha(), r, g, b
+  end)
+  if not ok then return end
+  if type(title) == "string" and not issecretvalue(title) and title ~= "" then leftHead:SetText(title) end
+  if type(desc) == "string" and not issecretvalue(desc) then leftText:SetText(desc) end
+  leftHead:SetAlpha(type(alpha) == "number" and alpha or 1)
+  if type(r) == "number" then leftText:SetTextColor(r, g, b) end
+  local grey = type(alpha) == "number" and alpha < 1 and 0.4 or 1
+  leftIcon:SetVertexColor(grey, grey, grey)
+  leftFriend:SetVertexColor(grey, grey, grey)
+end
+
+-- Each time the entry page shows: the game's border and cross off (the page has its own), the faction icon,
+-- the left column, the bottom line empty, the button's 1.x text
+local function DressShown()
+  local frame, entry, _, accept = GameAddFriend()
+  if not (frame and addPage) then return end
+  local level = entry:GetFrameLevel()
+  addPage:SetFrameLevel(level)
+  charBox:SetFrameLevel(level + 2)
+  charAccept:SetFrameLevel(level + 2)
+  if frame.Border then frame.Border:Hide() end
+  if frame.CloseButton then frame.CloseButton:Hide() end
+  local faction = UnitFactionGroup("player")
+  if faction == "Alliance" or faction == "Horde" then
+    rightIcon:SetTexture("Interface\\FriendsFrame\\PlusManz-" .. faction)
+    rightIcon:Show()
+  else
+    rightIcon:Hide()
+  end
+  charBox:SetText("")
+  MirrorLeft()
+  accept:SetText(ADD_FRIEND or "Add Friend")
+  AddButtons()
+end
+
+-- The "?" page (the game's): its border and cross back
+local function Undress()
+  local frame = AddFriendFrame
+  if not frame then return end
+  if frame.Border then frame.Border:Show() end
+  if frame.CloseButton then frame.CloseButton:Show() end
+end
+
+local function Column(page, file, point, x)
+  local icon = page:CreateTexture(nil, "BORDER")
+  icon:SetTexture(file)
+  icon:SetSize(40, 40)
+  icon:SetAlpha(0.5)
+  icon:SetPoint(point, page, point, x, -50)
+  local friend = page:CreateTexture(nil, "ARTWORK")
+  friend:SetTexture("Interface\\FriendsFrame\\PlusManz-PlusManz")
+  friend:SetSize(36, 36)
+  friend:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT", -10, -4)
+  local head = page:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  head:SetPoint("TOP", friend, "BOTTOM", 8, 4)
+  local text = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  text:SetPoint("TOP", head, "BOTTOM", 0, -4)
+  text:SetWidth(160)
+  text:SetJustifyH("CENTER")
+  return icon, friend, head, text
+end
+
+local function MakeCharBox(page, gameBox)
+  local box = CreateFrame("EditBox", "ClaraAddFriendCharacterBox", page, "AutoCompleteEditBoxTemplate")
+  box:SetSize(LINE_W, 20)
+  box:SetPoint("TOP", page, "TOP", 0, LINE_Y - LINE_STEP)
+  box:SetAutoFocus(false)
+  box:SetMaxLetters(NAME_MAX)
+  local font = gameBox.GetFontObject and gameBox:GetFontObject()
+  box:SetFontObject(font or GameFontHighlightSmall)
+  InputLook(box, box:CreateTexture(nil, "BACKGROUND"), box:CreateTexture(nil, "BACKGROUND"), box:CreateTexture(nil, "BACKGROUND"))
+  local gameFill = AddFriendNameEditBoxFill
+  local fill = box:CreateFontString(nil, "BORDER", "GameFontDisableSmall")
+  local fillFont = gameFill and gameFill.GetFontObject and gameFill:GetFontObject()
+  if fillFont then fill:SetFontObject(fillFont) end
+  fill:SetPoint("LEFT", box, "LEFT", 0, 0)
+  fill:SetText(L.ALT_ADD_FILL)
+  box.fill = fill
+  local choices = AUTOCOMPLETE_LIST and AUTOCOMPLETE_LIST.MAIL
+  if AutoCompleteEditBox_SetAutoCompleteSource and C_AutoComplete and choices then
+    AutoCompleteEditBox_SetAutoCompleteSource(box, C_AutoComplete.GetAutoCompleteResults, choices.include, choices.exclude)
+    box.addHighlightedText = true
+  end
+  box:SetScript("OnEnterPressed", function(self)
+    if AutoCompleteEditBox_OnEnterPressed and AutoCompleteEditBox_OnEnterPressed(self) then return end
+    AddCharacter(true)
+  end)
+  box:SetScript("OnTextChanged", function(self, userInput)
+    if AutoCompleteEditBox_OnTextChanged then AutoCompleteEditBox_OnTextChanged(self, userInput) end
+    self.fill:SetShown(self:GetText() == "")
+    AddButtons()
+  end)
+  box:SetScript("OnTabPressed", function(self)
+    if AutoCompleteEditBox_OnTabPressed and AutoCompleteEditBox_OnTabPressed(self) then return end
+    gameBox:SetFocus()
+  end)
+  box:SetScript("OnEscapePressed", function(self)
+    if AutoCompleteEditBox_OnEscapePressed and AutoCompleteEditBox_OnEscapePressed(self) then return end
+    self:ClearFocus()
+  end)
+  box:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:SetText(L.ALT_ADD_BUTTON, 1, 1, 1)
+    GameTooltip:AddLine(L.ALT_ADD_TIP, nil, nil, nil, true)
+    GameTooltip:Show()
+  end)
+  box:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return box
+end
+
+local function MakeAddPage(frame, entry, box, accept, cancel)
+  local page = CreateFrame("Frame", "ClaraAddFriendPage", entry, "BackdropTemplate")
+  page:SetSize(ADD_W, ADD_H)
+  page:SetPoint("TOP", frame, "TOP", 0, 0)
+  page:EnableMouse(true)
+  if page.SetBackdrop then
+    page:SetBackdrop(BACKDROP_DIALOG_32_32 or {
+      bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+      edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+      tile = true, tileEdge = true, tileSize = 32, edgeSize = 32,
+      insets = { left = 11, right = 12, top = 12, bottom = 11 },
+    })
+  end
+  local title = page:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+  title:SetPoint("TOP", page, "TOP", -12, -24)
+  title:SetText(ADD_FRIEND or "Add Friend")
+  local orLabel = page:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+  orLabel:SetPoint("TOP", page, "TOP", 0, -66)
+  orLabel:SetText(OR_CAPS or "OR")
+  orLabel:SetTextColor(1, 1, 1)
+  leftIcon, leftFriend, leftHead, leftText = Column(page, "Interface\\FriendsFrame\\PlusManz-BattleNet", "TOPLEFT", 92)
+  leftHead:SetText(BATTLETAG or "BattleTag")
+  local rightFriend, rightHead, rightText
+  rightIcon, rightFriend, rightHead, rightText = Column(page, "Interface\\FriendsFrame\\PlusManz-Alliance", "TOPRIGHT", -82)
+  rightHead:SetText(CHARACTER_FRIEND or "Character")
+  rightText:SetText(L.ALT_ADD_CLASSIC)
+
+  -- the game's parts: its "?" by the title, its box the top line, its two buttons at the 1.15 spots
+  local info = AddFriendEntryFrameInfoButton
+  if info then
+    info:ClearAllPoints()
+    info:SetPoint("LEFT", title, "RIGHT", 8, 0)
+  end
+  box:ClearAllPoints()
+  box:SetPoint("TOP", page, "TOP", 0, LINE_Y)
+  box:SetWidth(LINE_W)
+  if box.Left and box.Right and AddFriendNameEditBoxMiddle then InputLook(box, box.Left, box.Right, AddFriendNameEditBoxMiddle) end
+  accept:ClearAllPoints()
+  accept:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 45, 30)
+  accept:SetSize(118, 22)
+  PanelLook(accept)
+  cancel:ClearAllPoints()
+  cancel:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -50, 30)
+  cancel:SetSize(118, 22)
+  PanelLook(cancel)
+  local hide = { entry.TitleContainer, entry.OptionsContainer, entry.EditBoxContainer and entry.EditBoxContainer.RequestInfoText }
+  for i = 1, 3 do if hide[i] then hide[i]:Hide() end end
+
+  addPage = page
+  charBox = MakeCharBox(page, box)
+  local errorText = entry.EditBoxContainer and entry.EditBoxContainer.ErrorMessage
+  if errorText then
+    errorText:ClearAllPoints()
+    errorText:SetPoint("TOP", charBox, "BOTTOM", 0, -6)
+  end
+  charAccept = CreateFrame("Button", "ClaraAddFriendCharacterButton", page)
+  charAccept:SetNormalFontObject(GameFontNormal)
+  charAccept:SetHighlightFontObject(GameFontHighlight)
+  charAccept:SetDisabledFontObject(GameFontDisable)
+  charAccept:SetText(ADD_FRIEND or "Add Friend")
+  charAccept:SetSize(118, 22)
+  charAccept:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 45, 30)
+  PanelLook(charAccept)
+  charAccept:SetScript("OnClick", function() AddCharacter(true) end)
+  AltFriends.addPage, AltFriends.charBox, AltFriends.charAccept = page, charBox, charAccept
+end
+
+-- Once: the page made, the game's window hooked (after its own code each time: nothing of it changed)
+function AltFriends.DressAddFriend()
+  if addPage then return true end
+  local frame, entry, box, accept, cancel = GameAddFriend()
+  if not frame then return false end
+  MakeAddPage(frame, entry, box, accept, cancel)
+  entry:HookScript("OnShow", DressShown)
+  entry:HookScript("OnHide", Undress)
+  box:HookScript("OnTextChanged", AddButtons)
+  box:HookScript("OnTabPressed", function()
+    if not (AutoCompleteBox and AutoCompleteBox:IsShown()) then charBox:SetFocus() end
+  end)
+  -- (both lines typed: the game's Add Friend or Enter sends the top one, the bottom one added after it)
+  accept:HookScript("OnClick", function() AddCharacter(false) end)
+  if AddFriendFrame_Accept then hooksecurefunc("AddFriendFrame_Accept", function() AddCharacter(false) end) end
+  if AddFriendFrame_Show then hooksecurefunc("AddFriendFrame_Show", MirrorLeft) end
+  if AddFriendEntryFrame_Init then
+    hooksecurefunc("AddFriendEntryFrame_Init", function() accept:SetText(ADD_FRIEND or "Add Friend") end)
+  end
+  if entry:IsVisible() then DressShown() end
+  return true
 end
 
 ---------------------------------------------------------------------------
@@ -757,6 +1053,12 @@ events:SetScript("OnEvent", function(self)
   startedAt = GetTime()
   List()
   Hook()
+  if not AltFriends.DressAddFriend() then
+    -- (the game's Add Friend window loads with its friends window: dressed as it comes)
+    local wait = CreateFrame("Frame")
+    wait:RegisterEvent("ADDON_LOADED")
+    wait:SetScript("OnEvent", function(waiter) if AltFriends.DressAddFriend() then waiter:UnregisterAllEvents() end end)
+  end
   Look(false)
   AltFriends.StartProbes()
   C_Timer.After(20, function() settled = true end)
