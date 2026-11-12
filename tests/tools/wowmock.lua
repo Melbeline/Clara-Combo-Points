@@ -1490,6 +1490,17 @@ function M.CloseUnitMenu()
   M.unitMenu = nil
 end
 
+-- another addon (its own toc and name): ClassicFriendsList
+function M.LoadAddonAs(dir, tocName, addonName, ns)
+  local toc = assert(io.open(dir .. "/" .. tocName, "rb")):read("*a")
+  for file in toc:gmatch("[^\r\n]+") do
+    if not file:match("^##") and file:match("%.lua$") then
+      local f = assert(io.open(dir .. "/" .. file:gsub("\\", "/"), "rb"))
+      local chunk = assert(loadstring(f:read("*a"), "@" .. file)); f:close()
+      chunk(addonName, ns)
+    end
+  end
+end
 function M.LoadAddon(dir, ns)
   local toc = assert(io.open(dir .. "/ClaraComboPoints.toc", "rb")):read("*a")
   for file in toc:gmatch("[^\r\n]+") do
