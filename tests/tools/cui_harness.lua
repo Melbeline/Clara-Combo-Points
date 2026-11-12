@@ -420,6 +420,71 @@ print("who list opened: " .. tostring(okOpen) .. " " .. tostring(eOpen))
 local whoPanel = rawget(env, "ClassicUIForeverWhoPanel")
 print("who list's Refresh handed to the /who cooldown: " .. tostring(cooldownOn ~= nil and whoPanel ~= nil and cooldownOn == whoPanel.refresh) .. " (" .. tostring(cooldownOn) .. ", panel " .. tostring(whoPanel) .. ")")
 
+-- 4. The raid page put away as the social window closes (it holds the game's secure raid buttons: protected with it)
+local function Plain(name, shown)
+  local f = { name = name, shown = shown, points = {} }
+  function f:IsShown() return self.shown end
+  function f:GetParent() return self.parent end
+  function f:SetParent(p) self.parent = p end
+  function f:ClearAllPoints() self.points = {} end
+  function f:SetPoint(p, ...) self.points[#self.points + 1] = p end
+  function f:HookScript() end
+  return f
+end
+local friendsF, raidF, raidHome = Plain("FriendsFrame", false), Plain("RaidFrame", true), Plain("RaidParentFrame", false)
+raidF.parent = friendsF
+friendsF.selectedTab = 2
+local fight = false
+local savedEnv = {}
+for _, k in ipairs({ "FriendsFrame", "RaidFrame", "RaidParentFrame", "FRIEND_TAB_RAID", "FRIEND_TAB_FRIENDS",
+  "PanelTemplates_GetSelectedTab", "PanelTemplates_SetTab", "InCombatLockdown" }) do savedEnv[k] = rawget(env, k) end
+rawset(env, "FriendsFrame", friendsF); rawset(env, "RaidFrame", raidF); rawset(env, "RaidParentFrame", raidHome)
+rawset(env, "FRIEND_TAB_RAID", 2); rawset(env, "FRIEND_TAB_FRIENDS", 1)
+rawset(env, "PanelTemplates_GetSelectedTab", function(f) return f.selectedTab end)
+rawset(env, "PanelTemplates_SetTab", function(f, id) f.selectedTab = id end)
+rawset(env, "InCombatLockdown", function() return fight end)
+fight = true
+pcall(C.social.PutRaidAway)
+local inFight = raidF.parent == friendsF
+fight = false
+friendsF.shown = true
+pcall(C.social.PutRaidAway)
+local whileShown = raidF.parent == friendsF
+friendsF.shown = false
+local okAway, eAway = pcall(C.social.PutRaidAway)
+print("raid page put away as the social window closes: " .. tostring(okAway and raidF.parent == raidHome and #raidF.points == 2
+  and friendsF.selectedTab == 1 and inFight and whileShown) .. " (in a fight: left " .. tostring(inFight) .. ", window up: left "
+  .. tostring(whileShown) .. ", " .. tostring(eAway) .. ")")
+for k, v in pairs(savedEnv) do rawset(env, k, v) end
+
+-- 5. The Communities tab in a fight: the game's communities window shown raw (nothing protected in it)
+local commTab = rawget(env, "ClassicUIForeverCommunitiesTab")
+local commClick = commTab and commTab.GetScript and commTab:GetScript("OnClick")
+local commFrame = Plain("CommunitiesFrame", false)
+function commFrame:IsProtected() return false end
+local shownRaw, said = nil, 0
+local realShow, realSay = C.ShowPanel, C.SayNotInCombat
+C.ShowPanel = function(f) shownRaw = f f.shown = true return true end
+C.SayNotInCombat = function() said = said + 1 end
+local savedComm = {}
+for _, k in ipairs({ "CommunitiesFrame", "InCombatLockdown", "C_Club", "BNConnected", "IsCommunitiesUIDisabledByTrialAccount" }) do savedComm[k] = rawget(env, k) end
+rawset(env, "CommunitiesFrame", commFrame)
+rawset(env, "InCombatLockdown", function() return true end)
+rawset(env, "C_Club", { IsEnabled = function() return true end, IsRestricted = function() return 0 end })
+rawset(env, "BNConnected", function() return true end)
+rawset(env, "IsCommunitiesUIDisabledByTrialAccount", function() return false end)
+local okComm, eComm = false, "no tab"
+if commClick then okComm, eComm = pcall(commClick, commTab) end
+local inFightShown = shownRaw == commFrame and said == 0
+rawset(env, "BNConnected", function() return false end)
+commFrame.shown, shownRaw = false, nil
+if commClick then pcall(commClick, commTab) end
+local offlineKept = shownRaw == nil
+print("communities tab in a fight: the window shown raw: " .. tostring(okComm and inFightShown and offlineKept)
+  .. " (shown " .. tostring(inFightShown) .. ", Battle.net off: not shown " .. tostring(offlineKept) .. ", " .. tostring(eComm) .. ")")
+C.ShowPanel, C.SayNotInCombat = realShow, realSay
+for k, v in pairs(savedComm) do rawset(env, k, v) end
+
 -- capital globals ClassicUI read that the game's documentation and UI code never name (nil in the game too)
 local caps = {}
 for k in pairs(UNKNOWN_CAPS) do caps[#caps + 1] = k end
