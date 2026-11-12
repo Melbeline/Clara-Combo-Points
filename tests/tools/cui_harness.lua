@@ -485,6 +485,28 @@ print("communities tab in a fight: the window shown raw: " .. tostring(okComm an
 C.ShowPanel, C.SayNotInCombat = realShow, realSay
 for k, v in pairs(savedComm) do rawset(env, k, v) end
 
+-- 6. No secure frame of ours hung in a game window (a secure child makes the window protected: refused in a fight)
+local spellsWin0 = rawget(env, "PlayerSpellsFrame") or Mock("PlayerSpellsFrame")
+rawset(env, "PlayerSpellsFrame", spellsWin0)
+rawset(spellsWin0, "SetInspectUnit", function() end)
+fire("ADDON_LOADED", "Blizzard_PlayerSpells") -- (the unit menu's Inspect Talents taken on the game's spells window)
+local GAME_WINDOWS = { PlayerSpellsFrame = true, FriendsFrame = true, WorldMapFrame = true, CharacterFrame = true,
+  CommunitiesFrame = true, LFGParentFrame = true, CollectionsJournal = true, ChannelFrame = true }
+local hung = {}
+for _, f in ipairs(frames) do
+  local t = rawget(f, "__template")
+  if type(t) == "string" and t:find("Secure", 1, true) then
+    local p, depth = rawget(f, "__parent"), 0
+    while p and depth < 12 do
+      for name in pairs(GAME_WINDOWS) do
+        if rawget(env, name) == p then hung[#hung + 1] = name .. " <- " .. t end
+      end
+      p, depth = rawget(p, "__parent"), depth + 1
+    end
+  end
+end
+print("secure frames of ours in a game window: " .. #hung .. (#hung > 0 and (" (" .. table.concat(hung, ", ") .. ")") or ""))
+
 -- capital globals ClassicUI read that the game's documentation and UI code never name (nil in the game too)
 local caps = {}
 for k in pairs(UNKNOWN_CAPS) do caps[#caps + 1] = k end
