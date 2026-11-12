@@ -50,9 +50,15 @@ local function BagButton(button)
 end
 local function Grey()
   if not ContainerFrameUtil_EnumerateContainerFrames then return end
+  local frames = 0
   for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
-    if frame:IsShown() and frame.EnumerateValidItems then
+    frames = frames + 1
+    if frames > 20 then break end -- (the game has 14 at most)
+    if type(frame) == "table" and frame.IsShown and frame:IsShown() and frame.EnumerateValidItems then
+      local seen = 0
       for _, button in frame:EnumerateValidItems() do
+        seen = seen + 1
+        if seen > 300 then break end
         local bag, slot = BagButton(button)
         if bag then
           local queued = Find(bag, slot) ~= nil
