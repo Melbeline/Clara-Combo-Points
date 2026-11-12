@@ -733,13 +733,17 @@ events:SetScript("OnEvent", function(_, event, ...)
     joinTries = 0
     C_Timer.After(5, Join)
   elseif event == "PLAYER_LOGOUT" then
-    -- bye, at once (the queue would not be sent any more): the others see this one go
-    if not (S.On() and channelId and sdb) then return end
+    -- bye, at once (the queue would not be sent any more): the others see this one go; not at a reload (back at
+    -- once: the others would see it go and come back)
+    if S.reloading or not (S.On() and channelId and sdb) then return end
     local payload = ns.Encode64(ns.Serialize({ t = "Q" }))
     local text = "Qb0" .. "1/1:" .. Hex(Hash(sdb.key .. payload)) .. payload
     pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, "CHANNEL", tostring(channelId))
   end
 end)
+
+if type(ReloadUI) == "function" then hooksecurefunc("ReloadUI", function() S.reloading = true end) end
+if C_UI and type(C_UI.Reload) == "function" then hooksecurefunc(C_UI, "Reload", function() S.reloading = true end) end
 
 -- Still here: said on the channel every minute (the others count this one online while they hear it)
 C_Timer.NewTicker(60, function()

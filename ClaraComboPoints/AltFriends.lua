@@ -111,10 +111,14 @@ local function Verdict(name)
   if p then return p.verdict end
 end
 
+-- The newer of the two: the server's answer (or a Clara's hello or goodbye) and the sync's last word
 function AltFriends.Online(name)
   if IsMe(name) then return true end
-  if SyncOnline(name) then return true end
-  return Verdict(name) == true
+  local p = probes[Key(name)]
+  local S = ns.Sync
+  local heard = SyncOnline(name) and S and S.seen and S.seen[KeyOf(name)]
+  if p and p.verdict ~= nil and (type(heard) ~= "number" or (p.at or 0) >= heard) then return p.verdict end
+  return SyncOnline(name) and true or false
 end
 
 -- Whether Clara knows yet if it is online: the server answered, or the sync heard it, or long enough since login
@@ -463,18 +467,19 @@ AltFriends.Look = Look
 
 ---------------------------------------------------------------------------
 -- Online or not, for any character. Clara asks the server, one character a second (each one every 10 seconds,
--- every 5 while the friends list is open, at once as it opens), with an addon message whispered to it, which its
+-- every 3 while the friends list is open, at once as it opens), with an addon message whispered to it, which its
 -- player never sees: offline (or unknown, or of the other faction) the server answers "No player named ... is
 -- currently playing" (that line hidden from the chat when it answers our question); online it says nothing for
 -- 2 seconds. A character heard in the chat is online at once. Between two Clara that have each other in their
 -- lists it is at once both ways: the question is a hello (asked of everyone at login, the first 8 at once), the
 -- answer comes with its level, class and zone, and a goodbye goes at logout (not at a reload). Not asked: the
--- character played now, one the sync hears.
+-- character played now. One of the player's other accounts the sync hears too: the newer word counts (the sync's
+-- arrival waits for its channel, 15 to 30 seconds after a login; the server's answer does not).
 ---------------------------------------------------------------------------
 local PROBE_PREFIX = "ClaraFriends"
 local PROBE_EVERY = 1     -- seconds between two questions
 local PROBE_ROUND = 10    -- seconds at least between two questions to the same character
-local PROBE_ROUND_OPEN = 5 -- the same while the friends list is open
+local PROBE_ROUND_OPEN = 3 -- the same while the friends list is open
 local PROBE_WAIT = 2      -- seconds without the server's "no player named": online
 local PROBE_BURST = 8     -- questions asked at once at login, goodbyes said at once at logout
 local REPLY_EVERY = 20    -- seconds at least between two answers to the same asker
@@ -541,7 +546,7 @@ end
 local function Due(now, round)
   local due = {}
   for _, alt in pairs(List() or {}) do
-    if not IsMe(alt.name) and not SyncOnline(alt.name) then
+    if not IsMe(alt.name) then
       local p = probes[Key(alt.name)]
       local last = p and p.tried or 0
       if not (p and p.sent) and now - last >= round then due[#due + 1] = { alt = alt, last = last } end
@@ -581,7 +586,7 @@ local function Goodbye()
   local n = 0
   for _, alt in pairs(List() or {}) do
     if n >= PROBE_BURST then break end
-    if not IsMe(alt.name) and Verdict(alt.name) == true then
+    if not IsMe(alt.name) and AltFriends.Online(alt.name) then
       Whisper(alt.name, "!")
       n = n + 1
     end
