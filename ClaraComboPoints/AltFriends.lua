@@ -504,7 +504,7 @@ local PROBE_BURST = 8     -- questions asked at once at login, goodbyes said at 
 local PROBE_HIDE = 10     -- seconds the server's answer to a question is hidden from the chat (a late one too)
 local PROBE_SETTLE = 3    -- seconds after the world shows before asking (answers held in a loading screen came late)
 local pausedUntil = math.huge -- (no question before the world shows)
-local REPLY_EVERY = 20    -- seconds at least between two answers to the same asker
+local REPLY_EVERY = 2     -- seconds at least between two answers to the same asker (its hello answered at once)
 local replied = {}        -- Key(name) -> when answered last
 local hideUntil = {}      -- Key(name) -> until when the server's answer to our question is hidden
 local hiddenText, hiddenUntil -- (one answer shown by several chat windows: hidden in each)
@@ -584,7 +584,11 @@ local function Due(now, round)
       if not (p and p.sent) and now - last >= round then due[#due + 1] = { alt = alt, last = last } end
     end
   end
-  table.sort(due, function(a, b) return a.last < b.last end)
+  -- (the ones with Clara first: their hello and answer are the fast ones)
+  table.sort(due, function(a, b)
+    if (a.alt.clara and true or false) ~= (b.alt.clara and true or false) then return a.alt.clara == true end
+    return a.last < b.last
+  end)
   return due
 end
 
@@ -611,6 +615,20 @@ local function AskAll()
 end
 AltFriends.AskAll = AskAll
 
+-- The ones known to have Clara greeted the moment the world shows (their Clara shows this character online at once,
+-- and answers at once): the rest are asked a moment later, when the server's answers come in time
+local function HelloClara()
+  local now, n = GetTime(), 0
+  for _, alt in pairs(List() or {}) do
+    if n >= PROBE_BURST then break end
+    if alt.clara and not IsMe(alt.name) then
+      local p = probes[Key(alt.name)]
+      if not (p and p.sent) and AskOne(alt, now) then n = n + 1 end
+    end
+  end
+end
+AltFriends.HelloClara = HelloClara
+
 -- At logout, a goodbye to the ones online (their Clara shows this character offline at once); not at a reload
 local reloading = false
 local function Goodbye()
@@ -618,7 +636,7 @@ local function Goodbye()
   local n = 0
   for _, alt in pairs(List() or {}) do
     if n >= PROBE_BURST then break end
-    if not IsMe(alt.name) and AltFriends.Online(alt.name) then
+    if alt.clara and not IsMe(alt.name) and AltFriends.Online(alt.name) then -- (only a Clara hears it)
       Whisper(alt.name, "!")
       n = n + 1
     end
@@ -670,7 +688,10 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     -- shows (everyone at once after a login or reload), not taken for online.
     for _, p in pairs(probes) do p.sent = nil end
     pausedUntil = GetTime() + PROBE_SETTLE
-    if a1 or a2 then C_Timer.After(PROBE_SETTLE, AskAll) end
+    if a1 or a2 then
+      HelloClara()
+      C_Timer.After(PROBE_SETTLE, AskAll)
+    end
   elseif event == "CHAT_MSG_SYSTEM" then
     local key = NotFoundName(a1)
     if not key then return end
@@ -683,6 +704,7 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     local alt, own = Listed(Key(sender))
     if not alt then return end -- (only the characters in this list: answered and heard)
     Respell(alt, sender)
+    alt.clara = true -- (it has Clara: greeted first, told goodbye)
     if text == "!" then SetVerdict(own, false) return end -- (its goodbye)
     SetVerdict(own, true)
     if text == "?" then
