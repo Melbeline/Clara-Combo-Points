@@ -19,20 +19,41 @@ end
 -- The Battle.net toast (a friend online, offline): just above the general chat's tabs, rather than in the chat's
 -- alert column on its left, where it lay over the chat's lines. Only the toast: the column also holds the friends
 -- button, left where it is. Put back there each time the game lays its alerts out, and as it shows.
+-- WoW Forever's world refresh warning ("World refresh in 10 Minutes", ShardTransferImminentFrame, its minimize arrow
+-- at its left): the game sets it once, at its load, 55 above the chat's alert column, inside the chat window, and its
+-- height follows its text (a longer one first, why the refresh comes). Set by its bottom just above the general chat's
+-- tabs, so that text grows upward, never over the chat; the Battle.net toast above it while it shows.
+local function Shown(frame) return frame and frame.IsShown and frame:IsShown() end
 local function PlaceToast()
-  local toast, tab = _G.BNToastFrame, _G.ChatFrame1Tab
-  if not (toast and tab and toast.ClearAllPoints) then return end
-  toast:ClearAllPoints()
-  toast:SetPoint("BOTTOMLEFT", tab, "TOPLEFT", 0, 4)
+  local tab = _G.ChatFrame1Tab
+  if not tab then return end
+  local shard, toast = _G.ShardTransferImminentFrame, _G.BNToastFrame
+  if shard and shard.ClearAllPoints then
+    shard:ClearAllPoints()
+    shard:SetPoint("BOTTOMLEFT", tab, "TOPLEFT", 0, 4)
+  end
+  if toast and toast.ClearAllPoints then
+    toast:ClearAllPoints()
+    if Shown(shard) then
+      toast:SetPoint("BOTTOMLEFT", shard, "TOPLEFT", 0, 4)
+    else
+      toast:SetPoint("BOTTOMLEFT", tab, "TOPLEFT", 0, 4)
+    end
+  end
 end
 ns.ChatPlace.PlaceToast = PlaceToast
 local toastHooked
 local function HookToast()
-  if toastHooked or not _G.BNToastFrame then return end
+  if toastHooked or not (_G.BNToastFrame or _G.ShardTransferImminentFrame) then return end
   toastHooked = true
   local alerts = _G.ChatAlertFrame
   if alerts and type(alerts.UpdateAnchors) == "function" then hooksecurefunc(alerts, "UpdateAnchors", PlaceToast) end
-  _G.BNToastFrame:HookScript("OnShow", PlaceToast)
+  if _G.BNToastFrame then _G.BNToastFrame:HookScript("OnShow", PlaceToast) end
+  local shard = _G.ShardTransferImminentFrame
+  if shard and shard.HookScript then
+    shard:HookScript("OnShow", PlaceToast)
+    shard:HookScript("OnHide", PlaceToast)
+  end
   PlaceToast()
 end
 
