@@ -594,6 +594,8 @@ function FontString:SetText(t)
 end
 function FontString:GetText() return self._text end
 function FontString:SetTextColor(r, g, b, a) self._tc = { r, g, b, a or 1 } end
+function FontString:GetTextColor() local c = self._tc or { 1, 1, 1, 1 } return c[1], c[2], c[3], c[4] end
+function FontString:GetFontObject() return self._fontObject and _G[self._fontObject] or nil end
 function FontString:SetJustifyH(j) self._jh = j end
 function FontString:SetWordWrap() end
 function FontString:SetJustifyV(j) self._jv = j end
@@ -767,6 +769,13 @@ function Button:GetNormalTexture()
   if not self._ntex then self._ntex = self:CreateTexture(nil, "ARTWORK"); self._ntex:SetAllPoints() end
   return self._ntex
 end
+local function StateTexture(self, key, layer)
+  if not self[key] then self[key] = self:CreateTexture(nil, layer); self[key]:SetAllPoints() end
+  return self[key]
+end
+function Button:GetPushedTexture() return StateTexture(self, "_ptex", "ARTWORK") end
+function Button:GetDisabledTexture() return StateTexture(self, "_dtex", "ARTWORK") end
+function Button:GetHighlightTexture() return StateTexture(self, "_htex", "HIGHLIGHT") end
 function Button:SetHighlightTexture(t) self._highlightTex = t end
 function Button:SetButtonState(state, locked) self._state = state end
 function Button:LockHighlight() self._locked = true end
@@ -815,7 +824,8 @@ function EditBox:SetAutoFocus() end
 function EditBox:SetNumeric() end
 function EditBox:SetMaxLetters(n) self._maxLetters = n end
 function EditBox:GetMaxLetters() return self._maxLetters or 0 end
-function EditBox:SetFontObject() end
+function EditBox:SetFontObject(o) self._fontObject = o end
+function EditBox:GetFontObject() return self._fontObject end
 function EditBox:SetJustifyH() end
 function EditBox:SetTextInsets() end
 function EditBox:SetText(t) self._text = tostring(t) end
