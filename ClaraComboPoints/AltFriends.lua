@@ -42,11 +42,27 @@ local function List()
 end
 AltFriends.List = List
 
+-- A line in the chat as the game's own system lines (yellow), in the game's words when it has them
+local function SaySystem(text)
+  local frame = DEFAULT_CHAT_FRAME
+  if not (frame and frame.AddMessage) then return end
+  local info = ChatTypeInfo and ChatTypeInfo.SYSTEM
+  frame:AddMessage(text, info and info.r or 1, info and info.g or 1, info and info.b or 0)
+end
+AltFriends.SaySystem = SaySystem
+
+-- Added or removed: said as the game says it of a friend ("Melbeline Moon added to friends."), the whole name
 function AltFriends.Add(name)
   name = Normal(name)
   local list = List()
   if not (name and list) then return false end
-  list[name:lower()] = { name = name }
+  local key = name:lower()
+  if list[key] then
+    SaySystem((ERR_FRIEND_ALREADY_S or L.ALT_ALREADY):format(list[key].name))
+    return false
+  end
+  list[key] = { name = name }
+  SaySystem((ERR_FRIEND_ADDED_S or L.ALT_ADDED):format(name))
   AltFriends.Refresh()
   return true
 end
@@ -54,7 +70,10 @@ end
 function AltFriends.Remove(name)
   local list = List()
   if not (list and type(name) == "string") then return false end
+  local alt = list[name:lower()]
+  if not alt then return false end
   list[name:lower()] = nil
+  SaySystem((ERR_FRIEND_REMOVED_S or L.ALT_REMOVED):format(alt.name))
   AltFriends.Refresh()
   return true
 end
@@ -500,6 +519,16 @@ local function Listed(key)
   if count == 1 then return byFirst, Key(byFirst.name) end
 end
 
+-- The name as the game writes it, from a name heard whole (its sender's): "Melbeline moon" typed, "Melbeline Moon" heard
+local function Respell(alt, heard)
+  if issecretvalue(heard) or type(heard) ~= "string" then return end
+  local proper = ((heard:match("^([^%-]+)") or heard):gsub("^%s+", ""):gsub("%s+$", ""))
+  if proper ~= alt.name and proper:lower() == alt.name:lower() then
+    alt.name = proper
+    AltFriends.Refresh()
+  end
+end
+
 local function SetVerdict(key, online)
   local p = probes[key] or {}
   probes[key] = p
@@ -644,6 +673,7 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     if issecretvalue(text) or issecretvalue(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
     local alt, own = Listed(Key(sender))
     if not alt then return end -- (only the characters in this list: answered and heard)
+    Respell(alt, sender)
     if text == "!" then SetVerdict(own, false) return end -- (its goodbye)
     SetVerdict(own, true)
     if text == "?" then
@@ -662,7 +692,10 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
   else -- heard in the chat
     if issecretvalue(a2) or type(a2) ~= "string" or a2 == "" then return end
     local alt, own = Listed(Key(a2))
-    if alt then SetVerdict(own, true) end
+    if alt then
+      Respell(alt, a2)
+      SetVerdict(own, true)
+    end
   end
 end)
 
