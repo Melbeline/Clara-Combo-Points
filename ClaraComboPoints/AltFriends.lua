@@ -462,17 +462,21 @@ end
 AltFriends.Look = Look
 
 ---------------------------------------------------------------------------
--- Online or not, for any character. Clara asks the server, one character at a time (each one about every
--- 30 seconds, one question every 3 seconds, every second for the ones never asked yet), with an addon message
--- whispered to it, which its player never sees: offline (or unknown, or of the other faction) the server answers
--- "No player named ... is currently playing" (that line hidden from the chat when it answers our question); online
--- it says nothing. A friend whose Clara has this character in its own list answers with its level, class and zone.
--- A character heard in the chat is online too. Not asked: the character played now, one the sync hears.
+-- Online or not, for any character. Clara asks the server, one character a second (each one every 10 seconds,
+-- every 5 while the friends list is open, at once as it opens), with an addon message whispered to it, which its
+-- player never sees: offline (or unknown, or of the other faction) the server answers "No player named ... is
+-- currently playing" (that line hidden from the chat when it answers our question); online it says nothing for
+-- 2 seconds. A character heard in the chat is online at once. Between two Clara that have each other in their
+-- lists it is at once both ways: the question is a hello (asked of everyone at login, the first 8 at once), the
+-- answer comes with its level, class and zone, and a goodbye goes at logout (not at a reload). Not asked: the
+-- character played now, one the sync hears.
 ---------------------------------------------------------------------------
 local PROBE_PREFIX = "ClaraFriends"
-local PROBE_EVERY = 3     -- seconds between two questions
-local PROBE_ROUND = 30    -- seconds at least between two questions to the same character
-local PROBE_WAIT = 4      -- seconds without the server's "no player named": online
+local PROBE_EVERY = 1     -- seconds between two questions
+local PROBE_ROUND = 10    -- seconds at least between two questions to the same character
+local PROBE_ROUND_OPEN = 5 -- the same while the friends list is open
+local PROBE_WAIT = 2      -- seconds without the server's "no player named": online
+local PROBE_BURST = 8     -- questions asked at once at login, goodbyes said at once at logout
 local REPLY_EVERY = 20    -- seconds at least between two answers to the same asker
 local replied = {}        -- Key(name) -> when answered last
 local hideUntil = {}      -- Key(name) -> until when the server's answer to our question is hidden
@@ -513,32 +517,74 @@ local function Whisper(to, text)
   return result == nil or result == true or result == 0 or (success ~= nil and result == success)
 end
 
-local function AskServer()
-  local now = GetTime()
-  for first, p in pairs(probes) do
-    if p.sent and now - p.sent >= PROBE_WAIT then SetVerdict(first, true) end
+local function ListOpen() return FriendsFrame ~= nil and FriendsFrame:IsVisible() and true or false end
+
+-- One question to one character; false when the game refused to send it now (throttled: asked again later)
+local function AskOne(alt, now)
+  local key = Key(alt.name)
+  local p = probes[key] or {}
+  probes[key] = p
+  local sent, offline = Whisper(alt.name, "?")
+  if sent then
+    p.tried, p.sent = now, now
+    hideUntil[key] = now + PROBE_WAIT
+  elseif offline then -- (the game said so at once)
+    p.tried = now
+    SetVerdict(key, false)
+  else
+    return false
   end
-  local pick, oldest, fresh
+  return true
+end
+
+-- The characters to ask, the longest unasked first
+local function Due(now, round)
+  local due = {}
   for _, alt in pairs(List() or {}) do
     if not IsMe(alt.name) and not SyncOnline(alt.name) then
       local p = probes[Key(alt.name)]
       local last = p and p.tried or 0
-      if not (p and p.sent) and now - last >= PROBE_ROUND and (not oldest or last < oldest) then
-        pick, oldest, fresh = alt, last, last == 0
-      end
+      if not (p and p.sent) and now - last >= round then due[#due + 1] = { alt = alt, last = last } end
     end
   end
-  if not pick or (not fresh and now - lastAsked < PROBE_EVERY) then return end
-  local key = Key(pick.name)
-  local p = probes[key] or {}
-  probes[key] = p
-  p.tried, lastAsked = now, now
-  local sent, offline = Whisper(pick.name, "?")
-  if sent then
-    p.sent = now
-    hideUntil[key] = now + PROBE_WAIT
-  elseif offline then -- (the game said so at once)
-    SetVerdict(key, false)
+  table.sort(due, function(a, b) return a.last < b.last end)
+  return due
+end
+
+local function AskServer()
+  local now = GetTime()
+  for key, p in pairs(probes) do
+    if p.sent and now - p.sent >= PROBE_WAIT then SetVerdict(key, true) end
+  end
+  if now - lastAsked < PROBE_EVERY then return end
+  local due = Due(now, ListOpen() and PROBE_ROUND_OPEN or PROBE_ROUND)
+  if due[1] then
+    if AskOne(due[1].alt, now) then lastAsked = now else lastAsked = now + 2 end -- (refused: a short pause)
+  end
+end
+
+-- Everyone asked again at once (login, the friends list opened): the first PROBE_BURST now, the rest a second each
+local function AskAll()
+  local now = GetTime()
+  for _, p in pairs(probes) do if not p.sent then p.tried = 0 end end
+  for i, entry in ipairs(Due(now, 0)) do
+    if i > PROBE_BURST or not AskOne(entry.alt, now) then break end
+  end
+  lastAsked = now
+end
+AltFriends.AskAll = AskAll
+
+-- At logout, a goodbye to the ones online (their Clara shows this character offline at once); not at a reload
+local reloading = false
+local function Goodbye()
+  if reloading then return end
+  local n = 0
+  for _, alt in pairs(List() or {}) do
+    if n >= PROBE_BURST then break end
+    if not IsMe(alt.name) and Verdict(alt.name) == true then
+      Whisper(alt.name, "!")
+      n = n + 1
+    end
   end
 end
 AltFriends.AskServer = AskServer -- (not AltFriends.Ask: Add Character's dialog)
@@ -580,7 +626,9 @@ local CHAT_PRESENCE = { "CHAT_MSG_WHISPER", "CHAT_MSG_CHANNEL", "CHAT_MSG_SAY", 
 
 local probeEvents = CreateFrame("Frame")
 probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
-  if event == "CHAT_MSG_SYSTEM" then
+  if event == "PLAYER_LOGOUT" then
+    Goodbye()
+  elseif event == "CHAT_MSG_SYSTEM" then
     local key = NotFoundName(a1)
     if not key then return end
     local alt, own = Listed(key)
@@ -591,6 +639,7 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     if issecretvalue(text) or issecretvalue(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
     local alt, own = Listed(Key(sender))
     if not alt then return end -- (only the characters in this list: answered and heard)
+    if text == "!" then SetVerdict(own, false) return end -- (its goodbye)
     SetVerdict(own, true)
     if text == "?" then
       local now = GetTime()
@@ -622,6 +671,11 @@ function AltFriends.StartProbes()
   for _, event in ipairs(CHAT_PRESENCE) do probeEvents:RegisterEvent(event) end
   local AddFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
   if AddFilter then AddFilter("CHAT_MSG_SYSTEM", HideOurs) end
+  probeEvents:RegisterEvent("PLAYER_LOGOUT")
+  if type(ReloadUI) == "function" then hooksecurefunc("ReloadUI", function() reloading = true end) end
+  if C_UI and type(C_UI.Reload) == "function" then hooksecurefunc(C_UI, "Reload", function() reloading = true end) end
+  if FriendsFrame and FriendsFrame.HookScript then FriendsFrame:HookScript("OnShow", AskAll) end
+  AskAll()
   C_Timer.NewTicker(1, AskServer)
 end
 
