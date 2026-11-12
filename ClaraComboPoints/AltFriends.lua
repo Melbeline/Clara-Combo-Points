@@ -1,11 +1,11 @@
--- Clara Combo Points - one's other characters in the friends list. WoW Forever's friends list takes
--- none of the account's own characters; Clara keeps them instead (for the whole account) and shows
--- them in the friends window, above the offline Battle.net friends, in the game's look: online (the
--- character played now, or one heard on the sync between the accounts in the last five minutes) or
--- offline, with its level and class as Clara last saw them (the gold tracker) and when it was last
--- played. Add Alt, between Add Friend and Send Message (the three the same width), adds one by its
--- first name and surname with the suggestions of the mail's To field (the account's characters
--- among them). Over a row: its tooltip; right-click: whisper (online) or remove it from the list.
+-- Clara Combo Points - characters in the friends list. WoW Forever's server keeps no character friends
+-- (Battle.net friends only), and its list takes none of the account's own characters; Clara keeps a list of
+-- characters instead (for the whole account: one's own and friends'), and shows them in the friends window,
+-- above the offline Battle.net friends, in the game's look: online or offline (see "Online or not" below),
+-- with their level and class as Clara last saw them (the gold tracker, or the character's own Clara) and when
+-- last seen. Add Character, between Add Friend and Send Message (the three the same width), adds one by its
+-- first name and surname with the suggestions of the mail's To field (the account's characters among them).
+-- Over a row: its tooltip; right-click: whisper (online) or remove it from the list.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -14,6 +14,7 @@ local GAP = 2                -- between the three foot buttons
 local LEFT, RIGHT = 4, 6     -- the game's margins for its two (FriendsFrameButtonTemplate_BottomLeft / _BottomRight)
 local NAME_MAX = 12 + 1 + 64 -- a first name, a space, a surname (the game's own Add Friend box)
 local HEARD = 300            -- seconds: a character heard on the sync this recently is online
+local KNOWN_AFTER = 120      -- seconds after login: every character counts as known (offline unless found online)
 local TYPE = "claraAlt"      -- the list entries' button type (the game's: numbers)
 
 local AltFriends = {}
@@ -87,17 +88,38 @@ local function IsMe(name)
   return type(me) == "string" and me:lower() == name:lower()
 end
 
-function AltFriends.Online(name)
-  if IsMe(name) then return true end
+-- The name the game knows the character by (its first name: the surname is the player's own touch)
+local function GameName(name) return name:match("^(%S+)") or name end
+AltFriends.GameName = GameName
+local function First(name) return (name:match("^([^%-%s]+)") or name):lower() end
+
+-- The server's answers (see "Online or not"): lower-case first name -> { verdict = online, at, tried, sent }
+local probes = {}
+local startedAt -- (GetTime at login)
+
+local function SyncOnline(name)
   local S = ns.Sync
   if S and S.Online then return S.Online(KeyOf(name)) end
   local seen = S and S.seen and S.seen[KeyOf(name)]
   return type(seen) == "number" and GetTime() - seen < HEARD
 end
 
--- The name the game knows the character by (its first name: the surname is the player's own touch)
-local function GameName(name) return name:match("^(%S+)") or name end
-AltFriends.GameName = GameName
+local function Verdict(name)
+  local p = probes[First(name)]
+  if p then return p.verdict end
+end
+
+function AltFriends.Online(name)
+  if IsMe(name) then return true end
+  if SyncOnline(name) then return true end
+  return Verdict(name) == true
+end
+
+-- Whether Clara knows yet if it is online: the server answered, or the sync heard it, or long enough since login
+function AltFriends.Known(name)
+  if IsMe(name) or SyncOnline(name) or Verdict(name) ~= nil then return true end
+  return startedAt ~= nil and GetTime() - startedAt > KNOWN_AFTER
+end
 
 -- One of the player's characters: in this list, or known to the gold tracker (the account's characters,
 -- and the other accounts' through the sync). name: as the game gives it (a first name, maybe a realm).
@@ -129,6 +151,15 @@ function AltFriends.Facts(name)
   local money = ns.Money and ns.Money.db and ns.Money.db.chars
   local rec = money and money[KeyOf(name)]
   if rec then facts.level, facts.class, facts.at = rec.l, rec.c, rec.at end
+  -- What its own Clara said (newer than the gold tracker's), and when Clara last found it online
+  local alt = (List() or {})[name:lower()]
+  if type(alt) == "table" then
+    if alt.level and (not facts.at or (alt.levelAt or 0) >= facts.at) then
+      facts.level, facts.class = alt.level, alt.class or facts.class
+    end
+    if alt.zone and AltFriends.Online(name) then facts.zone = alt.zone end
+    if type(alt.seen) == "number" and (not facts.at or alt.seen > facts.at) then facts.at = alt.seen end
+  end
   return facts
 end
 
@@ -415,7 +446,7 @@ end
 local function Look(announce)
   local changed = false
   for key, alt in pairs(List() or {}) do
-    if not IsMe(alt.name) then
+    if not IsMe(alt.name) and AltFriends.Known(alt.name) then
       local on = AltFriends.Online(alt.name) and true or false
       if wasOnline[key] ~= nil and wasOnline[key] ~= on then
         changed = true
@@ -428,13 +459,167 @@ local function Look(announce)
 end
 AltFriends.Look = Look
 
+---------------------------------------------------------------------------
+-- Online or not, for any character. Clara asks the server, one character at a time (each one about every
+-- 30 seconds, one question every 3 seconds, every second for the ones never asked yet), with an addon message
+-- whispered to it, which its player never sees: offline (or unknown, or of the other faction) the server answers
+-- "No player named ... is currently playing" (that line hidden from the chat when it answers our question); online
+-- it says nothing. A friend whose Clara has this character in its own list answers with its level, class and zone.
+-- A character heard in the chat is online too. Not asked: the character played now, one the sync hears.
+---------------------------------------------------------------------------
+local PROBE_PREFIX = "ClaraFriends"
+local PROBE_EVERY = 3     -- seconds between two questions
+local PROBE_ROUND = 30    -- seconds at least between two questions to the same character
+local PROBE_WAIT = 4      -- seconds without the server's "no player named": online
+local REPLY_EVERY = 20    -- seconds at least between two answers to the same asker
+local replied = {}        -- lower-case first name -> when answered last
+local hideUntil = {}      -- lower-case first name -> until when the server's answer to our question is hidden
+local hiddenText, hiddenUntil -- (one answer shown by several chat windows: hidden in each)
+local lastAsked = 0
+
+local function Listed(first)
+  for _, alt in pairs(List() or {}) do
+    if First(alt.name) == first then return alt end
+  end
+end
+
+local function SetVerdict(first, online)
+  local p = probes[first] or {}
+  probes[first] = p
+  p.sent = nil
+  local changed = p.verdict ~= online
+  p.verdict, p.at = online, GetTime()
+  local alt = Listed(first)
+  if online and alt and time then alt.seen = time() end
+  if changed then Look(true) end
+end
+AltFriends.SetVerdict = SetVerdict
+
+local function Whisper(to, text)
+  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then return false end
+  local ok, result = pcall(C_ChatInfo.SendAddonMessage, PROBE_PREFIX, text, "WHISPER", to)
+  if not ok then return false end
+  local success = Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success
+  return result == nil or result == true or result == 0 or (success ~= nil and result == success)
+end
+
+local function Ask()
+  local now = GetTime()
+  for first, p in pairs(probes) do
+    if p.sent and now - p.sent >= PROBE_WAIT then SetVerdict(first, true) end
+  end
+  local pick, oldest, fresh
+  for _, alt in pairs(List() or {}) do
+    if not IsMe(alt.name) and not SyncOnline(alt.name) then
+      local p = probes[First(alt.name)]
+      local last = p and p.tried or 0
+      if not (p and p.sent) and now - last >= PROBE_ROUND and (not oldest or last < oldest) then
+        pick, oldest, fresh = alt, last, last == 0
+      end
+    end
+  end
+  if not pick or (not fresh and now - lastAsked < PROBE_EVERY) then return end
+  local first = First(pick.name)
+  local p = probes[first] or {}
+  probes[first] = p
+  p.tried, lastAsked = now, now
+  if Whisper(GameName(pick.name), "?") then
+    p.sent = now
+    hideUntil[first] = now + PROBE_WAIT
+  end
+end
+AltFriends.Ask = Ask
+
+-- The first name in the server's "No player named '%s' is currently playing", lower-case
+local notFound
+local function NotFoundName(text)
+  if issecretvalue(text) or type(text) ~= "string" or type(ERR_CHAT_PLAYER_NOT_FOUND_S) ~= "string" then return nil end
+  if not notFound then
+    local escaped = ERR_CHAT_PLAYER_NOT_FOUND_S:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+    notFound = "^" .. escaped:gsub("%%%%s", "(.+)") .. "$"
+  end
+  local name = text:match(notFound)
+  return name and First(name)
+end
+
+local function HideOurs(_, _, text, ...)
+  local now = GetTime()
+  if text == hiddenText and hiddenUntil and now <= hiddenUntil then return true end
+  local first = NotFoundName(text)
+  if first and hideUntil[first] and now <= hideUntil[first] then
+    hideUntil[first] = nil
+    hiddenText, hiddenUntil = text, now + 1
+    return true
+  end
+  return false
+end
+
+local function Answer(sender)
+  local level = UnitLevel and UnitLevel("player") or 0
+  local _, class = UnitClass("player")
+  local zone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+  if issecretvalue(zone) or type(zone) ~= "string" then zone = "" end
+  Whisper(sender, ("I|%d|%s|%s"):format(tonumber(level) or 0, class or "", (zone:gsub("|", ""))))
+end
+
+local CHAT_PRESENCE = { "CHAT_MSG_WHISPER", "CHAT_MSG_CHANNEL", "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_EMOTE",
+  "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER" }
+
+local probeEvents = CreateFrame("Frame")
+probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
+  if event == "CHAT_MSG_SYSTEM" then
+    local first = NotFoundName(a1)
+    if first and Listed(first) then SetVerdict(first, false) end
+  elseif event == "CHAT_MSG_ADDON" then
+    local prefix, text, channel, sender = a1, a2, a3, a4
+    if prefix ~= PROBE_PREFIX or channel ~= "WHISPER" then return end
+    if issecretvalue(text) or issecretvalue(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
+    local first = First(sender)
+    local alt = Listed(first)
+    if not alt then return end -- (only the characters in this list: answered and heard)
+    SetVerdict(first, true)
+    if text == "?" then
+      local now = GetTime()
+      if replied[first] and now - replied[first] < REPLY_EVERY then return end
+      replied[first] = now
+      Answer(sender)
+    else
+      local level, class, zone = text:match("^I|(%d+)|(%u*)|(.*)$")
+      if level then
+        alt.level, alt.class, alt.zone = tonumber(level), class ~= "" and class or nil, zone ~= "" and zone or nil
+        alt.levelAt = time and time() or nil
+        AltFriends.Refresh()
+      end
+    end
+  else -- heard in the chat
+    if issecretvalue(a2) or type(a2) ~= "string" or a2 == "" then return end
+    local first = First(a2)
+    if Listed(first) then SetVerdict(first, true) end
+  end
+end)
+
+local probing = false
+function AltFriends.StartProbes()
+  if probing then return end
+  probing = true
+  if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then pcall(C_ChatInfo.RegisterAddonMessagePrefix, PROBE_PREFIX) end
+  probeEvents:RegisterEvent("CHAT_MSG_SYSTEM")
+  probeEvents:RegisterEvent("CHAT_MSG_ADDON")
+  for _, event in ipairs(CHAT_PRESENCE) do probeEvents:RegisterEvent(event) end
+  local AddFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
+  if AddFilter then AddFilter("CHAT_MSG_SYSTEM", HideOurs) end
+  C_Timer.NewTicker(1, Ask)
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self)
   self:UnregisterAllEvents()
+  startedAt = GetTime()
   List()
   Hook()
   Look(false)
+  AltFriends.StartProbes()
   C_Timer.After(20, function() settled = true end)
   if ns.Sync and ns.Sync.OnPresence then ns.Sync.OnPresence(function() Look(true) end) end
   -- (one that left without a word: gone once not heard for a while)
