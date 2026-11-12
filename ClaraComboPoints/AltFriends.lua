@@ -503,7 +503,7 @@ local function Whisper(to, text)
   return result == nil or result == true or result == 0 or (success ~= nil and result == success)
 end
 
-local function Ask()
+local function AskServer()
   local now = GetTime()
   for first, p in pairs(probes) do
     if p.sent and now - p.sent >= PROBE_WAIT then SetVerdict(first, true) end
@@ -528,7 +528,7 @@ local function Ask()
     hideUntil[first] = now + PROBE_WAIT
   end
 end
-AltFriends.Ask = Ask
+AltFriends.AskServer = AskServer -- (not AltFriends.Ask: Add Character's dialog)
 
 -- The first name in the server's "No player named '%s' is currently playing", lower-case
 local notFound
@@ -608,7 +608,7 @@ function AltFriends.StartProbes()
   for _, event in ipairs(CHAT_PRESENCE) do probeEvents:RegisterEvent(event) end
   local AddFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
   if AddFilter then AddFilter("CHAT_MSG_SYSTEM", HideOurs) end
-  C_Timer.NewTicker(1, Ask)
+  C_Timer.NewTicker(1, AskServer)
 end
 
 local events = CreateFrame("Frame")
