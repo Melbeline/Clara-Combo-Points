@@ -150,6 +150,16 @@ ReloadUI()
 M.Fire("PLAYER_LOGOUT")
 check(Sent() == 0, "a reload: no goodbye")
 
+out("== added and removed: said in the chat as the game says it, with the whole name")
+M.chat = {}
+check(A.Add("Melbeline moon"), "added")
+check(Chat("Melbeline moon added to friends."), "\"Melbeline moon added to friends.\"")
+check(not A.Add("melbeline Moon") and Chat("Melbeline moon is already your friend."), "twice: already a friend")
+M.Fire("CHAT_MSG_SAY", "coucou", "Melbeline Moon-Realm")
+check(A.List()["melbeline moon"].name == "Melbeline Moon", "the name as the game writes it, once heard whole")
+M.chat = {}
+check(A.Remove("Melbeline Moon") and Chat("Melbeline Moon removed from friends."), "removed, said")
+
 out("== Add Character: its button opens the dialog (the server's questions running)")
 FriendsFrameAddFriendButton = FriendsFrameAddFriendButton or CreateFrame("Button", "FriendsFrameAddFriendButton", FriendsFrame)
 FriendsFrameSendMessageButton = FriendsFrameSendMessageButton or CreateFrame("Button", "FriendsFrameSendMessageButton", FriendsFrame)
