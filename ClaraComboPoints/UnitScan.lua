@@ -283,11 +283,15 @@ local function PlateOf(guid)
     if g and not issecret(g) and g == guid then return unit end
   end
 end
+-- The click targets it (by its name, and by its nameplate when it has one) and puts the skull on it, as /tm 8 does;
+-- "!8" never takes the skull off a unit that has it already. On its nameplate when it has one; else on the target
+-- only once the name targeted it: the old target cleared first, so a creature out of reach marks nothing else.
 local function Macro()
-  local text = "/targetexact " .. current.name
   local plate = PlateOf(current.guid)
-  if plate then text = text .. "\n/target [@" .. plate .. "]" end
-  return text
+  if plate then
+    return "/targetexact " .. current.name .. "\n/target [@" .. plate .. "]\n/tm [@" .. plate .. "] !8"
+  end
+  return "/cleartarget\n/targetexact " .. current.name .. "\n/tm [@target,exists] !8"
 end
 -- (a nameplate come or gone while the window shows, out of combat: the click follows)
 local function Retarget()
