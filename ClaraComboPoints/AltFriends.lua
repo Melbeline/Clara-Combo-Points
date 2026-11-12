@@ -501,6 +501,9 @@ local PROBE_ROUND = 10    -- seconds at least between two questions to the same 
 local PROBE_ROUND_OPEN = 3 -- the same while the friends list is open
 local PROBE_WAIT = 2      -- seconds without the server's "no player named": online
 local PROBE_BURST = 8     -- questions asked at once at login, goodbyes said at once at logout
+local PROBE_HIDE = 10     -- seconds the server's answer to a question is hidden from the chat (a late one too)
+local PROBE_SETTLE = 3    -- seconds after the world shows before asking (answers held in a loading screen came late)
+local pausedUntil = math.huge -- (no question before the world shows)
 local REPLY_EVERY = 20    -- seconds at least between two answers to the same asker
 local replied = {}        -- Key(name) -> when answered last
 local hideUntil = {}      -- Key(name) -> until when the server's answer to our question is hidden
@@ -561,7 +564,7 @@ local function AskOne(alt, now)
   local sent, offline = Whisper(alt.name, "?")
   if sent then
     p.tried, p.sent = now, now
-    hideUntil[key] = now + PROBE_WAIT
+    hideUntil[key] = now + PROBE_HIDE
   elseif offline then -- (the game said so at once)
     p.tried = now
     SetVerdict(key, false)
@@ -590,7 +593,7 @@ local function AskServer()
   for key, p in pairs(probes) do
     if p.sent and now - p.sent >= PROBE_WAIT then SetVerdict(key, true) end
   end
-  if now - lastAsked < PROBE_EVERY then return end
+  if now - lastAsked < PROBE_EVERY or now < pausedUntil then return end
   local due = Due(now, ListOpen() and PROBE_ROUND_OPEN or PROBE_ROUND)
   if due[1] then
     if AskOne(due[1].alt, now) then lastAsked = now else lastAsked = now + 2 end -- (refused: a short pause)
@@ -662,6 +665,12 @@ local probeEvents = CreateFrame("Frame")
 probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
   if event == "PLAYER_LOGOUT" then
     Goodbye()
+  elseif event == "PLAYER_ENTERING_WORLD" then
+    -- A loading screen held the answers: the questions then unanswered are asked again, a moment after the world
+    -- shows (everyone at once after a login or reload), not taken for online.
+    for _, p in pairs(probes) do p.sent = nil end
+    pausedUntil = GetTime() + PROBE_SETTLE
+    if a1 or a2 then C_Timer.After(PROBE_SETTLE, AskAll) end
   elseif event == "CHAT_MSG_SYSTEM" then
     local key = NotFoundName(a1)
     if not key then return end
@@ -712,8 +721,10 @@ function AltFriends.StartProbes()
   probeEvents:RegisterEvent("PLAYER_LOGOUT")
   if type(ReloadUI) == "function" then hooksecurefunc("ReloadUI", function() reloading = true end) end
   if C_UI and type(C_UI.Reload) == "function" then hooksecurefunc(C_UI, "Reload", function() reloading = true end) end
-  if FriendsFrame and FriendsFrame.HookScript then FriendsFrame:HookScript("OnShow", AskAll) end
-  AskAll()
+  if FriendsFrame and FriendsFrame.HookScript then
+    FriendsFrame:HookScript("OnShow", function() if GetTime() >= pausedUntil then AskAll() end end)
+  end
+  probeEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
   C_Timer.NewTicker(1, AskServer)
 end
 
