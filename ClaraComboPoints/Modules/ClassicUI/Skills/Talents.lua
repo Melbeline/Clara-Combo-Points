@@ -122,7 +122,7 @@ local function Build()
         if not frame:IsShown() then return end
         ns.Sched.NextFrame("talents.refresh", RefreshIfShown)
     end)
-    -- The inspect hook on the game's window, now that ours exists.
+    -- The inspect watcher's handle on the window, now that it exists.
     TakeMenuInspect()
     return frame
 end
@@ -205,21 +205,30 @@ ns.EventFrame("ADDON_LOADED", function(_, _, name)
 end)
 
 -- The unit menu's Inspect Talents opens the game's spells window on the unit (no inspect window on this client has a
--- Talents button). Its unit is set before it shows: ours shows the unit then, and the game's window, hooked as it shows,
--- hides itself at once, in a fight too, while ours says it is inspecting.
--- (Clara Combo Points: by its own show hook, no longer a secure watcher hung under it. A secure child made the game's
--- spells window protected at all times: in a fight the game's own open (its pet book key, the unit menu) was refused
--- on any path an addon had touched. Unprotected, it opens in a fight as the game's own, and its hide here is allowed
--- in a fight too: raw, as the watcher's was.)
-local showHooked, menuHooked
+-- Talents button). Its unit is set before it shows: ours shows the unit then, and a secure watcher under the game's
+-- window hides it as it shows, in a fight too (our hide would be refused there), while ours says it is inspecting.
+-- (Clara Combo Points: it stays. The game's spells window is protected in a fight by the game itself: its Hide from
+-- our code there is refused ("PlayerSpellsFrame:Hide() blocked"), and the window stayed up, Escape unable to shut it.)
+local WATCH = [[
+    local ours = self:GetFrameRef("ours")
+    if ours and ours:IsShown() and ours:GetAttribute("inspecting") == 1 then self:GetParent():Hide() end
+]]
+local watcher, watcherHasRef, menuHooked
 function TakeMenuInspect()
     local spells = _G.PlayerSpellsFrame
     if not (active and spells and spells.SetInspectUnit) or Hosted() then return end
-    if not showHooked and spells.HookScript then
-        showHooked = true
-        spells:HookScript("OnShow", function(self)
-            if active and frame and frame:IsShown() and frame:GetAttribute("inspecting") == 1 then self:Hide() end
-        end)
+    if not watcher then
+        watcher = ns.NewFrame("Frame", nil, spells, "SecureHandlerShowHideTemplate")
+        watcher:SetAttribute("_onshow", WATCH)
+    end
+    -- The window's handle, given out of a fight (the watcher is protected); a fight's first inspect waits for it.
+    if frame and not watcherHasRef then
+        if InCombatLockdown() then
+            ns.WhenCalm("talents.inspectWatch", TakeMenuInspect)
+        else
+            watcher:SetFrameRef("ours", frame)
+            watcherHasRef = true
+        end
     end
     if menuHooked then return end
     menuHooked = true
