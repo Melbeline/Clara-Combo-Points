@@ -694,11 +694,8 @@ local function TakeIncoming()
   if type(incoming) ~= "table" then return false end
   local any = false
   for folder, src in pairs(incoming) do
-    -- an older Windows script (before the gold): said once, to run its installer again
-    if type(src) == "table" and Gd and src.ClaraMoneyDB == nil and src.ClaraMailDB ~= nil and not S.saidOldScript then
-      S.saidOldScript = true
-      C_Timer.After(8, function() print("|cffffd200Clara|r: " .. ns.L.MONEY_SCRIPT_OLD) end)
-    end
+    -- (an account without gold has no ClaraMoneyDB: the script copies what exists. Nothing said: it is simply left out
+    -- of the gold window, which lists the accounts with characters; an old script cannot be told from it)
     if type(src) == "table" then
       local d = {
         mail = M and type(src.ClaraMailDB) == "table" and M.Clean(src.ClaraMailDB) or (M and M.Clean(nil)),
