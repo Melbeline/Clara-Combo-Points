@@ -620,7 +620,7 @@ function AltFriends.AddToList()
 end
 
 function AltFriends.Refresh()
-  if FriendsListFrame and FriendsListFrame:IsShown() and FriendsList_Update then FriendsList_Update(true) end
+  if FriendsListFrame and FriendsListFrame:IsShown() and FriendsList_Update then FriendsList_Update(true) end  if AltFriends.SocialRefresh then AltFriends.SocialRefresh() end
 end
 
 ---------------------------------------------------------------------------
@@ -683,6 +683,7 @@ local function Catcher(button)
   button.claraAlt = catcher
   return catcher
 end
+AltFriends.Catcher = Catcher
 
 local function Color(color, alpha)
   if type(color) == "table" and color.GetRGBA then return color:GetRGBA() end
@@ -745,6 +746,114 @@ local function Hook()
   if FriendsListFrame then FriendsListFrame:HookScript("OnShow", function() AltFriends.LayFoot() end) end
 end
 AltFriends.Hook = Hook
+
+---------------------------------------------------------------------------
+-- The game's new social window (WoW Forever's friends window when its server turns it on: the default UI's). Its
+-- friends list is a tree of Battle.net friend cards: the characters there as a section of their own, under the
+-- Battle.net friends ("Characters (2/5)", folded and unfolded as the game's own sections), each on the game's card,
+-- drawn by the game from what is known of it (name, level, class, zone, when last seen); the mouse on a layer of ours
+-- (tooltip, right-click menu), the Battle.net friend's party and summon buttons hidden. The game's search box
+-- filters them too.
+---------------------------------------------------------------------------
+local SOCIAL_HEADER = "claraCharacters"
+local socialView
+local socialNodes = {} -- (our section's nodes in the list shown: taken out and put back as it changes)
+
+-- What the game's card reads of a friend, for a character
+local function SocialInfo(alt)
+  local online = AltFriends.Online(alt.name)
+  local facts = AltFriends.Facts(alt.name)
+  local levels = Enum and Enum.BattleNetFriendLevel
+  local raf = Enum and Enum.RafLinkType
+  return {
+    accountName = alt.name, battleTag = "", note = "", friendTags = {}, isFavorite = false, isAFK = false,
+    isDND = false, customMessage = "", customMessageTime = 0, rafLinkType = raf and raf.None or 0,
+    friendLevel = levels and levels.Title, lastOnlineTime = (not online and facts.at) or 0,
+    gameAccountInfo = {
+      isOnline = online, characterName = alt.name, characterLevel = facts.level,
+      className = facts.class and ClassName(facts.class) or nil, classFilename = facts.class,
+      areaName = online and (facts.zone or L.ALT_ONLINE) or nil, richPresence = facts.zone,
+      clientProgram = online and (BNET_CLIENT_WOW or "WoW") or "", wowProjectID = WOW_PROJECT_ID,
+      factionName = UnitFactionGroup("player"), realmID = 0, isInCurrentRegion = true,
+      isGameAFK = false, isGameBusy = false,
+    },
+  }
+end
+
+local function SocialMatches(alt)
+  local bar = socialView and socialView.FilterBar and socialView.FilterBar.SearchBar
+  local ok, text = pcall(function() return bar and bar:GetText() end)
+  if not ok or type(text) ~= "string" or issecretvalue(text) or text == "" then return true end
+  return alt.name:lower():find(text:lower(), 1, true) ~= nil
+end
+
+local function SocialInsert(provider)
+  socialNodes = {}
+  if not (socialView and provider and provider.Insert) then return end
+  local alts, online = {}, 0
+  for _, alt in ipairs(Sorted()) do
+    if not GameFriend(alt.name) and SocialMatches(alt) then
+      alts[#alts + 1] = alt
+      if AltFriends.Online(alt.name) then online = online + 1 end
+    end
+  end
+  if #alts == 0 then return end
+  local okEmpty, empty = pcall(provider.IsEmpty, provider)
+  if okEmpty and not empty then socialNodes[#socialNodes + 1] = provider:Insert({ isSpacer = true }) end
+  local header = provider:Insert({ headerType = SOCIAL_HEADER, headerText = L.ALT_SOCIAL_HEADER:format(online, #alts) })
+  socialNodes[#socialNodes + 1] = header
+  local okFolded, folded = pcall(socialView.IsHeaderCollapsed, socialView, SOCIAL_HEADER)
+  local constants = TreeDataProviderConstants
+  header:SetCollapsed(okFolded and folded == true, constants and constants.RetainChildCollapse, constants and constants.SkipInvalidation)
+  header:Insert({ isSpacer = true })
+  for _, alt in ipairs(alts) do header:Insert({ claraAlt = alt, accountInfo = SocialInfo(alt) }) end
+end
+
+-- The list shown again with what changed: our section only, taken out and put back
+local function SocialRefresh()
+  if not (socialView and socialView:IsVisible()) then return end
+  local provider = socialView.ScrollBox:GetDataProvider()
+  if not provider then return end
+  for i = #socialNodes, 1, -1 do pcall(provider.Remove, provider, socialNodes[i]) end
+  SocialInsert(provider)
+end
+AltFriends.SocialRefresh = SocialRefresh
+
+-- Each card as the list draws it: ours with the mouse layer and without the party and summon buttons; a Battle.net
+-- friend's as the game made it (its party button back when the card was ours before)
+local function SocialCard(_, frame, node)
+  local data = node and node.GetData and node:GetData()
+  local alt = type(data) == "table" and data.claraAlt
+  if not alt then
+    if frame.claraAlt then frame.claraAlt:Hide(); frame.claraAlt.alt = nil end
+    if frame.claraAltHid and frame.PartyButton then frame.PartyButton:Show() end
+    frame.claraAltHid = nil
+    return
+  end
+  if frame.PartyButton then frame.PartyButton:Hide() end
+  if frame.RAFSummonButton then frame.RAFSummonButton:Hide() end
+  frame.claraAltHid = true
+  local catcher = AltFriends.Catcher(frame)
+  catcher.alt = alt
+  catcher:Show()
+end
+
+function AltFriends.HookSocial()
+  if socialView then return true end
+  local view = SocialUIFrame and SocialUIFrame.FriendsList
+  local box = view and view.ScrollBox
+  local events = ScrollBoxListMixin and ScrollBoxListMixin.Event
+  if not (box and box.SetDataProvider and box.RegisterCallback and events) then return false end
+  socialView = view
+  hooksecurefunc(box, "SetDataProvider", function(_, provider) SocialInsert(provider) end)
+  box:RegisterCallback(events.OnInitializedFrame, SocialCard, AltFriends)
+  box:RegisterCallback(events.OnReleasedFrame, function(_, frame)
+    if frame.claraAlt then frame.claraAlt:Hide(); frame.claraAlt.alt = nil end
+  end, AltFriends)
+  local provider = box:GetDataProvider()
+  if provider then SocialInsert(provider) end
+  return true
+end
 
 ---------------------------------------------------------------------------
 -- Coming and going: said in the chat as the game says it of a friend, the list redrawn
@@ -850,7 +959,9 @@ local function Whisper(to, text)
   return result == nil or result == true or result == 0 or (success ~= nil and result == success)
 end
 
-local function ListOpen() return FriendsFrame ~= nil and FriendsFrame:IsVisible() and true or false end
+local function ListOpen()
+  return (FriendsFrame ~= nil and FriendsFrame:IsVisible()) or (SocialUIFrame ~= nil and SocialUIFrame:IsVisible()) or false
+end
 
 -- One question to one character; false when the game refused to send it now (throttled: asked again later)
 local function AskOne(alt, now)
@@ -1042,9 +1153,72 @@ function AltFriends.StartProbes()
   if FriendsFrame and FriendsFrame.HookScript then
     FriendsFrame:HookScript("OnShow", function() if GetTime() >= pausedUntil then AskAll() end end)
   end
+  if SocialUIFrame and SocialUIFrame.HookScript then
+    SocialUIFrame:HookScript("OnShow", function() if GetTime() >= pausedUntil then AskAll() end end)
+  end
   probeEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
   C_Timer.NewTicker(1, AskServer)
 end
+
+---------------------------------------------------------------------------
+-- The zone in a character's tooltip over a frame (a party, raid or target frame, a list), as the 1.15 client shows a
+-- group member away: from the group's roster (any group member), else from the character's own Clara (one of this
+-- list, online). Not over the world (the character is right there, in the zone shown on the minimap).
+---------------------------------------------------------------------------
+local function FirstWord(name)
+  if type(name) ~= "string" or issecretvalue(name) then return nil end
+  return ((name:match("^([^%-]+)") or name):match("^(%S+)") or ""):lower()
+end
+
+local function RosterZone(unit)
+  if not (GetNumGroupMembers and GetRaidRosterInfo) then return nil end
+  local okName, name = pcall(UnitName, unit)
+  local first = okName and FirstWord(name)
+  if not first or first == "" then return nil end
+  for i = 1, GetNumGroupMembers() do
+    local ok, rosterName, _, _, _, _, _, zone = pcall(GetRaidRosterInfo, i)
+    if ok and FirstWord(rosterName) == first and type(zone) == "string" and not issecretvalue(zone) and zone ~= "" then
+      return zone
+    end
+  end
+end
+
+local function ListedZone(unit)
+  local okName, name, surname = pcall(UnitName, unit)
+  if not okName or type(name) ~= "string" or issecretvalue(name) then return nil end
+  local whole = name
+  if type(surname) == "string" and not issecretvalue(surname) and surname ~= "" then whole = name .. " " .. surname end
+  local alt = Listed(Key(whole))
+  if alt and AltFriends.Online(alt.name) then return AltFriends.Facts(alt.name).zone end
+end
+
+local function HasLine(tooltip, text)
+  local ok, lines = pcall(tooltip.NumLines, tooltip)
+  if not ok or type(lines) ~= "number" then return true end
+  for i = 1, lines do
+    local fs = _G[tooltip:GetName() .. "TextLeft" .. i]
+    local okText, line = pcall(function() return fs and fs:GetText() end)
+    if not okText or issecretvalue(line) then return true end
+    if line == text then return true end
+  end
+  return false
+end
+
+local function AddZone(tooltip)
+  if tooltip ~= GameTooltip or not tooltip.GetOwner then return end
+  local owner = tooltip:GetOwner()
+  if owner == nil or owner == UIParent or owner == WorldFrame then return end
+  local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
+  if not ok or type(unit) ~= "string" or issecretvalue(unit) then return end
+  local okPlayer, isPlayer = pcall(UnitIsPlayer, unit)
+  if not okPlayer or not isPlayer or issecretvalue(isPlayer) or UnitIsUnit(unit, "player") then return end
+  local zone = RosterZone(unit) or ListedZone(unit)
+  if type(zone) ~= "string" or zone == "" or HasLine(tooltip, zone) then return end
+  tooltip:AddLine(zone, 1, 1, 1)
+  tooltip:Show()
+end
+-- (never in the way of the other addons' tooltip lines)
+function AltFriends.AddZone(tooltip) pcall(AddZone, tooltip) end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
@@ -1053,11 +1227,19 @@ events:SetScript("OnEvent", function(self)
   startedAt = GetTime()
   List()
   Hook()
-  if not AltFriends.DressAddFriend() then
-    -- (the game's Add Friend window loads with its friends window: dressed as it comes)
+  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum.TooltipDataType then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip) AltFriends.AddZone(tooltip) end)
+  end
+  local dressed, social = AltFriends.DressAddFriend(), AltFriends.HookSocial()
+  if not (dressed and social) then
+    -- (the game's Add Friend window and its social window load with their friends windows: dressed as they come)
     local wait = CreateFrame("Frame")
     wait:RegisterEvent("ADDON_LOADED")
-    wait:SetScript("OnEvent", function(waiter) if AltFriends.DressAddFriend() then waiter:UnregisterAllEvents() end end)
+    wait:SetScript("OnEvent", function(waiter)
+      dressed = dressed or AltFriends.DressAddFriend()
+      social = social or AltFriends.HookSocial()
+      if dressed and social then waiter:UnregisterAllEvents() end
+    end)
   end
   Look(false)
   AltFriends.StartProbes()
