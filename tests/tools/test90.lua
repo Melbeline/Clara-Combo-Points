@@ -81,5 +81,16 @@ M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|42|MAGE|Stranglethorn Vale", "WHISPE
 local facts = A.Facts("Elle Woods")
 check(facts.level == 42 and facts.class == "MAGE" and facts.zone == "Stranglethorn Vale", "its level, class and zone shown")
 check(type(facts.at) == "number", "last seen kept")
+out("== Add Character: its button opens the dialog (the server's questions running)")
+FriendsFrame = FriendsFrame or CreateFrame("Frame", "FriendsFrame", UIParent)
+FriendsFrameAddFriendButton = FriendsFrameAddFriendButton or CreateFrame("Button", "FriendsFrameAddFriendButton", FriendsFrame)
+FriendsFrameSendMessageButton = FriendsFrameSendMessageButton or CreateFrame("Button", "FriendsFrameSendMessageButton", FriendsFrame)
+M.Tick()
+M.popup = nil
+check(A.LayFoot() and A.button ~= nil, "laid between Add Friend and Send Message")
+local click = A.button and A.button:GetScript("OnClick")
+if click then click(A.button) end
+check(M.popup ~= nil and M.popup.which == "CLARA_ADD_ALT", "the dialog shown")
+check(A.Ask ~= A.AskServer, "the dialog's opener not taken by the server's questions")
 out(string.format("\n%d failure(s)", fails))
 return fails
