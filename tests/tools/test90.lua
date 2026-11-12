@@ -61,13 +61,13 @@ M.now = 1013; M.Tick()
 check(A.Online("Elle Woods") and not A.Online("Piou Piou"), "Elle online, Piou offline")
 check(Chat("[Elle Woods]|h has come online") and Chat("Piou Piou has gone offline"), "both announced, as the game says it")
 
-out("== the friends list opened: everyone asked at once, then every 5 s")
+out("== the friends list opened: everyone asked at once, then every 3 s")
 M.addonSent = {}
 M.now = 1015
 FriendsFrame:Show()
 check(Sent() == 2, "both asked as it opens")
-M.now = 1020; M.Tick()
-check(Sent() == 3, "asked again 5 s on while it stays open")
+M.now = 1018; M.Tick()
+check(Sent() == 3, "asked again 3 s on while it stays open")
 FriendsFrame:Hide()
 
 out("== a whisper of the player's own to an offline friend: shown")
@@ -118,12 +118,33 @@ out("== a first name heard alone: the one character of the list with it")
 M.Fire("CHAT_MSG_SAY", "coucou", "Lulu")
 check(A.Online("Lulu Bleue"), "Lulu heard by its first name: online")
 
+out("== one of the player's other accounts: the sync's word and the server's, the newer counts")
+ns.Sync = ns.Sync or { seen = {} }
+ns.Sync.seen = ns.Sync.seen or {}
+local realm = ((GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or ""):gsub("%s", "")
+A.Add("Bob Twink")
+M.now = 1400
+ns.Sync.seen["Bob-" .. realm] = GetTime()
+check(A.Online("Bob Twink"), "heard by the sync: online")
+M.addonSent = {}
+for _ = 1, 4 do M.now = M.now + 1 M.Tick() end
+local askedBob = false
+for _, m in ipairs(Ours()) do if m[4] == "Bob Twink" and m[2] == "?" then askedBob = true end end
+check(askedBob, "asked of the server too (not left to the sync)")
+M.now = 1406
+M.Fire("CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Bob Twink"))
+check(not A.Online("Bob Twink"), "the server's newer answer: offline at once (the sync still counting it)")
+M.now = 1410
+ns.Sync.seen["Bob-" .. realm] = GetTime()
+check(A.Online("Bob Twink"), "the sync heard it again since: online")
+
 out("== logout: a goodbye to the ones online; none at a reload")
+M.Fire("CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Elle Woods")) -- (Elle gone; the others answered online)
 M.addonSent = {}
 M.Fire("PLAYER_LOGOUT")
 local byes = {}
 for _, m in ipairs(Ours()) do if m[2] == "!" then byes[m[4]] = true end end
-check(byes["Lulu Bleue"] and byes["Piou Piou"] and not byes["Elle Woods"], "said to Lulu and Piou (online), not to Elle (offline)")
+check(byes["Lulu Bleue"] and byes["Piou Piou"] and byes["Bob Twink"] and not byes["Elle Woods"], "said to Lulu, Piou and Bob (online), not to Elle (offline)")
 M.addonSent = {}
 ReloadUI()
 M.Fire("PLAYER_LOGOUT")
