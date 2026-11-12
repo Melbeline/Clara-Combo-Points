@@ -59,6 +59,16 @@ check(mdb.recipients.dave.cats.friend and mdb.recipients.dave.cats.bankalt and m
 check(Craft.db.chars["Frank-Forever"] and Craft.db.chars["Frank-Forever"].bags[106] == 7, "the other account's stock")
 check(Craft.Mailed("Lola-Forever", 106) == 3, "and the mail it sent here")
 check(ClaraSyncDB.key == "0000aaaa0000aaaa" and ClaraSyncDB.trusted["Frank-Forever"], "the smaller key kept, its trusted characters too")
+-- (WANJ's file has no gold: an account without gold, the script copies only what exists)
+for _ = 1, 30 do if not (M.timers and #M.timers > 0) then break end M.RunTimer() end
+local warned = false
+for _, line in ipairs(M.log or {}) do if line:find("Installer", 1, true) then warned = true end end
+check(not warned, "an account without gold: no message (an old script cannot be told from it)")
+if ns.Money then
+  local listed = false
+  for _, id in ipairs(ns.Money.Accounts()) do if id ~= ns.Money.db.me then listed = true end end
+  check(not listed, "and no column for it in the gold window")
+end
 
 out("== the channel")
 Run()
