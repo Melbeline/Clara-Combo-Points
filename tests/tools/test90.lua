@@ -95,7 +95,7 @@ check(A.Online("Elle Woods") and Chat("[Elle Woods]|h has come online"), "its he
 local reply = LastTo()
 check(reply and reply[4] == "Elle Woods-Realm" and reply[2]:find("^I|%d+|PRIEST|") ~= nil, "answered with level, class, zone")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods-Realm")
-check(Sent() == 1, "not answered twice in 20 s")
+check(Sent() == 1, "not answered twice at once")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Stranger-Realm")
 check(Sent() == 1, "one not in the list: not answered")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|42|MAGE|Stranglethorn Vale", "WHISPER", "Elle Woods")
@@ -143,12 +143,12 @@ ns.Sync.seen["Bob-" .. realm] = GetTime()
 check(A.Online("Bob Twink"), "the sync heard it again since: online")
 
 out("== logout: a goodbye to the ones online; none at a reload")
-M.Fire("CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Elle Woods")) -- (Elle gone; the others answered online)
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods-Realm") -- (Elle, who has Clara, back online)
 M.addonSent = {}
 M.Fire("PLAYER_LOGOUT")
 local byes = {}
 for _, m in ipairs(Ours()) do if m[2] == "!" then byes[m[4]] = true end end
-check(byes["Lulu Bleue"] and byes["Piou Piou"] and byes["Bob Twink"] and not byes["Elle Woods"], "said to Lulu, Piou and Bob (online), not to Elle (offline)")
+check(byes["Elle Woods"] and not byes["Lulu Bleue"] and not byes["Piou Piou"], "said to Elle (Clara, online) only: the others have no Clara to hear it")
 M.addonSent = {}
 ReloadUI()
 M.Fire("PLAYER_LOGOUT")
@@ -171,6 +171,20 @@ local before = pend and A.Online(pend)
 M.Fire("PLAYER_ENTERING_WORLD", false, false)
 M.now = M.now + 2.5; M.Tick()
 check(pend ~= nil and A.Online(pend) == before, "a question left in the loading: not taken for online")
+
+out("== the next login: the ones with Clara greeted the moment the world shows; a hello answered at once")
+M.addonSent = {}
+M.Fire("PLAYER_ENTERING_WORLD", true, false)
+local hello = {}
+for _, m in ipairs(Ours()) do if m[2] == "?" then hello[m[4]] = true end end
+check(hello["Elle Woods"] and not hello["Piou Piou"], "Elle (Clara) greeted at once; the others a moment later")
+M.addonSent = {}
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods-Realm")
+M.now = M.now + 3
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods-Realm")
+local answers = 0
+for _, m in ipairs(Ours()) do if m[2]:find("^I|") then answers = answers + 1 end end
+check(answers == 2, "each hello answered (3 s apart): the one who reloaded sees this one at once")
 
 out("== added and removed: said in the chat as the game says it, with the whole name")
 M.chat = {}
