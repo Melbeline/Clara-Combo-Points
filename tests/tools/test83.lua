@@ -27,6 +27,14 @@ C_ActionBar.GetActionTexture = function(a)
 end
 C_ActionBar.IsCurrentAction = function(a) local r = ACTIONS[a] return r ~= nil and (r[3] or r[2]) == STEALTH and game.stealth end
 C_ActionBar.FindSpellActionButtons = function() return {} end
+-- (Shadowmeld and Stealth cannot be cast again while on: their buttons unusable, grey 0.4 as the game draws them)
+C_ActionBar.IsUsableAction = function(a)
+  local r = ACTIONS[a]
+  local id = r and (r[3] or r[2])
+  if id == MELD then return not game.meld, false end
+  if id == STEALTH then return not game.stealth, false end
+  return true, false
+end
 local plainTexture = C_Spell.GetSpellTexture
 C_Spell.GetSpellTexture = function(spell)
   local id = type(spell) == "number" and spell or ({ Shadowmeld = MELD, Stealth = STEALTH, ["Auto Shot"] = AUTO })[spell]
@@ -102,6 +110,8 @@ local button = GameButton(meld)
 check(button ~= nil, "the game's aura button shows the buff (as in game)")
 check(Seen(meld) == STAR, "seen: the star (screen 3), above the game's aura button: " .. tostring(Seen(meld)))
 check(not meld.isChecked and meld:GetAlpha() == 1, "lit, no gold border")
+local vc = meld.active._vc or {}
+check(vc[1] == .4 and vc[2] == .4 and vc[3] == .4, "as dull as the game's button (unusable while on: grey 0.4, the user's screen): " .. tostring(vc[1]))
 game.meld = false; Changed()
 check(Seen(meld) == NELF and not (meld.active and meld.active:IsShown()) and not meld.isChecked, "off: its own image back")
 
@@ -109,6 +119,8 @@ out("== Stealth on: its buff up too")
 game.stealth = true; Changed()
 check(Seen(stealth) == FACE, "seen: the face (screen 4), above the game's aura button: " .. tostring(Seen(stealth)))
 check(stealth.isChecked, "with the gold border")
+vc = stealth.active._vc or {}
+check(vc[1] == .4 and vc[2] == .4 and vc[3] == .4, "as dull as its button too (grey 0.4)")
 check(Level(stealth.checked) > Level(stealth.over), "the border above the image")
 check(Seen(meld) == NELF and Seen(auto) == AUTO_ICON and not auto.isChecked, "the others left as they are")
 game.stealth = false; Changed()
