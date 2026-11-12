@@ -146,6 +146,39 @@ end
 
 S.OverlayUp, S.OnRaidPage = OverlayUp, OnRaidPage
 
+-- (Clara Combo Points) The raid page put away as the window closes. It holds the game's secure raid buttons
+-- (Blizzard_RaidUI, loaded as soon as any group forms), so while it stands in the social window that window is
+-- protected. With the game's new social window on, the game's own close leaves it there (its close puts away the
+-- Friends list alone): once the raid page had been seen, the window stayed protected, and in a fight the game's own
+-- open was refused (the sheet beside it moved over, and nothing came). Closed, it goes back to the game's raid window
+-- (hidden), as that window's own tab takes it, and the window opens again on its Friends page; out of combat, else as
+-- the fight ends.
+local function PutRaidAway()
+    local raid, home = _G.RaidFrame, _G.RaidParentFrame
+    if not (raid and home and FriendsFrame) or InCombatLockdown() then return end
+    if FriendsFrame:IsShown() or raid:GetParent() ~= FriendsFrame then return end
+    raid:SetParent(home)
+    raid:ClearAllPoints()
+    raid:SetPoint("TOPLEFT", 0, 0)
+    raid:SetPoint("BOTTOMRIGHT", 0, 0)
+    local friends = _G.FRIEND_TAB_FRIENDS
+    if friends and OnRaidPage() and PanelTemplates_SetTab then PanelTemplates_SetTab(FriendsFrame, friends) end
+end
+S.PutRaidAway = PutRaidAway
+
+local raidAwayHooked = false
+local function HookRaidAway()
+    if raidAwayHooked or not FriendsFrame then return end
+    raidAwayHooked = true
+    FriendsFrame:HookScript("OnHide", function() ns.Sched.NextFrame("social.raidAway", PutRaidAway) end)
+end
+HookRaidAway()
+-- The last moment before a fight anything may move, the first after it, and the game's windows loading late.
+ns.EventFrame({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ADDON_LOADED" }, function()
+    HookRaidAway()
+    PutRaidAway()
+end)
+
 SyncFriendsTab = function()
     local covered, raid = OverlayUp(), OnRaidPage()
     Pick(friendsTab, not covered and not raid)

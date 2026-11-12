@@ -87,10 +87,45 @@ end
 -- The roster took the communities' key and button, so they get a tab, or with Communities as a button (option) a round
 -- button on the guild page, that opens the client's window in this one's place.
 local communitiesTab
-local function OpenCommunities()
-    -- The client opens no window for an addon in a fight.
-    if InCombatLockdown() then
+
+-- (Clara Combo Points) The game's own checks before its guild key opens the communities window (ToggleGuildFrame).
+local function CommunitiesReady()
+    if IsCommunitiesUIDisabledByTrialAccount and IsCommunitiesUIDisabledByTrialAccount() then
+        if UIErrorsFrame and ERR_RESTRICTED_ACCOUNT_TRIAL then UIErrorsFrame:AddMessage(ERR_RESTRICTED_ACCOUNT_TRIAL, 1, 0.1, 0.1, 1) end
+        return false
+    end
+    if not (C_Club and C_Club.IsEnabled and C_Club.IsEnabled()) then return false end
+    if BNConnected and not BNConnected() then
+        if UIErrorsFrame and ERR_GUILD_AND_COMMUNITIES_UNAVAILABLE then
+            UIErrorsFrame:AddMessage(ERR_GUILD_AND_COMMUNITIES_UNAVAILABLE, 1, 0.1, 0.1, 1)
+        end
+        return false
+    end
+    local none = Enum and Enum.ClubRestrictionReason and Enum.ClubRestrictionReason.None
+    if C_Club.IsRestricted and none ~= nil and C_Club.IsRestricted() ~= none then return false end
+    return true
+end
+
+-- (Clara Combo Points) In a fight the client opens no window for an addon, and the game's own tab opens this one in a
+-- fight too: the communities window (nothing protected in it) is shown raw, as the game's windows our code opens in a
+-- fight (UI/WindowPanels.lua: the row lays it, our Escape closes it). Not while the note bridge's unseen window is up
+-- (it is put back after the fight).
+local function OpenCommunitiesInFight()
+    local frame = _G["CommunitiesFrame"]
+    if not frame or ns.guildGhost or (frame.IsProtected and frame:IsProtected()) then
         ns.SayNotInCombat()
+        return
+    end
+    if frame:IsShown() or not CommunitiesReady() then return end
+    PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
+    if G.panel and G.panel:IsShown() then HideGuild() end
+    if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+    if not ns.ShowPanel(frame) then ns.SayNotInCombat() end
+end
+
+local function OpenCommunities()
+    if InCombatLockdown() then
+        OpenCommunitiesInFight()
         return
     end
     PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
