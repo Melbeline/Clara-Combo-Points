@@ -14,7 +14,7 @@
 -- And the target and focus frames' health and power values at the right end of their bars.
 -- And a loot window left empty closed (a corpse clicked again and again while its items were on their way).
 -- And the minimap's tracking (Find Herbs, Find Minerals, a hunter's tracking) given back after a death.
--- And the quest tracker folded again as it was left (the whole tracker and each of its sections).
+-- And the quest tracker folded again as the player left it (the whole tracker and each of its sections).
 -- And /played always answered in the chat (in a fight it showed nothing).
 -- And the bags above AtlasLoot's window while it is open.
 -- And the stopwatch kept for each character through reloads and logouts, its time going on meanwhile.
@@ -652,6 +652,10 @@ function ns:MouseReport()
     local ok, lines = pcall(ns.HudIconsReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
   end
+  if ns.TrackerFoldsReport then
+    local ok, lines = pcall(ns.TrackerFoldsReport, ns)
+    if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
+  end
   local text = table.concat(out, "\n")
   -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
   if ns.sv then ns.sv.mouseReport = text end
@@ -903,61 +907,170 @@ tracking:SetScript("OnEvent", function(self, event)
 end)
 
 ---------------------------------------------------------------------------
--- The quest tracker folded as it was left. The game opens it whole at each login and reload: the tracker and
--- each of its sections (Quests, Achievements...) folded then are folded again, for each character. Read at
--- logout (reading the game's tracker changes nothing in it); folded again by the game's own fold (as its
--- header's button does), out of combat, and only what was folded: a tracker left open is never touched. The
--- tracker is not one of the game's protected frames (no fight check anywhere in it; its quest item buttons
--- keep their quest in attributes, which an addon's code does not taint).
+-- The quest tracker folded as the player left it. The game opens it whole at each login and reload. A click on
+-- one of its fold buttons (All Objectives, or a section's: Quests, Achievements...) is kept at once, for each
+-- character; only those clicks count, so a fold the game itself undoes (a quest popup opens the tracker) comes
+-- back at the next login. Folded again by the game's own fold, out of combat: as the game adds each section to
+-- the tracker (at login it does so only once its settings have come, which can be seconds after the world
+-- shows), and over the first seconds after a login or reload, should something open it meanwhile; a click of
+-- the player's ends that. Only what the player folded is ever folded: a section left open is never touched.
+-- The tracker is not one of the game's protected frames (no fight check anywhere in it; its quest item buttons
+-- keep their quest in attributes, which an addon's code does not taint). Its last folds and openings, and who
+-- made them, go in the mouse report (/cl souris).
 ---------------------------------------------------------------------------
+local FOLD_FOR = 12 -- seconds after a login or reload during which a kept fold is put back
+local FOLD_AT = { 0, 1, 3, 6, 11 }
+local foldUntil, foldClicked, foldWaits, foldSoon, folding, addHooked = 0, false, false, false, false, nil
+local foldWatched, foldLog, loginAt = {}, {}, nil
+local foldEvents = CreateFrame("Frame")
+
 local function TrackerSections()
   local list, tracker = {}, ObjectiveTrackerFrame
   if tracker and type(tracker.modules) == "table" then
     for _, module in ipairs(tracker.modules) do
-      local name = module.GetName and module:GetName()
-      if name and module.IsCollapsed and module.SetCollapsed then list[#list + 1] = { name = name, module = module } end
+      local name = type(module) == "table" and module.GetName and module:GetName()
+      if type(name) == "string" and module.IsCollapsed and module.SetCollapsed then
+        list[#list + 1] = { name = name, module = module }
+      end
     end
   end
   return list
 end
 
-local function SaveFolds()
-  local tracker, sv, me = ObjectiveTrackerFrame, ns.sv, Me()
-  if not (tracker and tracker.IsCollapsed and sv and me) then return end
-  local folds = {}
-  if tracker:IsCollapsed() then folds.all = true end
-  for _, section in ipairs(TrackerSections()) do
-    if section.module:IsCollapsed() then folds[section.name] = true end
+-- This character's kept folds ({ all = true, QuestObjectiveTracker = true... }); made only when asked
+local function Folds(make)
+  local sv, me = ns.sv, Me()
+  if not (sv and me) then return end
+  if type(sv.trackerFolds) ~= "table" then
+    if not make then return end
+    sv.trackerFolds = {}
   end
-  sv.trackerFolds = type(sv.trackerFolds) == "table" and sv.trackerFolds or {}
-  sv.trackerFolds[me] = next(folds) and folds or nil
-  if not next(sv.trackerFolds) then sv.trackerFolds = nil end
+  if type(sv.trackerFolds[me]) ~= "table" then
+    if not make then return end
+    sv.trackerFolds[me] = {}
+  end
+  return sv.trackerFolds[me], me
 end
 
-local foldEvents = CreateFrame("Frame")
-local function Fold(again)
-  if InCombatLockdown() then foldEvents:RegisterEvent("PLAYER_REGEN_ENABLED") return end
-  local tracker, sv, me = ObjectiveTrackerFrame, ns.sv, Me()
-  local folds = me and sv and type(sv.trackerFolds) == "table" and sv.trackerFolds[me]
-  if not (tracker and tracker.SetCollapsed and type(folds) == "table") then return end
+local function Keep(key, folded)
+  local folds, me = Folds(folded)
+  if not folds then return end
+  folds[key] = folded or nil
+  if not next(folds) then ns.sv.trackerFolds[me] = nil end
+  if not next(ns.sv.trackerFolds) then ns.sv.trackerFolds = nil end
+end
+
+-- Who folded or opened it: the first file of the call that is not the tracker's own fold
+local function FoldCaller()
+  if folding then return "Clara" end
+  local ok, stack = pcall(debugstack, 2, 12, 0)
+  if not ok or type(stack) ~= "string" then return "?" end
+  for line in stack:gmatch("[^\n]+") do
+    local file, num = line:match("([%w_]+)%.lua[\"%]]*:(%d+)")
+    if file and file ~= "Blizzard_ObjectiveTrackerModule" and file ~= "Blizzard_ObjectiveTrackerContainer"
+      and file ~= "GameFixes" then
+      return file .. ":" .. num
+    end
+  end
+  return "?"
+end
+
+local function Watch(owner, key)
+  if foldWatched[owner] then return end
+  foldWatched[owner] = true
+  if type(owner.SetCollapsed) == "function" then
+    hooksecurefunc(owner, "SetCollapsed", function(_, folded)
+      foldLog[#foldLog + 1] = { at = GetTime(), key = key, folded = folded == true, by = FoldCaller() }
+      if #foldLog > 8 then table.remove(foldLog, 1) end
+    end)
+  end
+  local button = owner.Header and owner.Header.MinimizeButton
+  if button and button.HookScript then
+    button:HookScript("OnClick", function()
+      if type(owner.IsCollapsed) ~= "function" then return end
+      local folded = owner:IsCollapsed() == true
+      foldClicked = true -- the player's own choice from now on: nothing folded again this session
+      Keep(key, folded)
+      local last = foldLog[#foldLog]
+      if last and last.key == key and last.at == GetTime() then last.by = "click" end
+    end)
+  end
+end
+
+local function FoldOne(owner, key, folds)
+  if not folds[key] or owner:IsCollapsed() then return end
+  folding = true
+  local ok, err = pcall(owner.SetCollapsed, owner, true)
+  folding = false
+  if not ok then geterrorhandler()(err) end
+end
+
+local function FoldAll()
+  local tracker = ObjectiveTrackerFrame
+  if not (tracker and tracker.IsCollapsed and tracker.SetCollapsed) then return end
   local sections = TrackerSections()
-  if #sections == 0 and not again then C_Timer.After(2, function() Fold(true) end) return end -- (its sections not set yet)
-  for _, section in ipairs(sections) do
-    if folds[section.name] and not section.module:IsCollapsed() then section.module:SetCollapsed(true) end
+  Watch(tracker, "all")
+  for _, section in ipairs(sections) do Watch(section.module, section.name) end
+  if foldClicked or GetTime() > foldUntil then return end
+  local folds = Folds(false)
+  if not folds then return end
+  if InCombatLockdown() then
+    if not foldWaits then foldWaits = true foldEvents:RegisterEvent("PLAYER_REGEN_ENABLED") end
+    return
   end
-  if folds.all and not tracker:IsCollapsed() then tracker:SetCollapsed(true) end
+  for _, section in ipairs(sections) do FoldOne(section.module, section.name, folds) end
+  FoldOne(tracker, "all", folds)
 end
 
+-- A section added by the game: folded on the next frame, out of the game's own call
+local function FoldSoon()
+  if foldSoon then return end
+  foldSoon = true
+  C_Timer.After(0, function() foldSoon = false FoldAll() end)
+end
+
+local function HookTracker()
+  local tracker = ObjectiveTrackerFrame
+  if not tracker or addHooked == tracker or type(tracker.AddModule) ~= "function" then return end
+  addHooked = tracker
+  hooksecurefunc(tracker, "AddModule", FoldSoon)
+end
+HookTracker()
+
+function ns:TrackerFoldsReport()
+  local tracker = ObjectiveTrackerFrame
+  if not (tracker and tracker.IsCollapsed) then return { "quest tracker: none" } end
+  local kept = {}
+  for key in pairs(Folds(false) or {}) do kept[#kept + 1] = key end
+  table.sort(kept)
+  local now = { "all " .. (tracker:IsCollapsed() and "folded" or "open") }
+  for _, section in ipairs(TrackerSections()) do
+    if section.module:IsCollapsed() then now[#now + 1] = section.name .. " folded" end
+  end
+  local out = { ("quest tracker folds: kept %s  ·  now %s"):format(#kept > 0 and table.concat(kept, ", ") or "none",
+    table.concat(now, ", ")) }
+  for _, entry in ipairs(foldLog) do
+    out[#out + 1] = ("    %+.1fs after login: %s %s by %s"):format(entry.at - (loginAt or 0), entry.key,
+      entry.folded and "folded" or "opened", entry.by)
+  end
+  return out
+end
+
+foldEvents:RegisterEvent("ADDON_LOADED")
 foldEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
-foldEvents:RegisterEvent("PLAYER_LOGOUT")
-foldEvents:SetScript("OnEvent", function(self, event, isLogin, isReload)
-  if event == "PLAYER_LOGOUT" then
-    SaveFolds()
+foldEvents:SetScript("OnEvent", function(self, event, arg1, arg2)
+  if event == "ADDON_LOADED" then
+    if arg1 == "Blizzard_ObjectiveTracker" then HookTracker() FoldSoon() end
   elseif event == "PLAYER_REGEN_ENABLED" then
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    Fold()
-  elseif isLogin or isReload then -- (the game's tracker set up on the same event: a moment later)
-    C_Timer.After(1, function() Fold() end)
+    foldWaits = false
+    foldUntil = math.max(foldUntil, GetTime() + 2) -- (the fight took the first seconds)
+    FoldAll()
+  elseif arg1 or arg2 then -- a login or a reload (a zone change leaves the tracker as it is)
+    loginAt = GetTime()
+    foldUntil, foldClicked = GetTime() + FOLD_FOR, false
+    HookTracker()
+    for _, delay in ipairs(FOLD_AT) do C_Timer.After(delay, FoldAll) end
   end
 end)
 
