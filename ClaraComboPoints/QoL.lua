@@ -23,6 +23,7 @@ ns.QOL_MODULES = {
   { key = "money", name = "Gold tracker", theme = "economy" }, -- (Clara's own)
   { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
   { key = "barscale", name = "Bar scale", theme = "interface" }, -- (Clara's own: the bars, micro menu and bags at once)
+  { key = "whocooldown", name = "/who cooldown", theme = "interface" }, -- (Clara's own: the time left before the next /who)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },
   { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", theme = "combat" },
