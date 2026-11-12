@@ -36,6 +36,48 @@ local function Find(bag, slot)
 end
 function M.Queued(bag, slot) return Find(bag, slot) ~= nil end
 
+-- The stacks of the extra slots greyed in the bags, as the game greys those in the mail: they wait for the next mails,
+-- the game does not lock them. On the game's item buttons (its bags, its one bag, ClassicUI's skin of them), kept grey
+-- as the game redraws them (SetItemButtonDesaturated), back to the game's look once off the extra slots.
+local function GameLocked(bag, slot)
+  local ok, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
+  return ok and type(info) == "table" and info.isLocked == true
+end
+local function BagButton(button)
+  if type(button) ~= "table" or type(button.GetBagID) ~= "function" or type(button.GetID) ~= "function" then return end
+  local ok, bag = pcall(button.GetBagID, button)
+  if ok and type(bag) == "number" then return bag, button:GetID() end
+end
+local function Grey()
+  if not ContainerFrameUtil_EnumerateContainerFrames then return end
+  for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
+    if frame:IsShown() and frame.EnumerateValidItems then
+      for _, button in frame:EnumerateValidItems() do
+        local bag, slot = BagButton(button)
+        if bag then
+          local queued = Find(bag, slot) ~= nil
+          if queued or button.claraQueued then
+            button.claraQueued = queued or nil
+            SetItemButtonDesaturated(button, queued or GameLocked(bag, slot))
+          end
+        end
+      end
+    end
+  end
+end
+M.GreyQueued = Grey
+if type(SetItemButtonDesaturated) == "function" then
+  hooksecurefunc("SetItemButtonDesaturated", function(button, desaturated)
+    if desaturated or #queue == 0 then return end
+    local bag, slot = BagButton(button)
+    if bag and Find(bag, slot) then
+      local icon = GetItemButtonIconTexture and GetItemButtonIconTexture(button)
+      if icon then icon:SetDesaturated(true) end
+      button.claraQueued = true
+    end
+  end)
+end
+
 local function Attachments()
   local n = 0
   for i = 1, PER_MAIL do
@@ -266,6 +308,7 @@ end
 local hooked = false
 
 function Refresh(fromGame)
+  Grey()
   if not hooked then return end
   local rows = Rows()
   if rows then Layout(rows) else Restore(fromGame) end
@@ -429,6 +472,7 @@ events:SetScript("OnEvent", function(_, event, who, what)
     Hook()
   elseif event == "MAIL_CLOSED" then
     wipe(queue)
+    Grey()
     chain = nil
     if hooked then Restore(true) end
     Label()
