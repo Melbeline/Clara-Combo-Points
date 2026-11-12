@@ -203,6 +203,18 @@ local function NewSlot(row)
   slot.over:SetFrameLevel(slot:GetFrameLevel() + 6)
   slot.frame = {}
   for i = 1, FrameArt() and #PIECES or 1 do slot.frame[i] = slot.over:CreateTexture(nil, "OVERLAY") end
+  -- The image the game shows for the spell while on (Shadowmeld's star, Stealth's face), drawn above the game's aura
+  -- button (which shows the buff's own icon over the icon while the buff is up, the face or the hood) and under the
+  -- button frame and the gold border; hidden otherwise.
+  slot.active = slot.over:CreateTexture(nil, "BACKGROUND")
+  slot.active:SetAllPoints(slot.icon)
+  if slot.over.CreateMaskTexture and slot.active.AddMaskTexture then
+    slot.activeMask = slot.over:CreateMaskTexture()
+    slot.activeMask:SetAtlas(MASK_ATLAS)
+    slot.activeMask:SetAllPoints(slot.active)
+    slot.active:AddMaskTexture(slot.activeMask)
+  end
+  slot.active:Hide()
   -- in that form, stance or stealth (or the spell queued, Auto Shot on): checked, as the game's action and
   -- stance buttons show it, their gold border cut like the frame (not the classic square ClassicUI puts on
   -- its bars: the icon under it looked pale)
@@ -322,6 +334,7 @@ function ns:LayoutIcons()
           slot:SetPoint("TOPLEFT", (i - 1) * (w + gap), 0)
           slot.w, slot.h = w, size
           Crop(slot.icon, w, size)
+          Crop(slot.active, w, size)
           LayoutFrame(slot, slot.frame, w, size)
           if AtlasArt(CHECKED_ATLAS) then LayoutFrame(slot.checked, slot.checked.pieces, w, size, CHECKED_ATLAS) end
           local inset = min(w, size) * 3 / 45
@@ -628,6 +641,7 @@ local function RestIcon(spellID)
   if icon == nil and GetSpellTextureNow then
     local ok, a, b = pcall(GetSpellTextureNow, spellID)
     local v = ok and (Plain(b) or Plain(a)) or nil
+    if v and IsStar(v) then v = nil end
     if v then restIcons[spellID] = v end
     icon = v
   end
@@ -663,19 +677,23 @@ end
 
 -- A spell the game checks while on (Stealth) and does not check now is off: what it shows now is its rest image
 -- (its first sight may have been while on: a reload while stealthed)
+local function SpellImage(spellID)
+  if not (GetSpellTextureNow and Plain(spellID)) then return nil end
+  local ok, a = pcall(GetSpellTextureNow, spellID)
+  a = ok and Plain(a) or nil
+  if a and not IsStar(a) then return a end
+end
 local function LearnRest(slot)
   if not slot.spellIcon or slot.item then return end
-  local icon
-  if GetSpellTextureNow and Plain(slot.spell) then
-    local ok, a = pcall(GetSpellTextureNow, slot.spell)
-    icon = ok and Plain(a) or nil
-  end
+  -- (from the spell's own icon only: on WoW Forever only its buttons change image while on)
+  local icon = SpellImage(slot.spell)
   if not icon then return end
-  if Plain(slot.spell) then restIcons[slot.spell] = icon end
+  restIcons[slot.spell] = icon
   if slot.spellIcon ~= icon and type(slot.spellIcon) == "number" then slot.spellIcon = icon end
   for _, action in ipairs(SpellActions(slot)) do
-    local id, tex = SpellOfAction(action), ActionTexture(action)
-    if id and Plain(tex) and not WeaponIcon(tex) then restIcons[id] = tex end
+    local id = SpellOfAction(action)
+    local own = id and SpellImage(id)
+    if own then restIcons[id] = own end
   end
 end
 
@@ -748,6 +766,7 @@ local function SetSlot(slot, look, aura, unit, enchant)
     -- a sample: lit, with a cooldown under way
     ShowChecked(slot, false)
     slot.spellChecked, slot.spellShown = false, nil
+    slot.active:Hide()
     slot.icon:SetTexture(slot.spellIcon)
     slot.icon:SetDesaturated(false)
     slot:SetAlpha(1)
@@ -820,6 +839,13 @@ local function SetSlot(slot, look, aura, unit, enchant)
   local swapped = formOn and onIcon ~= slot.spellIcon
   local on = formOn or slot.spellChecked
   ShowChecked(slot, on and (gameChecked or not swapped))
+  -- (the active image above the game's aura button: under it, it was never seen)
+  if swapped then
+    slot.active:SetTexture(onIcon)
+    slot.active:Show()
+  else
+    slot.active:Hide()
+  end
   local lit = enchant or aura or carried or (running and not slot.item) or slot.hasCooldown or on
   slot.icon:SetDesaturated(not lit)
   slot:SetAlpha(lit and 1 or MISSING_ALPHA)
@@ -1173,6 +1199,7 @@ local function AuraButton(slot, unit, filter)
       for i = 1, FrameArt() and #PIECES or 1 do frame[i] = over:CreateTexture(nil, "OVERLAY") end
       local count = over:CreateFontString(nil, "OVERLAY")
       count:SetFont(FONT, 10, "OUTLINE")
+      rec.button = button
       button:SetIcon(icon)
       button:SetDurationCooldown(cd)
       button:SetApplicationCount(count)
@@ -1643,6 +1670,12 @@ function ns:HudIconsReport()
         (IsCurrentAction and SpellOn(IsCurrentAction, action)) and "*" or "")
     end
     local drawn = slot.icon and slot.icon.GetTexture and slot.icon:GetTexture()
+    if slot.active and slot.active:IsShown() then drawn = V(drawn) .. ", above the game's aura button " .. V(slot.active:GetTexture()) end
+    for _, rec in pairs(slot.secure or {}) do
+      if rec and rec.button and rec.button.IsShown and rec.button:IsShown() then
+        drawn = V(drawn) .. " · game aura button shown (" .. V(rec.icon and rec.icon:GetTexture()) .. ")"
+      end
+    end
     lines[#lines + 1] = ("    %s (%s): own %s · game %s/%s · form %s %s · checked %s · buttons %s · other %s · drawn %s%s"):format(
       V(slot.name), V(slot.spell), V(slot.spellIcon), V(icon), V(original), V(form), V(formIcon), tostring(GameChecked(slot)),
       #actions > 0 and table.concat(actions, " ") or "none", V(ShownOn(slot)), V(drawn), slot.isChecked and " (gold border)" or "")
