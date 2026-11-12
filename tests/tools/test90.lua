@@ -26,13 +26,17 @@ local A = ns.AltFriends
 A.Add("Elle Woods"); A.Add("Piou Piou")
 M.addonSent = {}
 M.Fire("PLAYER_LOGIN")
+M.Tick()
+local beforeWorld = #M.addonSent
+M.Fire("PLAYER_ENTERING_WORLD", true, false) -- (the questions a moment after the world shows: answers came late in a loading screen)
 local guard = 0 while M.timers and #M.timers > 0 and guard < 50 do M.RunTimer() guard = guard + 1 end -- (settled: the first 20 s over)
 local function Ours() local t = {} for _, m in ipairs(M.addonSent) do if m[1] == "ClaraFriends" then t[#t + 1] = m end end return t end
 local function Sent() return #Ours() end
 local function LastTo() local t = Ours() return t[#t] end
 local function Chat(pat) for _, line in ipairs(M.chat) do if line:find(pat, 1, true) then return true end end return false end
 
-out("== at login: everyone asked at once")
+out("== at login: nothing asked before the world shows, then everyone at once")
+check(beforeWorld == 0, "nothing asked during the loading")
 local asked = {}
 for _, m in ipairs(Ours()) do asked[m[4]] = m[2] == "?" and m[3] == "WHISPER" end
 check(Sent() == 2 and asked["Elle Woods"] and asked["Piou Piou"], "an unseen addon whisper to each, by the whole name")
@@ -149,6 +153,24 @@ M.addonSent = {}
 ReloadUI()
 M.Fire("PLAYER_LOGOUT")
 check(Sent() == 0, "a reload: no goodbye")
+
+out("== a late answer (after a loading screen) still hidden; a zone change: the unanswered asked again, not taken for online")
+M.now = 1500
+M.addonSent = {}
+for _ = 1, 12 do M.Tick() M.now = M.now + 1 end
+local lateName
+for _, m in ipairs(Ours()) do if m[2] == "?" then lateName = m[4] end end
+local lateText = ERR_CHAT_PLAYER_NOT_FOUND_S:format(lateName or "?")
+M.now = M.now + 6
+check(lateName ~= nil and filters.CHAT_MSG_SYSTEM(nil, "CHAT_MSG_SYSTEM", lateText) == true, "answered 6 s late: hidden")
+M.addonSent = {}
+for _ = 1, 3 do M.Tick() M.now = M.now + 1 end
+local pend
+for _, m in ipairs(Ours()) do if m[2] == "?" then pend = m[4] end end
+local before = pend and A.Online(pend)
+M.Fire("PLAYER_ENTERING_WORLD", false, false)
+M.now = M.now + 2.5; M.Tick()
+check(pend ~= nil and A.Online(pend) == before, "a question left in the loading: not taken for online")
 
 out("== added and removed: said in the chat as the game says it, with the whole name")
 M.chat = {}
