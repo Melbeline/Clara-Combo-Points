@@ -2,19 +2,16 @@
 -- longer before using /who again."). The time left shows on the Who list's search button: a line crossing it from
 -- left to right over a faint fill (default), or the seconds left in place of its text; a light flash when /who is
 -- ready again, as the game's buttons at the end of a cooldown. Its two boxes on its card: neither, nothing shown.
--- The game tells no such time: Clara learns it from the server's answers and keeps it across sessions. From 5 s, it
--- goes down when a /who is taken sooner, up just past a delay the server refused (never longer than it must).
+-- The game tells no such time: 7 s, as the user measured it (learning it from the server's answers did not work in
+-- game). A /who sent while it runs is refused by the server: the time goes on from the last one taken.
 -- Buttons: the group finder's Who list (WoW Forever's, its magnifier), the old Who frame's Refresh, ClassicUI
 -- Forever's Who List (its Refresh: ns:WhoCooldownAttach). Card on Esc > Options > AddOns > Clara > Interface, and in
--- Clara's Improvements tab. Saved with Clara's settings (ClaraComboPointsDB.whoCD).
+-- Clara's Improvements tab. Its mode saved with Clara's settings (ClaraComboPointsDB.whoCD.mode).
 
 local ADDON, ns = ...
 local L = ns.L
-local issecretvalue = issecretvalue or function() return false end
 
-local DEFAULT, MIN, MAX = 5, 0.5, 60
-local MARGIN = 0.5    -- past a refused delay
-local ANSWER = 1.5    -- the server's refusal comes within this after the /who
+local LENGTH = 7      -- seconds between two /who the server takes
 local FLASH = 0.45    -- the flash fades in this
 
 local runs = ns:QolRuns("whocooldown")
@@ -23,6 +20,7 @@ local function Store()
   local sv = ns.sv
   if not sv then return nil end
   sv.whoCD = sv.whoCD or {}
+  sv.whoCD.low, sv.whoCD.high = nil, nil -- (what the first version learned: no longer read)
   return sv.whoCD
 end
 function ns:WhoCooldownMode()
@@ -51,71 +49,20 @@ local F = C_FriendList
 if not (F and F.SendWho) then return end
 
 ---------------------------------------------------------------------------
--- The cooldown, as learned: the longest delay refused (low), the shortest taken (high)
+-- The cooldown: from a /who sent while none runs (one sent while it runs is refused: it goes on)
 ---------------------------------------------------------------------------
-local function Clamp(v) return math.max(MIN, math.min(MAX, v)) end
-local function Round(v) return math.floor(v * 10 + .5) / 10 end
-function ns:WhoCooldownLength()
-  local s = Store() or {}
-  local low, high = tonumber(s.low), tonumber(s.high)
-  local length = low and (low + MARGIN) or DEFAULT
-  if high and high < length then length = high end
-  return Clamp(length)
-end
+function ns:WhoCooldownLength() return LENGTH end
 
-local taken       -- when the last /who the server took was sent
-local pending     -- a /who sent, its answer awaited: { at = }
 local shown       -- the cooldown on the buttons: { from =, length = }
 local flashAt     -- when the flash started
 local driver = CreateFrame("Frame")
 driver:Hide()
 
-local function Start(from, length)
-  shown = { from = from, length = length }
-  flashAt = nil
-  driver:Show()
-end
-
-local function Taken(at)
-  local s = Store()
-  if s and taken then
-    local d = at - taken
-    if d >= MIN and (not s.high or d < s.high) then s.high = Round(d) end
-    if s.low and s.high and s.high <= s.low then s.low = nil end
-  end
-  taken = at
-  Start(at, ns:WhoCooldownLength())
-end
-
-local function Refused(at)
-  local s = Store()
-  if s and taken then
-    local d = at - taken
-    if d >= 0 and (not s.low or d > s.low) then s.low = Round(d) end
-    if s.low and s.high and s.high <= s.low then s.high = nil end
-    local length = ns:WhoCooldownLength()
-    local left = taken + length - GetTime()
-    if left < MARGIN then length = length + (MARGIN - left) end
-    Start(taken, length)
-  else
-    Start(at, ns:WhoCooldownLength())
-  end
-end
-
--- The server's refusal: a system line naming the command, right after the /who (any language: its slash command)
-local function IsRefusal(text)
-  if type(text) ~= "string" or issecretvalue(text) then return false end
-  local lower = text:lower()
-  if lower:find("/who", 1, true) then return true end
-  for i = 1, 4 do
-    local cmd = _G["SLASH_WHO" .. i]
-    if type(cmd) == "string" and cmd ~= "" and lower:find(cmd:lower(), 1, true) then return true end
-  end
-  return false
-end
-
 hooksecurefunc(F, "SendWho", function()
-  pending = { at = GetTime() }
+  local now = GetTime()
+  if shown and now < shown.from + shown.length then return end
+  shown = { from = now, length = LENGTH }
+  flashAt = nil
   driver:Show()
 end)
 
@@ -208,11 +155,6 @@ end
 
 local function Update()
   local now = GetTime()
-  if pending and now - pending.at > ANSWER then
-    local at = pending.at
-    pending = nil
-    Taken(at)
-  end
   local mode = ns:WhoCooldownMode()
   local left = shown and (shown.from + shown.length - now)
   if shown and left <= 0 then
@@ -236,13 +178,11 @@ local function Update()
       if not (shown and mode ~= "none" and visible) then p.overlay:Hide() end
     end
   end
-  if not pending and not shown and not flashAt then driver:Hide() end
+  if not shown and not flashAt then driver:Hide() end
 end
 driver:SetScript("OnUpdate", Update)
 
 local events = CreateFrame("Frame")
-events:RegisterEvent("CHAT_MSG_SYSTEM")
-events:RegisterEvent("WHO_LIST_UPDATE")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 
@@ -252,23 +192,7 @@ local function WatchGameButtons()
   if _G.WhoFrameWhoButton then ns:WhoCooldownAttach(_G.WhoFrameWhoButton) end
 end
 
-events:SetScript("OnEvent", function(_, event, text)
-  if event == "CHAT_MSG_SYSTEM" then
-    if pending and GetTime() - pending.at <= ANSWER and IsRefusal(text) then
-      local at = pending.at
-      pending = nil
-      Refused(at)
-    end
-  elseif event == "WHO_LIST_UPDATE" then
-    if pending then
-      local at = pending.at
-      pending = nil
-      Taken(at)
-    end
-  else
-    WatchGameButtons()
-  end
-end)
+events:SetScript("OnEvent", function() WatchGameButtons() end)
 
 function ns:WhoCooldownAttach(button)
   if type(button) ~= "table" or not button.CreateTexture then return end
@@ -277,6 +201,6 @@ function ns:WhoCooldownAttach(button)
 end
 function ns:WhoCooldownRefresh()
   for button, p in pairs(buttons) do Hide(button, p) end
-  if shown or flashAt or pending then driver:Show() end
+  if shown or flashAt then driver:Show() end
 end
 WatchGameButtons()
