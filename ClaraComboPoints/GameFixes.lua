@@ -20,6 +20,8 @@
 -- And /played always answered in the chat (in a fight it showed nothing).
 -- And the bags above AtlasLoot's window while it is open.
 -- And the stopwatch kept for each character through reloads and logouts, its time going on meanwhile.
+-- And the world map left open when a quest window opens (it stands beside the map instead of replacing it).
+-- And a right-click on the minimap's tracking button turns the tracking spell off.
 
 local ADDON, ns = ...
 
@@ -1541,3 +1543,90 @@ do
     if type(frame) == "table" and type(frame.CheckBattlePet) == "function" then hooksecurefunc(frame, "CheckBattlePet", KeepLevel) end
   end
 end
+
+---------------------------------------------------------------------------
+-- The world map left open when a quest window opens (a quest shared in the group, one offered). The game's window
+-- manager puts both on the left, neither giving way, so the quest window replaced the map and closed it (an addon
+-- accepting the quest at once left the map shut). While the map is open, the quest window may stand beside it
+-- (its "pushable" layout setting at 1, as the character sheet's): it opens next to the map, which stays; back to the
+-- game's own setting as the map shuts. The map's own settings and its opening are left untouched (an addon's touch
+-- there would follow its pins into later fights).
+---------------------------------------------------------------------------
+local questPushable -- (the quest window's own setting, read before the first change)
+local function QuestBesideMap(beside)
+  local quest = QuestFrame
+  if not (quest and SetUIPanelAttribute and type(UIPanelWindows) == "table" and UIPanelWindows.QuestFrame) then return end
+  if questPushable == nil then
+    local own = quest.GetAttribute and quest:GetAttribute("UIPanelLayout-pushable")
+    if own == nil then own = UIPanelWindows.QuestFrame.pushable end
+    questPushable = tonumber(own) or 0
+  end
+  local want = beside and math.max(1, questPushable) or questPushable
+  local now = quest.GetAttribute and quest:GetAttribute("UIPanelLayout-pushable")
+  if now ~= want then pcall(SetUIPanelAttribute, quest, "pushable", want) end
+end
+ns.QuestBesideMap = QuestBesideMap
+local function WatchQuestOverMap()
+  local map = WorldMapFrame
+  if not (map and map.HookScript) or ns.questOverMapWatched then return end
+  ns.questOverMapWatched = true
+  map:HookScript("OnShow", function() QuestBesideMap(true) end)
+  map:HookScript("OnHide", function() QuestBesideMap(false) end)
+  if map:IsShown() then QuestBesideMap(true) end
+end
+WatchQuestOverMap()
+local questMapEvents = CreateFrame("Frame")
+questMapEvents:RegisterEvent("PLAYER_LOGIN")
+questMapEvents:RegisterEvent("ADDON_LOADED")
+questMapEvents:SetScript("OnEvent", function(self)
+  WatchQuestOverMap()
+  if ns.questOverMapWatched then self:UnregisterAllEvents() end
+end)
+
+---------------------------------------------------------------------------
+-- The minimap's tracking button: a right-click turns the tracking spell off (Find Herbs, Track Beasts...) by the
+-- game's own tracking call, in a fight too, as a right-click on its buff did in 1.x. The game's button hears the
+-- left button only (its menu): the right one's release is added, and its tooltip says so while a spell tracks.
+---------------------------------------------------------------------------
+local function ActiveTrackingSpell()
+  if not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo) then return nil end
+  local ok, count = pcall(C_Minimap.GetNumTrackingTypes)
+  if not ok or issecretvalue(count) or type(count) ~= "number" then return nil end
+  for i = 1, count do
+    local okInfo, info = pcall(C_Minimap.GetTrackingInfo, i)
+    if okInfo and type(info) == "table" and not issecretvalue(info.active) and not issecretvalue(info.type)
+      and info.active and info.type == "spell" then
+      return i, info
+    end
+  end
+end
+ns.ActiveTrackingSpell = ActiveTrackingSpell
+
+function ns.StopTracking()
+  local index = ActiveTrackingSpell()
+  if index and C_Minimap.SetTracking then pcall(C_Minimap.SetTracking, index, false) end
+  return index ~= nil
+end
+
+local function TakeTrackingRightClick()
+  local tracking = MinimapCluster and MinimapCluster.Tracking
+  local button = tracking and tracking.Button
+  if ns.trackingRightClick or not (button and button.RegisterForMouse and button.HookScript) then return end
+  ns.trackingRightClick = true
+  button:RegisterForMouse("LeftButtonDown", "LeftButtonUp", "RightButtonUp")
+  button:HookScript("OnMouseUp", function(_, which) if which == "RightButton" then ns.StopTracking() end end)
+  button:HookScript("OnEnter", function(self)
+    local _, info = ActiveTrackingSpell()
+    local name = info and info.name
+    if type(name) ~= "string" or issecretvalue(name) or not GameTooltip:IsOwned(self) then return end
+    GameTooltip:AddLine(L.TRACKING_STOP:format(name), 0.6, 0.6, 0.6, true)
+    GameTooltip:Show()
+  end)
+end
+TakeTrackingRightClick()
+local trackingClickEvents = CreateFrame("Frame")
+trackingClickEvents:RegisterEvent("PLAYER_LOGIN")
+trackingClickEvents:SetScript("OnEvent", function(self)
+  self:UnregisterAllEvents()
+  TakeTrackingRightClick()
+end)
