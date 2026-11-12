@@ -347,6 +347,8 @@ end
 
 -- 1. Built in: every file loads, its settings in Clara's own tables
 local ns, failed = Session({})
+local cooldownOn -- (Clara's /who cooldown, Modules/WhoCooldown: the Refresh button handed to it as the list is built)
+ns.WhoCooldownAttach = function(_, button) cooldownOn = button end
 assert(ns.ClassicUIRuns and ns:QolState("classicui") == "on", "the module runs")
 print("files that stopped at load: " .. #failed)
 for i = 1, math.min(#failed, 8) do print("  " .. failed[i]) end
@@ -415,6 +417,8 @@ local realTree = C.TreeMenu
 C.TreeMenu = function(entries) captured = entries return realTree(entries) end
 local okOpen, eOpen = pcall(C.OpenWhoList)
 print("who list opened: " .. tostring(okOpen) .. " " .. tostring(eOpen))
+local whoPanel = rawget(env, "ClassicUIForeverWhoPanel")
+print("who list's Refresh handed to the /who cooldown: " .. tostring(cooldownOn ~= nil and whoPanel ~= nil and cooldownOn == whoPanel.refresh) .. " (" .. tostring(cooldownOn) .. ", panel " .. tostring(whoPanel) .. ")")
 
 -- capital globals ClassicUI read that the game's documentation and UI code never name (nil in the game too)
 local caps = {}

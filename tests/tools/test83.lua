@@ -8,11 +8,13 @@ local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 
-local MELD, STEALTH, AUTO = 20580, 1784, 75
+local MELD, STEALTH, AUTO, HAWK = 20580, 1784, 75, 13165
+local HAWK_ICON = 136076
+M.SPELLS[HAWK] = M.SPELLS[HAWK] or { "Aspect of the Hawk", HAWK_ICON, 0 }
 local NELF, HOOD, AUTO_ICON, BOW = 132089, 132320, 135493, 135489
 local STAR, FACE = 136116, 136047
-local game = { meld = false, stealth = false }
-local ACTIONS = { [54] = { "spell", MELD }, [61] = { "macro", 5, STEALTH }, [70] = { "spell", AUTO } }
+local game = { meld = false, stealth = false, hawk = false, stealthPlain = false }
+local ACTIONS = { [54] = { "spell", MELD }, [61] = { "macro", 5, STEALTH }, [70] = { "spell", AUTO }, [80] = { "spell", HAWK } }
 function GetActionInfo(a) local r = ACTIONS[a] if r then return r[1], r[2] end end
 function GetMacroSpell(i) if i == 5 then return STEALTH end end
 C_ActionBar = C_ActionBar or {}
@@ -22,8 +24,9 @@ C_ActionBar.GetActionTexture = function(a)
   local r = ACTIONS[a]
   local id = r and (r[3] or r[2])
   if id == MELD then return game.meld and STAR or NELF end
-  if id == STEALTH then return game.stealth and FACE or HOOD end
+  if id == STEALTH then return (game.stealth and not game.stealthPlain) and FACE or HOOD end
   if id == AUTO then return BOW end
+  if id == HAWK then return game.hawk and STAR or HAWK_ICON end
 end
 C_ActionBar.IsCurrentAction = function(a) local r = ACTIONS[a] return r ~= nil and (r[3] or r[2]) == STEALTH and game.stealth end
 C_ActionBar.FindSpellActionButtons = function() return {} end
@@ -41,29 +44,31 @@ C_Spell.GetSpellTexture = function(spell)
   if id == MELD then return NELF, NELF end -- (the spells' own icons never change: report "game 132089/132089")
   if id == STEALTH then return HOOD, HOOD end
   if id == AUTO then return BOW, AUTO_ICON end
+  if id == HAWK then return HAWK_ICON, HAWK_ICON end
   return plainTexture(spell)
 end
 C_Spell.IsCurrentSpell = function() return false end
 function GetInventoryItemTexture(_, slot) if slot == 18 then return BOW end end
 function GetShapeshiftForm() return game.stealth and 1 or 0 end
-function GetShapeshiftFormInfo(i) if i == 1 then return game.stealth and FACE or HOOD, game.stealth and 1 or nil, 1, STEALTH end end
+function GetShapeshiftFormInfo(i) if i == 1 then return (game.stealth and not game.stealthPlain) and FACE or HOOD, game.stealth and 1 or nil, 1, STEALTH end end
 function GetNumShapeshiftForms() return 1 end
 local function Buffs()
   local list = {}
   if game.meld then list[#list + 1] = { name = "Shadowmeld", icon = NELF, spellId = MELD, duration = 0, expirationTime = 0, source = "player", sourceUnit = "player" } end
   if game.stealth then list[#list + 1] = { name = "Stealth", icon = HOOD, spellId = STEALTH, duration = 0, expirationTime = 0, source = "player", sourceUnit = "player" } end
+  if game.hawk then list[#list + 1] = { name = "Aspect of the Hawk", icon = HAWK_ICON, spellId = HAWK, duration = 0, expirationTime = 0, source = "player", sourceUnit = "player" } end
   S.auras = S.auras or {}
   S.auras.player = list
 end
 
 S.class = "ROGUE"; S.locale = "enUS"; S.powerType = 3; S.energy = 100
-S.knownSpells = { [MELD] = true, [STEALTH] = true, [AUTO] = true }
+S.knownSpells = { [MELD] = true, [STEALTH] = true, [AUTO] = true, [HAWK] = true }
 local ns = {}
 M.LoadAddon(ADDON_DIR, ns)
 M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN"); M.Fire("PLAYER_ENTERING_WORLD")
 M.now = 100
 M.Frame(0.016)
-ns.db.rows.above[1] = { MELD, STEALTH, AUTO }
+ns.db.rows.above[1] = { MELD, STEALTH, AUTO, HAWK }
 ns:LayoutIcons()
 M.Frame(0.016)
 local function slotOf(name)
@@ -125,6 +130,23 @@ check(Level(stealth.checked) > Level(stealth.over), "the border above the image"
 check(Seen(meld) == NELF and Seen(auto) == AUTO_ICON and not auto.isChecked, "the others left as they are")
 game.stealth = false; Changed()
 check(Seen(stealth) == HOOD and not stealth.isChecked and not (stealth.active and stealth.active:IsShown()), "off: its own image, no border")
+
+out("== an aspect on: its button usable, the star dull all the same (the user: aspects stayed bright)")
+local hawk = slotOf("Aspect of the Hawk")
+game.hawk = true; Changed()
+vc = hawk.active._vc or {}
+check(Seen(hawk) == STAR and not hawk.isChecked, "the star, alone")
+check(vc[1] == .4 and vc[2] == .4 and vc[3] == .4, "dull, grey 0.4: " .. tostring(vc[1]))
+game.hawk = false; Changed()
+check(Seen(hawk) == HAWK_ICON and not (hawk.active and hawk.active:IsShown()), "off: its own image, bright")
+
+out("== a form on whose image does not change (a druid form): its own image, dull, the gold border")
+game.stealth, game.stealthPlain = true, true; Changed()
+vc = stealth.active._vc or {}
+check(Seen(stealth) == HOOD and stealth.active:IsShown() and stealth.isChecked, "its own image above the game's aura button, the gold border")
+check(vc[1] == .4, "dull: " .. tostring(vc[1]))
+game.stealth, game.stealthPlain = false, false; Changed()
+check(not stealth.active:IsShown() and not stealth.isChecked, "off: bright, no border")
 
 out("== Shadowmeld cast: its button checked an instant, then the star while the game no longer checks it")
 C_ActionBar.IsCurrentAction = function(a) local r = ACTIONS[a] local id = r and (r[3] or r[2]) return (id == STEALTH and game.stealth) or (id == MELD and game.casting) end
