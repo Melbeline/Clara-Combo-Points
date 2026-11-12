@@ -140,6 +140,28 @@ local function Queued()
   return table.concat(t, " ")
 end
 
+-- the bag window, as the game draws it: an item greyed while locked (SetItemButtonDesaturated)
+function GetItemButtonIconTexture(button) return button.icon end
+function SetItemButtonDesaturated(button, desaturated)
+  local icon = GetItemButtonIconTexture(button)
+  if icon then icon:SetDesaturated(desaturated) end
+end
+local bagFrame = CreateFrame("Frame", "ContainerFrame1", UIParent)
+bagFrame.buttons = {}
+for slot = 1, 20 do
+  local b = CreateFrame("Button", nil, bagFrame)
+  b.icon = b:CreateTexture(nil, "ARTWORK")
+  b.GetBagID = function() return 0 end
+  b.GetID = function() return slot end
+  bagFrame.buttons[slot] = b
+end
+function bagFrame:EnumerateValidItems() return ipairs(self.buttons) end
+function ContainerFrameUtil_EnumerateContainerFrames() return ipairs({ bagFrame }) end
+local function GameUpdate() -- (the game redraws its bag: each item greyed while locked)
+  for slot, b in ipairs(bagFrame.buttons) do SetItemButtonDesaturated(b, BAGS[slot] ~= nil and BAGS[slot].locked == true) end
+end
+local function Grey(slot) return bagFrame.buttons[slot].icon._desat == true end
+
 local ns = {}
 S.class = "ROGUE"; S.locale = "enUS"
 M.LoadAddon(ADDON_DIR, ns)
@@ -167,6 +189,9 @@ check(GetCursorInfo() == nil and not BAGS[13].locked and Queued() == "13", "drop
 check(SendMailMailButton:GetText() == "Send (1/2)", "Send says there are two mails (" .. tostring(SendMailMailButton:GetText()) .. ")")
 C_Container.PickupContainerItem(0, 14)
 Extra(2)._scripts.OnClick(Extra(2), "LeftButton")
+check(Grey(13) and Grey(14) and not Grey(15), "the items in the slots more greyed in the bag, as those in the mail")
+GameUpdate()
+check(Grey(13) and Grey(14) and Grey(1) and not Grey(15), "the game redraws its bag: kept grey")
 check(Queued() == "13 14" and ExtraShown() == 9 and H() == 468,
   "the second row full: a third row, the window 44 taller (" .. ExtraShown() .. ", " .. H() .. ")")
 check(Point(SendMailAttachment1) == "15,215" and Point(SendMailAttachment8) == "15,171" and Point(Extra(3)) == "15,127",
@@ -184,6 +209,7 @@ check(GameTooltip._bagItem == "0:14", "its tooltip: the bag's item")
 Extra(4)._scripts.OnEnter(Extra(4))
 -- right-click: off; the third row gone, the window back
 Extra(2)._scripts.OnClick(Extra(2), "RightButton")
+check(Grey(13) and not Grey(14), "taken off: its colour back")
 check(Queued() == "13" and ExtraShown() == 2 and H() == 424 and Point(SendMailAttachment1) == "15,171",
   "right-click: taken off, back to two rows (" .. ExtraShown() .. ", " .. Point(SendMailAttachment1) .. ")")
 -- a click with nothing held: on the cursor
@@ -250,8 +276,13 @@ M.Fire("MAIL_FAILED")
 Run()
 check(#sent == 6 and Queued() == "5" and SendMailMailButton:GetText() == "Send (1/2)", "failed: nothing more sent, the rest kept")
 -- the mailbox shut: all gone
+check(Grey(5), "the rest waiting in the slots more: grey")
 M.Fire("MAIL_CLOSED")
 SendMailFrame:Hide()
+-- (the game gives the mail's items back as it shuts, and redraws its bag)
+for i = 1, 12 do if attached[i] and BAGS[attached[i]] then BAGS[attached[i]].locked = nil end attached[i] = nil end
+GameUpdate()
+check(not Grey(5) and not Grey(1), "the mailbox shut: their colour back (" .. tostring(BAGS[5] and BAGS[5].locked) .. ")")
 check(H() == 424 and SendMailMailButton:GetText() == "Send", "shut: the window as it was")
 
 -- a bound item, right-clicked while full: not taken (an unbound one is)
