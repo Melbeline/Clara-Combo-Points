@@ -88,12 +88,14 @@ local function IsMe(name)
   return type(me) == "string" and me:lower() == name:lower()
 end
 
--- The name the game knows the character by (its first name: the surname is the player's own touch)
+-- Its first name (Clara's key for it in the gold tracker and the sync)
 local function GameName(name) return name:match("^(%S+)") or name end
 AltFriends.GameName = GameName
-local function First(name) return (name:match("^([^%-%s]+)") or name):lower() end
+-- The name the server knows it by: the whole name, first name and surname (WoW Forever's names are unique with
+-- their surname: a whisper to the first name alone finds no one), any realm part off, lower-case
+local function Key(name) return ((name:match("^([^%-]+)") or name):gsub("^%s+", ""):gsub("%s+$", "")):lower() end
 
--- The server's answers (see "Online or not"): lower-case first name -> { verdict = online, at, tried, sent }
+-- The server's answers (see "Online or not"): Key(name) -> { verdict = online, at, tried, sent }
 local probes = {}
 local startedAt -- (GetTime at login)
 
@@ -105,7 +107,7 @@ local function SyncOnline(name)
 end
 
 local function Verdict(name)
-  local p = probes[First(name)]
+  local p = probes[Key(name)]
   if p then return p.verdict end
 end
 
@@ -332,11 +334,11 @@ local function Menu(catcher)
     if not IsMe(alt.name) then
       root:CreateButton(WHISPER or "Whisper", function()
         local tell = (ChatFrameUtil and ChatFrameUtil.SendTell) or ChatFrame_SendTell
-        if tell then tell(GameName(alt.name)) end
+        if tell then tell(alt.name) end
       end)
       root:CreateButton(PARTY_INVITE or INVITE or "Invite", function()
         local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
-        if invite then invite(GameName(alt.name)) end
+        if invite then invite(alt.name) end
       end)
     end
     root:CreateButton(L.ALT_REMOVE, function() AltFriends.Remove(alt.name) end)
@@ -437,7 +439,7 @@ local function Announce(alt, online)
   local r, g, b = info and info.r or 1, info and info.g or 1, info and info.b or 0
   local text
   if online then
-    text = (ERR_FRIEND_ONLINE_SS or "|Hplayer:%s|h[%s]|h has come online."):format(GameName(alt.name), alt.name)
+    text = (ERR_FRIEND_ONLINE_SS or "|Hplayer:%s|h[%s]|h has come online."):format(alt.name, alt.name)
   else
     text = (ERR_FRIEND_OFFLINE_S or "%s has gone offline."):format(alt.name)
   end
@@ -472,24 +474,30 @@ local PROBE_EVERY = 3     -- seconds between two questions
 local PROBE_ROUND = 30    -- seconds at least between two questions to the same character
 local PROBE_WAIT = 4      -- seconds without the server's "no player named": online
 local REPLY_EVERY = 20    -- seconds at least between two answers to the same asker
-local replied = {}        -- lower-case first name -> when answered last
-local hideUntil = {}      -- lower-case first name -> until when the server's answer to our question is hidden
+local replied = {}        -- Key(name) -> when answered last
+local hideUntil = {}      -- Key(name) -> until when the server's answer to our question is hidden
 local hiddenText, hiddenUntil -- (one answer shown by several chat windows: hidden in each)
 local lastAsked = 0
 
-local function Listed(first)
+-- The list's character a name points to: by its whole name; a first name alone (no surname heard), the one
+-- character of the list with that first name
+local function Listed(key)
+  local byFirst, count = nil, 0
   for _, alt in pairs(List() or {}) do
-    if First(alt.name) == first then return alt end
+    local own = Key(alt.name)
+    if own == key then return alt, own end
+    if not key:find(" ", 1, true) and GameName(own) == key then byFirst, count = alt, count + 1 end
   end
+  if count == 1 then return byFirst, Key(byFirst.name) end
 end
 
-local function SetVerdict(first, online)
-  local p = probes[first] or {}
-  probes[first] = p
+local function SetVerdict(key, online)
+  local p = probes[key] or {}
+  probes[key] = p
   p.sent = nil
   local changed = p.verdict ~= online
   p.verdict, p.at = online, GetTime()
-  local alt = Listed(first)
+  local alt = Listed(key)
   if online and alt and time then alt.seen = time() end
   if changed then Look(true) end
 end
@@ -499,7 +507,9 @@ local function Whisper(to, text)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then return false end
   local ok, result = pcall(C_ChatInfo.SendAddonMessage, PROBE_PREFIX, text, "WHISPER", to)
   if not ok then return false end
-  local success = Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success
+  local codes = Enum and Enum.SendAddonMessageResult
+  if result == 12 or (codes and codes.TargetOffline ~= nil and result == codes.TargetOffline) then return false, true end
+  local success = codes and codes.Success
   return result == nil or result == true or result == 0 or (success ~= nil and result == success)
 end
 
@@ -511,7 +521,7 @@ local function AskServer()
   local pick, oldest, fresh
   for _, alt in pairs(List() or {}) do
     if not IsMe(alt.name) and not SyncOnline(alt.name) then
-      local p = probes[First(alt.name)]
+      local p = probes[Key(alt.name)]
       local last = p and p.tried or 0
       if not (p and p.sent) and now - last >= PROBE_ROUND and (not oldest or last < oldest) then
         pick, oldest, fresh = alt, last, last == 0
@@ -519,18 +529,21 @@ local function AskServer()
     end
   end
   if not pick or (not fresh and now - lastAsked < PROBE_EVERY) then return end
-  local first = First(pick.name)
-  local p = probes[first] or {}
-  probes[first] = p
+  local key = Key(pick.name)
+  local p = probes[key] or {}
+  probes[key] = p
   p.tried, lastAsked = now, now
-  if Whisper(GameName(pick.name), "?") then
+  local sent, offline = Whisper(pick.name, "?")
+  if sent then
     p.sent = now
-    hideUntil[first] = now + PROBE_WAIT
+    hideUntil[key] = now + PROBE_WAIT
+  elseif offline then -- (the game said so at once)
+    SetVerdict(key, false)
   end
 end
 AltFriends.AskServer = AskServer -- (not AltFriends.Ask: Add Character's dialog)
 
--- The first name in the server's "No player named '%s' is currently playing", lower-case
+-- The name in the server's "No player named '%s' is currently playing", as Key gives it
 local notFound
 local function NotFoundName(text)
   if issecretvalue(text) or type(text) ~= "string" or type(ERR_CHAT_PLAYER_NOT_FOUND_S) ~= "string" then return nil end
@@ -539,15 +552,15 @@ local function NotFoundName(text)
     notFound = "^" .. escaped:gsub("%%%%s", "(.+)") .. "$"
   end
   local name = text:match(notFound)
-  return name and First(name)
+  return name and Key(name)
 end
 
 local function HideOurs(_, _, text, ...)
   local now = GetTime()
   if text == hiddenText and hiddenUntil and now <= hiddenUntil then return true end
-  local first = NotFoundName(text)
-  if first and hideUntil[first] and now <= hideUntil[first] then
-    hideUntil[first] = nil
+  local key = NotFoundName(text)
+  if key and hideUntil[key] and now <= hideUntil[key] then
+    hideUntil[key] = nil
     hiddenText, hiddenUntil = text, now + 1
     return true
   end
@@ -568,20 +581,21 @@ local CHAT_PRESENCE = { "CHAT_MSG_WHISPER", "CHAT_MSG_CHANNEL", "CHAT_MSG_SAY", 
 local probeEvents = CreateFrame("Frame")
 probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
   if event == "CHAT_MSG_SYSTEM" then
-    local first = NotFoundName(a1)
-    if first and Listed(first) then SetVerdict(first, false) end
+    local key = NotFoundName(a1)
+    if not key then return end
+    local alt, own = Listed(key)
+    if alt then SetVerdict(own, false) end
   elseif event == "CHAT_MSG_ADDON" then
     local prefix, text, channel, sender = a1, a2, a3, a4
     if prefix ~= PROBE_PREFIX or channel ~= "WHISPER" then return end
     if issecretvalue(text) or issecretvalue(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
-    local first = First(sender)
-    local alt = Listed(first)
+    local alt, own = Listed(Key(sender))
     if not alt then return end -- (only the characters in this list: answered and heard)
-    SetVerdict(first, true)
+    SetVerdict(own, true)
     if text == "?" then
       local now = GetTime()
-      if replied[first] and now - replied[first] < REPLY_EVERY then return end
-      replied[first] = now
+      if replied[own] and now - replied[own] < REPLY_EVERY then return end
+      replied[own] = now
       Answer(sender)
     else
       local level, class, zone = text:match("^I|(%d+)|(%u*)|(.*)$")
@@ -593,8 +607,8 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     end
   else -- heard in the chat
     if issecretvalue(a2) or type(a2) ~= "string" or a2 == "" then return end
-    local first = First(a2)
-    if Listed(first) then SetVerdict(first, true) end
+    local alt, own = Listed(Key(a2))
+    if alt then SetVerdict(own, true) end
   end
 end)
 
