@@ -748,6 +748,34 @@ local function ActiveIcon(slot)
 end
 ns.IconActiveTexture = function(_, slot) return (ActiveIcon(slot)) end
 
+-- The tint the game gives the button showing that image, as its action buttons do (ActionButton.lua UpdateUsable):
+-- usable, the spell's own colours; lacking mana, blue; else grey 0.4, as Shadowmeld and Stealth while on (they cannot
+-- be cast again). From the stance bar when no button shows it (a form not castable: 0.4); grey when nothing tells.
+local IsUsableAction = C_ActionBar and C_ActionBar.IsUsableAction
+local function GameTint(slot, image)
+  if IsUsableAction then
+    for _, action in ipairs(SpellActions(slot)) do
+      if ActionTexture(action) == image then
+        local ok, usable, lacking = pcall(IsUsableAction, action)
+        if ok and not issecretvalue(usable) and not issecretvalue(lacking) then
+          if usable then return 1, 1, 1 end
+          if lacking then return .5, .5, 1 end
+          return .4, .4, .4
+        end
+      end
+    end
+  end
+  local form = FormIndex(slot.name)
+  if form and GetShapeshiftFormInfo then
+    local ok, _, _, castable = pcall(GetShapeshiftFormInfo, form)
+    if ok and not issecretvalue(castable) then
+      if Truthy(castable) then return 1, 1, 1 end
+      return .4, .4, .4
+    end
+  end
+  return .4, .4, .4
+end
+
 local function ShowChecked(slot, on)
   if slot.isChecked == on then return end
   slot.isChecked = on
@@ -842,6 +870,7 @@ local function SetSlot(slot, look, aura, unit, enchant)
   -- (the active image above the game's aura button: under it, it was never seen)
   if swapped then
     slot.active:SetTexture(onIcon)
+    slot.active:SetVertexColor(GameTint(slot, onIcon)) -- (as dull as the game's own button: vanilla's look)
     slot.active:Show()
   else
     slot.active:Hide()
@@ -1670,7 +1699,11 @@ function ns:HudIconsReport()
         (IsCurrentAction and SpellOn(IsCurrentAction, action)) and "*" or "")
     end
     local drawn = slot.icon and slot.icon.GetTexture and slot.icon:GetTexture()
-    if slot.active and slot.active:IsShown() then drawn = V(drawn) .. ", above the game's aura button " .. V(slot.active:GetTexture()) end
+    if slot.active and slot.active:IsShown() then
+      local r, g, b
+      if slot.active.GetVertexColor then r, g, b = slot.active:GetVertexColor() end
+      drawn = ("%s, above the game's aura button %s (tint %.1f %.1f %.1f)"):format(V(drawn), V(slot.active:GetTexture()), r or 1, g or 1, b or 1)
+    end
     for _, rec in pairs(slot.secure or {}) do
       if rec and rec.button and rec.button.IsShown and rec.button:IsShown() then
         drawn = V(drawn) .. " · game aura button shown (" .. V(rec.icon and rec.icon:GetTexture()) .. ")"
