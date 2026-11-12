@@ -15,6 +15,7 @@
 -- And a loot window left empty closed (a corpse clicked again and again while its items were on their way).
 -- And the minimap's tracking (Find Herbs, Find Minerals, a hunter's tracking) given back after a death.
 -- And the quest tracker folded again as the player left it (the whole tracker and each of its sections).
+-- And the group role the player picks kept for each character, set again in the next groups.
 -- And /played always answered in the chat (in a fight it showed nothing).
 -- And the bags above AtlasLoot's window while it is open.
 -- And the stopwatch kept for each character through reloads and logouts, its time going on meanwhile.
@@ -1071,6 +1072,102 @@ foldEvents:SetScript("OnEvent", function(self, event, arg1, arg2)
     foldUntil, foldClicked = GetTime() + FOLD_FOR, false
     HookTracker()
     for _, delay in ipairs(FOLD_AT) do C_Timer.After(delay, FoldAll) end
+  end
+end)
+
+---------------------------------------------------------------------------
+-- The group role chosen by the player kept for each character. The game forgets it with the group: in the next
+-- one the character starts with no role. The role the player sets for themself (Set Role on their own frame's
+-- menu, the group finder's role, the answer to a role check) is kept; "No Role" forgets it. Set again by the
+-- game's own call, 2 seconds after joining a group and after a login or reload in a group (once the game has
+-- the group's roles), out of combat, when the game allows a role to be picked (as its Set Role menu: not in a
+-- group finder group or a scenario) and the class can take it. Only then: a role the leader gives afterwards
+-- is left as it is.
+---------------------------------------------------------------------------
+local ROLE_DELAY = 2
+local ROLE_NAMES = { [0] = "TANK", [1] = "HEALER", [2] = "DAMAGER" }
+local roleSetting, roleWaits = false, false
+local roleEvents = CreateFrame("Frame")
+
+local function EnumRole(role)
+  if Enum and Enum.LFGRole and type(role) == "number" then
+    for name, value in pairs(Enum.LFGRole) do
+      if value == role then return ({ Tank = "TANK", Healer = "HEALER", Damage = "DAMAGER" })[name] end
+    end
+  end
+  return ROLE_NAMES[role]
+end
+
+local function IsPlayer(unit)
+  if issecretvalue(unit) or type(unit) ~= "string" then return false end
+  if unit == "player" then return true end
+  local ok, same = pcall(UnitIsUnit, unit, "player")
+  return ok and not issecretvalue(same) and same == true
+end
+
+local function KeepRole(unit, role)
+  if roleSetting or not IsPlayer(unit) then return end
+  local sv, me = ns.sv, Me()
+  if not (sv and me) then return end
+  if role ~= "TANK" and role ~= "HEALER" and role ~= "DAMAGER" then role = nil end -- (No Role: forgotten)
+  if role then
+    sv.groupRoles = type(sv.groupRoles) == "table" and sv.groupRoles or {}
+    sv.groupRoles[me] = role
+  elseif type(sv.groupRoles) == "table" then
+    sv.groupRoles[me] = nil
+    if not next(sv.groupRoles) then sv.groupRoles = nil end
+  end
+end
+
+if type(UnitSetRoleEnum) == "function" then
+  hooksecurefunc("UnitSetRoleEnum", function(unit, role) KeepRole(unit, EnumRole(role)) end)
+end
+if type(UnitSetRole) == "function" then
+  hooksecurefunc("UnitSetRole", function(unit, role) KeepRole(unit, role) end)
+end
+
+-- What the game's Set Role menu asks before it shows (Blizzard_UnitPopupShared)
+local function CanPickRole()
+  if not IsInGroup() then return false end
+  if CanShowSetRoleButton and not CanShowSetRoleButton() then return false end
+  if C_Scenario and C_Scenario.IsInScenario and C_Scenario.IsInScenario() then return false end
+  local override = OverrideLFGSetRoleRestriction and select(2, pcall(OverrideLFGSetRoleRestriction))
+  if HasLFGRestrictions and HasLFGRestrictions() and override ~= true then return false end
+  return true
+end
+
+local function ClassCanTake(role)
+  if AreClassRolesSoftSuggestions and AreClassRolesSoftSuggestions() then return true end
+  if not UnitGetAvailableRoles then return true end
+  local tank, healer, damager = UnitGetAvailableRoles("player")
+  return (role == "TANK" and tank) or (role == "HEALER" and healer) or (role == "DAMAGER" and damager) or false
+end
+
+local function SetRoleAgain()
+  local sv, me = ns.sv, Me()
+  local role = sv and me and type(sv.groupRoles) == "table" and sv.groupRoles[me]
+  if not role or not CanPickRole() then return end
+  if InCombatLockdown() then
+    if not roleWaits then roleWaits = true roleEvents:RegisterEvent("PLAYER_REGEN_ENABLED") end
+    return
+  end
+  local now = UnitGroupRolesAssigned and UnitGroupRolesAssigned("player")
+  if issecretvalue(now) or now == role or not ClassCanTake(role) then return end
+  roleSetting = true
+  local ok, err = pcall(UnitSetRole, "player", role)
+  roleSetting = false
+  if not ok then geterrorhandler()(err) end
+end
+
+roleEvents:RegisterEvent("GROUP_JOINED")
+roleEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+roleEvents:SetScript("OnEvent", function(self, event, isLogin, isReload)
+  if event == "PLAYER_REGEN_ENABLED" then
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    roleWaits = false
+    SetRoleAgain()
+  elseif event == "GROUP_JOINED" or isLogin or isReload then -- (a zone change keeps the group's roles)
+    C_Timer.After(ROLE_DELAY, SetRoleAgain)
   end
 end)
 
