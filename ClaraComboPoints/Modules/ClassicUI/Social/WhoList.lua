@@ -395,6 +395,8 @@ local function Build()
     panel.refresh:SetScript("OnClick", function()
         S.SendWho(panel.query and panel.query:GetText())
     end)
+    -- (Clara Combo Points) the time left before the next /who on it: Modules/WhoCooldown
+    if ClaraNS and ClaraNS.WhoCooldownAttach then ClaraNS:WhoCooldownAttach(panel.refresh) end
 
     panel.add:SetScript("OnClick", function()
         local entry = SelectedEntry()
