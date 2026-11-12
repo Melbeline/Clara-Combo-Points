@@ -16,6 +16,7 @@
 -- And the minimap's tracking (Find Herbs, Find Minerals, a hunter's tracking) given back after a death.
 -- And the quest tracker folded again as the player left it (the whole tracker and each of its sections).
 -- And the group role the player picks kept for each character, set again in the next groups.
+-- And the windows the game refused in a fight, in the mouse report, with the protected ones and why.
 -- And /played always answered in the chat (in a fight it showed nothing).
 -- And the bags above AtlasLoot's window while it is open.
 -- And the stopwatch kept for each character through reloads and logouts, its time going on meanwhile.
@@ -657,6 +658,10 @@ function ns:MouseReport()
     local ok, lines = pcall(ns.TrackerFoldsReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
   end
+  if ns.FightWindowsReport then
+    local ok, lines = pcall(ns.FightWindowsReport, ns)
+    if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
+  end
   local text = table.concat(out, "\n")
   -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
   if ns.sv then ns.sv.mouseReport = text end
@@ -1170,6 +1175,116 @@ roleEvents:SetScript("OnEvent", function(self, event, isLogin, isReload)
     C_Timer.After(ROLE_DELAY, SetRoleAgain)
   end
 end)
+
+---------------------------------------------------------------------------
+-- Windows in a fight, for the mouse report (/cl souris). What the game refused this session in a fight: a window its
+-- panel manager did not show (and who asked), its "Interface action failed" message and who made it, Clara's own
+-- "can't do that in combat" refusals and where they came from, and the blocked calls the game names (any addon). And,
+-- read when the report is made, the game's windows that are protected now (the game refuses them to any touched path
+-- in a fight), with the protected frames inside them that make them so. Only read and noted: nothing is changed.
+---------------------------------------------------------------------------
+local FIGHT_LOG_MAX = 12
+local fightLog = {}
+local function FightNote(text)
+  fightLog[#fightLog + 1] = (date and date("%H:%M:%S") or "") .. "  " .. text
+  if #fightLog > FIGHT_LOG_MAX then table.remove(fightLog, 1) end
+end
+
+-- The first file of the call outside the game's panel manager, its chat message, its error frame and this file
+local SKIP_FILES = { UIParentPanelManager = true, ChatFrameUtil = true, GameFixes = true, Dialogs = true }
+local function FightCaller(skipDialogs)
+  local ok, stack = pcall(debugstack, 2, 14, 0)
+  if not ok or type(stack) ~= "string" then return "?", false end
+  local ours = stack:find("AddOns/ClaraComboPoints", 1, true) ~= nil
+  for line in stack:gmatch("[^\n]+") do
+    local file, num = line:match("([%w_]+)%.lua[\"%]]*:(%d+)")
+    if file and not SKIP_FILES[file] then return file .. ":" .. num, ours end
+  end
+  return "the game's own key or button", ours
+end
+
+local function FrameName(frame)
+  local ok, name = pcall(function() return frame:GetDebugName() end)
+  if ok and type(name) == "string" and name ~= "" then return name end
+  ok, name = pcall(frame.GetName, frame)
+  return ok and type(name) == "string" and name or tostring(frame)
+end
+
+if type(ShowUIPanel) == "function" then
+  hooksecurefunc("ShowUIPanel", function(frame)
+    if not InCombatLockdown() or type(frame) ~= "table" or not frame.IsShown then return end
+    local ok, shown = pcall(frame.IsShown, frame)
+    if ok and shown == false then
+      local by = FightCaller()
+      local okP, protected = pcall(frame.IsProtected, frame)
+      FightNote(("%s not shown (asked by %s%s)"):format(FrameName(frame), by,
+        okP and protected and ", the window protected" or ""))
+    end
+  end)
+end
+if type(DisplayInterfaceActionBlockedMessage) == "function" then
+  hooksecurefunc("DisplayInterfaceActionBlockedMessage", function()
+    FightNote("\"Interface action failed\" (" .. FightCaller() .. ")")
+  end)
+end
+if UIErrorsFrame and type(UIErrorsFrame.AddMessage) == "function" then
+  hooksecurefunc(UIErrorsFrame, "AddMessage", function(_, text)
+    if issecretvalue(text) or type(text) ~= "string" or text ~= ERR_NOT_IN_COMBAT then return end
+    local by, ours = FightCaller()
+    if ours then FightNote("\"" .. text .. "\" from " .. by) end
+  end)
+end
+local blockedEvents = CreateFrame("Frame")
+blockedEvents:RegisterEvent("ADDON_ACTION_BLOCKED")
+blockedEvents:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+blockedEvents:SetScript("OnEvent", function(_, event, addon, func)
+  FightNote(("%s: %s %s"):format(event == "ADDON_ACTION_FORBIDDEN" and "forbidden" or "blocked", tostring(addon), tostring(func)))
+end)
+
+-- The explicitly protected frames inside a window (its own, or ours hung in it), up to three
+local function ProtectedInside(frame)
+  local found, seen, queue, head = {}, 0, { frame }, 1
+  while head <= #queue and seen < 600 and #found < 3 do
+    local f = queue[head]
+    head = head + 1
+    local ok, kids = pcall(function() return { f:GetChildren() } end)
+    if ok then
+      for _, kid in ipairs(kids) do
+        seen = seen + 1
+        local okP, _, explicit = pcall(kid.IsProtected, kid)
+        if okP and explicit and #found < 3 then found[#found + 1] = FrameName(kid) end
+        queue[#queue + 1] = kid
+      end
+    end
+  end
+  return found
+end
+
+local EXTRA_WINDOWS = { "WorldMapFrame", "LFGParentFrame", "RaidParentFrame", "CooldownViewerSettings", "SocialUIFrame" }
+function ns:FightWindowsReport()
+  local out = { "windows in a fight (" .. (#fightLog > 0 and "refused this session:" or "nothing refused this session") .. ")" }
+  for _, line in ipairs(fightLog) do out[#out + 1] = "    " .. line end
+  local names, listed = {}, {}
+  for name in pairs(type(UIPanelWindows) == "table" and UIPanelWindows or {}) do
+    if type(name) == "string" then names[#names + 1] = name listed[name] = true end
+  end
+  for _, name in ipairs(EXTRA_WINDOWS) do if not listed[name] then names[#names + 1] = name end end
+  table.sort(names)
+  local protected = {}
+  for _, name in ipairs(names) do
+    local frame = _G[name]
+    if type(frame) == "table" and frame.IsProtected then
+      local ok, isProtected = pcall(frame.IsProtected, frame)
+      if ok and isProtected then
+        local inside = ProtectedInside(frame)
+        protected[#protected + 1] = "    " .. name .. ": " .. (#inside > 0 and table.concat(inside, ", ") or "itself or by an anchor")
+      end
+    end
+  end
+  out[#out + 1] = "game windows protected now (refused in a fight to a touched path): " .. (#protected > 0 and "" or "none")
+  for _, line in ipairs(protected) do out[#out + 1] = line end
+  return out
+end
 
 ---------------------------------------------------------------------------
 -- /played always answered. In a fight the game's answer (TIME_PLAYED_MSG) came, and no chat window showed it.
