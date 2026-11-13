@@ -346,6 +346,30 @@ if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall then
   end)
 end
 
+-- Buffs and debuffs, on every client
+--
+-- An aura is its own tooltip type, so no OnTooltipSet script covers it on the classic clients, and the
+-- player buff bar uses the instance-ID setters. (Clara: on every client, not the classic ones only: WoW
+-- Forever's tooltips have ProcessInfo, but its aura tooltip data carries no spell id, so the post call
+-- above shows none. Where it does, this one joins the same line: one SpellID, no second one.)
+if C_UnitAuras then
+  local byInstance = C_UnitAuras.GetAuraDataByAuraInstanceID
+  for method, getAura in pairs({SetUnitAura = C_UnitAuras.GetAuraDataByIndex,
+    SetUnitBuff = C_UnitAuras.GetBuffDataByIndex, SetUnitDebuff = C_UnitAuras.GetDebuffDataByIndex,
+    SetUnitAuraByAuraInstanceID = byInstance, SetUnitBuffByAuraInstanceID = byInstance,
+    SetUnitDebuffByAuraInstanceID = byInstance}) do
+    if getAura then
+      hook(GameTooltip, method, function(tooltip, unit, key, filter)
+        if isSecret(unit) or isSecret(key) then return end
+        -- (a unit the game keeps from addons, or its auras restricted: none)
+        local ok, aura = pcall(getAura, unit, key, filter)
+        if not ok or type(aura) ~= "table" or isSecret(aura) then return end
+        add(tooltip, aura.spellId, "spell")
+      end)
+    end
+  end
+end
+
 -- Classic and anniversary
 --
 -- Both ship TooltipDataHandler.lua but mix TooltipDataHandlerMixin into no tooltip,
@@ -366,23 +390,6 @@ hookScript(GameTooltip, "OnTooltipSetUnit", function(tooltip)
   local unit = select(2, tooltip:GetUnit())
   if unit and UnitGUID then addNpc(tooltip, UnitGUID(unit)) end
 end)
-
--- an aura is its own tooltip type, so no OnTooltipSet script covers it, and the
--- player buff bar uses the instance-ID setters
-if C_UnitAuras then
-  local byInstance = C_UnitAuras.GetAuraDataByAuraInstanceID
-  for method, getAura in pairs({SetUnitAura = C_UnitAuras.GetAuraDataByIndex,
-    SetUnitBuff = C_UnitAuras.GetBuffDataByIndex, SetUnitDebuff = C_UnitAuras.GetDebuffDataByIndex,
-    SetUnitAuraByAuraInstanceID = byInstance, SetUnitBuffByAuraInstanceID = byInstance,
-    SetUnitDebuffByAuraInstanceID = byInstance}) do
-    if getAura then
-      hook(GameTooltip, method, function(tooltip, unit, key, filter)
-        local aura = getAura(unit, key, filter)
-        add(tooltip, aura and aura.spellId, "spell")
-      end)
-    end
-  end
-end
 
 local function onSetHyperlink(tooltip, link)
   local kind, id = string.match(link, "^(%a+):(%d+)")
