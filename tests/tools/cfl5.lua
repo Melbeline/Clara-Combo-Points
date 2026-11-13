@@ -63,5 +63,16 @@ Constants = Constants or {}
 Constants.CharacterNameSeparatorConsts = Constants.CharacterNameSeparatorConsts or { CHARACTERNAME_SURNAME_SEPARATOR = " " }
 M.Fire("PLAYER_TARGET_CHANGED")
 check(A.Facts("Lune Belle").sex == 3, "Lune: a woman")
+
+out("== one's own characters: their level and class kept as each logs in")
+local mine = ClassicFriendsListDB.chars
+local any
+for _, rec in pairs(mine or {}) do any = rec end
+check(any and any.class == "PRIEST", "this character's kept (" .. tostring(any and any.class) .. ")")
+mine["elle moon"] = { level = 16, class = "HUNTER" }
+A.Add("elle moon")
+check(ClassicFriendsListDB.friends["elle moon"].name == "Elle Moon", "\"elle moon\" typed: Elle Moon")
+local f = A.Facts("Elle Moon")
+check(f.level == 16 and f.class == "HUNTER", "another of mine: level 16, Hunter, before any answer")
 out(string.format("\n%d failure(s)", fails))
 return fails

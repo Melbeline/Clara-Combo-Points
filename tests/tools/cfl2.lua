@@ -170,8 +170,8 @@ check(answers == 2, "each hello answered (3 s apart): the one who reloaded sees 
 out("== added and removed: said in the chat as the game says it, with the whole name")
 M.chat = {}
 check(A.Add("Melbeline moon"), "added")
-check(Chat("Melbeline moon added to friends."), "\"Melbeline moon added to friends.\"")
-check(not A.Add("melbeline Moon") and Chat("Melbeline moon is already your friend."), "twice: already a friend")
+check(Chat("Melbeline Moon added to friends."), "\"Melbeline moon\" typed: \"Melbeline Moon added to friends.\" (each word its capital)")
+check(not A.Add("melbeline Moon") and Chat("Melbeline Moon is already your friend."), "twice: already a friend")
 M.Fire("CHAT_MSG_SAY", "coucou", "Melbeline Moon-Realm")
 check(A.List()["melbeline moon"].name == "Melbeline Moon", "the name as the game writes it, once heard whole")
 M.chat = {}
