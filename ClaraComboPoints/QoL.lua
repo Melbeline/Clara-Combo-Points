@@ -31,6 +31,7 @@ ns.QOL_MODULES = {
   { key = "names", name = "Names", theme = "interface" }, -- (Clara's own: its own entry in the game's options)
   { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
   { key = "barscale", name = "Bar scale", theme = "interface" }, -- (Clara's own: the bars, micro menu and bags at once)
+  { key = "xptext", name = "XP bar text", theme = "interface" }, -- (Clara's own: the game's XP bar text, the pet's beside it)
   { key = "whocooldown", name = "/who cooldown", theme = "interface" }, -- (Clara's own: the time left before the next /who)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
   { key = "petfeed", name = "Pet feeding", theme = "combat" }, -- (Clara's own: a hunter's Feed Pet time left on the pet frame)
