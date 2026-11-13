@@ -178,7 +178,15 @@ function ns.TooltipAnchorTakes(owner)
   return false
 end
 
-local function OnSetOwner(tooltip, owner)
+local function OnSetOwner(tooltip, owner, anchorType)
+  -- A tooltip of ours handed back to the game with no anchor ("ANCHOR_NONE": the game places it next, its default
+  -- spot among them): our points taken off first. Left on, the game's own placing failed ("SetPoint would result in
+  -- anchor family connection", hundreds of times over the world's units), its point added to ours.
+  if anchorType == "ANCHOR_NONE" and (held == tooltip or following == tooltip)
+    and not (tooltip.IsForbidden and tooltip:IsForbidden()) then
+    tooltip:ClearAllPoints()
+    if held == tooltip then held = nil end
+  end
   if not (db and db.mode ~= "game" and ns.TooltipAnchorTakes(owner)) then return end
   if tooltip.IsForbidden and tooltip:IsForbidden() then return end
   if tooltip.SetAnchorType then tooltip:SetAnchorType("ANCHOR_NONE") end
