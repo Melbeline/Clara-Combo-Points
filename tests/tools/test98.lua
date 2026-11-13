@@ -215,6 +215,48 @@ F().drag:GetScript("OnDragStop")()
 local pos = ns.sv.questLog.pos
 check(pos and pos[1] == 300 and pos[2] == -200, "moved: its place kept (" .. tostring(pos and pos[1]) .. ", " .. tostring(pos and pos[2]) .. ")")
 
+out("== made bigger or smaller by the grip on its bottom right corner (the whole window scaled), kept")
+local grip = F().grip
+local function Near(a, b) return math.abs(a - b) < 0.6 end
+local function Ui(frame) local l, b, w, h = M.Rect(frame) local s = frame:GetScale() return l * s, (b + h) * s - UIParent:GetHeight() end
+local function Centre(r) local l, b, w, h = M.Rect(r) return l + w / 2, b + h / 2 end
+local fl, fb, fw, fh = M.Rect(F())
+local gx, gy = Centre(grip)
+check(grip and grip:IsShown() and Near(gx - fl, 350) and Near(fb + fh - gy, 465), "the grip on the art's corner (" .. (gx - fl) .. ", " .. (fb + fh - gy) .. ")")
+grip:GetScript("OnEnter")(grip)
+check(GameTooltip:IsOwned(grip) and GameTooltip._lines[1] == ns.L.QL_GRIP, "its tooltip: drag, right-click")
+grip:GetScript("OnLeave")(grip)
+local ui = UIParent:GetEffectiveScale()
+local function DragTo(x, y) M.cursorX, M.cursorY = x * ui, (y + UIParent:GetHeight()) * ui grip:GetScript("OnUpdate")(grip, 0.02) end
+grip:GetScript("OnMouseDown")(grip, "LeftButton")
+check(grip:GetScript("OnUpdate") ~= nil, "pressed: it follows the mouse")
+DragTo(300 + 350 * 1.5, -200 - 465 * 1.5)
+check(Near(F():GetScale(), 1.5), "dragged: 1.5 times bigger (" .. F():GetScale() .. ")")
+grip:GetScript("OnMouseUp")(grip, "LeftButton")
+local x, y = Ui(F())
+check(ns.sv.questLog.scale == 1.5 and Near(x, 300) and Near(y, -200), "let go: its size kept, its top left where it was (" .. x .. ", " .. y .. ")")
+check(grip:GetScript("OnUpdate") == nil, "let go: no longer followed")
+gx, gy = Centre(grip)
+fl, fb, fw, fh = M.Rect(F())
+check(Near(gx - fl, 350) and Near(fb + fh - gy, 465), "the grip still on its corner")
+grip:GetScript("OnMouseDown")(grip, "LeftButton")
+DragTo(300 + 350 * 0.3, -200 - 465 * 0.3)
+grip:GetScript("OnMouseUp")(grip, "LeftButton")
+check(ns.sv.questLog.scale == 0.6, "never smaller than 0.6 (" .. tostring(ns.sv.questLog.scale) .. ")")
+grip:GetScript("OnMouseDown")(grip, "LeftButton")
+DragTo(300 + 350 * 5, -200 - 465 * 5)
+grip:GetScript("OnMouseUp")(grip, "LeftButton")
+local big = ns.sv.questLog.scale
+check(big <= 2 and 465 * big <= UIParent:GetHeight() + 1, "never bigger than the screen (" .. tostring(big) .. ")")
+grip:GetScript("OnClick")(grip, "RightButton")
+x, y = Ui(F())
+check(ns.sv.questLog.scale == nil and F():GetScale() == 1 and Near(x, 300) and Near(y, -200), "right-click: its first size, in its place")
+F().dualToggle:Click()
+gx, gy = Centre(grip)
+fl, fb, fw, fh = M.Rect(F())
+check(Near(gx - fl, 680) and Near(fb + fh - gy, 439), "the double pane: on its corner too")
+F().dualToggle:Click()
+
 out("== Share: a secure pad over it, armed out of combat, away in combat")
 S.group = "party"
 M.Fire("GROUP_ROSTER_UPDATE")
