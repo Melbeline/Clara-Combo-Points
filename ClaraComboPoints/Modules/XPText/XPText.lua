@@ -2,7 +2,7 @@
 -- level's percent after it ("(98%)"), and a hunter's pet's experience to its right ("Pet XP: 1897/1940 (98%)"), text
 -- only (no bar of its own), each in a color of its own (the player's white, the pet's a light green: both plain on the
 -- bar's purple, on the rested blue and on the rested part still to come), picked with the game's color picker on its
--- page. Kept small: the game's own text and its own setting ("xpBarText", shown always: put on once, then the
+-- page, and its size (8 to 24, the game's own by default) on a slider there. Kept small: the game's own text and its own setting ("xpBarText", shown always: put on once, then the
 -- player's), the text written again after each of the game's updates (a hook after it) and as the pet's experience
 -- changes; nothing else of the bar touched. Its page in Esc > Options > AddOns > Clara > Interface > XP bar text, its
 -- boxes on its card. Saved with Clara's settings (ClaraComboPointsDB.xpText).
@@ -12,6 +12,7 @@ local L = ns.L
 
 local PLAYER_COLOR = { 1, 1, 1 }          -- the game's own white
 local PET_COLOR = { 0.55, 1, 0.55 }       -- a light green, plain on the purple and the blue
+local SIZE_MIN, SIZE_MAX = 8, 24          -- the text's size (nil: the game's own)
 
 local runs = ns:QolRuns("xptext")
 
@@ -26,6 +27,12 @@ local function Color(key, default)
   local c = s and s[key]
   if type(c) == "table" and type(c[1]) == "number" and type(c[2]) == "number" and type(c[3]) == "number" then return c end
   return default
+end
+local function Size()
+  local s = Store()
+  local v = s and tonumber(s.size)
+  if v and v >= SIZE_MIN and v <= SIZE_MAX then return math.floor(v + 0.5) end
+  return nil
 end
 local function ShowPet()
   local s = Store()
@@ -97,10 +104,31 @@ ns.XPTextCompose = Compose -- (for the tests)
 -- The game's experience bars (one in each of its two bar places): their text written after the game's
 ---------------------------------------------------------------------------
 local bars = {}
+local gameFont = setmetatable({}, { __mode = "k" }) -- the game's own font of each text: { path, size, flags }
+
+-- Its size: the one picked, else the game's own (put back)
+local function Sized(fs)
+  if not (fs.GetFont and fs.SetFont) then return end
+  local base = gameFont[fs]
+  if not base then
+    local path, size, flags = fs:GetFont()
+    if type(path) ~= "string" or type(size) ~= "number" or issecret(size) then return end
+    base = { path, size, flags }
+    gameFont[fs] = base
+  end
+  local want = Size() or base[2]
+  local _, now = fs:GetFont()
+  if now ~= want then fs:SetFont(base[1], want, base[3]) end
+end
+local function GameSize()
+  for fs, base in pairs(gameFont) do return base[2] end
+  return 12
+end
 
 local function Write(bar)
   local fs = bar and bar.OverlayFrame and bar.OverlayFrame.Text
   if not (fs and fs.SetText) then return end
+  Sized(fs)
   local ok, capped = pcall(function() return bar.IsCapped and bar:IsCapped() end)
   if ok and capped then return end -- (a trial account's banked experience: the game's text)
   local text = Compose()
@@ -238,17 +266,47 @@ local function Build()
 
   Check(L.XPT_ALWAYS, -100, Always, SetAlways)
   Check(L.XPT_PET_SHOW, -126, ShowPet, SetShowPet)
-  Swatch(L.XPT_COLOR_PLAYER, -164, "player", PLAYER_COLOR)
-  Swatch(L.XPT_COLOR_PET, -194, "pet", PET_COLOR)
+
+  -- The text's size: 8 to 24, the game's own until moved
+  local sizeLabel = page:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  sizeLabel:SetPoint("TOPLEFT", 16, -166)
+  sizeLabel:SetText(L.XPT_SIZE)
+  local slider = CreateFrame("Frame", nil, page, "MinimalSliderWithSteppersTemplate")
+  slider:SetPoint("TOPLEFT", 14, -184)
+  slider:SetSize(260, 24)
+  local sizeValue = page:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  sizeValue:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+  local filling = true -- (set up: nothing saved)
+  slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value)
+    local v = math.floor(value + 0.5)
+    sizeValue:SetText(tostring(v))
+    if filling then return end
+    local st = Store()
+    if st then st.size = v end
+    Refresh()
+  end, page)
+  slider:Init(Size() or GameSize(), SIZE_MIN, SIZE_MAX, SIZE_MAX - SIZE_MIN)
+  filling = false
+  swatches.size = slider
+  updates[#updates + 1] = function()
+    filling = true
+    local v = Size() or GameSize()
+    slider:SetValue(v)
+    sizeValue:SetText(tostring(v))
+    filling = false
+  end
+
+  Swatch(L.XPT_COLOR_PLAYER, -224, "player", PLAYER_COLOR)
+  Swatch(L.XPT_COLOR_PET, -254, "pet", PET_COLOR)
   local reset = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
   reset:SetSize(200, 22)
-  reset:SetPoint("TOPLEFT", 14, -232)
+  reset:SetPoint("TOPLEFT", 14, -292)
   reset:SetText(L.XPT_DEFAULT)
   swatches.reset = reset
   reset:SetScript("OnClick", function()
     Click()
     local s = Store()
-    if s then s.player, s.pet = nil, nil end
+    if s then s.player, s.pet, s.size = nil, nil, nil end -- (the game's size too)
     Update()
     Refresh()
   end)
