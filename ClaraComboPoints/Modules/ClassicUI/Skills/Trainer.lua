@@ -29,14 +29,57 @@ local CLIENT_SHRUNK = { "ScrollBox", "ScrollBar" }
 local CHANGED = { changed = true }
 local FOOT_EDGE = { "TopEdge", "TopLeftCorner", "TopRightCorner" }
 local TRAINER_EVENTS = { "TRAINER_SHOW", "TRAINER_UPDATE", "TRAINER_CLOSED", "TRAINER_DESCRIPTION_UPDATE",
-    "TRAINER_SERVICE_INFO_NAME_UPDATE", "PLAYER_MONEY", "UNIT_PET_TRAINING_POINTS" }
+    "TRAINER_SERVICE_INFO_NAME_UPDATE", "PLAYER_MONEY", "UNIT_PET_TRAINING_POINTS", "SPELLS_CHANGED" }
+
+-- A rank's number in its line ("Rank 2", "Rang 2"); nil without one
+local function RankOf(sub)
+    if type(sub) ~= "string" or IsSecret(sub) then return nil end
+    return tonumber(sub:match("(%d+)"))
+end
+
+-- A pet trainer: what the pet knows already, from its own spellbook. WoW Forever's pet trainer gives an ability the
+-- pet has as "available" (green, Train on), Era's gave it as "used" (grey, Already Known). Each ability's highest
+-- rank known (0: known, its rank not told); a rank at or under it is known.
+local function PetKnows()
+    local trainerType = C_Trainer and C_Trainer.GetTrainerType and C_Trainer.GetTrainerType()
+    if not (Enum and Enum.TrainerType and trainerType == Enum.TrainerType.Pet) then return nil end
+    local book = C_SpellBook
+    if not (book and book.HasPetSpells and book.GetSpellBookItemName and Enum.SpellBookSpellBank) then return nil end
+    local count = book.HasPetSpells()
+    if type(count) ~= "number" or IsSecret(count) then return nil end
+    local known = {}
+    for slot = 1, count do
+        local name, sub = book.GetSpellBookItemName(slot, Enum.SpellBookSpellBank.Pet)
+        if type(name) == "string" and not IsSecret(name) then
+            local rank = RankOf(sub) or 0
+            if (known[name] or -1) < rank then known[name] = rank end
+        end
+    end
+    return known
+end
+
+-- Known to the pet: its rank at or under the pet's (a line without a rank: the ability known at all)
+local function PetHas(known, name, sub)
+    local have = known and type(name) == "string" and not IsSecret(name) and known[name]
+    if not have then return false end
+    local rank = RankOf(sub)
+    if rank then return have >= rank end
+    return true
+end
 
 local function Services()
     local count = GetNumTrainerServices and GetNumTrainerServices() or 0
     local order, groups = {}, {}
+    local petKnows = PetKnows()
+    local showUsed = not GetTrainerServiceTypeFilter or GetTrainerServiceTypeFilter("used")
     for index = 1, count do
         local name, kind, texture, level, sub, category = GetTrainerServiceInfo(index)
-        if name then
+        local hidden = false
+        if name and petKnows and kind ~= "used" and PetHas(petKnows, name, sub) then
+            kind = "used"
+            hidden = not showUsed -- (Already Known unticked in the filter)
+        end
+        if name and not hidden then
             if not category or category == "" then category = OTHER or "Other" end
             if not groups[category] then
                 groups[category] = {}
@@ -48,6 +91,8 @@ local function Services()
     end
     return order, groups
 end
+
+ns.TrainerServices = Services -- (for the tests)
 
 local function Collect()
     wipe(lines)
@@ -574,6 +619,10 @@ end
 local events = CreateFrame("Frame")
 events:SetScript("OnEvent", function(_, event)
     if not active then return end
+    if event == "SPELLS_CHANGED" then -- (the pet's spellbook: what it knows now, at a pet trainer)
+        if panel and panel:IsVisible() then Refresh() end
+        return
+    end
     if event == "TRAINER_CLOSED" or event == "PLAYER_MONEY" or event == "UNIT_PET_TRAINING_POINTS" then
         -- A pending Open lands first, as when it ran at once.
         OpenNow()
