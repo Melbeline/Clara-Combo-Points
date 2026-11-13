@@ -26,6 +26,8 @@ local DUAL = { WIDTH = 680, HEIGHT = 440, LIST_X = 20, LIST_Y = -76, LIST_W = 29
 local MAX_ROWS = DUAL.ROWS
 -- Where it opens until moved (from the screen's top left), as the game's windows on the left
 local HOME_X, HOME_Y = 20, -104
+-- The size grip's centre on the art's bottom right corner (from the window's bottom right), one pane or two
+local GRIP_SINGLE, GRIP_DUAL = { -34, 47 }, { 0, 1 }
 
 local FRAME_NAME = "ClaraQuestLogFrame" -- (named: Escape closes it, UISpecialFrames)
 
@@ -533,6 +535,8 @@ function Layout()
   Q.SetPointOnce(frame.book, "TOPLEFT", frame, "TOPLEFT", dual and 6 or 4, dual and -6 or -4)
   Q.SetPointOnce(frame.title, "TOP", frame, "TOP", 0, dual and -19 or -17)
   Q.SetPointOnce(frame.close, "TOPRIGHT", frame, "TOPRIGHT", dual and DUAL_CLOSE_X or CLOSE_X, CLOSE_Y)
+  local spot = dual and GRIP_DUAL or GRIP_SINGLE
+  Q.SetPointOnce(frame.grip, "CENTER", frame, "BOTTOMRIGHT", spot[1], spot[2])
   frame.countRight:ClearAllPoints()
   if dual then
     frame.countRight:SetPoint("TOPLEFT", frame, "TOPLEFT", 190, -40)
@@ -601,22 +605,110 @@ function ns.QuestLogSetDual(on)
 end
 
 ---------------------------------------------------------------------------
--- Its place: moved by its top, kept (top left, in the screen's units)
+-- Its place and its size: moved by its top, made bigger or smaller by the grip on its bottom right corner (the whole
+-- window scaled: the art keeps its shape); both kept (its top left in the screen's units, its scale)
 ---------------------------------------------------------------------------
+local MIN_SCALE, MAX_SCALE = 0.6, 2
+local function SavedScale()
+  local scale = tonumber(Q.Store().scale)
+  return scale and math.max(MIN_SCALE, math.min(MAX_SCALE, scale)) or 1
+end
+
 local function PlaceWindow()
   local pos = Q.Store().pos
   local x, y = HOME_X, HOME_Y
   if type(pos) == "table" and type(pos[1]) == "number" and type(pos[2]) == "number" then x, y = pos[1], pos[2] end
+  local scale = SavedScale()
+  frame:SetScale(scale)
   frame:ClearAllPoints()
-  frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, y)
+  frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x / scale, y / scale) -- (offsets in its own, scaled, units)
 end
 
-local function KeepPlace()
+-- Its top left in the screen's units
+local function TopLeft()
   local left, top = frame:GetLeft(), frame:GetTop()
   if not (left and top) then return end
   local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
-  Q.Store().pos = { math.floor(left * scale + 0.5), math.floor(top * scale - UIParent:GetHeight() + 0.5) }
+  return left * scale, top * scale - UIParent:GetHeight()
+end
+
+local function KeepPlace()
+  local x, y = TopLeft()
+  if not x then return end
+  Q.Store().pos = { math.floor(x + 0.5), math.floor(y + 0.5) }
   PlaceWindow()
+end
+
+local function GripSpot() return frame.dual and GRIP_DUAL or GRIP_SINGLE end
+-- The corner from the window's top left, in its own units
+local function Corner()
+  local spot = GripSpot()
+  return frame:GetWidth() + spot[1], frame:GetHeight() - spot[2]
+end
+
+-- While dragged: the scale that puts the corner under the mouse (the axis it went furthest on), its top left held
+local sizing
+local function Cursor()
+  local x, y = GetCursorPosition()
+  local ui = UIParent:GetEffectiveScale()
+  return x / ui, y / ui - UIParent:GetHeight()
+end
+local function SizeStep()
+  if not sizing then return end
+  local cx, cy = Cursor()
+  local cornerX, cornerY = Corner()
+  local scale = math.max((cx - sizing.x) / cornerX, (sizing.y - cy) / cornerY)
+  -- (never bigger than the screen)
+  local fit = math.min(UIParent:GetWidth() / cornerX, UIParent:GetHeight() / cornerY)
+  scale = math.max(MIN_SCALE, math.min(MAX_SCALE, fit, scale))
+  frame:SetScale(scale)
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", sizing.x / scale, sizing.y / scale)
+end
+local function StartSizing()
+  local x, y = TopLeft()
+  if not x then return end
+  sizing = { x = x, y = y }
+  frame.grip:SetScript("OnUpdate", SizeStep)
+end
+local function StopSizing()
+  if not sizing then return end
+  SizeStep()
+  sizing = nil
+  frame.grip:SetScript("OnUpdate", nil)
+  local scale = math.floor(frame:GetScale() * 100 + 0.5) / 100
+  Q.Store().scale = math.abs(scale - 1) >= 0.01 and scale or nil
+  KeepPlace()
+  Q.PlacePads()
+end
+local function ResetSize()
+  KeepPlace()
+  Q.Store().scale = nil
+  PlaceWindow()
+  Q.PlacePads()
+  PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+end
+
+local GRIP_TEX = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-"
+local function Grip()
+  local grip = CreateFrame("Button", nil, frame)
+  grip:SetSize(16, 16)
+  grip:SetFrameLevel(frame:GetFrameLevel() + 20) -- (over the foot's buttons)
+  grip:SetNormalTexture(GRIP_TEX .. "Up")
+  grip:SetPushedTexture(GRIP_TEX .. "Down")
+  grip:SetHighlightTexture(GRIP_TEX .. "Highlight")
+  grip:RegisterForClicks("RightButtonUp")
+  grip:SetScript("OnMouseDown", function(_, mouse) if mouse == "LeftButton" then StartSizing() end end)
+  grip:SetScript("OnMouseUp", function(_, mouse) if mouse == "LeftButton" then StopSizing() end end)
+  grip:SetScript("OnHide", StopSizing)
+  grip:SetScript("OnClick", function(_, mouse) if mouse == "RightButton" then ResetSize() end end)
+  grip:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(L.QL_GRIP, 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  grip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return grip
 end
 
 ---------------------------------------------------------------------------
@@ -702,6 +794,7 @@ local function Build()
   frame.close:SetSize(CLOSE_SIZE, CLOSE_SIZE)
   frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", CLOSE_X, CLOSE_Y)
   frame.close:SetScript("OnClick", CloseLog)
+  frame.grip = Grip()
 
   frame.count, frame.countMiddle, frame.countRight = CountBox(frame)
   frame.allTab = AllTab(frame)
