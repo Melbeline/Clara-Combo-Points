@@ -221,5 +221,15 @@ check(A.List()["rose thorn"] == nil and Chat("Rose Thorn removed from friends.")
 SlashCmdList.CLASSICFRIENDSLIST("")
 check(Chat("/cfl add"), "the help")
 check(type(ClassicFriendsListDB) == "table" and ClassicFriendsListDB.friends == A.List(), "kept in ClassicFriendsListDB")
+
+out("== /rl")
+local reloaded = 0
+C_UI = C_UI or {}
+local realReload = C_UI.Reload
+C_UI.Reload = function() reloaded = reloaded + 1 end
+check(_G.SLASH_CLASSICFRIENDSLISTRELOAD1 == "/rl" and SlashCmdList.CLASSICFRIENDSLISTRELOAD ~= nil, "/rl there (running)")
+SlashCmdList.CLASSICFRIENDSLISTRELOAD("")
+check(reloaded == 1, "/rl reloads the interface")
+C_UI.Reload = realReload
 out(string.format("\n%d failure(s)", fails))
 return fails

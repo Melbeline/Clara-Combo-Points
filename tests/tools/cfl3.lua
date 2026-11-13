@@ -38,5 +38,15 @@ check(ns.CFL.AddToList() == 0, "no rows")
 SlashCmdList.CLASSICFRIENDSLIST("add Rose Thorn")
 check(Chat("Clara is loaded") == 2 and ClassicFriendsListDB.friends["rose thorn"] == nil, "/cfl: says Clara runs, adds nothing")
 check(ClassicFriendsListDB.friends["elle woods"] ~= nil, "its list kept for when Clara is gone")
+
+out("== /rl")
+local reloaded = 0
+C_UI = C_UI or {}
+local realReload = C_UI.Reload
+C_UI.Reload = function() reloaded = reloaded + 1 end
+check(_G.SLASH_CLASSICFRIENDSLISTRELOAD1 == "/rl" and SlashCmdList.CLASSICFRIENDSLISTRELOAD ~= nil, "/rl there (with Clara loaded)")
+SlashCmdList.CLASSICFRIENDSLISTRELOAD("")
+check(reloaded == 1, "/rl reloads the interface")
+C_UI.Reload = realReload
 out(string.format("\n%d failure(s)", fails))
 return fails
