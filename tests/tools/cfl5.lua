@@ -55,14 +55,19 @@ out("== heard in the chat: the game's word on its sender")
 guids["Player-1-ABC"] = 2
 M.Fire("CHAT_MSG_WHISPER", "salut", "Bob Twink", "", "", "", "", 0, 0, "", 0, 0, "Player-1-ABC")
 check(A.Facts("Bob Twink").sex == 2, "Bob: a man")
+check(A.Facts("Bob Twink").class == "HUNTER", "and his class from the game, without an addon of his (" .. tostring(A.Facts("Bob Twink").class) .. ")")
 
 out("== seen as the target")
 unitNames.target = { "Lune", "Belle" }
 sexOf.target = 3
 Constants = Constants or {}
 Constants.CharacterNameSeparatorConsts = Constants.CharacterNameSeparatorConsts or { CHARACTERNAME_SURNAME_SEPARATOR = " " }
+local realUnitClass, realUnitLevel = UnitClass, UnitLevel
+function UnitClass(u) if u == "target" then return "Mage", "MAGE" end return realUnitClass(u) end
+function UnitLevel(u) if u == "target" then return 23 end return realUnitLevel(u) end
 M.Fire("PLAYER_TARGET_CHANGED")
 check(A.Facts("Lune Belle").sex == 3, "Lune: a woman")
+check(A.Facts("Lune Belle").class == "MAGE" and A.Facts("Lune Belle").level == 23, "her class and level from the game")
 
 out("== one's own characters: their level and class kept as each logs in")
 local mine = ClassicFriendsListDB.chars

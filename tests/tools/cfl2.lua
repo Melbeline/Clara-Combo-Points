@@ -98,7 +98,12 @@ check(reply and reply[4] == "Elle Woods-Realm" and reply[2]:find("^I|%d+|PRIEST|
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods-Realm")
 check(Sent() == 1, "not answered twice at once")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Stranger-Realm")
-check(Sent() == 1, "one not in the list: not answered")
+local toStranger = LastTo()
+check(Sent() == 2 and toStranger and toStranger[4] == "Stranger-Realm" and toStranger[2]:find("^I|%d+|PRIEST|") ~= nil,
+  "one not in the list asking: answered all the same (what /who tells anyone)")
+check(not A.Online("Stranger"), "and not taken into the list")
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Stranger-Realm")
+check(Sent() == 2, "the stranger not answered twice at once")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|42|MAGE|Stranglethorn Vale", "WHISPER", "Elle Woods")
 local facts = A.Facts("Elle Woods")
 check(facts.level == 42 and facts.class == "MAGE" and facts.zone == "Stranglethorn Vale", "its level, class and zone shown")
