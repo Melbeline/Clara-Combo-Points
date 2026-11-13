@@ -147,6 +147,10 @@ Modules\TullaRange\TullaRange.lua
 Modules\TullaRange\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
 Modules\XPText\XPText.lua
+Modules\QuestLog\QuestLogCore.lua
+Modules\QuestLog\QuestLogDetail.lua
+Modules\QuestLog\QuestLogWindow.lua
+Modules\QuestLog\QuestLogOpen.lua
 Modules\WhoCooldown\WhoCooldown.lua
 Modules\IdTip\IdTip.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
