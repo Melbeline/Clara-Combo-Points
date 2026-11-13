@@ -1,6 +1,7 @@
 local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
+if ns.gameMapOnly then return end -- (Clara Combo Points: the game's own world map, Core.lua)
 
 -- Map Options at the classic map's foot, in MoP's spot: our box in Era's drop down look, with the game's own filter
 -- button laid over it unseen, so a click opens the game's own menu (other addons' entries in it too) as the game's.

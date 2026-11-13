@@ -1568,7 +1568,7 @@ end
 ns.QuestBesideMap = QuestBesideMap
 local function WatchQuestOverMap()
   local map = WorldMapFrame
-  if not (map and map.HookScript) or ns.questOverMapWatched then return end
+  if not (map and map.HookScript) or ns.questOverMapWatched or ns.GameMapOnly() then return end
   ns.questOverMapWatched = true
   map:HookScript("OnShow", function() QuestBesideMap(true) end)
   map:HookScript("OnHide", function() QuestBesideMap(false) end)

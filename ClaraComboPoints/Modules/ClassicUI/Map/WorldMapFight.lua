@@ -1,6 +1,7 @@
 local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
+if ns.gameMapOnly then return end -- (Clara Combo Points: the game's own world map, Core.lua)
 
 -- The classic map in a fight: the game lays it at its own size and spot on its first open and on maximize or restore,
 -- and our snippet cannot start from our code then. Secure watchers lay the map frame, from values set as the fight

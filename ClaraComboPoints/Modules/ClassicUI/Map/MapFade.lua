@@ -1,6 +1,7 @@
 local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
+if ns.gameMapOnly then return end -- (Clara Combo Points: the game's own world map, Core.lua)
 
 -- The toggle is the client's mapFade cvar; a change made elsewhere updates our setting.
 

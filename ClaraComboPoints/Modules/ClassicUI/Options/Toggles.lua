@@ -389,7 +389,9 @@ ns.TOGGLES = {
     { "hideTrackerHeader", L["OPT_hideTrackerHeader"]:format(_G.TRACKER_ALL_OBJECTIVES or "All Objectives"),
         L["OPT_hideTrackerHeader_TIP"], search = "all objectives header title top line tracker" },
 
-    { "worldMap", L["OPT_worldMap"], L["OPT_worldMap_TIP"], group = L["GROUP_MAP"] },
+    { "gameWorldMap", L["OPT_gameWorldMap"], L["OPT_gameWorldMap_TIP"], group = L["GROUP_MAP"],
+        search = "game world map default forever close fight combat untouched" },
+    { "worldMap", L["OPT_worldMap"], L["OPT_worldMap_TIP"] },
     { "mapNavClassic", L["OPT_mapNavClassic"], L["OPT_mapNavClassic_TIP"], parent = "worldMap", radio = "mapNavStyle",
         drop = true, dropTip = L["OPT_mapNavStyle_TIP"], search = "navigation bar header continent zone drop down zoom out era large" },
     { "mapNavBar", L["OPT_mapNavBar"], L["OPT_mapNavBar_TIP"], parent = "worldMap", radio = "mapNavStyle", drop = true,

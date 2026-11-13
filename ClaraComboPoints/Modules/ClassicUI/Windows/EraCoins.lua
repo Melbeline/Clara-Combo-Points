@@ -17,6 +17,7 @@ local MONEY = { "QuestInfoMoneyFrame", "QuestInfoRequiredMoneyDisplay" }
 local WINDOWS = { "MerchantFrame", "MailFrame", "OpenMailFrame", "TradeFrame", "QuestFrame", "ClassTrainerFrame",
     "BankFrame", "GuildBankFrame", "PetStableFrame", "WorldMapFrame", "ContainerFrameCombinedBags" }
 for i = 1, 13 do WINDOWS[#WINDOWS + 1] = "ContainerFrame" .. i end
+if ns.gameMapOnly then for i = #WINDOWS, 1, -1 do if WINDOWS[i] == "WorldMapFrame" then table.remove(WINDOWS, i) end end end -- (Clara: the game's own world map, untouched)
 local DEPTH, LATER = 8, 0.3
 
 local over = setmetatable({}, { __mode = "k" })    -- the game's coin texture -> ours over it

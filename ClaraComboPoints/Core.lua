@@ -11,6 +11,12 @@
 -- which accept them, so the display works whether they are secret or not.
 
 local ADDON, ns = ...
+
+-- The game's own world map (ClassicUI's option "Game's world map", ClaraClassicUIDB.gameWorldMap): read once as the
+-- files load, a change taking the next reload. On, nothing of ClassicUI's or Clara's touches the world map (no art,
+-- size, place, pins, hooks on it), so the game opens and closes it as its own, in a fight too.
+local gameMapOnly = type(ClaraClassicUIDB) == "table" and ClaraClassicUIDB.gameWorldMap == true
+function ns.GameMapOnly() return gameMapOnly end
 _G.ClaraComboPoints = ns
 local L = ns.L
 

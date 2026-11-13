@@ -152,7 +152,7 @@ local WINDOWS = {
     worldMap = {
         -- No open: the game's own key and button. The frame: the Era border drawn now, its right edge the art's outer
         -- edge (the quest pane counted); nil in the game's own look.
-        frame = function() return ns.ClassicMapBorder() end,
+        frame = function() return ns.ClassicMapBorder and ns.ClassicMapBorder() end,
         parts = {},
     },
     questWatch = {

@@ -250,7 +250,7 @@ local function Watch(entry)
     end
 end
 
-local MAP_ENTRY = WINDOWS[5]
+local MAP_ENTRY = byKey.map or { toggle = "mapUnlocked" } -- (Clara: by its key; none with the game's own map)
 
 PlaceAll = function()
     if not ns.db then return end
@@ -360,6 +360,7 @@ end
 -- The placeholder's size in the window's own units: as drawn, the map (Era's or the client's) in the width picked.
 local function PreviewSize(entry, frame)
     if entry.quests then
+        if not ns.ClassicMapSize then return 1035, 534 end -- (the game's own world map: its file not run)
         local w, h, quests = ns.ClassicMapSize()
         return w + (mapOnly and 0 or quests), h
     end

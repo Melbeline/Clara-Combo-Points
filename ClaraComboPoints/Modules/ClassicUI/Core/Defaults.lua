@@ -245,6 +245,7 @@ ns.DB_DEFAULTS = {
     -- The game's own Hidden on a gryphon (its edit mode dialog, before ours) read into the choice once.
     gryphonHiddenCarried = false,
     mapUnlocked = false,
+    gameWorldMap = false, -- (Clara Combo Points: the game's own world map, Core.lua)
     minimapButtonAngle = 213,
     namePlates = true,
     fullPlates = true,
@@ -419,6 +420,8 @@ ns.RELOAD_KEYS = {
     -- Restore hides the title strips only; dressed windows keep the old frame. Turned on, windows built while it was
     -- off keep the plain one: a reload either way.
     worldMap = { on = L["CORE_THE_WORLD_MAP_KEEPS_THE"], off = L["CORE_THE_WORLD_MAP_KEEPS_THE"] },
+    -- (Clara Combo Points) Read once as the files load: the map's touches made or not, a reload either way.
+    gameWorldMap = { own = true, on = L["CORE_GAME_WORLD_MAP_ON"], off = L["CORE_GAME_WORLD_MAP_OFF"] },
     lootWindow = { on = L["CORE_THE_LOOT_WINDOW_KEEPS_THE"], off = L["CORE_THE_LOOT_WINDOW_KEEPS_THE"] },
     -- Its frame of the window list stays on the game's trainer window.
     trainer = { on = L["CORE_WINDOWS_ALREADY_OPENED_KEEP_THE"], off = L["CORE_WINDOWS_ALREADY_OPENED_KEEP_THE"] },

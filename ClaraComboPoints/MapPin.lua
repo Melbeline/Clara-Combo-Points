@@ -36,6 +36,7 @@ end
 ns.DropMapPin = Drop
 
 local function Dress()
+  if ns.GameMapOnly() then return end -- (the game's own world map: nothing on it, Core.lua)
   local map = WorldMapFrame
   if not (map and map.ScrollContainer and C_Map and C_Map.SetUserWaypoint and UiMapPoint) or map.claraMapPin then return end
   map.claraMapPin = true

@@ -19,6 +19,23 @@ local ADDON, ns = ...
 ns.ClassicUIRuns = ns:QolRuns("classicui")
 if ns.ClassicUIRuns then
   ns.ClassicUIPrivate = {} -- (the standalone's own `...` table)
+  -- (Clara Combo Points: the game's own world map, Core.lua: ClassicUI's map settings put aside while it is on, so its
+  -- map modules stay off; given back as it is turned off. Before ClassicUI reads its settings.)
+  ns.ClassicUIPrivate.gameMapOnly = type(ClaraClassicUIDB) == "table" and ClaraClassicUIDB.gameWorldMap == true
+  local db = ClaraClassicUIDB
+  local MAP_KEYS = { "worldMap", "mapUnlocked", "mapMarkers", "mapFade", "questMapPane", "hideMapQuestButton" }
+  if type(db) == "table" and db.gameWorldMap == true and type(db.gameWorldMapKept) ~= "table" then
+    db.gameWorldMapKept = {}
+    for _, key in ipairs(MAP_KEYS) do
+      db.gameWorldMapKept[key] = db[key] == nil and "unset" or db[key]
+      db[key] = false
+    end
+  elseif type(db) == "table" and db.gameWorldMap ~= true and type(db.gameWorldMapKept) == "table" then
+    for key, value in pairs(db.gameWorldMapKept) do
+      if value == "unset" then db[key] = nil else db[key] = value end
+    end
+    db.gameWorldMapKept = nil
+  end
 elseif ns:QolState("classicui") == "standalone" then
   local f = CreateFrame("Frame")
   f:RegisterEvent("PLAYER_LOGIN")

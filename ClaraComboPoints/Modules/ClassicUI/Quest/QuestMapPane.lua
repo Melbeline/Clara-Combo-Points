@@ -3,6 +3,7 @@ if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 -- The map's quest pane in 1.x style. Client rows, pools and text stay
 -- theirs: their modern art is faded and ours laid under.
 local ns = ClaraNS.ClassicUIPrivate
+if ns.gameMapOnly then return end -- (Clara Combo Points: the game's own world map, Core.lua)
 
 local INK_R, INK_G, INK_B = 0.18, 0.12, 0.06   -- parchment ink
 local CHECK_BOX = "Interface\\Buttons\\UI-CheckBox-Up"

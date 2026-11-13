@@ -1,6 +1,7 @@
 local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
+if ns.gameMapOnly then return end -- (Clara Combo Points: the game's own world map, Core.lua)
 
 -- Era's city and town markers on the continent maps (#165). Forever draws Era's numbers from a newer sheet where its
 -- tower is 6 and house 5 (capitals, Era 5, got the house), and its towns lost their continent flag: the capitals'

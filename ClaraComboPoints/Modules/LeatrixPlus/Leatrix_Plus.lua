@@ -3880,6 +3880,7 @@
 
 			end)
 
+			if not (ClaraNS.GameMapOnly and ClaraNS.GameMapOnly()) then -- (Clara: the game's own world map, untouched)
 			----------------------------------------------------------------------
 			-- World map frame
 			----------------------------------------------------------------------
@@ -3976,6 +3977,7 @@
 					mEB:SetPoint("TOPLEFT", WorldMapFrame.ScrollContainer, "TOPLEFT", 98, -4)
 				end
 			end)
+			end
 
 		end
 

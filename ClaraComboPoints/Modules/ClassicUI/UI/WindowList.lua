@@ -81,6 +81,10 @@ ns.WINDOW_LIST = {
         follows = "questGiver", followX = 0, followY = 0, followSize = true,
         dressed = function() return ns.panels and ns.panels.Dressing("panelGossip") end },
 }
+-- (Clara Combo Points: the game's own world map, Core.lua: no handle, lock, grip nor place of ours on it)
+if ns.gameMapOnly then
+    for i = #ns.WINDOW_LIST, 1, -1 do if ns.WINDOW_LIST[i].key == "map" then table.remove(ns.WINDOW_LIST, i) end end
+end
 
 -- The other micro buttons on the minimap ring: Map/MinimapMicro.lua names its frames and angles the same way.
 local RING_MICROS = { { "Character", L["OPT_hideMicroCharacter"] }, { "Spellbook", L["OPT_hideMicroSpellbook"] },

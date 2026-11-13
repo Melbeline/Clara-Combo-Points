@@ -1,6 +1,7 @@
 local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
+if ns.gameMapOnly then return end -- (Clara Combo Points: the game's own world map, Core.lua)
 
 -- Classic Era's large world map (Blizzard_WorldMap Vanilla) at its own size: its 1024 x 768 sheets
 -- round the picture, the header's Continent and Zone drop downs and Zoom Out, the zoom note over the picture's corner.

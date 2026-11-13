@@ -1,6 +1,7 @@
 local _, ClaraNS = ... -- (Clara Combo Points: ClassicUI Forever built in, QoL.lua)
 if not (type(ClaraNS) == "table" and ClaraNS.ClassicUIRuns) then return end
 local ns = ClaraNS.ClassicUIPrivate
+if ns.gameMapOnly then return end -- (Clara Combo Points: the game's own world map, Core.lua)
 
 -- Classic Era's world map in the header style picked: Classic (WorldMapEraLarge.lua), none (Era's small map) or the
 -- game's own. The quest pane in a second hole the art widens across; Map Options at the foot (WorldMapOptions.lua).

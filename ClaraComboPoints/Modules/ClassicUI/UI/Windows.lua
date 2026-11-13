@@ -19,7 +19,7 @@ ns.ReleaseWindowRow = Release
 local WatchClientWindows   -- forward declared: must stay local
 
 -- Client windows outside its panel list; the map opens on its own terms.
-local LOOSE_PANELS = { "WorldMapFrame" }
+local LOOSE_PANELS = ns.gameMapOnly and {} or { "WorldMapFrame" } -- (Clara: none with the game's own map)
 
 -- Never closed by us: closing talents clears the bars' empty-slot note, which the client never sets again.
 local LEAVE_OPEN = { PlayerSpellsFrame = true }

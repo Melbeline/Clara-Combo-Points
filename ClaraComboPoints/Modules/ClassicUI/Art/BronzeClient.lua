@@ -216,6 +216,7 @@ local CLIENT_WINDOWS = { "MailFrame", "OpenMailFrame", "TradeFrame", "MerchantFr
     "CalendarFrame", "CommunitiesFrame", "AchievementFrame", "MacroFrame", "AddonList", "InspectFrame", "AuctionHouseFrame",
     "GuildBankFrame", "ItemSocketingFrame", "DressUpFrame", "TaxiFrame", "PetStableFrame", "HelpFrame", "TimeManagerFrame",
     "ChannelFrame", "ItemTextFrame", "StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4" }
+if ns.gameMapOnly then for i = #CLIENT_WINDOWS, 1, -1 do if CLIENT_WINDOWS[i] == "WorldMapFrame" then table.remove(CLIENT_WINDOWS, i) end end end -- (Clara: the game's own world map, untouched)
 
 -- Forbidden pieces (trade window money boxes) may not be asked for regions.
 local Forbidden = ns.IsForbidden
