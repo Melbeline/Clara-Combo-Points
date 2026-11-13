@@ -27,6 +27,7 @@ ns.QOL_MODULES = {
   { key = "prices", name = "Auction house prices shared", theme = "economy" }, -- (Clara's own)
   { key = "sniper", name = "Sniper", theme = "economy" }, -- (Clara's own, a tab beside Auctionator's)
   { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
+  { key = "xptext", name = "XP bar text", theme = "interface" }, -- (Clara's own: the game's XP bar text, the pet's beside it)
   { key = "whocooldown", name = "/who cooldown", theme = "interface" }, -- (Clara's own: the time left before the next /who)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },

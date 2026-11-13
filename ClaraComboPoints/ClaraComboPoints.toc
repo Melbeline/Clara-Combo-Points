@@ -146,6 +146,7 @@ Modules\Sniper\Sniper.xml
 Modules\TullaRange\TullaRange.lua
 Modules\TullaRange\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
+Modules\XPText\XPText.lua
 Modules\WhoCooldown\WhoCooldown.lua
 Modules\IdTip\IdTip.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
