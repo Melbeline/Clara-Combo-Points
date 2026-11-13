@@ -507,6 +507,31 @@ for _, f in ipairs(frames) do
 end
 print("secure frames of ours in a game window: " .. #hung .. (#hung > 0 and (" (" .. table.concat(hung, ", ") .. ")") or ""))
 
+-- 7. The game's own world map (Clara's option): ClassicUI's map files not run, its map settings put aside, given back
+local okMap, mapText, mapPass = pcall(function()
+  local mapNS, mapFailed = Session({ saved = { ClaraClassicUIDB = { gameWorldMap = (os.getenv("CUI_MAPCTL") == nil), worldMap = true, mapUnlocked = true } } })
+  local M2 = mapNS.ClassicUIPrivate
+  local errsMap = fire("ADDON_LOADED", "ClaraComboPoints")
+  for _, e in ipairs(fire("PLAYER_LOGIN")) do errsMap[#errsMap + 1] = e end
+  -- (a second session here: one window's frame gone with the first session's stand-ins, the same without the option)
+  for i = #errsMap, 1, -1 do if tostring(errsMap[i]):find("WindowLocks.lua:62", 1, true) then table.remove(errsMap, i) end end
+  local db = rawget(env, "ClaraClassicUIDB")
+  local off = M2.gameMapOnly == true and M2.MapLarge == nil and M2.MapOptions == nil and M2.MapMarkers == nil
+    and M2.MapFight == nil and M2.QuestPaneFloor == nil and M2.ClassicMapSize == nil
+  local aside = db.worldMap == false and db.mapUnlocked == false and type(db.gameWorldMapKept) == "table"
+    and db.gameWorldMapKept.worldMap == true and db.gameWorldMapKept.mapUnlocked == true
+  local hung = 0
+  local mapFrame = rawget(env, "WorldMapFrame")
+  for i = first, #frames do local p = rawget(frames[i], "__parent") if mapFrame and p == mapFrame then hung = hung + 1 end end
+  db.gameWorldMap = false
+  local backNS = Session({ saved = { ClaraClassicUIDB = db } })
+  local back = db.worldMap == true and db.mapUnlocked == true and db.gameWorldMapKept == nil and backNS.ClassicUIPrivate.gameMapOnly == false
+  return ("files not run " .. tostring(off) .. ", settings put aside " .. tostring(aside) .. ", given back " .. tostring(back)
+    .. ", frames of ours on the map " .. hung .. ", stopped files " .. #mapFailed .. ", errors " .. #errsMap
+    .. (#errsMap > 0 and (" (" .. errsMap[1] .. ")") or "")), off and aside and back and hung == 0 and #mapFailed == 0 and #errsMap == 0
+end)
+print("game's own world map: " .. tostring(okMap and mapPass) .. " (" .. tostring(mapText) .. ")")
+
 -- capital globals ClassicUI read that the game's documentation and UI code never name (nil in the game too)
 local caps = {}
 for k in pairs(UNKNOWN_CAPS) do caps[#caps + 1] = k end
