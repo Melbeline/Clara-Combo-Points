@@ -1,5 +1,5 @@
 -- Clara Combo Points - one look for Clara's windows and its modules' (the options window, the dialogs of
--- BuyEmAll, DoesItDie, Leatrix Plus, DynamicCam...). With the game's interface: the game's own (its window
+-- BuyEmAll, Leatrix Plus, DynamicCam...). With the game's interface: the game's own (its window
 -- metal, its dialog border, its buttons). With ClassicUI, while it dresses the game's
 -- windows: ClassicUI dresses ours too, as it dresses the game's (the old metal and stone, Classic's dialog
 -- box, the red buttons and old boxes, in its theme). The Light version, without ClassicUI, has Classic's

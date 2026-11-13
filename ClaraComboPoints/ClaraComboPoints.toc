@@ -5,10 +5,10 @@
 ## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
 ## Version: 1.7.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, WT_WeaponGrouping, WT_ShowKnownWeaponSkills, WT_SpellDisplay, WT_SideBySide, WT_ScrollTwoPages, WT_FloatingFramePoint, WT_WaypointProvider, WT_ProfessionTabPosition, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB
-## SavedVariablesPerCharacter: WT_LearnedPetAbilities, WT_NeedsToOpenBeastTraining, WT_IgnoredSpells, WT_PriceFaction, WT_HideWeaponSkillSwitcher, WT_Crafting, ClaraLFGForeverCharDB
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB
+## SavedVariablesPerCharacter: ClaraLFGForeverCharDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, WhatsTraining, LFGForever, LOF, Auctionator, ReverseEngineering, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, LFGForever, Auctionator, ReverseEngineering, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -60,13 +60,6 @@ Libs\AceConfig-3.0\AceConfig-3.0.xml
 Libs\AceDBOptions-3.0\AceDBOptions-3.0.xml
 Libs\AceTimer-3.0\AceTimer-3.0.xml
 Modules\BuyEmAll\BuyEmAll.lua
-Modules\NodeSight\Bootstrap.lua
-Modules\NodeSight\Names.lua
-Modules\NodeSight\NodeSight.lua
-Modules\NodeSight\Sparkles.lua
-Modules\NodeSight\FarSparkles.lua
-Modules\NodeSight\WhatsNew.lua
-Modules\NodeSight\Settings.lua
 Modules\DynamicCam\Bootstrap.lua
 Modules\DynamicCam\embeds.xml
 Modules\DynamicCam\UiHideModule.lua
@@ -146,105 +139,17 @@ Modules\Mail\MailItems.lua
 Modules\Mail\MailExtra.lua
 Modules\Money\Money.lua
 Modules\Money\MoneyUI.lua
-Modules\LOFPlus\LOFPlus.lua
 Modules\Prices\Prices.lua
 Modules\Sniper\History.lua
 Modules\Sniper\Sniper.lua
 Modules\Sniper\Sniper.xml
 Modules\TullaRange\TullaRange.lua
 Modules\TullaRange\Options.lua
-Modules\Names\Names.lua
-Modules\Names\Options.lua
 Modules\TooltipAnchor\TooltipAnchor.lua
-Modules\BarScale\BarScale.lua
 Modules\WhoCooldown\WhoCooldown.lua
 Modules\IdTip\IdTip.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
 Modules\EnemyCasts\EnemyCasts.lua
-Modules\EnhancedRaidFrames\Bootstrap.lua
-Modules\EnhancedRaidFrames\Libs\AceBucket-3.0\AceBucket-3.0.lua
-Modules\EnhancedRaidFrames\Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
-Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\prototypes.lua
-Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\FontWidget.lua
-Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\SoundWidget.lua
-Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\StatusbarWidget.lua
-Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\BorderWidget.lua
-Modules\EnhancedRaidFrames\Libs\AceGUI-3.0-SharedMediaWidgets\BackgroundWidget.lua
-Modules\EnhancedRaidFrames\Libs\LibDeflate\LibDeflate.lua
-Modules\EnhancedRaidFrames\Localizations\enUS.lua
-Modules\EnhancedRaidFrames\Localizations\deDE.lua
-Modules\EnhancedRaidFrames\Localizations\frFR.lua
-Modules\EnhancedRaidFrames\EnhancedRaidFrames.lua
-Modules\EnhancedRaidFrames\Globals.lua
-Modules\EnhancedRaidFrames\DatabaseDefaults.lua
-Modules\EnhancedRaidFrames\Overrides.lua
-Modules\EnhancedRaidFrames\Utils\Utilities.lua
-Modules\EnhancedRaidFrames\Utils\DatabaseMigration.lua
-Modules\EnhancedRaidFrames\Modules\AuraListeners.lua
-Modules\EnhancedRaidFrames\Modules\AuraIndicators.lua
-Modules\EnhancedRaidFrames\Modules\GameAuras.lua
-Modules\EnhancedRaidFrames\Modules\TargetMarkers.lua
-Modules\EnhancedRaidFrames\XML\IndicatorTemplate.xml
-Modules\EnhancedRaidFrames\GUI\GeneralConfigPanel.lua
-Modules\EnhancedRaidFrames\GUI\IndicatorConfigPanel.lua
-Modules\EnhancedRaidFrames\GUI\TargetMarkerConfigPanel.lua
-Modules\EnhancedRaidFrames\GUI\ProfileImportExport.lua
-Modules\DoesItDie\Bootstrap.lua
-Modules\DoesItDie\Locale.lua
-Modules\DoesItDie\Locale_deDE.lua
-Modules\DoesItDie\Locale_esES.lua
-Modules\DoesItDie\Locale_frFR.lua
-Modules\DoesItDie\Locale_koKR.lua
-Modules\DoesItDie\Locale_ptBR.lua
-Modules\DoesItDie\Locale_zhCN.lua
-Modules\DoesItDie\DoesItDie.lua
-Modules\DoesItDie\Display.lua
-Modules\DoesItDie\Frames.lua
-Modules\DoesItDie\Options.lua
-Modules\DoesItDie\Nameplates.lua
-Modules\DoesItDie\Focus.lua
-Modules\DoesItDie\Execute.lua
-Modules\DoesItDie\API.lua
-Modules\WhatsTraining\Bootstrap.lua
-Modules\WhatsTraining\libs\LibDataBroker-1.1.lua
-Modules\WhatsTraining\libs\LibBabble-CreatureType-3.0\LibBabble-3.0.lua
-Modules\WhatsTraining\libs\LibBabble-CreatureType-3.0\LibBabble-CreatureType-3.0.lua
-Modules\WhatsTraining\libs\FusionIgnoreStore\IgnoreStore.lua
-Modules\WhatsTraining\Game.lua
-Modules\WhatsTraining\Localization.lua
-Modules\WhatsTraining\Utils.lua
-Modules\WhatsTraining\Cache.lua
-Modules\WhatsTraining\Classes\Camelot\Druid.lua
-Modules\WhatsTraining\Classes\Camelot\Hunter.lua
-Modules\WhatsTraining\Classes\Camelot\HunterPets.lua
-Modules\WhatsTraining\Classes\Camelot\Mage.lua
-Modules\WhatsTraining\Classes\Camelot\Paladin.lua
-Modules\WhatsTraining\Classes\Camelot\Priest.lua
-Modules\WhatsTraining\Classes\Camelot\Rogue.lua
-Modules\WhatsTraining\Classes\Camelot\Shaman.lua
-Modules\WhatsTraining\Classes\Camelot\Warlock.lua
-Modules\WhatsTraining\Classes\Camelot\WarlockTomes.lua
-Modules\WhatsTraining\Classes\Camelot\Warrior.lua
-Modules\WhatsTraining\Classes\Camelot\QuestSpells.lua
-Modules\WhatsTraining\Classes\Player.lua
-Modules\WhatsTraining\Classes\HunterPets.lua
-Modules\WhatsTraining\Classes\WarlockTomes.lua
-Modules\WhatsTraining\Classes\WeaponSkills.lua
-Modules\WhatsTraining\Classes\Camelot\WeaponSkills.lua
-Modules\WhatsTraining\Classes\Camelot\TrainerFactions.lua
-Modules\WhatsTraining\Pricing.lua
-Modules\WhatsTraining\Compare.lua
-Modules\WhatsTraining\Waypoint.lua
-Modules\WhatsTraining\WeaponGrouping.lua
-Modules\WhatsTraining\Rows.lua
-Modules\WhatsTraining\WhatsTrainingUI.lua
-Modules\WhatsTraining\Forever\Forever.xml
-Modules\WhatsTraining\Crafting\Crafting.xml
-Modules\WhatsTraining\Categories.lua
-Modules\WhatsTraining\DataBuilder.lua
-Modules\WhatsTraining\WhatsTraining.lua
-Modules\WhatsTraining\Broker.lua
-Modules\WhatsTraining\Api.lua
 Modules\LFGForever\Bootstrap.lua
 Modules\LFGForever\Locale_Clara.lua
 Modules\LFGForever\locale.lua

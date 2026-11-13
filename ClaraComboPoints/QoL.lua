@@ -16,7 +16,6 @@ local L = ns.L
 ns.QOL_MODULES = {
   { key = "buyemall", name = "BuyEmAll", standalone = "BuyEmAllClassic", theme = "economy" },
   { key = "leatrix", name = "Leatrix Plus", standalone = "Leatrix_Plus", theme = "interface" },
-  { key = "nodesight", name = "NodeSight", standalone = "NodeSight", theme = "quests" },
   { key = "wst", name = "WeaponSwingTimer", standalone = "WeaponSwingTimer", theme = "combat" },
   { key = "dynamiccam", name = "DynamicCam", standalone = "DynamicCam", theme = "interface" },
   { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", theme = "quests" },
@@ -25,18 +24,12 @@ ns.QOL_MODULES = {
   { key = "tullarange", name = "tullaRange", standalone = "tullaRange", theme = "combat" },
   { key = "mail", name = "Mail", theme = "economy" }, -- (Clara's own: no addon of its own)
   { key = "money", name = "Gold tracker", theme = "economy" }, -- (Clara's own)
-  { key = "lofplus", name = "LootOptimizer Forever", theme = "economy" }, -- (Clara's own, beside LOF)
   { key = "prices", name = "Auction house prices shared", theme = "economy" }, -- (Clara's own)
   { key = "sniper", name = "Sniper", theme = "economy" }, -- (Clara's own, a tab beside Auctionator's)
-  { key = "names", name = "Names", theme = "interface" }, -- (Clara's own: its own entry in the game's options)
   { key = "tooltipanchor", name = "Tooltip Anchor", theme = "interface" }, -- (Clara's own)
-  { key = "barscale", name = "Bar scale", theme = "interface" }, -- (Clara's own: the bars, micro menu and bags at once)
   { key = "whocooldown", name = "/who cooldown", theme = "interface" }, -- (Clara's own: the time left before the next /who)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },
-  { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames", theme = "combat" },
-  { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", theme = "combat" },
-  { key = "whatstraining", name = "What's Training?", standalone = "WhatsTraining", theme = "quests" },
   { key = "lfgforever", name = "LFG Forever", standalone = "LFGForever", theme = "quests" },
   { key = "enemycasts", name = "Enemy Casts", theme = "combat" }, -- (Clara's own)
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
@@ -126,6 +119,17 @@ local function StandaloneOn(m, on)
   if A.SaveAddOns then A.SaveAddOns() end
 end
 
+-- Modules no longer built in: their own addon, turned off here for a character while the built-in one ran,
+-- turned back on as that character logs in (from its next reload); the ones turned off by hand stay off
+local GONE = {
+  { key = "nodesight", standalone = "NodeSight" },
+  { key = "enhancedraidframes", standalone = "EnhancedRaidFrames" },
+  { key = "doesitdie", standalone = "DoesItDie" },
+  { key = "whatstraining", standalone = "WhatsTraining" },
+}
+ns.QOL_GONE = GONE -- (for the tests)
+local GONE_SAVED = { "nodesight", "lofplus", "names", "barscale", "enhancedraidframes", "doesitdie", "whatstraining" }
+
 -- At login: the own addons that run this session are turned off for the next ones.
 local takeOver = CreateFrame("Frame")
 takeOver:RegisterEvent("PLAYER_LOGIN")
@@ -133,6 +137,13 @@ takeOver:SetScript("OnEvent", function(self)
   self:UnregisterEvent("PLAYER_LOGIN")
   for _, m in ipairs(ns.QOL_MODULES) do
     if ns:QolTakesOver(m.key) then StandaloneOn(m, false) end
+  end
+  for _, m in ipairs(GONE) do StandaloneOn(m, true) end
+  -- (their on/off switches dropped)
+  local qol = ns.sv and ns.sv.qol
+  if type(qol) == "table" then
+    for _, key in ipairs(GONE_SAVED) do qol[key] = nil end
+    if next(qol) == nil then ns.sv.qol = nil end
   end
 end)
 

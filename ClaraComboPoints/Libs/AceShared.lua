@@ -6,6 +6,5 @@
 -- takes DynamicCam's AceConsole, AceEvent, AceLocale and AceSerializer, and DialogKey's AceHook
 -- (each loaded once, for whichever of them runs).
 local _, ns = ...
-ns.ERFRuns = ns:QolRuns("enhancedraidframes")
-ns.AceModulesRun = ns:QolRuns("dynamiccam") or ns:QolRuns("dialogkey") or ns:QolRuns("xtolevel") or ns.ERFRuns
+ns.AceModulesRun = ns:QolRuns("dynamiccam") or ns:QolRuns("dialogkey") or ns:QolRuns("xtolevel")
 ns.AceDBModulesRun = ns:QolRuns("dynamiccam") or ns:QolRuns("xtolevel")

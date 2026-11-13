@@ -1836,8 +1836,7 @@ local function InitDB()
   if sv.noBlink ~= false then sv.noBlink = nil end -- (on unless turned off: GameFixes.lua)
   -- the game's options Clara sets once (GameFixes.lua): for the account, and each character's
   if type(sv.gameDefaults) ~= "number" then sv.gameDefaults = nil end
-  -- the action bars', micro menu's and bags' scale (Modules/BarScale): 0.5 to 2, nil the game's
-  if type(sv.barScale) ~= "number" or sv.barScale ~= sv.barScale or sv.barScale < 0.5 or sv.barScale > 2 then sv.barScale = nil end
+  sv.barScale = nil -- (the bar scale module is gone: its setting dropped)
   if type(sv.gameDefaultsChars) == "table" then
     for who, v in pairs(sv.gameDefaultsChars) do
       if type(who) ~= "string" or type(v) ~= "number" then sv.gameDefaultsChars[who] = nil end

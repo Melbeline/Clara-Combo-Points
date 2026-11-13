@@ -1,5 +1,5 @@
 local _, ClaraNS = ... -- (Clara Combo Points: loaded only for DialogKey and Enhanced Raid Frames built in)
-if type(ClaraNS) == "table" and not (ClaraNS.DialogKeyRuns or ClaraNS.ERFRuns) then return end
+if type(ClaraNS) == "table" and not ClaraNS.DialogKeyRuns then return end
 --- **AceHook-3.0** offers safe Hooking/Unhooking of functions, methods and frame scripts.
 -- Using AceHook-3.0 is recommended when you need to unhook your hooks again, so the hook chain isn't broken
 -- when you manually restore the original function.
