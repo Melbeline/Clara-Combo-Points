@@ -103,6 +103,12 @@ for _, n in ipairs(Flat(provider)) do if n.data.classicFriend and n.data.classic
 local info = elle.data.accountInfo
 check(info.gameAccountInfo.isOnline and info.gameAccountInfo.characterLevel == 42 and info.gameAccountInfo.areaName == "Stranglethorn Vale",
   "Elle's card: online, level 42, her zone")
+check(info.accountName == "|cff40c7ebElle Woods|r, Level 42 MAGE", "all on the top line, her name in her class's color (" .. tostring(info.accountName) .. ")")
+check(info.gameAccountInfo.characterName == nil, "no character line (the name not twice)")
+local rose
+for _, n in ipairs(Flat(provider)) do if n.data.classicFriend and n.data.classicFriend.name == "Rose Thorn" then rose = n end end
+check(rose.data.accountInfo.accountName == "Rose Thorn" and rose.data.accountInfo.gameAccountInfo.characterName == nil,
+  "Rose, offline, nothing known: her name once, grey, no character line")
 check(cacheWrites == 0, "the game's size cache never written by us")
 
 out("== nobody online: after the first Battle.net card; no Battle.net friend: none")
@@ -120,7 +126,7 @@ for _, n in ipairs(Flat(provider)) do if n.data.classicFriend and n.data.classic
 local frame = Card(elle)
 check(frame.classicFriend and frame.classicFriend:IsShown() and frame.classicFriend.alt.name == "Elle Woods", "the tooltip and menu layer")
 check(not frame.PartyButton:IsShown(), "the party button hidden")
-check(frame.FriendName._text == "|cff40c7ebElle Woods|r", "online: her name in her class's color (" .. tostring(frame.FriendName._text) .. ")")
+check(frame.FriendName._text == "|cff40c7ebElle Woods|r, Level 42 MAGE", "online: one line, her name in her class's color (" .. tostring(frame.FriendName._text) .. ")")
 local akabounet
 for _, n in ipairs(Flat(provider)) do if n.data.accountInfo and n.data.accountInfo.accountName == "Akabounet" then akabounet = n end end
 local other = Card(akabounet, CreateFrame("Button", nil, box))
