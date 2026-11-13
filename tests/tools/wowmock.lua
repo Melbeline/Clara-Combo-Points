@@ -1366,8 +1366,8 @@ function ColorPickerFrame:SetupColorPickerAndShow(info)
 end
 function ColorPickerFrame:GetColorRGB() return cp.r, cp.g, cp.b end
 function ColorPickerFrame:GetColorAlpha() return cp.a end
-function M.PickColor(r, g, b, a) cp.r, cp.g, cp.b, cp.a = r, g, b, a; ColorPickerFrame.swatchFunc(); ColorPickerFrame.opacityFunc() end
-function M.PickerOkay() ColorPickerFrame.swatchFunc(); ColorPickerFrame.opacityFunc(); ColorPickerFrame:Hide() end
+function M.PickColor(r, g, b, a) cp.r, cp.g, cp.b, cp.a = r, g, b, a; ColorPickerFrame.swatchFunc(); if ColorPickerFrame.opacityFunc then ColorPickerFrame.opacityFunc() end end
+function M.PickerOkay() ColorPickerFrame.swatchFunc(); if ColorPickerFrame.opacityFunc then ColorPickerFrame.opacityFunc() end; ColorPickerFrame:Hide() end
 function M.PickerCancel() ColorPickerFrame.cancelFunc(); ColorPickerFrame:Hide() end
 function M.SetStaleAlpha(a) cp.a = a end
 
