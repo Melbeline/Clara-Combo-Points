@@ -30,6 +30,8 @@ local function Normal(name)
   if type(name) ~= "string" then return nil end
   name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
   if name == "" or #name > NAME_MAX then return nil end
+  -- (each word with its capital, as the game writes a name: "Elle woods" typed, "Elle Woods" kept)
+  name = (name:gsub("(%S)(%S*)", function(first, rest) return first:upper() .. rest end))
   return name
 end
 
@@ -38,7 +40,8 @@ local function List()
   if not sv then return nil end
   if type(sv.altFriends) ~= "table" then sv.altFriends = {} end
   for key, alt in pairs(sv.altFriends) do
-    if type(key) ~= "string" or type(alt) ~= "table" or not Normal(alt.name) then sv.altFriends[key] = nil end
+    if type(key) ~= "string" or type(alt) ~= "table" or not Normal(alt.name) then sv.altFriends[key] = nil
+    else alt.name = Normal(alt.name) end
   end
   return sv.altFriends
 end
