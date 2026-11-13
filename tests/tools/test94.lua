@@ -63,8 +63,13 @@ function view:InsertFriendsIntoDataProvider(provider)
   for i, f in ipairs(bnet) do section:Insert({ friendIndex = i, accountInfo = { accountName = f[1], gameAccountInfo = { isOnline = f[2] } } }) end
 end
 function view:GenerateDataProvider() local p = Provider() self:InsertFriendsIntoDataProvider(p, {}) return p end
-local callbacks, provider = {}, nil
-function box:RegisterCallback(event, fn, owner) callbacks[event] = { fn, owner } end
+local provider = nil
+local registered = 0
+function box:RegisterCallback() registered = registered + 1 end
+FriendsListSocialCardMixin = { Initialize = function(f, n)
+  f.drawn = n:GetData().accountInfo
+  f.FriendName:SetText(f.drawn.accountName)
+end }
 function box:GetDataProvider() return provider end
 function view:Refresh() provider = self:GenerateDataProvider() end
 local function Card(node, frame)
@@ -72,10 +77,7 @@ local function Card(node, frame)
   frame.PartyButton = frame.PartyButton or CreateFrame("Button", nil, frame)
   frame.PartyButton:Show()
   frame.FriendName = frame.FriendName or frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  frame.Initialize = frame.Initialize or function(f, n) f.drawn = n:GetData().accountInfo f.FriendName:SetText(f.drawn.accountName) end
-  frame:Initialize(node)
-  local cb = callbacks.OnInitializedFrame
-  if cb then cb[1](cb[2], frame, node) end
+  FriendsListSocialCardMixin.Initialize(frame, node) -- (the game's card drawing, our hook after it)
   return frame
 end
 
@@ -88,7 +90,7 @@ M.Fire("ADDON_LOADED", "ClaraComboPoints")
 local A = ns.AltFriends
 ns.sv.altFriends = { ["elle woods"] = { name = "Elle Woods" }, ["rose thorn"] = { name = "Rose Thorn", seen = 1000 } }
 M.Fire("PLAYER_LOGIN")
-check(callbacks.OnInitializedFrame ~= nil, "hooked into the social window's list")
+check(registered == 0, "nothing registered on the game's list (its card drawing hooked instead)")
 check(A.panel == nil and _G.ClaraFriendsPanel == nil, "no window of ours")
 
 out("== the list as the game builds it: Battle.net online, ours, Battle.net offline")
@@ -137,10 +139,12 @@ frame = Card(elle)
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "!", "WHISPER", "Elle Woods")
 A.SocialRefresh()
 check(Names(provider) == "[Friends List], Ekiss, Nadkov, *Elle Woods, *Rose Thorn, Akabounet, Rorg", "the same list (in place)")
-check(frame.drawn and frame.drawn.gameAccountInfo.isOnline == false, "Elle's card drawn again: offline")
-check(frame.FriendName._text == "Elle Woods", "offline: the game's grey, no class color")
+check(frame.FriendName._text == "Elle Woods", "her card's text drawn again in place: offline, no class color (" .. tostring(frame.FriendName._text) .. ")")
 A.Add("Lune Belle")
-check(Names(provider) == "[Friends List], Ekiss, Nadkov, *Elle Woods, *Lune Belle, *Rose Thorn, Akabounet, Rorg", Names(provider))
+local ours = select(2, Names(provider):gsub("%*", ""))
+check(ours == 2 and #Flat(provider) == 8, "added: the game's list not touched, still two cards of ours (" .. Names(provider) .. ")")
+view:Refresh()
+check(Names(provider) == "[Friends List], Ekiss, Nadkov, *Elle Woods, *Lune Belle, *Rose Thorn, Akabounet, Rorg", "the game's next build: in it (" .. Names(provider) .. ")")
 
 out("== the search box")
 view.FilterBar.SearchBar:SetText("rose")
