@@ -43,6 +43,7 @@ ScrollBoxListMixin = { Event = { OnInitializedFrame = "OnInitializedFrame", OnRe
 Enum.BattleNetFriendLevel = { Title = 2 }
 Enum.RafLinkType = { None = 0 }
 BNET_CLIENT_WOW = "WoW"; WOW_PROJECT_ID = 2
+RAID_CLASS_COLORS.MAGE = { r = 0.25, g = 0.78, b = 0.92 }
 
 -- The game's friends page: it builds its list (its Battle.net friends) and lays it out
 local bnet = { { "Ekiss", true }, { "Nadkov", true }, { "Akabounet", false }, { "Rorg", false } }
@@ -70,7 +71,8 @@ local function Card(node, frame)
   frame = frame or CreateFrame("Button", nil, box)
   frame.PartyButton = frame.PartyButton or CreateFrame("Button", nil, frame)
   frame.PartyButton:Show()
-  frame.Initialize = frame.Initialize or function(f, n) f.drawn = n:GetData().accountInfo end
+  frame.FriendName = frame.FriendName or frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  frame.Initialize = frame.Initialize or function(f, n) f.drawn = n:GetData().accountInfo f.FriendName:SetText(f.drawn.accountName) end
   frame:Initialize(node)
   local cb = callbacks.OnInitializedFrame
   if cb then cb[1](cb[2], frame, node) end
@@ -116,6 +118,7 @@ for _, n in ipairs(Flat(provider)) do if n.data.claraAlt and n.data.claraAlt.nam
 local frame = Card(elle)
 check(frame.claraAlt and frame.claraAlt:IsShown() and frame.claraAlt.alt.name == "Elle Woods", "the tooltip and menu layer")
 check(not frame.PartyButton:IsShown(), "the party button hidden")
+check(frame.FriendName._text == "|cff40c7ebElle Woods|r", "online: her name in her class's color (" .. tostring(frame.FriendName._text) .. ")")
 local akabounet
 for _, n in ipairs(Flat(provider)) do if n.data.accountInfo and n.data.accountInfo.accountName == "Akabounet" then akabounet = n end end
 local other = Card(akabounet, CreateFrame("Button", nil, box))
@@ -129,6 +132,7 @@ M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "!", "WHISPER", "Elle Woods")
 A.SocialRefresh()
 check(Names(provider) == "[Friends List], Ekiss, Nadkov, *Elle Woods, *Rose Thorn, Akabounet, Rorg", "the same list (in place)")
 check(frame.drawn and frame.drawn.gameAccountInfo.isOnline == false, "Elle's card drawn again: offline")
+check(frame.FriendName._text == "Elle Woods", "offline: the game's grey, no class color")
 A.Add("Lune Belle")
 check(Names(provider) == "[Friends List], Ekiss, Nadkov, *Elle Woods, *Lune Belle, *Rose Thorn, Akabounet, Rorg", Names(provider))
 

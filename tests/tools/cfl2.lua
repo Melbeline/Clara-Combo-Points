@@ -202,9 +202,10 @@ button.info = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 button.status = button:CreateTexture(nil, "ARTWORK")
 local elle
 for _, entry in ipairs(rows) do if entry.alt and entry.alt.name == "Elle Woods" then elle = entry end end
+RAID_CLASS_COLORS.MAGE = { r = 0.25, g = 0.78, b = 0.92 }
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|42|MAGE|Stranglethorn Vale", "WHISPER", "Elle Woods")
 A.DrawRow(button, elle)
-check(button.name._text and button.name._text:find("^Elle Woods") ~= nil, "its name (" .. tostring(button.name._text) .. ")")
+check(button.name._text and button.name._text:find("^|cff40c7ebElle Woods|r, ") ~= nil, "its name in its class's color (" .. tostring(button.name._text) .. ")")
 check(button.classicFriend and button.classicFriend.alt == elle.alt, "the mouse layer: its tooltip and right-click menu")
 A.DrawRow(button, rows[1])
 check(not button.classicFriend:IsShown(), "a game row again: the layer off")
