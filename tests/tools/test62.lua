@@ -41,10 +41,12 @@ check(type(ClaraIdTipDB) == "table" and ClaraIdTipDB.spellEnabled == false and C
 
 out("== Solo Raid Frame, its frame made late")
 check(ns:QolRuns("soloraidframe"), "runs (its own addon not enabled)")
-check(CompactPartyFrame:IsShown(), "hooked at login, and shown at once (solo)")
-S.group = "raid"; CompactPartyFrame:UpdateVisibility()
-S.group = nil; CompactPartyFrame:UpdateVisibility()
-check(CompactPartyFrame:IsShown(), "after a group: shown again")
+local drive = M.stateDrivers[CompactPartyFrame]
+check(drive and drive[1] == "visibility" and drive[2] == "[group] game; show", "its driver put on at login (" .. tostring(drive and drive[2]) .. ")")
+local function Tick() if not IsInGroup() then CompactPartyFrame._shown = true end end
+S.group = "raid"; CompactPartyFrame:UpdateVisibility(); Tick()
+S.group = nil; CompactPartyFrame:UpdateVisibility(); Tick()
+check(CompactPartyFrame:IsShown(), "after a group: shown again by the game's driver")
 
 out("")
 out(fails .. " failure(s)")

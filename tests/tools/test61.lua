@@ -46,8 +46,7 @@ function SecureHandlerSetFrameRef(frame, name, ref) frame:SetAttribute("frameref
 local gameRuns = 0
 function CompactPartyFrame:UpdateVisibility()
   gameRuns = gameRuns + 1
-  if S.inCombat then self._shown = IsInGroup() and true or false return end -- (the game's own secure code: allowed)
-  self:SetShown(IsInGroup() and true or false)
+  self._shown = IsInGroup() and true or false -- (the game's own secure code)
 end
 
 local ns = {}
@@ -101,47 +100,43 @@ check(SlashCmdList.CLARAIDTIP and SLASH_CLARAIDTIP1 == "/idtip", "/idtip opens i
 
 out("== Solo Raid Frame")
 check(ns:QolRuns("soloraidframe"), "runs")
+-- the game's secure state driver: its value as the game resolves it every fifth of a second, the frame shown by the
+-- game's own code (never by the addon's: its frames' updates would then run in the addon's name, failing on secret health)
+local drive
+for f, d in pairs(M.stateDrivers) do if f == CompactPartyFrame and d[1] == "visibility" then drive = d[2] end end
+check(drive == "[group] game; show", "a visibility driver on the frame: shown solo, the game's rule in a group (" .. tostring(drive) .. ")")
+local function Tick()
+  local value = IsInGroup() and "game" or "show"
+  if value == "show" then CompactPartyFrame._shown = true elseif value == "hide" then CompactPartyFrame._shown = false end
+end
+local addonShows = 0
+local realShow = CompactPartyFrame.Show
+CompactPartyFrame.Show = function(self, ...) addonShows = addonShows + 1 return realShow(self, ...) end
+local function Run() local n = 0 while M.timers and #M.timers > 0 and n < 100 do M.RunTimer() n = n + 1 end end
 S.group = nil
-CompactPartyFrame:UpdateVisibility()
+CompactPartyFrame:UpdateVisibility(); Run(); Tick()
 check(CompactPartyFrame:IsShown(), "solo: the raid-style party frame shown (the game had hidden it)")
 S.group = "party"
-CompactPartyFrame:UpdateVisibility()
+CompactPartyFrame:UpdateVisibility(); Run(); Tick()
 check(CompactPartyFrame:IsShown(), "in a group: the game's rule")
-local function Run() local n = 0 while M.timers and #M.timers > 0 and n < 100 do M.RunTimer() n = n + 1 end end
-Run()
--- the game's secure state driver: its value as the game would resolve it, the snippet run as its restricted code would
-local driver, drive
-for f, d in pairs(M.stateDrivers) do if d[1] == "solo" then driver, drive = f, d[2] end end
-check(driver ~= nil and drive == "[group] grouped; [combat] fight; solo", "a secure state driver on the group (" .. tostring(drive) .. ")")
-local function Resolve()
-  local state = IsInGroup() and "grouped" or (S.inCombat and "fight" or "solo")
-  local snippet = driver:GetAttribute("_onstate-solo")
-  -- (the restricted environment's frame handle: Show allowed on a protected frame in combat)
-  local function Handle(f) return { IsShown = function() return f:IsShown() end, IsProtected = function() return f:IsProtected() end, Show = function() f._shown = true end } end
-  local handle = { GetFrameRef = function(_, name) return Handle(driver:GetAttribute("frameref-" .. name)) end }
-  local fn = assert(loadstring("local self, stateid, newstate = ...\n" .. snippet))
-  fn(handle, "solo", state)
-end
+S.group = "party"; CompactPartyFrame._shown = false; Tick()
+check(not CompactPartyFrame:IsShown(), "in a group, the game hiding it (its own party frames chosen): left hidden")
 S.group = nil; S.inCombat = true
 local blockedBefore = #M.blocked
 CompactPartyFrame._shown = false -- (hidden by the game's own secure code, as the group ends in the fight)
-CompactPartyFrame:UpdateVisibility(); Run()
-check(not CompactPartyFrame:IsShown(), "left the group in combat: not shown by the addon's own code (protected then)")
-Resolve()
-check(CompactPartyFrame:IsShown(), "the game's state driver shows it at once, in combat")
+CompactPartyFrame:UpdateVisibility(); Run(); Tick()
+check(CompactPartyFrame:IsShown(), "left the group in combat: shown again by the game's driver")
 local mine = 0
 for i = blockedBefore + 1, #M.blocked do if M.blocked[i]:find("CompactPartyFrame") then mine = mine + 1 end end
 check(mine == 0, "nothing of the addon's refused by the game in the fight")
-CompactPartyFrame._shown = false
 S.inCombat = false
 M.Fire("PLAYER_REGEN_ENABLED"); Run()
-check(CompactPartyFrame:IsShown(), "out of combat: shown")
--- an invitation declined: the group told gone after the game's update (hidden directly by its raid container)
 S.group = "party"; CompactPartyFrame:UpdateVisibility(); Run()
-CompactPartyFrame:Hide() -- (the container's unused group frame: Hide, not UpdateVisibility)
+CompactPartyFrame._shown = false -- (the container's unused group frame hidden: Hide, not UpdateVisibility)
 S.group = nil
-Run()
+M.Fire("GROUP_ROSTER_UPDATE"); Run(); Tick()
 check(CompactPartyFrame:IsShown(), "hidden directly, the group gone a moment later: shown again")
+check(addonShows == 0, "never shown by the addon's own code (" .. addonShows .. ")")
 
 out("")
 out(fails .. " failure(s)")

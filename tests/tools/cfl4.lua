@@ -53,9 +53,15 @@ SocialUIFrame.FriendsList = view
 local box = CreateFrame("Frame", nil, view)
 view.ScrollBox = box
 view.FilterBar = { SearchBar = CreateFrame("EditBox", nil, view) }
+-- The game's card-size cache, as the game uses it: filled as it lays the list out, a pass that reads every line first
+-- (a size put in after reading one of ours is the addon's); emptied at each refresh just before its friend search,
+-- which the game refuses when a size of the addon's is found there then (the list empty)
 view.TemplateExtentCache = {}
-local cacheWrites = 0
-setmetatable(view.TemplateExtentCache, { __newindex = function(t, k, v) cacheWrites = cacheWrites + 1 rawset(t, k, v) end })
+local layoutOurs, refused, refreshes = false, 0, 0
+function view:GetTemplateExtent(name)
+  if not self.TemplateExtentCache[name] then self.TemplateExtentCache[name] = { 70, layoutOurs } end
+  return self.TemplateExtentCache[name][1]
+end
 function view:InsertFriendsIntoDataProvider(provider)
   if #bnet == 0 then return end
   local section = provider:Insert({ headerType = 2, headerText = "Friends List" })
@@ -64,6 +70,15 @@ function view:InsertFriendsIntoDataProvider(provider)
 end
 function view:GenerateDataProvider() local p = Provider() self:InsertFriendsIntoDataProvider(p, {}) return p end
 local provider = nil
+local function Layout(p)
+  layoutOurs = false
+  for _, n in ipairs(Flat(p)) do if n.data.classicFriend then layoutOurs = true end end -- (its pass over the lines' kinds)
+  for _, n in ipairs(Flat(p)) do
+    local d = n.data
+    view:GetTemplateExtent(d.isSpacer and "spacer" or (d.headerText and "header") or "card")
+  end
+  layoutOurs = false
+end
 local registered = 0
 function box:RegisterCallback() registered = registered + 1 end
 FriendsListSocialCardMixin = { Initialize = function(f, n)
@@ -71,7 +86,14 @@ FriendsListSocialCardMixin = { Initialize = function(f, n)
   f.FriendName:SetText(f.drawn.accountName)
 end }
 function box:GetDataProvider() return provider end
-function view:Refresh() provider = self:GenerateDataProvider() end
+function view:Refresh()
+  refreshes = refreshes + 1
+  local ours = false
+  for _, v in pairs(self.TemplateExtentCache) do if v[2] then ours = true end end
+  wipe(self.TemplateExtentCache)
+  if ours then refused = refused + 1; provider = Provider() else provider = self:GenerateDataProvider() end
+  Layout(provider)
+end
 local function Card(node, frame)
   frame = frame or CreateFrame("Button", nil, box)
   frame.PartyButton = frame.PartyButton or CreateFrame("Button", nil, frame)
@@ -111,7 +133,7 @@ local rose
 for _, n in ipairs(Flat(provider)) do if n.data.classicFriend and n.data.classicFriend.name == "Rose Thorn" then rose = n end end
 check(rose.data.accountInfo.accountName == "Rose Thorn" and rose.data.accountInfo.gameAccountInfo.characterName == nil,
   "Rose, offline, nothing known: her name once, grey, no character line")
-check(cacheWrites == 0, "the game's size cache never written by us")
+check(refused == 0, "the game's friend search never refused (" .. refused .. " of " .. refreshes .. ")")
 
 out("== nobody online: after the first Battle.net card; no Battle.net friend: none")
 bnet = { { "Akabounet", false }, { "Rorg", false } }
@@ -153,6 +175,16 @@ view.FilterBar.SearchBar:SetText("rose")
 view:Refresh()
 check(Names(provider) == "[Friends List], Ekiss, Nadkov, *Rose Thorn, Akabounet, Rorg", Names(provider))
 view.FilterBar.SearchBar:SetText("")
-check(cacheWrites == 0, "the game's size cache still never ours")
+
+out("== the window opened and shut again and again, a Battle.net friend's news: never empty")
+local empty = 0
+for _ = 1, 6 do
+  view:Refresh()
+  if not Names(provider):find("Elle Woods", 1, true) then empty = empty + 1 end
+end
+check(empty == 0 and refused == 0, "each time the whole list, ours in it (" .. empty .. " empty, " .. refused .. " refused)")
+local left = 0
+for _, v in pairs(view.TemplateExtentCache) do if v[2] then left = left + 1 end end
+check(left == 0, "no size of the addon's left in the game's cache")
 out(string.format("\n%d failure(s)", fails))
 return fails
