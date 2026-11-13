@@ -100,26 +100,52 @@ check(SlashCmdList.CLARAIDTIP and SLASH_CLARAIDTIP1 == "/idtip", "/idtip opens i
 
 out("== Solo Raid Frame")
 check(ns:QolRuns("soloraidframe"), "runs")
--- the game's secure state driver: its value as the game resolves it every fifth of a second, the frame shown by the
--- game's own code (never by the addon's: its frames' updates would then run in the addon's name, failing on secret health)
-local drive
-for f, d in pairs(M.stateDrivers) do if f == CompactPartyFrame and d[1] == "visibility" then drive = d[2] end end
-check(drive == "[group] game; show", "a visibility driver on the frame: shown solo, the game's rule in a group (" .. tostring(drive) .. ")")
-local function Tick()
-  local value = IsInGroup() and "game" or "show"
-  if value == "show" then CompactPartyFrame._shown = true elseif value == "hide" then CompactPartyFrame._shown = false end
-end
+-- Never shown by the addon's own code (its frames' updates would run in its name, failing on secret health): the
+-- addon arms a secure handler; the game's driver manager sets its state at its next look (secure), and the handler's
+-- restricted code registers the frame's own visibility driver, which the game applies (shown solo, its rule in a group)
 local addonShows = 0
 local realShow = CompactPartyFrame.Show
 CompactPartyFrame.Show = function(self, ...) addonShows = addonShows + 1 return realShow(self, ...) end
+local D = ns.SoloRaidFrameDriver
+local arm = D and M.stateDrivers[D]
+check(D ~= nil and arm and arm[1] == "arm" and arm[2] == "go", "a secure handler of its own, its state driven by the game (" .. tostring(arm and arm[2]) .. ")")
+check(D and D:GetAttribute("armed") == true and D:GetAttribute("state-arm") == "wait", "armed, its state set back by hand")
+check(M.stateDrivers[CompactPartyFrame] == nil, "no driver put on the frame from the addon's code")
+-- the restricted environment: the handler's snippet as the game runs it; its RegisterStateDriver applied at once
+local secureRuns = 0
+local function Visibility()
+  local d = M.stateDrivers[CompactPartyFrame]
+  if not (d and d[1] == "visibility") then return end
+  local value = IsInGroup() and "game" or "show"
+  if value == "show" then CompactPartyFrame._shown = true elseif value == "hide" then CompactPartyFrame._shown = false end
+end
+local function Snippet(newstate)
+  local handle = { GetAttribute = function(_, k) return D:GetAttribute(k) end, SetAttribute = function(_, k, v) rawset(D, "_attr_" .. k, v) D:SetAttribute(k, v) end,
+    GetFrameRef = function(_, name) return D:GetAttribute("frameref-" .. name) end }
+  local env = setmetatable({ self = handle, newstate = newstate,
+    RegisterStateDriver = function(frame, state, values) M.stateDrivers[frame] = { state, values } Visibility() end }, { __index = _G })
+  local fn = assert(loadstring(D:GetAttribute("_onstate-arm")))
+  setfenv(fn, env)
+  fn()
+end
+-- the game's manager at its next look: "go" again, not "wait": set, by the game
+local function Tick()
+  secureRuns = secureRuns + 1
+  if D:GetAttribute("state-arm") ~= arm[2] then D:SetAttribute("state-arm", arm[2]) Snippet(arm[2]) end
+  Visibility()
+end
 local function Run() local n = 0 while M.timers and #M.timers > 0 and n < 100 do M.RunTimer() n = n + 1 end end
 S.group = nil
-CompactPartyFrame:UpdateVisibility(); Run(); Tick()
+CompactPartyFrame:UpdateVisibility(); Run()
+check(not CompactPartyFrame:IsShown(), "before the game's look: hidden still (nothing shown by the addon)")
+Tick()
+local drive = M.stateDrivers[CompactPartyFrame]
+check(drive and drive[1] == "visibility" and drive[2] == "[group] game; show", "the frame's driver registered by the handler's secure code (" .. tostring(drive and drive[2]) .. ")")
 check(CompactPartyFrame:IsShown(), "solo: the raid-style party frame shown (the game had hidden it)")
 S.group = "party"
 CompactPartyFrame:UpdateVisibility(); Run(); Tick()
 check(CompactPartyFrame:IsShown(), "in a group: the game's rule")
-S.group = "party"; CompactPartyFrame._shown = false; Tick()
+CompactPartyFrame._shown = false; Tick()
 check(not CompactPartyFrame:IsShown(), "in a group, the game hiding it (its own party frames chosen): left hidden")
 S.group = nil; S.inCombat = true
 local blockedBefore = #M.blocked

@@ -55,6 +55,7 @@ function UnitIsUnit(a, b) return a == b end
 M.stateDrivers = {}
 function RegisterStateDriver(frame, state, value) M.stateDrivers[frame] = { state, value } end
 function UnregisterStateDriver(frame, state) M.stateDrivers[frame] = nil end
+function SecureHandlerSetFrameRef(frame, name, ref) frame:SetAttribute("frameref-" .. name, ref) end
 -- chat: M.sent holds what was sent ({ text, chatType })
 M.sent = {}
 C_ChatInfo = C_ChatInfo or {}

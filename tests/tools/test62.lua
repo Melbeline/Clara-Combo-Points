@@ -41,9 +41,11 @@ check(type(ClaraIdTipDB) == "table" and ClaraIdTipDB.spellEnabled == false and C
 
 out("== Solo Raid Frame, its frame made late")
 check(ns:QolRuns("soloraidframe"), "runs (its own addon not enabled)")
-local drive = M.stateDrivers[CompactPartyFrame]
-check(drive and drive[1] == "visibility" and drive[2] == "[group] game; show", "its driver put on at login (" .. tostring(drive and drive[2]) .. ")")
-local function Tick() if not IsInGroup() then CompactPartyFrame._shown = true end end
+local D = ns.SoloRaidFrameDriver
+local arm = D and M.stateDrivers[D]
+check(arm and arm[1] == "arm" and D:GetAttribute("armed") == true, "its secure handler armed at login (frame made late)")
+check(D and D:GetAttribute("frameref-party") == CompactPartyFrame, "the frame handed to it")
+local function Tick() if not IsInGroup() then CompactPartyFrame._shown = true end end -- (the frame's driver, once registered)
 S.group = "raid"; CompactPartyFrame:UpdateVisibility(); Tick()
 S.group = nil; CompactPartyFrame:UpdateVisibility(); Tick()
 check(CompactPartyFrame:IsShown(), "after a group: shown again by the game's driver")
