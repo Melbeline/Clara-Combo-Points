@@ -654,7 +654,9 @@ function AltFriends.AddToList()
 end
 
 function AltFriends.Refresh()
-  if FriendsListFrame and FriendsListFrame:IsShown() and FriendsList_Update then FriendsList_Update(true) end  if AltFriends.SocialRefresh then AltFriends.SocialRefresh() end
+  -- (not forced: the game keeps where the list is scrolled to)
+  if FriendsListFrame and FriendsListFrame:IsShown() and FriendsList_Update then FriendsList_Update() end
+  if AltFriends.SocialRefresh then AltFriends.SocialRefresh() end
 end
 
 ---------------------------------------------------------------------------
@@ -907,45 +909,66 @@ local function SocialCard(_, frame, node)
   DressCard(frame, alt)
 end
 
--- What changed: the same number of characters, their cards drawn again in place (in the list's order: online
--- first); another number, the list as the game built it with ours put in again
+-- What changed, while the list shows: our cards' text drawn again in place (in the list's order: online first),
+-- nothing of the game's list touched (no line put in or taken out, none of its own drawing run from here: its friend
+-- search would be refused after). A character added or taken off shows as the game builds its list again (the
+-- window opened again, a Battle.net friend's news).
+local function Redraw(frame, node)
+  local data = node:GetData()
+  local alt = data.claraAlt
+  local info = data.accountInfo
+  local game = info and info.gameAccountInfo
+  if not (alt and game) then return end
+  local online = game.isOnline
+  pcall(function()
+    local nameColor = online and HIGHLIGHT_FONT_COLOR or FRIENDS_GRAY_COLOR
+    if frame.FriendName then
+      frame.FriendName:SetText(nameColor and nameColor.WrapTextInColorCode and nameColor:WrapTextInColorCode(info.accountName) or info.accountName)
+    end
+    if frame.Location then
+      local text = online and (game.areaName or "") or (FriendsListUtil and FriendsListUtil.GetLastOnlineText(info) or "")
+      local color = online and FRIENDS_GRAY_COLOR or DARKGRAY_COLOR
+      frame.Location:SetText(color and color.WrapTextInColorCode and color:WrapTextInColorCode(text) or text)
+    end
+    if frame.PresenceHolder and frame.PresenceHolder.SetPresence and SocialUIUtil then
+      frame.PresenceHolder:SetPresence(SocialUIUtil.GetPresenceTypeForBattleNetAccountInfo(info))
+    end
+    if frame.Background then frame.Background:SetAtlas(online and "friends-card-default" or "friends-card-disabled", false) end
+    if frame.GameIconHolder then
+      if online and C_Texture and frame.GameIconHolder.Icon then
+        C_Texture.SetTitleIconTexture(frame.GameIconHolder.Icon, BNET_CLIENT_WOW or "WoW", Enum.TitleIconVersion.Small)
+      end
+      frame.GameIconHolder:SetShown(online)
+    end
+  end)
+  DressCard(frame, alt)
+end
+
 function AltFriends.SocialRefresh()
-  if not (socialView and socialView:IsVisible()) then return end
+  if not (socialView and socialView:IsVisible()) or #socialNodes == 0 then return end
   local alts = SocialAlts()
-  if #alts == #socialNodes and #alts > 0 then
-    for i, node in ipairs(socialNodes) do
+  for i, node in ipairs(socialNodes) do
+    local alt = alts[i]
+    if alt then
       local data = node:GetData()
-      data.claraAlt, data.accountInfo = alts[i], SocialInfo(alts[i])
+      data.claraAlt, data.accountInfo = alt, SocialInfo(alt)
     end
-    for frame, node in pairs(socialFrames) do
-      if frame.Initialize then pcall(frame.Initialize, frame, node) end
-      DressCard(frame, node:GetData().claraAlt)
-    end
-    return
   end
-  local provider = socialView.ScrollBox and socialView.ScrollBox:GetDataProvider()
-  if not provider then return end
-  for i = #socialNodes, 1, -1 do
-    local node = socialNodes[i]
-    if node.parent and node.parent.Remove then pcall(node.parent.Remove, node.parent, node) end
+  for frame, node in pairs(socialFrames) do
+    if frame:IsVisible() then Redraw(frame, node) end
   end
-  SocialInsert(provider)
 end
 
 function AltFriends.HookSocial()
   if socialView then return true end
   local view = SocialUIFrame and SocialUIFrame.FriendsList
-  local box = view and view.ScrollBox
-  local events = ScrollBoxListMixin and ScrollBoxListMixin.Event
-  if not (box and box.RegisterCallback and events and view.InsertFriendsIntoDataProvider) then return false end
+  if not (view and view.InsertFriendsIntoDataProvider and FriendsListSocialCardMixin) then return false end
   socialView = view
   -- (in the list the game builds, before it lays it out)
   hooksecurefunc(view, "InsertFriendsIntoDataProvider", function(_, provider) SocialInsert(provider) end)
-  box:RegisterCallback(events.OnInitializedFrame, SocialCard, AltFriends)
-  box:RegisterCallback(events.OnReleasedFrame, function(_, frame)
-    socialFrames[frame] = nil
-    if frame.claraAlt then frame.claraAlt:Hide(); frame.claraAlt.alt = nil end
-  end, AltFriends)
+  -- (each card as the game draws it: after its own drawing, ours dressed; the cards are made after this, from the
+  -- game's card with this hook in it)
+  hooksecurefunc(FriendsListSocialCardMixin, "Initialize", function(frame, node) SocialCard(nil, frame, node) end)
   return true
 end
 
