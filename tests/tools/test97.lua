@@ -30,6 +30,7 @@ local function Bar(container)
   local bar = CreateFrame("Frame", nil, container)
   bar.OverlayFrame = CreateFrame("Frame", nil, bar)
   bar.OverlayFrame.Text = bar.OverlayFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  bar.OverlayFrame.Text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE") -- (the game's own)
   function bar:IsCapped() return capped end
   function bar:UpdateCurrentText() self.OverlayFrame.Text:SetText(XP_STATUS_BAR_TEXT:format(UnitXP("player"), UnitXPMax("player"))) end
   container.bars = { [4] = bar }
@@ -85,7 +86,14 @@ sw[1].set(true)
 out("== the colors, with the game's color picker; Cancel puts them back; the default colors")
 ns.XPTextPage:Show()
 local sws = ns.XPTextSwatches
-check(sws.player and sws.pet and sws.reset, "its page: two color swatches and a default button")
+check(sws.player and sws.pet and sws.reset and sws.size, "its page: a size slider, two color swatches and a default button")
+check(ns.sv.xpText.size == nil and select(2, main.OverlayFrame.Text:GetFont()) == 12, "its slider set up at the game's size, nothing saved")
+sws.size.Slider:SetValue(18)
+local path, size, flags = main.OverlayFrame.Text:GetFont()
+check(ns.sv.xpText.size == 18 and size == 18 and path == "Fonts\\FRIZQT__.TTF" and flags == "OUTLINE", "bigger: 18, the game's font and outline kept (" .. tostring(size) .. ")")
+check(select(2, second.OverlayFrame.Text:GetFont()) == 18, "on both bar places")
+main:UpdateCurrentText()
+check(select(2, main.OverlayFrame.Text:GetFont()) == 18, "kept after the game's own update")
 sws.player:Click()
 check(ColorPickerFrame:IsShown(), "the game's color picker opened")
 M.PickColor(1, 0.5, 0, 1)
@@ -98,6 +106,7 @@ M.PickerOkay()
 check(Text(main):find("|cffffff00Pet XP:", 1, true) ~= nil and ns.sv.xpText.pet[1] == 1, "the pet's yellow, kept")
 sws.reset:Click()
 check(Text(main):find("|cff8cff8cPet XP:", 1, true) ~= nil and ns.sv.xpText.pet == nil, "the default colors back")
+check(ns.sv.xpText.size == nil and select(2, main.OverlayFrame.Text:GetFont()) == 12, "and the game's size")
 
 out("== a trial account's banked experience: the game's text left as it is")
 capped = true
