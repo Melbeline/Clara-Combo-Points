@@ -29,8 +29,9 @@ local function SpellOfLink(link)
   return tonumber(link:match("^spell:(%d+)") or link:match("|Hspell:(%d+)"))
 end
 
+local issecret = issecretvalue or function() return false end
 local function Learned(message)
-  if type(message) ~= "string" then return end
+  if issecret(message) or type(message) ~= "string" then return end -- (a secret system line: not read)
   for _, pattern in ipairs(patterns) do
     local what = message:match(pattern)
     if what then

@@ -18,6 +18,8 @@ local function Progress(unit)
   local ok, data = pcall(C_TooltipInfo.GetUnit, unit)
   if not ok or type(data) ~= "table" or type(data.lines) ~= "table" then return end
   for _, line in ipairs(data.lines) do
+    -- (in combat, or in an instance, the game hands its tooltip lines over secret: nothing read then)
+    if issecret(line.type) or issecret(line.completed) then return end
     if line.type == OBJECTIVE and not line.completed then
       local text = line.leftText
       if type(text) == "string" and not issecret(text) then
