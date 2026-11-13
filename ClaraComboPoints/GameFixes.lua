@@ -258,7 +258,9 @@ function ns:PlaceBarTexts(unit)
   if type(mana) == "table" and type(mana.RightText) == "table" then
     -- its right end under the health's: the power bar runs a little further right, under the frame's art
     local hr, mr = health:GetRight(), mana:GetRight()
-    local x = (hr and mr) and (hr - mr - 2) or -10
+    -- (secret while the game hides the frame's geometry: the usual spot then)
+    local known = hr and mr and not secretText(hr) and not secretText(mr)
+    local x = known and (hr - mr - 2) or -10
     KeepBarText(mana.RightText, unit, mana, x)
   end
   return done
