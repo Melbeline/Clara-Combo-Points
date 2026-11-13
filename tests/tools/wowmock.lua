@@ -784,6 +784,8 @@ function Button:UnlockHighlight() self._locked = false end
 local CheckButton = class("CheckButton", Button)
 function CheckButton:SetChecked(v) self._checked = v and true or false end
 function CheckButton:GetChecked() return self._checked or false end
+function CheckButton:SetCheckedTexture(t) self._checkedTex = t end
+function CheckButton:GetCheckedTexture() return StateTexture(self, "_ctex", "OVERLAY") end
 
 local StatusBar = class("StatusBar", Frame)
 function StatusBar:SetStatusBarTexture(f)
@@ -806,6 +808,7 @@ function StatusBar:SetStatusBarColor(r, g, b, a) self._barcolor = { r, g, b, a o
 local Slider = class("Slider", Frame)
 function Slider:SetOrientation() end
 function Slider:SetMinMaxValues(a, b) self._min, self._max = a, b end
+function Slider:GetMinMaxValues() return self._min or 0, self._max or 0 end
 function Slider:SetValueStep(s) self._step = s end
 function Slider:SetObeyStepOnDrag() end
 function Slider:SetThumbTexture(f)
