@@ -154,6 +154,7 @@ Modules\QuestLog\QuestLogWindow.lua
 Modules\QuestLog\QuestLogOpen.lua
 Modules\WhoCooldown\WhoCooldown.lua
 Modules\IdTip\IdTip.lua
+Modules\ReportMute\ReportMute.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
 Modules\EnemyCasts\EnemyCasts.lua
 Modules\LFGForever\Bootstrap.lua

@@ -31,6 +31,7 @@ ns.QOL_MODULES = {
   { key = "xptext", name = "XP bar text", theme = "interface" }, -- (Clara's own: the game's XP bar text, the pet's beside it)
   { key = "whocooldown", name = "/who cooldown", theme = "interface" }, -- (Clara's own: the time left before the next /who)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
+  { key = "reportmute", name = "Permanent Report Mute", theme = "interface" }, -- (Clara's own: a reported player muted for good)
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },
   { key = "lfgforever", name = "LFG Forever", standalone = "LFGForever", theme = "quests" },
   { key = "enemycasts", name = "Enemy Casts", theme = "combat" }, -- (Clara's own)
