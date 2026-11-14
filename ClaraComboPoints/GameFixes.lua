@@ -1287,36 +1287,102 @@ local function BagButtonUnder()
   local f = foci and foci[1]
   if type(f) == "table" and type(f.GetBagID) == "function" and type(f.GetID) == "function" then return f end
 end
-function ns:BagClickTaintReport(button)
-  button = button or BagButtonUnder()
-  if not button then return {} end
-  if type(issecurevariable) ~= "function" then return { "bag item click: the game's issecurevariable is missing" } end
-  local tainted, seen = {}, 0
-  local function Check(label, t, key)
-    seen = seen + 1
-    local ok, secure, by
-    if t then ok, secure, by = pcall(issecurevariable, t, key) else ok, secure, by = pcall(issecurevariable, key) end
-    if ok and secure == false then tainted[#tainted + 1] = ("%s (%s)"):format(label, tostring(by)) end
-  end
-  local function Fields(label, t)
-    if type(t) ~= "table" then return end
-    local n = 0
-    for k in pairs(t) do
-      n = n + 1
-      if n > 600 then break end
-      if type(k) == "string" and not (issecretvalue and issecretvalue(k)) then Check(label .. "." .. k, t, k) end
+
+-- Which of a table's fields an addon wrote: a list of "label.key (addon)"; a table all of whose fields one addon wrote
+-- (made while that addon's code ran: a frame from the game's template, made in its name) in one line
+local function TaintedFields(label, t, limit)
+  local list, total, by1, same = {}, 0, nil, true
+  if type(t) ~= "table" or type(issecurevariable) ~= "function" then return list, 0 end
+  local n = 0
+  for k in pairs(t) do
+    n = n + 1
+    if n > (limit or 600) then break end
+    if type(k) == "string" and not (issecretvalue and issecretvalue(k)) then
+      total = total + 1
+      local ok, secure, by = pcall(issecurevariable, t, k)
+      if ok and secure == false then
+        list[#list + 1] = ("%s.%s (%s)"):format(label, k, tostring(by))
+        if by1 == nil then by1 = by elseif by1 ~= by then same = false end
+      else
+        same = false
+      end
     end
   end
-  for _, name in ipairs(BAG_CLICK_GLOBALS) do Check(name, nil, name) end
-  for _, name in ipairs(BAG_CLICK_TABLES) do Fields(name, _G[name]) end
-  Fields(NameOf(button), button) -- (the item's button: its own fields, its methods)
-  local okParent, bag = pcall(button.GetParent, button)
-  if okParent and type(bag) == "table" then Fields(NameOf(bag), bag) end -- (its bag window)
-  local out = { ("bag item click (%s): what its right-click reads, %d values: %s"):format(NameOf(button), seen,
-    #tainted > 0 and "written by an addon:" or "none written by an addon") }
-  table.sort(tainted)
-  for i = 1, math.min(#tainted, 40) do out[#out + 1] = "    " .. tainted[i] end
-  if #tainted > 40 then out[#out + 1] = ("    ... and %d more"):format(#tainted - 40) end
+  if total > 3 and same and #list == total then
+    return { ("%s: all %d of its fields (made while %s's code ran)"):format(label, total, tostring(by1)) }, total
+  end
+  return list, total
+end
+
+-- The bag windows the game built in an addon's name this session (their item list, written anew at each build, an
+-- addon's): when, which, in whose name, who opened it (the calls), and the first values an addon wrote among what
+-- the build reads (the bag bar, the side action bars, the bag windows' manager)
+local BAG_BUILD_TABLES = { "ContainerFrameSettingsManager", "ContainerFrameContainer", "MultiBarLeft", "MultiBarRight",
+  "BagsBar", "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot", "CharacterBag2Slot",
+  "CharacterBag3Slot", "CharacterReagentBag0Slot", "BankFrame", "EditModeUtil" }
+local bagBuilds, BAG_BUILDS_MAX = {}, 6
+local function Calls()
+  local ok, stack = pcall(debugstack, 3, 14, 0)
+  if not ok or type(stack) ~= "string" then return "?" end
+  local calls = {}
+  for line in stack:gmatch("[^\n]+") do
+    local file, num = line:match("([%w_]+)%.lua[\"%]]*:(%d+)")
+    local fn = line:match("in function [`'<]([^'>]+)")
+    if file then calls[#calls + 1] = file .. ":" .. num .. (fn and (" " .. fn) or "") end
+    if #calls >= 8 then break end
+  end
+  return #calls > 0 and table.concat(calls, " < ") or "?"
+end
+local function WatchBagBuilds()
+  if type(ContainerFrame_GenerateFrame) ~= "function" or type(issecurevariable) ~= "function" then return end
+  hooksecurefunc("ContainerFrame_GenerateFrame", function(frame, size, id)
+    local ok, secure, by = pcall(issecurevariable, frame, "Items")
+    if not ok or secure ~= false then return end
+    local seen = {}
+    for _, name in ipairs(BAG_BUILD_TABLES) do
+      local list = TaintedFields(name, _G[name], 300)
+      for _, line in ipairs(list) do if #seen < 5 then seen[#seen + 1] = line end end
+    end
+    bagBuilds[#bagBuilds + 1] = ("%s  bag %s (%s) built in %s's name; opened by: %s%s"):format(
+      date and date("%H:%M:%S") or "", tostring(id), NameOf(frame), tostring(by), Calls(),
+      #seen > 0 and ("; written by an addon among what it reads: " .. table.concat(seen, ", ")) or "")
+    if #bagBuilds > BAG_BUILDS_MAX then table.remove(bagBuilds, 1) end
+  end)
+end
+local watchBags = CreateFrame("Frame")
+watchBags:RegisterEvent("PLAYER_LOGIN")
+watchBags:SetScript("OnEvent", function(self)
+  self:UnregisterAllEvents()
+  pcall(WatchBagBuilds)
+end)
+ns.BagBuildsLog = bagBuilds -- (for the tests)
+
+function ns:BagClickTaintReport(button)
+  button = button or BagButtonUnder()
+  local out = {}
+  if button then
+    if type(issecurevariable) ~= "function" then return { "bag item click: the game's issecurevariable is missing" } end
+    local tainted, seen = {}, 0
+    local function Add(list, total) seen = seen + total for _, line in ipairs(list) do tainted[#tainted + 1] = line end end
+    for _, name in ipairs(BAG_CLICK_GLOBALS) do
+      seen = seen + 1
+      local ok, secure, by = pcall(issecurevariable, name)
+      if ok and secure == false then tainted[#tainted + 1] = ("%s (%s)"):format(name, tostring(by)) end
+    end
+    for _, name in ipairs(BAG_CLICK_TABLES) do Add(TaintedFields(name, _G[name])) end
+    Add(TaintedFields(NameOf(button), button)) -- (the item's button: its own fields, its methods)
+    local okParent, bag = pcall(button.GetParent, button)
+    if okParent and type(bag) == "table" then Add(TaintedFields(NameOf(bag), bag)) end -- (its bag window)
+    out[1] = ("bag item click (%s): what its right-click reads, %d values: %s"):format(NameOf(button), seen,
+      #tainted > 0 and "written by an addon:" or "none written by an addon")
+    table.sort(tainted)
+    for i = 1, math.min(#tainted, 40) do out[#out + 1] = "    " .. tainted[i] end
+    if #tainted > 40 then out[#out + 1] = ("    ... and %d more"):format(#tainted - 40) end
+  end
+  if #bagBuilds > 0 then
+    out[#out + 1] = "bag windows built in an addon's name this session:"
+    for _, line in ipairs(bagBuilds) do out[#out + 1] = "    " .. line end
+  end
   return out
 end
 
