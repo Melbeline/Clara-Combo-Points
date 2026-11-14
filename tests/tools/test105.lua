@@ -24,6 +24,9 @@ function issecurevariable(t, key)
 end
 local function Wrote(t, key, addon) written[t] = written[t] or {}; written[t][key] = addon end
 
+-- the game's bag build (its item list written anew), and a stack for the calls
+function ContainerFrame_GenerateFrame(frame, size, id) frame.Items = {} end
+debugstack = debugstack or function() return '[string "@Interface/AddOns/Blizzard_UIPanels_Game/Mainline/ContainerFrame.lua"]:305: in function <OpenBag_Individual>\n[string "@Interface/AddOns/ClaraComboPoints/Modules/X.lua"]:12: in function <Opener>' end
 S.class = "ROGUE"; S.locale = "enUS"
 local ns = {}
 M.LoadAddon(ADDON_DIR, ns)
@@ -49,9 +52,36 @@ check(text:find("C_Container.UseContainerItem (OtherAddon)", 1, true) ~= nil, "a
 check(text:find("MerchantFrame.selectedTab (ClaraComboPoints)", 1, true) ~= nil, "a window's field")
 check(text:find(".bagID (SomeBagAddon)", 1, true) ~= nil, "the item button's own field")
 
+out("== a button made while an addon's code ran: one line")
+local made = CreateFrame("Button", nil, ContainerFrame1)
+function made:GetBagID() return 0 end
+made.Cooldown, made.Count, made.IconBorder, made.GetItem = {}, {}, {}, function() end
+for _, k in ipairs({ "Cooldown", "Count", "IconBorder", "GetItem", "GetBagID" }) do Wrote(made, k, "ClaraComboPoints") end
+for k in pairs(made) do if type(k) == "string" then Wrote(made, k, "ClaraComboPoints") end end
+local text2 = table.concat(ns:BagClickTaintReport(made), "\n")
+check(text2:find(": all %d+ of its fields %(made while ClaraComboPoints's code ran%)") ~= nil, "summed up: " .. (text2:match("\n    ([^\n]*made while[^\n]*)") or "?"))
+
+out("== a bag window built in an addon's name: when, which, whose, the calls, what it reads")
+local bagWin = CreateFrame("Frame", "ContainerFrame3", UIParent)
+ContainerFrame_GenerateFrame(bagWin, 16, 2)
+check(#ns.BagBuildsLog == 0, "built in the game's name: nothing noted")
+Wrote(bagWin, "Items", "ClaraComboPoints")
+MultiBarRight = CreateFrame("Frame", "MultiBarRight", UIParent)
+MultiBarRight.isShownExternal = true
+Wrote(MultiBarRight, "isShownExternal", "SomeAddon")
+ContainerFrame_GenerateFrame(bagWin, 16, 2)
+local note = ns.BagBuildsLog[1] or ""
+check(note:find("bag 2 (ContainerFrame3) built in ClaraComboPoints's name", 1, true) ~= nil, note:sub(1, 90))
+check(note:find("opened by: ", 1, true) ~= nil and note:find("MultiBarRight.isShownExternal (SomeAddon)", 1, true) ~= nil,
+  "the calls, and what it reads that an addon wrote")
+GetMouseFoci = function() return { UIParent } end
+local tail = table.concat(ns:BagClickTaintReport(), "\n")
+check(tail:find("bag windows built in an addon's name this session:", 1, true) ~= nil, "in the report, even not over an item")
+GetMouseFoci = nil
+
 out("== not over a bag item: no section")
 GetMouseFoci = function() return { UIParent } end
-check(#ns:BagClickTaintReport() == 0, "nothing")
+check(#ns:BagClickTaintReport() == 0 or not table.concat(ns:BagClickTaintReport(), "\n"):find("bag item click", 1, true), "no item section")
 GetMouseFoci = function() return { item } end
 check(#ns:BagClickTaintReport() > 1, "over it: found by the mouse")
 
