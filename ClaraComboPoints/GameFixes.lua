@@ -666,6 +666,10 @@ function ns:MouseReport()
     local ok, lines = pcall(ns.FightWindowsReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
   end
+  if ns.BagClickTaintReport then
+    local ok, lines = pcall(ns.BagClickTaintReport, ns)
+    if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
+  end
   local text = table.concat(out, "\n")
   -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
   if ns.sv then ns.sv.mouseReport = text end
@@ -1262,6 +1266,58 @@ local function ProtectedInside(frame)
     end
   end
   return found
+end
+
+-- A bag item under the mouse: what its right-click reads (the game's ContainerFrameItemButton_OnClick and what it calls),
+-- each value an addon wrote named with that addon (the game's own issecurevariable). One of them written by an addon:
+-- the item's use is refused to that addon's name ("forbidden: <addon> UNKNOWN()"). Only read: nothing is changed.
+local BAG_CLICK_GLOBALS = { "ContainerFrameItemButton_OnClick", "ContainerFrameItemButtonMixin", "MerchantFrame_ResetRefundItem",
+  "MerchantFrame", "AuctionHouseFrame", "AzeriteRespecFrame", "RuneforgeFrame", "BankFrame", "BankPanel", "GuildBankFrame",
+  "MailFrame", "AuctionFrame", "TradeFrame", "ItemUpgradeFrame", "ObliterumForgeFrame", "ChallengesKeystoneFrame",
+  "ArtifactFrame", "C_ItemSocketInfo", "C_ArtifactUI", "C_MountJournal", "CollectionsJournal", "CollectionsJournal_LoadUI",
+  "BankUtil_IsAccountBankDepositRefundable", "ItemButtonUtil", "StackSplitFrame", "C_Container", "C_Item", "C_Spell",
+  "C_AuctionHouse", "C_NewItems", "ItemLocation", "ItemLocationMixin", "IsModifiedClick", "GetCursorInfo",
+  "SpellCanTargetItem", "SpellCanTargetItemID", "SpellIsTargeting", "EventRegistry", "ContainerFrame_GetExtendedPriceString",
+  "CreateFromMixins", "Mixin", "UIErrorsFrame", "GameTooltip", "ResetCursor", "SetCursorHoveredItem", "CanSellItems" }
+local BAG_CLICK_TABLES = { "C_Container", "C_Item", "C_Spell", "C_AuctionHouse", "C_ItemSocketInfo", "C_ArtifactUI",
+  "C_MountJournal", "ItemButtonUtil", "ItemLocation", "ItemLocationMixin", "MerchantFrame", "MailFrame", "BankFrame",
+  "BankPanel", "TradeFrame", "ContainerFrameItemButtonMixin", "EventRegistry", "StackSplitFrame" }
+local function BagButtonUnder()
+  local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+  local f = foci and foci[1]
+  if type(f) == "table" and type(f.GetBagID) == "function" and type(f.GetID) == "function" then return f end
+end
+function ns:BagClickTaintReport(button)
+  button = button or BagButtonUnder()
+  if not button then return {} end
+  if type(issecurevariable) ~= "function" then return { "bag item click: the game's issecurevariable is missing" } end
+  local tainted, seen = {}, 0
+  local function Check(label, t, key)
+    seen = seen + 1
+    local ok, secure, by
+    if t then ok, secure, by = pcall(issecurevariable, t, key) else ok, secure, by = pcall(issecurevariable, key) end
+    if ok and secure == false then tainted[#tainted + 1] = ("%s (%s)"):format(label, tostring(by)) end
+  end
+  local function Fields(label, t)
+    if type(t) ~= "table" then return end
+    local n = 0
+    for k in pairs(t) do
+      n = n + 1
+      if n > 600 then break end
+      if type(k) == "string" and not (issecretvalue and issecretvalue(k)) then Check(label .. "." .. k, t, k) end
+    end
+  end
+  for _, name in ipairs(BAG_CLICK_GLOBALS) do Check(name, nil, name) end
+  for _, name in ipairs(BAG_CLICK_TABLES) do Fields(name, _G[name]) end
+  Fields(NameOf(button), button) -- (the item's button: its own fields, its methods)
+  local okParent, bag = pcall(button.GetParent, button)
+  if okParent and type(bag) == "table" then Fields(NameOf(bag), bag) end -- (its bag window)
+  local out = { ("bag item click (%s): what its right-click reads, %d values: %s"):format(NameOf(button), seen,
+    #tainted > 0 and "written by an addon:" or "none written by an addon") }
+  table.sort(tainted)
+  for i = 1, math.min(#tainted, 40) do out[#out + 1] = "    " .. tainted[i] end
+  if #tainted > 40 then out[#out + 1] = ("    ... and %d more"):format(#tainted - 40) end
+  return out
 end
 
 local EXTRA_WINDOWS = { "WorldMapFrame", "LFGParentFrame", "RaidParentFrame", "CooldownViewerSettings", "SocialUIFrame" }
