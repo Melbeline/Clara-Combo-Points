@@ -1,6 +1,7 @@
 -- The rested XP left in the experience bar's tooltip (RestedXP.lua), on every version: on the game's rest line, after
 -- its name ("Rested  xp: 1,600 - 16%"), hovered on the bar (its two places) or on its rest tick; once however many
--- hovers; nothing when not rested; ClassicUI's own where ClassicUI runs (no second one)
+-- hovers; nothing when not rested; ClassicUI's own where ClassicUI runs (no second one); WoW Forever's rest name in
+-- gold (a color code before it): found all the same, the amount after it; no rest line at all: a line of its own
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -13,6 +14,7 @@ local tip = GameTooltip
 tip._lines = {}
 function tip:NumLines() return #self._lines end
 function tip:IsShown() return self._shown == true end
+function tip:AddLine(text) self._lines[#self._lines + 1] = text _G["GameTooltipTextLeft" .. #self._lines].text = text end
 local function Cell(i)
   local name = "GameTooltipTextLeft" .. i
   _G[name] = _G[name] or { GetText = function(self) return self.text end, SetText = function(self, t) self.text = t end }
@@ -78,6 +80,20 @@ ns.ClassicUIRuns = true
 Hover(main)
 check(Line(2):find("xp:", 1, true) == nil, "where ClassicUI runs: its own (none of ours)")
 ns.ClassicUIRuns = nil
+
+out("== WoW Forever's rest name in gold: found through its color")
+EXHAUST_TOOLTIP1 = "|cffffd100%s|r\n%d%% of normal experience\ngained from monsters."
+Cell(3)
+Hover(main)
+check(Line(2) == "|cffffd100Rested  xp: 1,600 - 16%|r\n200% of normal experience\ngained from monsters.", "after its name, in its color: " .. tostring(Line(2)))
+Hover(main.ExhaustionTick)
+check(select(2, Line(2):gsub("xp:", "")) == 1 and tip:NumLines() == 2, "hovered again: once")
+
+out("== no line starting with the rest's name: a line of its own")
+EXHAUST_TOOLTIP1 = "You are %s: %d%% of normal experience gained from monsters."
+Hover(main)
+check(tip:NumLines() == 3 and Line(3) == "Rested  xp: 1,600 - 16%", "added under: " .. tostring(Line(3)))
+EXHAUST_TOOLTIP1 = "%s\n%d%% of normal experience gained from monsters."
 
 out(string.format("\n%d failure(s)", fails))
 return fails
