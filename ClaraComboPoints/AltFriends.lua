@@ -119,9 +119,16 @@ AltFriends.GameName = GameName
 -- their surname: a whisper to the first name alone finds no one), any realm part off, lower-case
 local function Key(name) return ((name:match("^([^%-]+)") or name):gsub("^%s+", ""):gsub("%s+$", "")):lower() end
 
--- The server's answers (see "Online or not"): Key(name) -> { verdict = online, at, tried, sent, asked, silent, again }
+-- The server's answers (see "Online or not"): Key(name) -> { verdict = online, at, tried, sent, asked }
 local probes = {}
 local startedAt -- (GetTime at login)
+
+local function SyncOnline(name)
+  local S = ns.Sync
+  if S and S.Online then return S.Online(KeyOf(name)) end
+  local seen = S and S.seen and S.seen[KeyOf(name)]
+  return type(seen) == "number" and GetTime() - seen < HEARD
+end
 
 -- This WoW account's characters (ns.sv: saved for this account alone), each kept as it logs in: Key(name) -> when
 local function AccountChars()
@@ -129,6 +136,39 @@ local function AccountChars()
   if type(sv) ~= "table" then return nil end
   if type(sv.accountChars) ~= "table" then sv.accountChars = {} end
   return sv.accountChars
+end
+
+-- A gold tracker record's whole name ("First Surname")
+local function WholeOf(rec)
+  local whole = rec.n
+  local surname = type(rec.s) == "string" and rec.s ~= "" and rec.s or nil
+  if surname and not whole:lower():find(" " .. surname:lower(), 1, true) then whole = whole .. " " .. surname end
+  return whole
+end
+
+-- Each character's WoW account, from the gold tracker (every account's characters: this one's, and the other
+-- accounts' the sync brought): account[Key(name)] = id, members[id] = { whole names }, me = this account's id. Built
+-- once a frame (a list sorted asks it of every character).
+local index, indexAt, indexOf
+local function AccountIndex()
+  local now = GetTime()
+  local db = ns.Money and ns.Money.db
+  local chars = type(db) == "table" and db.chars or nil
+  if index and indexAt == now and indexOf == chars then return index end
+  index, indexAt, indexOf = { account = {}, members = {} }, now, chars
+  if type(chars) == "table" then
+    index.me = type(db.me) == "string" and db.me or nil
+    for _, rec in pairs(db.chars) do
+      if type(rec) == "table" and type(rec.n) == "string" and type(rec.a) == "string" then
+        local whole = WholeOf(rec)
+        index.account[Key(whole)] = rec.a
+        local list = index.members[rec.a] or {}
+        index.members[rec.a] = list
+        list[#list + 1] = whole
+      end
+    end
+  end
+  return index
 end
 
 -- One of this WoW account's other characters: never online while the player plays (a WoW account plays one character
@@ -139,27 +179,50 @@ local function OnThisAccount(name)
   local key = Key(name)
   local mine = AccountChars()
   if mine and mine[key] then return true end
-  local db = ns.Money and ns.Money.db
-  if type(db) == "table" and type(db.chars) == "table" and type(db.me) == "string" then
-    for _, rec in pairs(db.chars) do
-      if type(rec) == "table" and rec.a == db.me and type(rec.n) == "string" then
-        local whole = rec.n
-        local surname = type(rec.s) == "string" and rec.s ~= "" and rec.s or nil
-        if surname and not whole:lower():find(" " .. surname:lower(), 1, true) then whole = whole .. " " .. surname end
-        if Key(whole) == key then return true end
-      end
+  local ix = AccountIndex()
+  return ix.me ~= nil and ix.account[key] == ix.me
+end
+AltFriends.OnThisAccount = OnThisAccount
+
+-- When it was last surely online, or nil: its own Clara answered or said hello, or it was heard in the chat by its
+-- whole name, within the last minute; or the sync hears it. Never the server's silence alone (it may only be late).
+local HEARD_FOR = 60
+local function SurelyOnline(name)
+  local at
+  if SyncOnline(name) then
+    local S = ns.Sync
+    local seen = S and S.seen and S.seen[KeyOf(name)]
+    at = type(seen) == "number" and seen or GetTime()
+  end
+  local p = probes[Key(name)]
+  if p and p.verdict == true and type(p.heardAt) == "number" and GetTime() - p.heardAt < HEARD_FOR then
+    at = math.max(at or p.heardAt, p.heardAt)
+  end
+  return at
+end
+
+-- Another of the player's WoW accounts playing another of its characters (surely online, and heard since this one
+-- was): this one cannot be online (one character at a time per account), never asked
+local function AccountBusy(name)
+  if type(name) ~= "string" then return false end
+  local key = Key(name)
+  local ix = AccountIndex()
+  local account = ix.account[key]
+  if not account or account == ix.me then return false end
+  local mine = SurelyOnline(name)
+  for _, other in ipairs(ix.members[account] or {}) do
+    if Key(other) ~= key then
+      local at = SurelyOnline(other)
+      if at and (not mine or at > mine) then return true end
     end
   end
   return false
 end
-AltFriends.OnThisAccount = OnThisAccount
+AltFriends.AccountBusy = AccountBusy
 
-local function SyncOnline(name)
-  local S = ns.Sync
-  if S and S.Online then return S.Online(KeyOf(name)) end
-  local seen = S and S.seen and S.seen[KeyOf(name)]
-  return type(seen) == "number" and GetTime() - seen < HEARD
-end
+-- Its WoW account plays another character: this account (the player's), or another one surely online
+local function Elsewhere(name) return OnThisAccount(name) or AccountBusy(name) end
+AltFriends.Elsewhere = Elsewhere
 
 local function Verdict(name)
   local p = probes[Key(name)]
@@ -169,7 +232,7 @@ end
 -- The newer of the two: the server's answer (or a Clara's hello or goodbye) and the sync's last word
 function AltFriends.Online(name)
   if IsMe(name) then return true end
-  if OnThisAccount(name) then return false end
+  if Elsewhere(name) then return false end
   local p = probes[Key(name)]
   local S = ns.Sync
   local heard = SyncOnline(name) and S and S.seen and S.seen[KeyOf(name)]
@@ -179,7 +242,7 @@ end
 
 -- Whether Clara knows yet if it is online: the server answered, or the sync heard it, or long enough since login
 function AltFriends.Known(name)
-  if IsMe(name) or OnThisAccount(name) or SyncOnline(name) or Verdict(name) ~= nil then return true end
+  if IsMe(name) or Elsewhere(name) or SyncOnline(name) or Verdict(name) ~= nil then return true end
   return startedAt ~= nil and GetTime() - startedAt > KNOWN_AFTER
 end
 
@@ -1056,25 +1119,21 @@ AltFriends.Look = Look
 -- every 3 while the friends list is open, at once as it opens), with an addon message whispered to it, which its
 -- player never sees: offline (or unknown, or of the other faction) the server answers "No player named ... is
 -- currently playing" (that line hidden from the chat when it answers one of our questions, however late); online it
--- says nothing. Silence alone is slow to trust: online once two questions in a row went unanswered (the second asked
--- 4 seconds after the first was given up), each given 2 seconds, or longer while the server is slow (its answers'
--- delay learned as they come), and the first asked 12 seconds ago at least; a late answer still says offline, and
--- is still hidden. A character heard in the chat by its whole name is online at once. Between two Clara that have
+-- says nothing for 2 seconds (longer while the server is slow: its answers' delay learned as they come); a late
+-- answer still says offline, and is still hidden. A character heard in the chat by its whole name is online at once. Between two Clara that have
 -- each other in their lists it is at once both ways: the question is a hello (asked of everyone at login, the first
 -- 8 at once), the answer comes with its level, class and zone, and a goodbye goes at logout (not at a reload). Not
--- asked, never online: the character played now, and this WoW account's other characters (one character at a time
--- per account). One of the player's other accounts the sync hears too: the newer word counts (the sync's arrival
--- waits for its channel, 15 to 30 seconds after a login; the server's answer does not).
+-- asked, never online (one character at a time per WoW account): the character played now, this account's other
+-- characters, and another account's while one of its characters is surely online (Elsewhere, above). One of the
+-- player's other accounts the sync hears too: the newer word counts (the sync's arrival waits for its channel, 15 to
+-- 30 seconds after a login; the server's answer does not).
 ---------------------------------------------------------------------------
 local PROBE_PREFIX = "ClaraFriends"
 local PROBE_EVERY = 1     -- seconds between two questions
 local PROBE_ROUND = 10    -- seconds at least between two questions to the same character
 local PROBE_ROUND_OPEN = 3 -- the same while the friends list is open
-local PROBE_WAIT = 2      -- seconds at least without the server's "no player named" before a question counts unanswered
+local PROBE_WAIT = 2      -- seconds without the server's "no player named": online (longer while the server is slow)
 local PROBE_WAIT_MAX = 20 -- the most it waits (a server very slow to answer)
-local PROBE_CONFIRM = 2   -- questions in a row unanswered: online
-local PROBE_TRUST = 12    -- seconds at least since the first of them was asked (an answer may be that late)
-local PROBE_AGAIN = 4     -- seconds after one went unanswered before the next question to that character
 local PROBE_BURST = 8     -- questions asked at once at login, goodbyes said at once at logout
 local PROBE_HIDE = 30     -- seconds the server's answer to a question is still taken for it (hidden, offline)
 local PROBE_SETTLE = 3    -- seconds after the world shows before asking (answers held in a loading screen came late)
@@ -1110,10 +1169,11 @@ end
 local function SetVerdict(key, online, heard)
   local p = probes[key] or {}
   probes[key] = p
-  p.sent, p.silent, p.again, p.silentSince = nil, 0, nil, nil
+  p.sent = nil
   if heard then p.asked = nil end -- (heard from: its questions answered, none left for a late "no player named")
   local changed = p.verdict ~= online
   p.verdict, p.at = online, GetTime()
+  if not online then p.heardAt = nil elseif heard then p.heardAt = p.at end -- (surely online: for its account's others)
   local alt = Listed(key)
   if online and alt and time then alt.seen = time() end
   if changed then Look(true) end
@@ -1141,7 +1201,7 @@ local function AskOne(alt, now)
   probes[key] = p
   local sent, offline = Whisper(alt.name, "?")
   if sent then
-    p.tried, p.sent, p.again = now, now, nil
+    p.tried, p.sent = now, now
     -- (each question kept a while: its answer, however late, is ours)
     p.asked = p.asked or {}
     p.asked[#p.asked + 1] = { at = now, load = loads }
@@ -1158,11 +1218,10 @@ end
 local function Due(now, round)
   local due = {}
   for _, alt in pairs(List() or {}) do
-    if not IsMe(alt.name) and not OnThisAccount(alt.name) then
+    if not IsMe(alt.name) and not Elsewhere(alt.name) then
       local p = probes[Key(alt.name)]
       local last = p and p.tried or 0
-      local ready = now - last >= round or (p and p.again and now >= p.again)
-      if not (p and p.sent) and ready then due[#due + 1] = { alt = alt, last = last } end
+      if not (p and p.sent) and now - last >= round then due[#due + 1] = { alt = alt, last = last } end
     end
   end
   -- (the ones with Clara first: their hello and answer are the fast ones)
@@ -1198,22 +1257,7 @@ local function AskServer()
     -- (questions too old for an answer: let go)
     local asked = p.asked
     while asked and asked[1] and now - asked[1].at > PROBE_HIDE do table.remove(asked, 1) end
-    if p.sent and now - p.sent >= wait then
-      -- Unanswered: online still, if it was; else counted (the next asked soon)
-      if p.verdict == true then
-        SetVerdict(key, true)
-      else
-        p.silentSince = p.silentSince or p.sent
-        p.sent = nil
-        p.silent = (p.silent or 0) + 1
-        if p.silent < PROBE_CONFIRM then p.again = now + PROBE_AGAIN end
-      end
-    end
-    -- Online by silence: PROBE_CONFIRM questions in a row unanswered, the first of them asked long enough ago
-    if p.verdict ~= true and (p.silent or 0) >= PROBE_CONFIRM and p.silentSince
-      and now - p.silentSince >= math.max(PROBE_TRUST, wait * 2) then
-      SetVerdict(key, true)
-    end
+    if p.sent and now - p.sent >= wait then SetVerdict(key, true) end -- (unanswered: online)
   end
   if now - lastAsked < PROBE_EVERY or now < pausedUntil then return end
   local due = Due(now, ListOpen() and PROBE_ROUND_OPEN or PROBE_ROUND)
@@ -1239,7 +1283,7 @@ local function HelloClara()
   local now, n = GetTime(), 0
   for _, alt in pairs(List() or {}) do
     if n >= PROBE_BURST then break end
-    if alt.clara and not IsMe(alt.name) and not OnThisAccount(alt.name) then
+    if alt.clara and not IsMe(alt.name) and not Elsewhere(alt.name) then
       local p = probes[Key(alt.name)]
       if not (p and p.sent) and AskOne(alt, now) then n = n + 1 end
     end
