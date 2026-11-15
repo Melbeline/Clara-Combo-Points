@@ -49,11 +49,9 @@ local function BagButton(button)
   if ok and type(bag) == "number" then return bag, button:GetID() end
 end
 local function Grey()
-  if not ContainerFrameUtil_EnumerateContainerFrames then return end
-  local frames = 0
-  for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
-    frames = frames + 1
-    if frames > 20 then break end -- (the game has 14 at most)
+  -- (the bag windows by their names: never the game's own enumerator, its list would be made in Clara's name: GameFixes)
+  if not ns.ContainerFrames then return end
+  for _, frame in ipairs(ns.ContainerFrames()) do
     if type(frame) == "table" and frame.IsShown and frame:IsShown() and frame.EnumerateValidItems then
       local seen = 0
       for _, button in frame:EnumerateValidItems() do
