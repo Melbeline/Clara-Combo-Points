@@ -271,7 +271,7 @@ Rows()[2]:GetScript("OnLeave")(Rows()[2])
 M.Tick()
 local pad = share.pad
 check(pad and pad._secure and pad:IsShown() and pad:GetFrameStrata() == "DIALOG", "the secure pad over it")
-check((pad:GetAttribute("macrotext") or ""):find("/click ClaraQLS1", 1, true) ~= nil, "its macro: the map's own Share, pressed by the player")
+check((pad:GetAttribute("macrotext") or ""):find("/click [nomod] CQLC1", 1, true) ~= nil, "its macro: the map's own Share, pressed by the player")
 M.Fire("PLAYER_REGEN_DISABLED")
 S.inCombat = true
 check(not pad:IsShown(), "a fight starts: the pad goes")
