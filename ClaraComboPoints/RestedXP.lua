@@ -14,6 +14,9 @@ end
 
 local function Escape(text) return (text:gsub("[%%%(%)%.%+%-%*%?%[%]%^%$]", "%%%0")) end
 
+-- A line's text without its colors (WoW Forever writes the rest's name in gold: "|cffffd100Rested|r")
+local function Plain(text) return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+
 local function RestedLine()
   if ns.ClassicUIRuns then return end -- (ClassicUI's own)
   if not (GameTooltip and GameTooltip:IsShown()) then return end
@@ -25,16 +28,31 @@ local function RestedLine()
   if type(stateName) ~= "string" or issecret(stateName) or stateName == "" then return end
   local amount = BreakUpLargeNumbers and BreakUpLargeNumbers(rest) or tostring(rest)
   local head = L.XPR_INLINE:format(stateName, amount, math.floor(rest / most * 100 + .5))
-  for i = 2, GameTooltip:NumLines() do
+  local tail = head:sub(#stateName + 1) -- ("  xp: 1,600 - 16%", put after the rest's name)
+  local lines = {}
+  for i = 1, GameTooltip:NumLines() do
     local line = _G["GameTooltipTextLeft" .. i]
     local text = line and line:GetText()
-    if type(text) == "string" and not issecret(text) and text:find("^" .. Escape(stateName)) then
-      if text:find(head, 1, true) then return end -- (already there)
-      line:SetText((text:gsub("^" .. Escape(stateName), (head:gsub("%%", "%%%%")), 1)))
-      GameTooltip:Show()
-      return
+    if type(text) == "string" and not issecret(text) then
+      local plain = Plain(text)
+      if plain:find(head, 1, true) then return end -- (already there)
+      lines[#lines + 1] = { line = line, text = text, plain = plain }
     end
   end
+  -- On the game's rest line (the one starting with the rest's name, whatever its colors): after its name
+  for _, l in ipairs(lines) do
+    if l.plain:find("^%s*" .. Escape(stateName)) then
+      local _, last = l.text:find(Escape(stateName))
+      if last then
+        l.line:SetText(l.text:sub(1, last) .. tail .. l.text:sub(last + 1))
+        GameTooltip:Show()
+        return
+      end
+    end
+  end
+  -- (no such line: one of its own)
+  GameTooltip:AddLine(head, 1, 1, 1)
+  GameTooltip:Show()
 end
 ns.RestedXPLine = RestedLine -- (for the tests)
 
