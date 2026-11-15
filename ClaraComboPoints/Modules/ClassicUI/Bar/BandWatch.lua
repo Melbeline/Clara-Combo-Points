@@ -483,9 +483,14 @@ local function AnchorOpenBags()
     if shown == nil then
         local combined, single = ContainerFrameCombinedBags, _G.ContainerFrame1
         if not ((combined and combined:IsShown()) or (single and single:IsShown())) then return end
-        if not manager.GetBagsShown then return end
-        local ok, list = pcall(manager.GetBagsShown, manager)
-        shown = ok and list
+        -- (the shown bag windows read by their names, in the game's order: never its GetBagsShown, whose list made
+        -- from here would be Clara's, and every bag window built from it then: GameFixes)
+        local list = {}
+        for _, frame in ipairs(ClaraNS.ContainerFrames()) do
+            if frame ~= ContainerFrameCombinedBags and frame:IsShown() then list[#list + 1] = frame end
+        end
+        if combined and combined:IsShown() then table.insert(list, 1, combined) end
+        shown = list
     end
     local first = type(shown) == "table" and shown[1]
     if not first or not first.GetPoint then return end

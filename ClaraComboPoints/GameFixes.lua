@@ -1345,17 +1345,21 @@ local function AtlasLootShown()
     if type(f) == "table" and f.IsShown and f:IsShown() then return f end
   end
 end
-local function Bags()
+-- The game's bag windows, read by their names. Never by the game's own ContainerFrameUtil_EnumerateContainerFrames: it
+-- makes its list the first time it is called and keeps it, so called from Clara the list was made in Clara's name, and
+-- every bag window the game built from it then (its item buttons too) was Clara's: the items' right-click (their use)
+-- refused ("forbidden: ClaraComboPoints UNKNOWN()") until a reload.
+function ns.ContainerFrames()
   local list = {}
-  if ContainerFrameUtil_EnumerateContainerFrames then
-    for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
-      list[#list + 1] = frame
-      if #list >= 20 then break end -- (the game has 13 at most)
-    end
+  local count = tonumber(NUM_CONTAINER_FRAMES) or 13
+  for i = 1, math.min(count, 20) do
+    local frame = _G["ContainerFrame" .. i]
+    if type(frame) == "table" then list[#list + 1] = frame end
   end
-  if ContainerFrameCombinedBags then list[#list + 1] = ContainerFrameCombinedBags end
+  if type(ContainerFrameCombinedBags) == "table" then list[#list + 1] = ContainerFrameCombinedBags end
   return list
 end
+local function Bags() return ns.ContainerFrames() end
 
 local function LiftBags()
   local atlas = AtlasLootShown()

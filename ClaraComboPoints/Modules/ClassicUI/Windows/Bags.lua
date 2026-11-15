@@ -83,7 +83,7 @@ end
 local function ParkedReagent()
     local combined = ContainerFrameCombinedBags
     if not (REAGENT and ns.db and ns.db.reagentBagCombined and combined and combined:IsShown()) then return nil end
-    for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
+    for _, frame in ipairs(ClaraNS.ContainerFrames()) do -- (by their names: never the game's enumerator, GameFixes)
         if frame:IsShown() and not frame:IsCombinedBagContainer() and frame:GetBagID() == REAGENT then return frame end
     end
 end
@@ -743,13 +743,13 @@ ns.RegisterModule("oneBag", { apply = ReadOneBag, restore = ReadOneBag })
 -- The ring in its own window, as 1.x: the client opens it only once showKeyring is on (its first login
 -- holding a key), and with one bag on it opens the combined bag instead.
 local function RingFrame()
-    for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
+    for _, frame in ipairs(ClaraNS.ContainerFrames()) do -- (by their names: never the game's enumerator, GameFixes)
         if frame:IsShown() and not frame:IsCombinedBagContainer() and frame:GetBagID() == KEYRING then return frame end
     end
 end
 
 local function FreeFrame()
-    for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
+    for _, frame in ipairs(ClaraNS.ContainerFrames()) do -- (by their names: never the game's enumerator, GameFixes)
         if not frame:IsShown() and not frame:IsCombinedBagContainer() and frame:CanUseForBagID(KEYRING) then return frame end
     end
 end
