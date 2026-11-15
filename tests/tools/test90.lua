@@ -1,7 +1,7 @@
 -- Characters in the friends list online or not (AltFriends.lua): an unseen addon whisper to each by its whole name,
 -- one a second (each every 10 s, every 5 s with the list open, all at once at login and as the list opens); the
--- server's "No player named" = offline (that line hidden), silence = online only after two questions unanswered and
--- 12 s; heard in the chat by the whole name = online; two
+-- server's "No player named" = offline (that line hidden), 2 s of silence = online; heard in the chat by the whole
+-- name = online; two
 -- Clara with each other in their lists: hello and answer (level, class, zone) and goodbye at once, none at a reload;
 -- comings and goings announced; Add Character's button opens its dialog
 local M, S = MOCK, MOCK.state
@@ -42,42 +42,36 @@ local asked = {}
 for _, m in ipairs(Ours()) do asked[m[4]] = m[2] == "?" and m[3] == "WHISPER" end
 check(Sent() == 2 and asked["Elle Woods"] and asked["Piou Piou"], "an unseen addon whisper to each, by the whole name")
 
-out("== Elle offline: the server answers; Piou silent: online after two questions unanswered, 12 s on")
+out("== Elle offline: the server answers; Piou silent: online after 2 s")
 local text = ERR_CHAT_PLAYER_NOT_FOUND_S:format("Elle Woods")
 check(filters.CHAT_MSG_SYSTEM and filters.CHAT_MSG_SYSTEM(nil, "CHAT_MSG_SYSTEM", text) == true, "the answer to our question hidden")
 check(filters.CHAT_MSG_SYSTEM(nil, "CHAT_MSG_SYSTEM", text) == true, "in each chat window that shows it")
 M.Fire("CHAT_MSG_SYSTEM", text)
 check(not A.Online("Elle Woods") and A.Known("Elle Woods"), "Elle: offline, known")
-local function RunTo(t) while M.now < t do M.now = M.now + 1 M.Tick() end end
+M.now = 1001; M.Tick()
+check(not A.Online("Piou Piou"), "Piou: not yet after 1 s")
 M.now = 1002; M.Tick()
-check(not A.Online("Piou Piou"), "Piou: one question unanswered, not yet")
-check(Sent() == 2, "nobody asked again at once")
-RunTo(1006)
-check(Sent() == 3 and LastTo()[4] == "Piou Piou", "Piou asked again 4 s after")
-RunTo(1008)
-check(not A.Online("Piou Piou"), "two unanswered, the first 8 s ago: not yet")
-RunTo(1012)
-check(A.Online("Piou Piou"), "12 s on: online")
+check(A.Online("Piou Piou"), "Piou: no answer in 2 s, online")
 check(not Chat("has come online"), "the first answers after login: not announced")
+check(Sent() == 2, "nobody asked again before 10 s")
 
-out("== each asked again, every 10 s, one a second")
-check(Sent() == 4 and LastTo()[4] == "Elle Woods", "Elle asked 10 s on")
+out("== 10 s later: each asked again, one a second")
+M.now = 1010; M.Tick()
+check(Sent() == 3, "one asked")
+M.now = 1011; M.Tick()
+check(Sent() == 4, "the other a second later")
 M.chat = {}
-RunTo(1016)
-check(Sent() == 5 and LastTo()[4] == "Piou Piou", "Piou asked 10 s on")
 M.Fire("CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Piou Piou"))
-RunTo(1021)
-check(not A.Online("Elle Woods"), "Elle silent twice, 11 s: not yet")
-RunTo(1022)
+M.now = 1013; M.Tick()
 check(A.Online("Elle Woods") and not A.Online("Piou Piou"), "Elle online, Piou offline")
 check(Chat("[Elle Woods]|h has come online") and Chat("Piou Piou has gone offline"), "both announced, as the game says it")
 
 out("== the friends list opened: everyone asked at once, then every 3 s")
 M.addonSent = {}
-M.now = 1025
+M.now = 1015
 FriendsFrame:Show()
 check(Sent() == 2, "both asked as it opens")
-M.now = 1028; M.Tick()
+M.now = 1018; M.Tick()
 check(Sent() == 3, "asked again 3 s on while it stays open")
 FriendsFrame:Hide()
 

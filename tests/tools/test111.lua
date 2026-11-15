@@ -1,8 +1,9 @@
--- Clara's characters (AltFriends.lua): an offline character never shown online. This WoW account's other characters
--- (one character at a time per account: the ones that logged in here, and the gold tracker's of this account) never
--- asked, never online, never announced; a server slow to answer (11 s late) never makes one online, each late answer
--- hidden, its pace learned; the friends list opened just after an unanswered question (two questions out): both
--- answers hidden, never online; a whisper of the player's own still shows; a stale question not taken for one
+-- Clara's characters (AltFriends.lua): one of the player's characters never asked, never online, while its WoW
+-- account plays another (one character at a time per account): this account's (the ones that logged in here, the gold
+-- tracker's of this account), and another account's while one of its characters is surely online (its Clara answered
+-- or said hello, the sync heard it: never the server's silence), the newer word winning; the 2 s detection kept; a
+-- server slow to answer: each late answer hidden and says offline, its pace learned; the friends list opened just
+-- after an unanswered question (two questions out): both answers hidden; a whisper of the player's own still shows
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -20,14 +21,16 @@ FriendsFrame:Hide()
 function UnitNameUnmodified(u) if u == "player" then return "Lola", "Moon" end end
 Constants = Constants or {}
 Constants.CharacterNameSeparatorConsts = { CHARACTERNAME_SURNAME_SEPARATOR = " ", CHARACTERNAME_REALMNAME_SEPARATOR = "-" }
--- this account: Charlotte Moon logged in here before; Lia Moon is the gold tracker's (this account's), Bob Twink another's
+-- this account: Charlotte Moon logged in here before; Lia Moon is the gold tracker's (this account's); Bob Twink and Nina
+-- Nox another account's
 ClaraComboPointsDB = { accountChars = { ["charlotte moon"] = 1 }, qol = { lfgforever = false, whatstraining = false, doesitdie = false,
   enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false, dialogkey = false,
   xtolevel = false, minimapdrawer = false, mail = false, classicui = false, tullarange = false, names = false, tooltipanchor = false,
   idtip = false, soloraidframe = false, enemycasts = false, reverseengineering = false } }
 ClaraMoneyDB = { me = "acc1acc1", chars = {
   ["Lia-Realm"] = { n = "Lia", s = "Moon", r = "Realm", a = "acc1acc1", l = 20, m = 0 },
-  ["Bob-Realm"] = { n = "Bob", s = "Twink", r = "Realm", a = "acc2acc2", l = 30, m = 0 } } }
+  ["Bob-Realm"] = { n = "Bob", s = "Twink", r = "Realm", a = "acc2acc2", l = 30, m = 0 },
+  ["Nina-Realm"] = { n = "Nina", s = "Nox", r = "Realm", a = "acc2acc2", l = 12, m = 0 } } }
 
 M.now = 1000
 local ns = {}
@@ -36,7 +39,7 @@ M.LoadAddon(ADDON_DIR, ns)
 M.Fire("ADDON_LOADED", "ClaraComboPoints")
 local A = ns.AltFriends
 out("(money module: " .. tostring(ns.Money ~= nil) .. ")")
-A.Add("Charlotte Moon"); A.Add("Lia Moon"); A.Add("Bob Twink"); A.Add("Piou Piou")
+A.Add("Charlotte Moon"); A.Add("Lia Moon"); A.Add("Bob Twink"); A.Add("Nina Nox"); A.Add("Piou Piou")
 M.addonSent = {}
 M.Fire("PLAYER_LOGIN")
 M.Tick()
@@ -61,10 +64,10 @@ check(A.OnThisAccount("Lia Moon"), "Lia Moon: the gold tracker's, of this accoun
 check(not A.OnThisAccount("Bob Twink") and not A.OnThisAccount("Piou Piou"), "Bob (another account's), Piou: not")
 check(ClaraComboPointsDB.accountChars["lola moon"] ~= nil, "this character kept as one of this account's")
 M.chat = {}
-local answered = { ["Bob Twink"] = 0, ["Piou Piou"] = 0 }
+local answered = { ["Bob Twink"] = 0, ["Nina Nox"] = 0, ["Piou Piou"] = 0 }
 for _ = 1, 40 do
   M.now = M.now + 1 M.Tick()
-  for name, n in pairs(answered) do -- (Bob and Piou offline: the server answers at once)
+  for name, n in pairs(answered) do -- (Bob, Nina and Piou offline: the server answers at once)
     for _ = n + 1, AskedOf(name) do Answer(name) end
     answered[name] = AskedOf(name)
   end
@@ -76,56 +79,104 @@ check(not A.Online("Charlotte Moon") and A.Known("Charlotte Moon") and not A.Onl
 M.Fire("CHAT_MSG_SAY", "coucou", "Charlotte Moon-Realm")
 check(not A.Online("Charlotte Moon") and not Chat("[Charlotte Moon]"), "a name like hers heard: still offline, nothing said")
 
-out("== a server 11 s slow to answer: never online, each answer hidden")
-A.Remove("Piou Piou")
-local pending, shown, everOnline = {}, 0, false
-local seen = AskedOf("Bob Twink")
+out("== another account of the player's playing one of its characters: its others never asked, never online")
+local realm = ((GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or ""):gsub("%s", "")
+ns.Sync = ns.Sync or { seen = {} }
+ns.Sync.seen = ns.Sync.seen or {}
+local function Keep(name, sec) -- sec seconds on: each question to it answered by its Clara, the others' left unanswered
+  local seen = AskedOf(name)
+  for _ = 1, sec do
+    M.now = M.now + 1 M.Tick()
+    local n = AskedOf(name)
+    for _ = seen + 1, n do M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|30|MAGE|Duskwood", "WHISPER", name .. "-Realm") end
+    seen = n
+  end
+end
 M.chat = {}
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Bob Twink-Realm") -- (Bob logs in on the other account: his hello)
+check(A.Online("Bob Twink"), "Bob: his Clara said hello, online")
+check(A.AccountBusy("Nina Nox") and not A.Online("Nina Nox") and A.Known("Nina Nox"), "Nina, of Bob's account: offline")
+local ninaAsked = AskedOf("Nina Nox")
+Keep("Bob Twink", 40)
+check(AskedOf("Nina Nox") == ninaAsked, "Nina never asked (the server says nothing of her)")
+check(A.Online("Bob Twink") and not A.Online("Nina Nox") and not Chat("[Nina Nox]"), "40 s on: Bob online, Nina still offline, nothing said of her")
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "!", "WHISPER", "Bob Twink-Realm") -- (Bob logs out: his goodbye)
+local ninaSeen = ninaAsked
+for _ = 1, 12 do -- (Nina offline: the server answers at once)
+  M.now = M.now + 1 M.Tick()
+  for _ = ninaSeen + 1, AskedOf("Nina Nox") do Answer("Nina Nox") end
+  ninaSeen = AskedOf("Nina Nox")
+end
+check(not A.AccountBusy("Nina Nox") and AskedOf("Nina Nox") > ninaAsked, "Bob gone: Nina asked again")
+check(not A.Online("Nina Nox"), "and offline (the server's answer)")
+
+out("== the newer word counts: one heard by the sync, then another of its account logs in")
+M.now = M.now + 1
+ns.Sync.seen["Nina-" .. realm] = GetTime() -- (Nina on the other account, heard by the sync since)
+check(A.Online("Nina Nox"), "Nina heard by the sync: online")
+check(A.AccountBusy("Bob Twink") and not A.Online("Bob Twink"), "Bob, of her account: offline")
+M.now = M.now + 5
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Bob Twink-Realm") -- (Nina gone without a word, Bob in)
+check(A.Online("Bob Twink") and not A.AccountBusy("Bob Twink"), "Bob's hello, newer than the sync's word on Nina: Bob online")
+check(not A.Online("Nina Nox"), "Nina: offline")
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "!", "WHISPER", "Bob Twink-Realm")
+ns.Sync.seen["Nina-" .. realm] = nil
+A.Remove("Bob Twink"); A.Remove("Nina Nox"); A.Remove("Piou Piou")
+
+out("== the server's silence: online after 2 s, as before")
+A.Add("Max Vite")
+local t1
+for _ = 1, 15 do M.now = M.now + 1 M.Tick() if AskedOf("Max Vite") > 0 then t1 = M.now break end end
+check(t1 ~= nil and not A.Online("Max Vite"), "Max asked")
+check(A.Wait() == 2, "a server answering at once: 2 s")
+M.now = t1 + 2; M.Tick()
+check(A.Online("Max Vite"), "no answer in 2 s: online")
+A.Remove("Max Vite")
+
+out("== a server 11 s slow to answer: each late answer hidden and says offline, its pace learned")
+A.Add("Zed Zorro")
+local pending, shown, flips, lastOn = {}, 0, 0, false
+local seen = AskedOf("Zed Zorro")
 for _ = 1, 150 do
   M.now = M.now + 1
   M.Tick()
-  local n = AskedOf("Bob Twink")
+  local n = AskedOf("Zed Zorro")
   for _ = seen + 1, n do pending[#pending + 1] = M.now + 11 end
   seen = n
   while pending[1] and pending[1] <= M.now do
     table.remove(pending, 1)
-    if not Answer("Bob Twink") then shown = shown + 1 end
+    if not Answer("Zed Zorro") then shown = shown + 1 end
+    if A.Online("Zed Zorro") then shown = shown + 100 end -- (an answer must say offline)
   end
-  if A.Online("Bob Twink") then everOnline = true end
+  local on = A.Online("Zed Zorro") and true or false
+  if on and not lastOn then flips = flips + 1 end
+  lastOn = on
 end
-check(not everOnline, "Bob never online")
-check(not Chat("has come online"), "never announced")
-check(shown == 0, "every late answer hidden")
+check(shown == 0, "every late answer hidden, each one saying offline")
 check(A.Wait() > 2, "the server's pace learned: questions wait longer (" .. string.format("%.1f", A.Wait()) .. " s)")
+check(flips <= 1, "online by mistake once at most, before the pace is learned (" .. flips .. ")")
 
-out("== the friends list opened just after an unanswered question: both answers hidden, never online")
+out("== the friends list opened just after an unanswered question: both answers hidden")
 for _ = 1, 400 do M.now = M.now + 1 M.Tick() end -- (the pace forgotten, a fresh start)
-A.Remove("Bob Twink"); A.Add("Zed Zorro")
-M.chat = {}
-local before = AskedOf("Zed Zorro")
+A.Remove("Zed Zorro"); A.Add("Uma Ulm")
+local before = AskedOf("Uma Ulm")
 local t0
 for _ = 1, 15 do
   M.now = M.now + 1 M.Tick()
-  if AskedOf("Zed Zorro") > before then t0 = M.now break end
+  if AskedOf("Uma Ulm") > before then t0 = M.now break end
 end
 M.now = t0 + 2; M.Tick() -- (unanswered 2 s)
 M.now = t0 + 2.5
 FriendsFrame:Show()
-check(AskedOf("Zed Zorro") == before + 2, "asked again as the list opens")
+check(AskedOf("Uma Ulm") == before + 2, "asked again as the list opens")
 M.now = t0 + 3
-check(Answer("Zed Zorro"), "the first answer (3 s late): hidden")
+check(Answer("Uma Ulm"), "the first answer (3 s late): hidden")
+check(not A.Online("Uma Ulm"), "and offline")
 M.now = t0 + 3.2
-check(Answer("Zed Zorro"), "the second: hidden too")
+check(Answer("Uma Ulm"), "the second: hidden too")
 FriendsFrame:Hide()
-local on = false
-for _ = 1, 30 do M.now = M.now + 1 M.Tick() if A.Online("Zed Zorro") then on = true end
-  -- (each later question answered at once)
-  local n = AskedOf("Zed Zorro")
-  if n > before + 2 then before = n - 2 Answer("Zed Zorro") end
-end
-check(not on and not Chat("has come online"), "Zed never online")
 
-out("== a whisper of the player's own: shown; a stale question not taken for one")
+out("== a whisper of the player's own: shown; a question answered in another way not taken for one")
 M.now = M.now + 5
 local text = ERR_CHAT_PLAYER_NOT_FOUND_S:format("Nobody Here")
 check(filters.CHAT_MSG_SYSTEM(nil, "CHAT_MSG_SYSTEM", text, "", "", "", "", "", 0, 0, "", 0, 999) == false, "no question to that name: the line stays")
