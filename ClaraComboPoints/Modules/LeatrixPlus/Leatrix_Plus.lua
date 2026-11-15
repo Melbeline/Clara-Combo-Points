@@ -562,6 +562,28 @@
 		-- window, and those the gold tracker knows (WoW Forever's friends list takes none of them)
 		if ClaraNS.AltFriends and ClaraNS.AltFriends.IsAlt and ClaraNS.AltFriends.IsAlt(name) then return true end
 
+		-- (Clara Combo Points) and the player's characters on another WoW account of the same Battle.net account, by
+		-- their GUID: the game's own test (its menus use it to tell the player's characters), then their Battle.net
+		-- account against the player's
+		if type(guid) == "string" and not (issecretvalue and issecretvalue(guid)) and guid:find("^Player%-") then
+			local function Plain(v) return v ~= nil and not (issecretvalue and issecretvalue(v)) end
+			local related = C_AccountInfo and C_AccountInfo.IsGUIDRelatedToLocalAccount
+			if related then
+				local ok, mine = pcall(related, guid)
+				if ok and Plain(mine) and mine == true then return true end
+			end
+			local byGUID = C_BattleNet and C_BattleNet.GetAccountInfoByGUID
+			if byGUID and BNGetInfo then
+				local ok, info = pcall(byGUID, guid)
+				local okMe, myID, myTag = pcall(BNGetInfo)
+				if ok and okMe and type(info) == "table" then
+					local id, tag = info.bnetAccountID, info.battleTag
+					if Plain(id) and Plain(myID) and id == myID then return true end
+					if Plain(tag) and Plain(myTag) and tag ~= "" and tag == myTag then return true end
+				end
+			end
+		end
+
 		-- Update friends list
 		C_FriendList.ShowFriends()
 
