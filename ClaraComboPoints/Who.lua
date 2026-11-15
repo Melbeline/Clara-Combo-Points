@@ -57,12 +57,27 @@ hooksecurefunc(F, "SendWho", function(text)
   word = Word(text)
 end)
 
--- The game's list: its rows that do not match taken out once it has made them (its own functions untouched)
+-- The game's list: its rows that do not match taken out once it has made them (its own functions untouched), and
+-- its count ("15 People Found") the players left. (RemoveAllByPredicate: the game's RemoveByPredicate takes out the
+-- first match only.)
 local function Filter(box, provider)
-  if not word or not ns:WhoNames() or type(provider) ~= "table" or type(provider.RemoveByPredicate) ~= "function" then return end
-  pcall(provider.RemoveByPredicate, provider, function(data)
-    return type(data) == "table" and data.info ~= nil and not Keep(data.info)
-  end)
+  if not word or not ns:WhoNames() or type(provider) ~= "table" then return end
+  local function Out(data) return type(data) == "table" and data.info ~= nil and not Keep(data.info) end
+  if type(provider.RemoveAllByPredicate) == "function" then
+    pcall(provider.RemoveAllByPredicate, provider, Out)
+  elseif type(provider.RemoveByPredicate) == "function" and type(provider.GetSize) == "function" then
+    for _ = 1, provider:GetSize() do -- (one at a time, until none is left)
+      local before = provider:GetSize()
+      if not pcall(provider.RemoveByPredicate, provider, Out) or provider:GetSize() == before then break end
+    end
+  else
+    return
+  end
+  local frame = box and box.GetParent and box:GetParent()
+  local totals = type(frame) == "table" and frame.WhoFrameTotals
+  if totals and totals.SetText and type(WHO_FRAME_TOTAL_TEMPLATE) == "string" and type(provider.GetSize) == "function" then
+    pcall(totals.SetText, totals, WHO_FRAME_TOTAL_TEMPLATE:format(provider:GetSize()))
+  end
 end
 local hooked = {}
 local function Watch(frame)
