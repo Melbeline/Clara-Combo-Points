@@ -151,20 +151,42 @@ function AltFriends.Known(name)
   return startedAt ~= nil and GetTime() - startedAt > KNOWN_AFTER
 end
 
--- One of the player's characters: in this list, or known to the gold tracker (the account's characters,
--- and the other accounts' through the sync). name: as the game gives it (a first name, maybe a realm).
+-- A name as Leatrix's friend check compares it: first name and surname (WoW Forever's names are unique by both; two
+-- characters may share a first name), its realm, case and spacing aside
+local function FullKey(name)
+  if type(name) ~= "string" or name == "" or (issecretvalue and issecretvalue(name)) then return nil end
+  local consts = Constants and Constants.CharacterNameSeparatorConsts
+  local sep = consts and consts.CHARACTERNAME_SURNAME_SEPARATOR
+  name = name:match("^([^%-]+)") or name -- (its realm left out)
+  if type(sep) == "string" and sep ~= "" and sep ~= " " and sep ~= "-" then
+    name = name:gsub(sep:gsub("%p", "%%%0"), " ")
+  end
+  name = name:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+  if name == "" then return nil end
+  return name:lower()
+end
+AltFriends.FullKey = FullKey -- (for the tests)
+
+-- One of the player's characters, or one in Clara's list of characters (theirs and their friends'), by its first name
+-- and surname: Leatrix's friends (its party invites accepted, invited on a whispered word). Known from Clara's list
+-- and from the gold tracker (this account's characters, and the other accounts' the sync brought). A name with no
+-- surname matches only a character with none.
 function AltFriends.IsAlt(name)
-  if type(name) ~= "string" or name == "" or (issecretvalue and issecretvalue(name)) then return false end
-  local first = (name:match("^([^%-%s]+)") or name):lower()
-  if IsMe(name) or first == (UnitName("player") or ""):lower() then return false end
+  local key = FullKey(name)
+  if not key then return false end
+  if key == FullKey(ns.FullName and ns:FullName("player")) then return false end
   for _, alt in pairs(List() or {}) do
-    if GameName(alt.name):lower() == first then return true end
+    if type(alt) == "table" and FullKey(alt.name) == key then return true end
   end
   local money = ns.Money and ns.Money.db and ns.Money.db.chars
-  if type(money) == "table" and money[KeyOf(first:sub(1, 1):upper() .. first:sub(2))] then return true end
   if type(money) == "table" then
-    for key in pairs(money) do
-      if type(key) == "string" and (key:match("^([^%-]+)") or ""):lower() == first then return true end
+    for _, rec in pairs(money) do
+      if type(rec) == "table" and type(rec.n) == "string" then
+        local full = rec.n
+        local surname = type(rec.s) == "string" and rec.s ~= "" and rec.s or nil
+        if surname and not full:lower():find(" " .. surname:lower(), 1, true) then full = full .. " " .. surname end
+        if FullKey(full) == key then return true end
+      end
     end
   end
   return false
