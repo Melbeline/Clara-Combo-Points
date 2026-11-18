@@ -34,12 +34,23 @@ local DIFFICULTY = {
 
 function ns.TradeSkillActive() return active end
 
--- A recipe's needs (R.Read) never change; false: unreadable.
+-- A recipe's needs (R.Read), read again when the talents change (a talent can change what a recipe costs); false: unreadable.
 local reagentsOf = {}
+
+-- A recipe that costs no reagents (WoW Forever since its build 70938: a talent can waive them; the game's own window reads
+-- it so): made as many times as asked, up to FREE_MAX at once; Create All has nothing to use up.
+local FREE_MAX = 99
+local function Free(recipeID)
+    local free = recipeID and C_TradeSkillUI.HasNoReagentCost
+    if not free then return false end
+    local ok, yes = pcall(free, recipeID)
+    return ok and not IsSecret(yes) and yes == true
+end
 
 -- Craftable count from reagents in reach. The client's numAvailable is empty on Forever (no counts, Create grey): fallback only.
 local function Craftable(info)
     if not info or not info.recipeID then return 0 end
+    if Free(info.recipeID) then return FREE_MAX end
     local best = info.numAvailable or 0
     local needs = reagentsOf[info.recipeID]
     if needs == nil then
@@ -56,6 +67,8 @@ local function Craftable(info)
     end
     return count or best
 end
+-- (for the harness: a recipe's count as the window has it, and whether it is free)
+ns.TradeCraftable, ns.TradeFree = Craftable, Free
 
 ---------------------------------------------------------------------------
 -- The list
@@ -160,7 +173,7 @@ local function DrawItem(row, line)
     row.text:SetPoint("LEFT", row, "LEFT", 26, 0)
     local name = info.name or ""
     local count = Craftable(info)
-    if count > 0 and info.learned ~= false then name = name .. " [" .. count .. "]" end
+    if count > 0 and info.learned ~= false and not Free(info.recipeID) then name = name .. " [" .. count .. "]" end
     row.text:SetText(name)
     SkillList.Paint(row, info.recipeID == selected, DIFFICULTY[info.relativeDifficulty or 3] or DIFFICULTY[3])
 end
@@ -368,7 +381,7 @@ UpdateDetail = function()
     local gameOnly = R.GameOnly(info, schematic)
     local can = Craftable(info) > 0 and not info.disabled and not gameOnly and info.learned ~= false
     panel.create:SetEnabled(can)
-    panel.createAll:SetEnabled(can)
+    panel.createAll:SetEnabled(can and not Free(info.recipeID))
     if panel.LayRetail then panel.LayRetail(info, schematic, gameOnly) end
 end
 
@@ -486,6 +499,7 @@ local function Craft(all)
     if not info then return end
     local count = 1
     if all then
+        if Free(info.recipeID) then return end
         count = Craftable(info)
     elseif panel.count then
         count = panel.count:GetNumber() or 1
@@ -549,7 +563,7 @@ end
 
 local TRADE_EVENTS = { "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_DATA_SOURCE_CHANGED",
     "TRADE_SKILL_DETAILS_UPDATE", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED", "SKILL_LINES_CHANGED",
-    "UPDATE_TRADESKILL_CAST_STOPPED", "TRADE_SKILL_ITEM_CRAFTED_RESULT", "TRACKED_RECIPE_UPDATE" }
+    "UPDATE_TRADESKILL_CAST_STOPPED", "TRADE_SKILL_ITEM_CRAFTED_RESULT", "TRACKED_RECIPE_UPDATE", "PLAYER_TALENT_UPDATE" }
 
 -- One pass per event burst, next frame; item data alone only touches the detail plates.
 local detailOnly = true
@@ -719,6 +733,8 @@ local function Build()
     events:SetScript("OnEvent", function(_, event, itemID)
         -- A profession opening lists every type again, as Era's does.
         if event == "TRADE_SKILL_SHOW" then R.ClearTypes() end
+        -- Talents changed: each recipe's cost read again (one can be free now, or cheaper).
+        if event == "PLAYER_TALENT_UPDATE" then wipe(reagentsOf) end
         if not active or not panel:IsShown() then return end
         if event == "GET_ITEM_INFO_RECEIVED" then
             if not OnPlates(itemID) then return end
