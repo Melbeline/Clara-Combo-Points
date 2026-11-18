@@ -10,13 +10,15 @@ local QL = ns.QL
 -- QuestLogPushQuest is protected; the map's Share reads its quest off a row the game fills only as its quest pane shows.
 -- One press, in one script run: the map, its pane and the quest's header open, the row, Share and Back are pressed, and
 -- what was opened is shut. The Aim steps are ours: each points the next clicks at what the game has just built.
-local STEPS = { "Open", "AimPane", "Pane", "AimHeader", "Header", "AimRow", "Row", "Share", "Back", "AimShut", "Shut" }
--- The row's click leaves the map on the quest's zone, and the game sorts the whole quest log for the map's zone: the
--- map is opened and shut once more at the end, which puts it back on the player's.
-local ORDER = { "Open", "AimPane", "Pane", "AimHeader", "Header", "AimRow", "Row", "Share", "Back", "AimShut", "Shut", "Open",
-    "Open", "Open" }
+-- The map shut at the end by its own close button: the zone button's toggle (three more Opens) does not always shut it
+-- (with its quest panel not as the player keeps it, it only hides that panel, and the map stayed open: the next share
+-- then said to shut it first). The game puts the map back on the player's zone each time it opens. One line a step:
+-- the macro stays well under the 255 characters the game runs.
+local STEPS = { "Open", "AimPane", "Pane", "AimHeader", "Header", "AimRow", "Row", "Share", "Back", "AimShut", "Shut",
+    "AimClose", "Close" }
+local ORDER = STEPS
 -- Only what the press aims: Open stays aimed while a share is possible.
-local AIMED = { "Pane", "Header", "Row", "Share", "Back", "Shut" }
+local AIMED = { "Pane", "Header", "Row", "Share", "Back", "Shut", "Close" }
 local proxies, macro
 local armedID          -- the quest the pad shares
 local openedPane       -- the pane was shut and this press opened it
@@ -87,7 +89,13 @@ local function AimShut()
     if MapUp() and openedPane and toggle then Aim("Shut", toggle.CloseButton) end
 end
 
-local AIMS = { AimPane = AimPane, AimHeader = AimHeader, AimRow = AimRow, AimShut = AimShut }
+-- The map, opened by this press, shut by its own close button
+local function AimClose()
+    local border = WorldMapFrame.BorderFrame
+    if MapUp() then Aim("Close", border and border.CloseButton or nil) end
+end
+
+local AIMS = { AimPane = AimPane, AimHeader = AimHeader, AimRow = AimRow, AimShut = AimShut, AimClose = AimClose }
 
 local function Build()
     if proxies then return end
@@ -102,6 +110,7 @@ local function Build()
         lines[i] = string.format(step == "Open" and "/click [nomod] %s" or "/click %s", proxies[step]:GetName())
     end
     macro = table.concat(lines, "\n")
+    QL.shareMacroLength = #macro -- (for the tests: under the 255 characters the game runs)
 end
 
 -- The quest to share while the pad may act: our Share lit, the world map shut, the game's pieces there.
