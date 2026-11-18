@@ -4,6 +4,9 @@
 -- case; another character with the same first name and another surname is not one; the character itself is not one
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
+do local f = io.open(ADDON_DIR .. "/Modules/LeatrixPlus/Leatrix_Plus.lua", "rb")
+  if not f then out("  ok   not in this version (Leatrix Plus: not in Light)"); out("0 failure(s)"); return 0 end
+  f:close() end
 local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 GetBuildInfo = function() return "1.60.1", "70938", "Nov 13 2026", 16001 end

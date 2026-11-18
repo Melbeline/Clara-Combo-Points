@@ -4,6 +4,9 @@
 -- the player's (BNGetInfo); a friend's or a stranger's character is not one; secrets and errors are passed over.
 -- Its two callers hand it the GUID: the whisper's (12th argument), the invite's (PARTY_INVITE_REQUEST's inviterGUID).
 local out = function(s) io.write(tostring(s), "\n") end
+do local f = io.open(ADDON_DIR .. "/Modules/LeatrixPlus/Leatrix_Plus.lua", "rb")
+  if not f then out("  ok   not in this version (Leatrix Plus: not in Light)"); out("0 failure(s)"); return 0 end
+  f:close() end
 local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 

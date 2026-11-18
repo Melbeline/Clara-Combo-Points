@@ -2,6 +2,9 @@
 -- an addon wrote named with that addon (the game's issecurevariable); none: said so; not over a bag item: no section
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
+do local f = io.open(ADDON_DIR .. "/GameFixes.lua", "rb")
+  local src = f and f:read("*a") or ""; if f then f:close() end
+  if not src:find("BagClickTaintReport", 1, true) then out("  ok   not in this version (/cl souris on a bag item: sans and avec)"); out("0 failure(s)"); return 0 end end
 local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 GetBuildInfo = function() return "1.60.1", "70938", "Nov 13 2026", 16001 end

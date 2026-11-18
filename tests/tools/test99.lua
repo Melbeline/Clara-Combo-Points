@@ -3,10 +3,14 @@
 -- back on, from the next reload
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
+do local f = io.open(ADDON_DIR .. "/Modules/QuestLog/QuestLogWindow.lua", "rb")
+  if not f then out("  ok   not in this version (Clara's own quest log: the sans version only (avec: ClassicUI's))"); out("0 failure(s)"); return 0 end
+  f:close() end
 local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 GetBuildInfo = function() return "1.60.1", "70938", "Nov 13 2026", 16001 end
-ClaraComboPointsDB = { qol = { lfgforever = false, buyemall = false, leatrix = false, wst = false, dynamiccam = false,
+ClaraComboPointsDB = { qol = { nodesight = false, classicui = false, doesitdie = false, whatstraining = false,
+  enhancedraidframes = false, names = false, lfgforever = false, buyemall = false, leatrix = false, wst = false, dynamiccam = false,
   dialogkey = false, xtolevel = false, minimapdrawer = false, mail = false, tullarange = false, tooltipanchor = false,
   money = false, prices = false, sniper = false, whocooldown = false, idtip = false, soloraidframe = false,
   enemycasts = false, fishing = false, unitscan = false, reverseengineering = false, xptext = false, questlog = false } }

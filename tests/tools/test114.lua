@@ -1,6 +1,7 @@
 -- The sniper's full scan (Modules/Sniper): its button at the tab's top right, the whole auction house at once (the
 -- game's ReplicateItems: once every 15 minutes), read a batch a frame; each item's lowest unit price (buyouts only,
--- battle pet cages left out) kept in the prices' history and judged as the passes judge it (a deal listed, a sound);
+-- battle pet cages left out) kept in the prices' history, among the prices shared with the other accounts and in
+-- Auctionator's records, and judged as the passes judge it (a deal listed, a sound);
 -- a chat line at the end; the button then waits out the game's 15 minutes (its minutes shown); nothing sent back:
 -- said; the auction house closed: stopped.
 local M, S = MOCK, MOCK.state
@@ -15,7 +16,7 @@ GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end
 ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false,
   leatrix = false, nodesight = false, wst = false, dynamiccam = false, dialogkey = false, xtolevel = false, minimapdrawer = false,
   mail = false, classicui = false, tullarange = false, names = false, tooltipanchor = false, idtip = false, soloraidframe = false,
-  enemycasts = false, reverseengineering = false, money = false, lofplus = false, prices = false } }
+  enemycasts = false, reverseengineering = false, money = false, lofplus = false, prices = true } }
 local ZERO = 1577836800
 local now = ZERO + 2000 * 86400 + 43200 -- (day 2000, noon)
 time = function(t) if t then return ZERO end return now end
@@ -96,6 +97,10 @@ check(H.Reference("Forever/9999", 1, "median") == 500, "a new item: its price ke
 check(H.Reference("Forever/3000", 1, "median") == 8, "the lowest of its 1201 auctions kept (" .. tostring(H.Reference("Forever/3000", 1, "median")) .. ")")
 check(H.Reference("Forever/82800", 0, "median") == nil and H.Reference("Forever/2590", 0, "median") == nil, "a pet cage, bids only: left out")
 check(Chat("full scan done: 1206 auctions read, 3 items' prices kept"), "said in the chat")
+local Pr = ns.Prices
+check(Pr and Pr.db and Pr.db.items["Forever/2589"] and Pr.db.items["Forever/2589"].m == 50 and Pr.db.items["Forever/9999"].m == 500,
+  "among the prices shared with the other accounts (as Auctionator's scans' prices)")
+check(records["2589"].m == 50 and records["9999"] and records["9999"].m == 500, "and in Auctionator's records (its tooltips' price)")
 out("== then: the game's 15 minutes")
 check(not f.Full:IsEnabled() and f.Full:GetText() == "Full scan (15 min)", "waiting: " .. f.Full:GetText())
 f.Full:Click()
