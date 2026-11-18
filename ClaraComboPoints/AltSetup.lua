@@ -6,7 +6,7 @@
 -- whole account (or the computer) are already every character's: not kept, so a later change of
 -- them is never undone. (Other addons' own per-character files cannot be read by another addon.)
 -- The profile picked as the alts' one goes, once, to each new character (level 5 or lower) at its
--- first login with the addon, out of combat; the interface is then offered a reload. A profile
+-- first login with the addon, out of combat; the interface then reloads at once (the game's action bars need it). A profile
 -- can also be put on the current character by hand (the options window's header), and passed to
 -- another account as a line of text (export / import). Profiles and the characters done are
 -- account-wide (ClaraComboPointsDB.alts).
@@ -533,15 +533,25 @@ local function Finish(name, asked)
   if store and me then store.done[me] = true end
   if ns.RefreshOptions then ns:RefreshOptions() end
   reloadDue = name
-  local text = (asked and L.ALTS_APPLIED_ASK or L.ALTS_GOT_ASK):format(name)
-  if p.layout and not layoutDone then text = text .. "\n\n" .. L.ALTS_LAYOUT_MISSING:format(p.layout.name) end
-  local function Ask()
-    ns:Ask(text, false, { L.RELOAD_UI, function()
-      if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
-    end }, { L.ALTS_LATER })
+  -- The interface reloaded at once, no choice: the game's own settings put on from an addon's code (its Edit Mode layout,
+  -- its action bars shown, its options) leave the game's action bars "tainted" for the rest of the session, and in a
+  -- fight the game then cannot put them back in place when it lays them out again (the pet bar showing or going): the
+  -- main bar, and everything above it, vanish until the fight ends. A reload starts a clean session.
+  local function Say(text)
+    if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage(text, 1, 0.82, 0) end
   end
-  -- (after the dialog that asked for it, if any, is gone: the game's dialogs are reused)
-  if C_Timer and C_Timer.After then C_Timer.After(0, Ask) else Ask() end
+  Say(L.ALTS_RELOADING:format(name))
+  if p.layout and not layoutDone then Say(L.ALTS_LAYOUT_MISSING:format(p.layout.name)) end
+  local function Reload()
+    if InCombatLockdown and InCombatLockdown() then -- (a fight started meanwhile: once it ends)
+      waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
+      waiter.reload = true
+      return
+    end
+    if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+  end
+  if C_Timer and C_Timer.After then C_Timer.After(2, Reload) else Reload() end
+  ns.AltReload = Reload -- (for the tests)
 end
 
 local function TryPending()
@@ -559,7 +569,13 @@ local function TryPending()
   waiter:UnregisterAllEvents()
   Finish(job.name, job.asked)
 end
-waiter:SetScript("OnEvent", function()
+waiter:SetScript("OnEvent", function(self)
+  if self.reload and not (InCombatLockdown and InCombatLockdown()) then
+    self.reload = nil
+    self:UnregisterAllEvents()
+    if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+    return
+  end
   if C_Timer and C_Timer.After then C_Timer.After(0, TryPending) else TryPending() end
 end)
 

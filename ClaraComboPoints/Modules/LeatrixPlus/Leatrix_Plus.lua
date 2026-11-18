@@ -2911,6 +2911,20 @@
 							if not (active and active.layoutName and active.layoutName:lower() == wanted) then
 								C_EditMode.SetActiveLayout(index)
 								LeaPlusLC:Print(L["Edit Mode layout"] .. " '" .. layout.layoutName .. "' " .. L["applied"])
+								-- (Clara Combo Points) a layout switched from an addon's code leaves the game's action bars
+								-- tainted for the session: in a fight the game then cannot lay them out again (the pet bar
+								-- showing or going), and the main bar and those above it vanish. A reload, once (the layout
+								-- stays this character's: the next logins switch nothing).
+								local sv, me, now = ClaraNS.sv, UnitGUID("player"), time()
+								local last = type(sv) == "table" and sv.leaLayoutReload
+								if type(sv) == "table" and not (type(last) == "table" and last.who == me and now - (tonumber(last.at) or 0) < 300) then
+									sv.leaLayoutReload = { who = me, at = now }
+									LeaPlusLC:Print(ClaraNS.L.LEA_LAYOUT_RELOAD)
+									C_Timer.After(2, function()
+										if InCombatLockdown() then LeaPlusLC:Print(ClaraNS.L.LEA_LAYOUT_RELOAD_LATER) return end
+										if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+									end)
+								end
 							end
 							return true
 						end
