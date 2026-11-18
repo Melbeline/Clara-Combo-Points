@@ -808,9 +808,11 @@ end
 -- Glisser-déposer : détacher une icône du menu / la rattacher
 ---------------------------------------------------------------------
 local DRAG_STRATA = "FULLSCREEN_DIALOG"  -- au-dessus de tout pendant le glisser
--- icône libre posée sur l'écran : la strate de la minicarte (au-dessus d'elle par son niveau), sous les fenêtres (sacs,
--- personnage, quêtes...) ; en HIGH, l'icône d'AtlasLoot passait par-dessus les sacs
-local FREE_STRATA = "LOW"
+-- icône libre posée sur l'écran : au-dessus de la minicarte et de son anneau (strate LOW) par sa strate, sous les fenêtres
+-- (sacs, personnage, quêtes... : MEDIUM, à un niveau plus haut) par son niveau, le plus bas ; en HIGH, l'icône d'AtlasLoot
+-- passait par-dessus les sacs, et en LOW (niveau 10) la minicarte la recouvrait quand même (son anneau, et la souris)
+local FREE_STRATA = "MEDIUM"
+local function FreeLevel() return UIParent:GetFrameLevel() end
 
 local function CursorOverMenu()
     if not menu:IsShown() then return false end
@@ -839,7 +841,7 @@ local function SetFree(btn, x, y)
     info[btn].idleSince = GetTime()
     btn:SetParent(UIParent)
     btn:SetFrameStrata(FREE_STRATA)
-    btn:SetFrameLevel(10)
+    btn:SetFrameLevel(FreeLevel())
     rawClearAllPoints(btn)
     rawSetPoint(btn, "CENTER", UIParent, "BOTTOMLEFT", x, y)
     lastSig = nil
