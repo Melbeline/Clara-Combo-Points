@@ -76,6 +76,7 @@ local function Grab(link)
   local held = HeldSpell()
   if held == id then return end      -- already held (the press, then the click)
   if GetCursorInfo and GetCursorInfo() then return end -- something else is held
+  if InCombatLockdown and InCombatLockdown() then return end -- (the game forbids taking a spell in a fight)
   if not pcall(PickupSpell, id) or not HeldSpell() then return end -- (a passive spell stays put)
   if ItemRefTooltip and ItemRefTooltip:IsShown() then ItemRefTooltip:Hide() end
   Hold(id)
