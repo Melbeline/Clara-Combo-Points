@@ -1,0 +1,85 @@
+-- Names of the friends list's characters the earlier capitals broke (an accented first letter cut in two and kept so:
+-- "Éclair Chazal" said "▯clair Chazal", "Clair Chazal has gone offline."): mended. From the list's own key when it is
+-- whole; else from a whole name Clara knows (a character seen, its sex kept), heard (a whisper's sender), or a
+-- Battle.net friend's character; never another name, never a whole one changed. ClassicFriendsList's (Clara's same
+-- code: test117).
+local M, S = MOCK, MOCK.state
+local out = function(s) io.write(tostring(s), "\n") end
+local fails = 0
+local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
+GetBuildInfo = function() return "1.60.1", "70938", "Nov 13 2026", 16001 end
+function UnitNameUnmodified(u) if u == "player" then return "Lola", "Moon" end end
+ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false,
+  leatrix = false, nodesight = false, wst = false, dynamiccam = false, dialogkey = false, xtolevel = false, minimapdrawer = false,
+  mail = false, classicui = false, tullarange = false, names = false, tooltipanchor = false, idtip = false, soloraidframe = false,
+  enemycasts = false, reverseengineering = false } }
+
+-- The game's capitals read UTF-8 (imitated): "é" -> "É" whole
+local plainUpper = string.upper
+local CAPS = { ["é"] = "É", ["è"] = "È", ["ê"] = "Ê", ["à"] = "À", ["ç"] = "Ç", ["ô"] = "Ô" }
+string.upper = function(s)
+  local t, i = {}, 1
+  while i <= #s do
+    local b = s:byte(i)
+    local len = b < 0x80 and 1 or b >= 0xF0 and 4 or b >= 0xE0 and 3 or b >= 0xC0 and 2 or 1
+    local ch = s:sub(i, i + len - 1)
+    if len == 1 and b < 0x80 then t[#t + 1] = plainUpper(ch) else t[#t + 1] = CAPS[ch] or ch end
+    i = i + len
+  end
+  return table.concat(t)
+end
+
+local BAD = "\239\191\189" -- (the replacement sign the game's capitals left)
+local bnet = {}
+C_BattleNet = C_BattleNet or {}
+C_BattleNet.GetFriendAccountInfo = function(i) return bnet[i] end
+BNGetNumFriends = function() return #bnet end
+
+local ns = {}
+S.class = "ROGUE"; S.locale = "frFR"
+C_AddOns = C_AddOns or {}
+C_AddOns.IsAddOnLoaded = function() return false end
+M.LoadAddonAs(ADDON_DIR, "ClassicFriendsList.toc", "ClassicFriendsList", ns)
+M.Fire("ADDON_LOADED", "ClassicFriendsList")
+local A = ns.CFL
+ClassicFriendsListDB.friends = {
+  ["éclair chazal"] = { name = BAD .. "\137clair Chazal" },            -- its key whole
+  [BAD .. "\169mile zola"] = { name = BAD .. "\169mile Zola" },        -- key broken too: a character seen
+  ["\137lodie dupré"] = { name = "\137lodie Dupré" },                  -- a byte left alone: heard in a whisper
+  [BAD .. "\136ve lune"] = { name = BAD .. "\136ve Lune" },            -- a Battle.net friend's character
+  [BAD .. "\137clair dupont"] = { name = BAD .. "\137clair Dupont" },  -- nobody known by that name: left as it is
+  ["eclair chazal"] = { name = "Eclair Chazal" },                      -- whole: never changed
+}
+ClassicFriendsListDB.sexes = { ["émile zola"] = 2 }
+local function Named(name)
+  for key, alt in pairs(A.List()) do if alt.name == name then return key end end
+end
+local function BrokenLeft() local n = 0 for _, alt in pairs(A.List()) do if A.Broken(alt.name) then n = n + 1 end end return n end
+
+out("== its key whole: its name back from it")
+check(Named("Éclair Chazal") == "éclair chazal", "\"Éclair Chazal\", under its key")
+check(Named("Eclair Chazal") == "eclair chazal", "the whole \"Eclair Chazal\" left as it is")
+
+out("== at login: from a character seen (its sex kept), and a Battle.net friend's character")
+bnet = { { gameAccountInfo = { characterName = "Ève Lune", isOnline = true } } }
+M.Fire("PLAYER_LOGIN")
+check(Named("Émile Zola") ~= nil and not A.Broken(Named("Émile Zola")), "\"Émile Zola\", under a whole key")
+check(Named("Ève Lune") ~= nil, "\"Ève Lune\"")
+
+out("== heard in a whisper by its whole name")
+check(Named("\137lodie Dupré") ~= nil, "still broken before")
+M.Fire("CHAT_MSG_WHISPER", "coucou", "Élodie Dupré-Realm", "", "", "Élodie Dupré", "", 0, 0, "", 0, 1, "Player-1-0001")
+check(Named("Élodie Dupré") ~= nil, "\"Élodie Dupré\"")
+
+out("== nobody known by that name: left, nothing else changed")
+check(BrokenLeft() == 1 and Named(BAD .. "\137clair Dupont") ~= nil, "one left broken (" .. BrokenLeft() .. ")")
+local count = 0
+for _ in pairs(A.List()) do count = count + 1 end
+check(count == 6, "six characters still (" .. count .. ")")
+A.Mend("Éclair Chazol")
+check(Named(BAD .. "\137clair Dupont") ~= nil, "another surname: not it")
+A.List(); A.List()
+check(Named("Éclair Chazal") and Named("Élodie Dupré") and Named("Émile Zola"), "the whole names kept as they are, list after list")
+string.upper = plainUpper
+out(string.format("\n%d failure(s)", fails))
+return fails
