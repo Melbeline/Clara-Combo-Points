@@ -42,17 +42,81 @@ local function Normal(name)
   return name
 end
 
+-- A name the earlier capitals broke (its accented first letter cut in two, kept so: "Éclair" became "▯clair"): the
+-- replacement sign in it, or bytes that are no UTF-8
+local function Broken(name)
+  if type(name) ~= "string" or issecretvalue(name) then return false end
+  if name:find("\239\191\189", 1, true) then return true end
+  local i, n = 1, #name
+  while i <= n do
+    local b = name:byte(i)
+    local len = b < 128 and 1 or (b >= 194 and b <= 223) and 2 or (b >= 224 and b <= 239) and 3 or (b >= 240 and b <= 244) and 4
+    if not len then return true end
+    for k = i + 1, i + len - 1 do
+      local c = name:byte(k)
+      if not c or c < 128 or c > 191 then return true end
+    end
+    i = i + len
+  end
+  return false
+end
+AltFriends.Broken = Broken
+-- Its plain letters alone, lower-case (the accented ones, and what is left of a broken one, dropped): a broken name
+-- and its whole spelling alike ("▯clair Chazal", "Éclair Chazal": "clair chazal")
+local function Plain(name) return ((name:gsub("[\128-\255]", "")):lower()) end
+
 local function List()
   local sv = ns.sv
   if not sv then return nil end
   if type(sv.altFriends) ~= "table" then sv.altFriends = {} end
-  for key, alt in pairs(sv.altFriends) do
-    if type(key) ~= "string" or type(alt) ~= "table" or not Normal(alt.name) then sv.altFriends[key] = nil
-    else alt.name = Normal(alt.name) end
+  local list, moved = sv.altFriends, nil
+  for key, alt in pairs(list) do
+    if type(key) ~= "string" or type(alt) ~= "table" or type(alt.name) ~= "string" then list[key] = nil
+    else
+      -- (a broken name: its whole spelling back from its key, when that one is whole)
+      if Broken(alt.name) and not Broken(key) and key:find("[\128-\255]") and Plain(key) == Plain(alt.name) then
+        alt.name = key
+      end
+      if not Normal(alt.name) then list[key] = nil
+      else
+        alt.name = Normal(alt.name)
+        if Broken(key) and not Broken(alt.name) then moved = moved or {}; moved[key] = alt end
+      end
+    end
   end
-  return sv.altFriends
+  -- (one kept under a broken key, its name whole: kept under its whole one)
+  for key, alt in pairs(moved or {}) do
+    list[key] = nil
+    local whole = alt.name:lower()
+    if not list[whole] then list[whole] = alt end
+  end
+  return list
 end
 AltFriends.List = List
+
+-- A whole name seen or heard as the game writes it (a sender, a unit, a Battle.net friend's character, a character
+-- known), or one of the names kept lower-case: one of the list whose name is broken takes it back, under its whole
+-- name. Its first name and surname must match whole (their plain letters).
+function AltFriends.Mend(heard)
+  if issecretvalue(heard) or type(heard) ~= "string" then return false end
+  local proper = ((heard:match("^([^%-]+)") or heard):gsub("^%s+", ""):gsub("%s+$", ""))
+  if proper == "" or not proper:find("[\128-\255]") or Broken(proper) then return false end
+  local list = List()
+  if not list then return false end
+  local plain = Plain(proper)
+  for key, alt in pairs(list) do
+    if Broken(alt.name) and Plain(alt.name) == plain then
+      local name = Normal(proper)
+      if not name then return false end
+      list[key] = nil
+      if not list[name:lower()] then list[name:lower()] = alt end
+      alt.name = name
+      if AltFriends.Refresh then AltFriends.Refresh() end
+      return true
+    end
+  end
+  return false
+end
 
 -- A line in the chat as the game's own system lines (yellow), in the game's words when it has them
 local function SaySystem(text)
@@ -177,6 +241,33 @@ local function AccountIndex()
   end
   return index
 end
+
+-- The list's broken names mended from every whole name Clara knows: the characters seen (their sex kept), this
+-- account's, the gold tracker's, the Battle.net friends' characters in the game (nothing done while none is broken)
+local function MendKnown()
+  local any = false
+  for _, alt in pairs(List() or {}) do if Broken(alt.name) then any = true break end end
+  if not any then return end
+  local names = {}
+  local sv = ns.sv
+  for key in pairs(type(sv) == "table" and type(sv.sexes) == "table" and sv.sexes or {}) do names[#names + 1] = key end
+  for key in pairs(AccountChars() or {}) do names[#names + 1] = key end
+  for _, list in pairs(AccountIndex().members) do
+    for _, whole in ipairs(list) do names[#names + 1] = whole end
+  end
+  if C_BattleNet and C_BattleNet.GetFriendAccountInfo and BNGetNumFriends then
+    local okCount, count = pcall(BNGetNumFriends)
+    for i = 1, (okCount and type(count) == "number" and not issecretvalue(count)) and count or 0 do
+      local ok, info = pcall(C_BattleNet.GetFriendAccountInfo, i)
+      local game = ok and type(info) == "table" and info.gameAccountInfo
+      if type(game) == "table" then names[#names + 1] = game.characterName end
+    end
+  end
+  for _, name in ipairs(names) do
+    if type(name) == "string" then AltFriends.Mend(name) end
+  end
+end
+AltFriends.MendKnown = MendKnown
 
 -- One of this WoW account's other characters: never online while the player plays (a WoW account plays one character
 -- at a time), never asked. Known from the characters that logged in on this account, and from the gold tracker's
@@ -1583,6 +1674,7 @@ local function Announce(alt, online)
   frame:AddMessage(text, r, g, b)
 end
 local function Look(announce)
+  MendKnown()
   local changed = false
   for key, alt in pairs(List() or {}) do
     if not IsMe(alt.name) and AltFriends.Known(alt.name) then
@@ -1883,6 +1975,7 @@ local function NoteUnit(unit)
   if not ok or issecretvalue(player) or not player then return end
   local name = WholeName(unit)
   if not name then return end
+  AltFriends.Mend(name)
   local alt, own = Listed(Key(name))
   if not alt then return end
   local okSex, sex = pcall(UnitSex, unit)
@@ -1918,6 +2011,7 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4, ...)
     local prefix, text, channel, sender = a1, a2, a3, a4
     if prefix ~= PROBE_PREFIX or channel ~= "WHISPER" then return end
     if issecretvalue(text) or issecretvalue(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
+    AltFriends.Mend(sender)
     local alt, own = Listed(Key(sender))
     if not alt then
       -- A player not in this list asking: answered all the same (its level, class and zone are what /who tells
@@ -1959,6 +2053,7 @@ probeEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4, ...)
     for i = 1, (GetNumGroupMembers and GetNumGroupMembers() or 0) do NoteUnit((raid and "raid" or "party") .. i) end
   else -- heard in the chat: by its whole name only (a first name alone may be anyone's)
     if issecretvalue(a2) or type(a2) ~= "string" or a2 == "" then return end
+    AltFriends.Mend(a2)
     local heard = Key(a2)
     local alt, own = Listed(heard)
     if alt and own == heard then
