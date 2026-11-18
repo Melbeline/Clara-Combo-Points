@@ -193,6 +193,8 @@ end
 
 function ns.SetLevelIf(frame, level)
     if Same(frame:GetFrameLevel(), level) then return false end
+    -- (a protected frame's level cannot be set in a fight: "Button:SetFrameLevel() blocked"; set again after it)
+    if InCombatLockdown() and frame.IsProtected and frame:IsProtected() then return false end
     frame:SetFrameLevel(level)
     return true
 end

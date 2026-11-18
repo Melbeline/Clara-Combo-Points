@@ -68,8 +68,14 @@ local function Action(entry)
 end
 
 -- A second summon of the out pet sends it home.
+-- (the game refuses a summon in a fight: "SummonPetByGUID() blocked"; said instead)
 local function Act(entry)
-    if entry.petID then PJ.SummonPetByGUID(entry.petID) end
+    if not entry.petID then return end
+    if InCombatLockdown() then
+        if ns.SayNotInCombat then ns.SayNotInCombat() end
+        return
+    end
+    PJ.SummonPetByGUID(entry.petID)
 end
 
 local function Pickup(entry)
