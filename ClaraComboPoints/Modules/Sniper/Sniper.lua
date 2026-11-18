@@ -192,7 +192,8 @@ end)
 ---------------------------------------------------------------------------
 -- The full scan: the whole auction house at once (the game's ReplicateItems, as Auctionator's own full scan does; the
 -- game allows it once every 15 minutes). Each item's lowest price (a unit's, buyouts only; battle pets left out: one
--- cage item for all of them) goes into the prices' history (today), and each item is judged as the passes judge it.
+-- cage item for all of them) goes into the prices' history (today), among the prices shared with the other accounts
+-- and into Auctionator's records (as its own scans' prices do), and each item is judged as the passes judge it.
 -- Read a few hundred auctions a frame: the game is never held.
 ---------------------------------------------------------------------------
 local FULL_EVERY = 15 * 60 -- (the game's own limit)
@@ -225,6 +226,15 @@ local function FullKeep(job)
     local itemID = job.items[i]
     local price = job.low[itemID]
     if realm then H.Add(realm .. "/" .. itemID, price) end
+    -- (and as Auctionator's own scans are: kept among the prices shared with the other accounts, and in Auctionator's
+    -- records, its tooltips' price; Prices.lua)
+    local Pr = ns.Prices
+    if Pr and Pr.Record then
+      Pr.Record(tostring(itemID), price, job.qty[itemID], realm)
+      if Pr.WriteAuctionator and Pr.Day then
+        Pr.WriteAuctionator(tostring(itemID), { m = price, d = Pr.Day(), a = job.qty[itemID] }, true)
+      end
+    end
     local result = { itemKey = { itemID = itemID, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 },
       minPrice = price, totalQuantity = job.qty[itemID] }
     if Look(result) then job.heard = true end
