@@ -147,6 +147,10 @@ M.MenuPick("Default")
 check(alts.default == "Default", "picked again from the list")
 
 -- a new character: its first login
+local reloads = 0
+C_UI = C_UI or {}
+C_UI.Reload = function() reloads = reloads + 1 end
+local function Said(pat) for _, line in ipairs(M.chat or {}) do if line:find(pat, 1, true) then return true end end return false end
 local function Fresh(guid, level)
   GUID, LEVEL = guid, level
   for _, c in pairs(CV) do c.value = c.default end
@@ -154,6 +158,8 @@ local function Fresh(guid, level)
   EditModeManagerFrame.layoutInfo.activeLayout = 1
   M.timers = {}
   M.popup = nil
+  M.chat = {}
+  reloads = 0
 end
 Fresh("Player-2", 1)
 CV.autoLootDefault.value = "0" -- (turned off on the account since the profile was saved)
@@ -166,10 +172,9 @@ check(CV.autoLootDefault.value == "0", "the account's own left as it is now")
 check(BARS[1] and BARS[2] and not BARS[3] and barCalls == 1, "its action bars")
 check(EditModeManagerFrame.layoutInfo.activeLayout == 3, "its Edit Mode layout")
 check(alts.done["Player-2"], "done")
+check(Said("the interface reloads to finish") and reloads == 0, "said in the chat")
 M.RunTimer()
-check(M.popup and M.popup.text:find("new character", 1, true) and M.popup.buttons[1] == "Reload UI" and M.popup.buttons[2] == "Later",
-  "then: reload the interface?")
-M.PopupClick(2)
+check(reloads == 1 and M.popup == nil, "then the interface reloaded at once, no choice (the game's action bars need it)")
 Fresh("Player-2", 1)
 ns:AltsAtLogin()
 check(#M.timers == 0, "its next login: nothing again")
@@ -185,6 +190,12 @@ check(CV.lockActionBars.value == "0" and not alts.done["Player-4"], "in combat: 
 S.inCombat = false
 M.Fire("PLAYER_REGEN_ENABLED"); M.RunTimer()
 check(CV.lockActionBars.value == "1" and alts.done["Player-4"], "out of combat: set")
+S.inCombat = true
+M.RunTimer()
+check(reloads == 0, "a fight begun meanwhile: no reload yet")
+S.inCombat = false
+M.Fire("PLAYER_REGEN_ENABLED")
+check(reloads == 1, "the fight over: reloaded")
 
 -- Edit Mode not ready yet: once it is
 Fresh("Player-5", 1)
@@ -200,9 +211,8 @@ check(CV.lockActionBars.value == "1" and EditModeManagerFrame.layoutInfo.activeL
 Fresh("Player-6", 1)
 EditModeManagerFrame.layoutInfo = Layouts(1, false)
 ns:AltsAtLogin(); M.RunTimer(); M.RunTimer()
-check(EditModeManagerFrame.layoutInfo.activeLayout == 1 and M.popup and M.popup.text:find('"Clara" is not on this character', 1, true),
+check(EditModeManagerFrame.layoutInfo.activeLayout == 1 and Said('"Clara" is not on this character'),
   "a layout not there: kept as it is, and said")
-M.PopupClick(2)
 EditModeManagerFrame.layoutInfo = Layouts(3)
 
 -- applied by hand, from the list
@@ -211,8 +221,9 @@ M.Press(picker); M.Frame(0.016)
 M.MenuPick('Apply "Default" to this character')
 check(M.popup and M.popup.text:find("Apply the profile", 1, true), "applying asks first")
 M.PopupClick(1); M.RunTimer()
-check(CV.lockActionBars.value == "1" and alts.done["Player-7"] and M.popup and M.popup.text:find("was applied", 1, true), "applied, then reload?")
-M.PopupClick(2)
+check(CV.lockActionBars.value == "1" and alts.done["Player-7"] and Said("the interface reloads to finish"), "applied, said")
+M.RunTimer()
+check(reloads == 1, "then reloaded")
 
 -- a new profile from the list, named
 GUID = "Player-1"

@@ -326,5 +326,17 @@ assert(ns:QolState("minimapdrawer") == "off" and rawget(env, "MinimapDrawerHotsp
 ns = Session({ notForever = true })
 assert(ns:QolState("minimapdrawer") == "unavailable" and rawget(env, "MinimapDrawerHotspot") == nil, "not Forever: unavailable")
 print("off, not Forever: nothing loaded")
+-- 5. An icon taken out of the drawer and put on the minimap (AtlasLoot's): over the minimap (its strata, LOW, whatever
+-- the levels), under the windows (MEDIUM at UIParent's level, the lowest)
+ns = Session({ saved = { free = { LibDBIcon10_AtlasLoot = { x = 1874, y = 874 } } } })
+local atlas = Mock("atlas")
+rawset(atlas, "__text", "LibDBIcon10_AtlasLoot")
+rawset(atlas, "__type", "Button")
+rawset(env, "LibStub", function(name) if name == "LibDBIcon-1.0" then return { objects = { AtlasLoot = atlas } } end end)
+fire("ADDON_LOADED", "ClaraComboPoints"); fire("PLAYER_LOGIN")
+assert(rawget(atlas, "__strata") == "MEDIUM" and rawget(atlas, "__level") == 1, "AtlasLoot's icon, out of the drawer: MEDIUM at UIParent's level, got "
+  .. tostring(rawget(atlas, "__strata")) .. " " .. tostring(rawget(atlas, "__level")))
+rawset(env, "LibStub", nil)
+print("an icon out of the drawer: over the minimap, under the windows")
 assert(#errors == 0, "no error: " .. table.concat(errors, " | "))
 print("ALL OK")
