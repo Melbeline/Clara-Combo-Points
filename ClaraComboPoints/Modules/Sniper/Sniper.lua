@@ -4,7 +4,8 @@
 -- once the items whose lowest price is a given share under their usual price, the best first. Their usual price:
 -- the median (or the mean) of their days' lowest prices over 24 hours, 3, 7, 15 or 30 days, 3, 6 or 12 months, or
 -- all time (History.lua), switched with one click; the share with a slider (0 to 100 %) or typed in its box. A row
--- clicked opens the item in the game's own buy view (each purchase: one click, as the game wants). Needs
+-- clicked opens the item in the game's own buy view (each purchase: one click, as the game wants). A full scan (its
+-- button, top right): the whole auction house at once, every item's price kept and judged (once every 15 minutes). Needs
 -- Auctionator (its tab strip; its records feed the prices): none of its code is here, its tab strip is given a
 -- tab through what it offers other addons (Auctionator.Tabs.Register).
 local ADDON, ns = ...
@@ -189,6 +190,107 @@ events:SetScript("OnEvent", function(_, event, added)
 end)
 
 ---------------------------------------------------------------------------
+-- The full scan: the whole auction house at once (the game's ReplicateItems, as Auctionator's own full scan does; the
+-- game allows it once every 15 minutes). Each item's lowest price (a unit's, buyouts only; battle pets left out: one
+-- cage item for all of them) goes into the prices' history (today), and each item is judged as the passes judge it.
+-- Read a few hundred auctions a frame: the game is never held.
+---------------------------------------------------------------------------
+local FULL_EVERY = 15 * 60 -- (the game's own limit)
+local FULL_WAIT = 90       -- seconds without the list: none came (the limit not over yet)
+local FULL_BATCH = 500     -- auctions read, or items kept, a frame
+local PET_CAGE = 82800
+
+-- Seconds before the game allows a full scan again (the last one asked, for the whole account)
+function Sn.FullLeft()
+  local at = ns.sv and tonumber(ns.sv.sniperFullAt)
+  if not at then return 0 end
+  return math.max(0, FULL_EVERY - (time() - at))
+end
+
+local fullEvents = CreateFrame("Frame")
+local function FullEnd(note)
+  fullEvents:UnregisterAllEvents()
+  Sn.full = nil
+  if note and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage(note, 1, 0.82, 0) end
+  if Sn.Refresh then Sn.Refresh() end
+end
+
+local function Later(job, fn) C_Timer.After(0, function() if Sn.full == job then fn(job) end end) end
+
+-- Its items kept, a batch a frame: their price in the history, each judged
+local function FullKeep(job)
+  local realm = H.Realm()
+  local last = math.min(#job.items, job.kept + FULL_BATCH)
+  for i = job.kept + 1, last do
+    local itemID = job.items[i]
+    local price = job.low[itemID]
+    if realm then H.Add(realm .. "/" .. itemID, price) end
+    local result = { itemKey = { itemID = itemID, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 },
+      minPrice = price, totalQuantity = job.qty[itemID] }
+    if Look(result) then job.heard = true end
+  end
+  job.kept = last
+  if job.kept < #job.items then
+    if Sn.Refresh then Sn.Refresh() end
+    return Later(job, FullKeep)
+  end
+  if job.heard then Sound() end
+  local deals = 0
+  for _ in pairs(Sn.deals) do deals = deals + 1 end
+  FullEnd(L.SNIPER_FULL_DONE:format(job.total, #job.items, deals))
+end
+
+-- Its auctions read, a batch a frame: each item's lowest unit price, and how many
+local function FullRead(job)
+  local AHAPI = C_AuctionHouse
+  local total = tonumber(AHAPI.GetNumReplicateItems()) or 0
+  job.total = total
+  local last = math.min(total - 1, job.next + FULL_BATCH - 1)
+  for i = job.next, last do
+    local ok, _name, _texture, count, _quality, _usable, _level, _levelType, _minBid, _minIncrement, buyout,
+      _bid, _highBidder, _bidder, _owner, _ownerFull, _status, itemID = pcall(AHAPI.GetReplicateItemInfo, i)
+    if ok and type(itemID) == "number" and itemID ~= PET_CAGE and type(count) == "number" and count > 0
+      and type(buyout) == "number" and buyout > 0 then
+      local unit = math.floor(buyout / count)
+      local low = job.low[itemID]
+      if not low then job.items[#job.items + 1] = itemID end
+      job.low[itemID] = low and math.min(low, unit) or unit
+      job.qty[itemID] = (job.qty[itemID] or 0) + count
+    end
+  end
+  job.next = last + 1
+  if Sn.Refresh then Sn.Refresh() end
+  if job.next < total then return Later(job, FullRead) end
+  job.reading = false
+  Later(job, FullKeep)
+end
+
+fullEvents:SetScript("OnEvent", function(_, event)
+  local job = Sn.full
+  if not job then return end
+  if event == "AUCTION_HOUSE_CLOSED" then FullEnd() return end
+  if job.started then return end -- (the list came: read once)
+  job.started, job.reading = true, true
+  FullRead(job)
+end)
+
+function Sn.FullScan()
+  local AHAPI = C_AuctionHouse
+  if Sn.full or not (AHAPI and AHAPI.ReplicateItems and AHAPI.GetNumReplicateItems and AHAPI.GetReplicateItemInfo) then return end
+  if Sn.FullLeft() > 0 then return end
+  local job = { next = 0, total = 0, kept = 0, items = {}, low = {}, qty = {} }
+  Sn.full = job
+  if ns.sv then ns.sv.sniperFullAt = time() end
+  fullEvents:RegisterEvent("REPLICATE_ITEM_LIST_UPDATE")
+  fullEvents:RegisterEvent("AUCTION_HOUSE_CLOSED")
+  AHAPI.ReplicateItems()
+  C_Timer.After(FULL_WAIT, function()
+    if Sn.full == job and not job.started then FullEnd(L.SNIPER_FULL_REFUSED) end
+  end)
+  if Sn.Refresh then Sn.Refresh() end
+end
+
+---------------------------------------------------------------------------
 -- The tab
 ---------------------------------------------------------------------------
 local function Money(c)
@@ -228,10 +330,27 @@ local function Build(f)
   go:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -34)
   go:SetScript("OnClick", function() if Sn.running then Sn.Stop() else Sn.Start() end end)
   f.Go = go
+  -- the full scan, at the top right (its text: where it stands, or the minutes before the game allows it again)
+  local full = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  full:SetSize(160, 24)
+  full:SetPoint("TOPRIGHT", f, "TOPRIGHT", -12, -34)
+  full:SetScript("OnClick", function() Sn.FullScan() end)
+  if full.SetMotionScriptsWhileDisabled then full:SetMotionScriptsWhileDisabled(true) end -- (its tooltip while it waits)
+  full:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText(L.SNIPER_FULL, 1, 1, 1)
+    GameTooltip:AddLine(L.SNIPER_FULL_TIP, nil, nil, nil, true)
+    GameTooltip:Show()
+  end)
+  full:SetScript("OnLeave", GameTooltip_Hide)
+  f.Full = full
   local status = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   status:SetPoint("LEFT", go, "RIGHT", 10, 0)
+  status:SetPoint("RIGHT", full, "LEFT", -10, 0)
   status:SetJustifyH("LEFT")
   f.Status = status
+  -- (the minutes before the next full scan, kept up while the tab is shown)
+  C_Timer.NewTicker(5, function() if Visible() and (Sn.full or Sn.FullLeft() > 0) then Sn.Refresh() end end)
 
   -- the window: nine buttons, one click
   local label = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -368,7 +487,7 @@ local function Build(f)
   end)
   f:HookScript("OnShow", function() Sn.Refresh(); if Sn.running and not Sn.waiting then Pass() end end)
 
-  for _, b in ipairs({ go, mode, unpack(f.windows) }) do ns:DressButton(b) end
+  for _, b in ipairs({ go, full, mode, unpack(f.windows) }) do ns:DressButton(b) end
   ns:DressCheck(sound)
   if Sn.Refresh then Sn.Refresh() end
 end
@@ -377,6 +496,19 @@ function Sn.Refresh()
   local f = Sn.frame
   if not f then return end
   f.Go:SetText(Sn.running and L.SNIPER_STOP or L.SNIPER_START)
+  local job, left = Sn.full, Sn.FullLeft()
+  if job then
+    local share = job.reading ~= false and (job.total > 0 and job.next / job.total * 90 or 0)
+      or (90 + (#job.items > 0 and job.kept / #job.items * 10 or 10))
+    f.Full:SetText(L.SNIPER_FULL_RUNNING:format(math.floor(share)))
+    f.Full:Disable()
+  elseif left > 0 then
+    f.Full:SetText(L.SNIPER_FULL_WAIT:format(math.ceil(left / 60)))
+    f.Full:Disable()
+  else
+    f.Full:SetText(L.SNIPER_FULL)
+    f.Full:Enable()
+  end
   local count = 0
   for _ in pairs(Sn.deals) do count = count + 1 end
   local seen = 0
