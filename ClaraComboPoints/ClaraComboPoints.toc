@@ -5,9 +5,9 @@
 ## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
 ## Version: 1.7.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraDoesItDieDB, ClaraMoneyDB
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraDoesItDieDB, ClaraMoneyDB, ClaraWaterShieldDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: TipTac, WeaponSwingTimer, BuyEmAllClassic, DialogKey_Numy, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, DoesItDie, ElvUI, EasyFrames, Glass
+## OptionalDeps: TipTac, WeaponSwingTimer, BuyEmAllClassic, DialogKey_Numy, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, DoesItDie, ElvUI, EasyFrames, Glass, WaterShieldTracker
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 # (ClaraLeaPlusDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraXToLevelDB: not built in here, kept for the full version)
@@ -92,6 +92,7 @@ Modules\IdTip\IdTip.lua
 Modules\PetFeed\PetFeed.lua
 Modules\ReportMute\ReportMute.lua
 Modules\TooltipTarget\TooltipTarget.lua
+Modules\WaterShieldTracker\WaterShieldTracker.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
 Modules\EnemyCasts\EnemyCasts.lua
 Modules\DoesItDie\Bootstrap.lua
