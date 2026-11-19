@@ -300,6 +300,35 @@ check(Listed(p) == "2,3,5", "ticked: only what the bags make")
 root.items[1].set()
 check(not C.FilterOn(), "unticked: off again")
 
+out("== with ForeverRecipes: the panel under its Difficulty and Source panels, never over them")
+-- (ForeverRecipes' own frames on the page, as it makes them: its Difficulty with its bar and estimates, its Source)
+local function Kids(parent) local t = {} for _, f in ipairs(M.frames) do if f._parent == parent then t[#t + 1] = f end end return t end
+function page:GetChildren() return unpack(Kids(self)) end
+local function OurScroll() for _, f in ipairs(Kids(form)) do if f._kind == "ScrollFrame" then return f end end end
+local function Under() local _, rel, relPoint = OurScroll():GetPoint(1) return rel, relPoint end
+form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
+check(select(1, Under()) == form.Reagents, "no ForeverRecipes: under the reagents")
+ForeverRecipes = {}
+local difficulty = CreateFrame("Frame", nil, page)
+difficulty.estimateRows = {}; difficulty.bar = CreateFrame("Frame", nil, difficulty); difficulty.req = difficulty:CreateFontString()
+difficulty:SetPoint("TOPLEFT", form, "TOPLEFT", 22, -270); difficulty:SetHeight(112)
+local source = CreateFrame("Frame", nil, page)
+source.rows = {}; source.content = source
+source:SetPoint("TOPLEFT", difficulty, "BOTTOMLEFT", 0, -12); source:SetHeight(24)
+difficulty:Show(); source:Show()
+form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
+local rel, relPoint = Under()
+check(rel == source and relPoint == "BOTTOMLEFT", "its Source shown: the panel under it")
+source:Hide(); Run()
+check(select(1, Under()) == difficulty, "its Source hidden (its option): under its Difficulty, placed again at once")
+difficulty:Hide(); Run()
+check(select(1, Under()) == form.Reagents, "a recipe it knows nothing of (its panels hidden): under the reagents again")
+difficulty:Show(); source:Show(); Run()
+check(select(1, Under()) == source, "shown again: under its Source")
+check(next(rawget(difficulty, "estimateRows")) == nil and source.content == source, "its frames left as they were")
+difficulty:Hide(); source:Hide(); Run()
+ForeverRecipes = nil
+
 if ns.CraftClassicDetail then
   out("== ClassicUI's professions window (its hooks)")
   check(ns.CraftMatch(2, { name = "Gold Power Core" }, '"gold power core"') and not ns.CraftMatch(1, { name = "Tranquil Mechanical Yeti" }, '"gold power core"'),
