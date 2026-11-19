@@ -112,6 +112,19 @@ out("== the list: the map's rares first, the search, Show all and Hide all")
 button:Click("RightButton")
 local panel = ns.RareMapPanel
 check(panel and panel:IsShown(), "opened by the button's right-click")
+-- (its rows end above the foot's buttons; the count on the title's line, not in the foot)
+local lowest = 0
+for _, child in ipairs(Children(panel)) do
+  if child.check then
+    local _, _, _, _, top = child:GetPoint(1)
+    lowest = math.max(lowest, -top + child:GetHeight())
+  end
+end
+local _, _, _, _, footY = panel.showAll:GetPoint(1)
+local footTop = panel:GetHeight() - footY - panel.showAll:GetHeight()
+check(lowest > 0 and lowest + 4 <= footTop, ("the last row ends %d from the top, the buttons start at %d"):format(lowest, footTop))
+local cp = select(1, panel.count:GetPoint(1))
+check(cp == "RIGHT", "the count beside the close button, on the title's line")
 local function Rows()
   local t = {}
   for _, child in ipairs(Children(panel)) do if child.rare and child:IsShown() then t[#t + 1] = child end end
