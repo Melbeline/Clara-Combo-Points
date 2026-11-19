@@ -14,6 +14,7 @@ local ICON = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
 local MARK = "Interface\\COMMON\\Indicator-Yellow"
 local SIZE, MARK_SIZE = 18, 9 -- the icon's and a mark's size on the screen, whatever the map's zoom
 local ROWS, ROW_H, LIST_W = 16, 18, 300
+local LIST_TOP, FOOT = 84, 40 -- (the list under the search box; the foot's band for Show all and Hide all, nothing over it)
 local LANG = ({ frFR = 2, deDE = 3 })[GetLocale and GetLocale() or "enUS"] or 1
 local EMPTY = {}
 
@@ -333,7 +334,7 @@ ns.RareMapSetAll = function(hidden) if panel then Filter() SetAll(hidden) end en
 local function Row(i)
   local row = CreateFrame("Button", nil, panel)
   row:SetSize(LIST_W - 30, ROW_H)
-  row:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -84 - (i - 1) * ROW_H)
+  row:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -LIST_TOP - (i - 1) * ROW_H)
   local check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
   check:SetSize(20, 20)
   check:SetPoint("LEFT", row, "LEFT", 0, 0)
@@ -379,7 +380,7 @@ end
 
 local function BuildPanel()
   panel = CreateFrame("Frame", nil, map, "BackdropTemplate")
-  panel:SetSize(LIST_W, 96 + ROWS * ROW_H)
+  panel:SetSize(LIST_W, LIST_TOP + ROWS * ROW_H + FOOT)
   panel:SetPoint("TOPRIGHT", button, "TOPLEFT", -4, 0)
   panel:SetFrameStrata(button:GetFrameStrata())
   panel:SetFrameLevel(button:GetFrameLevel() + 5)
@@ -420,7 +421,7 @@ local function BuildPanel()
   panel.search = search
   local showAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
   showAll:SetSize(110, 20)
-  showAll:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 10, 8)
+  showAll:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 10, 10)
   showAll:SetText(L.RAREMAP_SHOW_ALL)
   showAll:SetScript("OnClick", function() SetAll(false) end)
   local hideAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -429,12 +430,13 @@ local function BuildPanel()
   hideAll:SetText(L.RAREMAP_HIDE_ALL)
   hideAll:SetScript("OnClick", function() SetAll(true) end)
   panel.showAll, panel.hideAll = showAll, hideAll
+  -- (how many the list shows, on the title's line, clear of the foot's buttons)
   panel.count = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-  panel.count:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -12, 12)
+  panel.count:SetPoint("RIGHT", close, "LEFT", -2, 0)
   -- (a thin bar showing where the list is scrolled to; the mouse wheel scrolls it)
   local track = panel:CreateTexture(nil, "BACKGROUND")
   track:SetColorTexture(1, 1, 1, 0.06)
-  track:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -84)
+  track:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -LIST_TOP)
   track:SetSize(6, ROWS * ROW_H)
   panel.track = track
   local thumb = panel:CreateTexture(nil, "ARTWORK")
