@@ -1,10 +1,13 @@
 -- Clara Combo Points - Reverse Engineering in the game's own professions window (ClassicUI's calls
--- CraftUI.lua itself): the panel under the reagents (scrolling when it runs long), a chest on the
--- reagents the bank holds, the search (by name or reagent, "Name" in quotes for that recipe alone) and
--- the filter on what is in reach (its menu's last entries). The list is the game's: what does not
--- match is taken out of it each time the game makes it.
--- With the addon ForeverRecipes (left as it is): its panels (Difficulty and its estimates, Source) lie
--- under the reagents too, the panel goes under the lowest of them shown.
+-- CraftUI.lua itself): the panel under the reagents, a chest on the reagents the bank holds, the search
+-- (by name or reagent, "Name" in quotes for that recipe alone) and the filter on what is in reach (its
+-- menu's last entries). The list is the game's: what does not match is taken out of it each time the
+-- game makes it.
+-- The whole recipe pane on the right scrolls as one (the wheel anywhere on it, a bar at its right edge
+-- when there is more below): the game's recipe form is put in a scroll frame of its own size and place
+-- (placed again as the game moves it: the window maximized or minimized), made as tall as what it holds.
+-- With the addon ForeverRecipes (its code left as it is): its panels (Difficulty and its estimates,
+-- Source) lie under the reagents too; they are put in the same scroll frame, the panel under them.
 
 local ADDON, ns = ...
 local C = ns.Craft
@@ -14,7 +17,8 @@ local issecret = issecretvalue or function() return false end
 local BASIC = Enum and Enum.CraftingReagentType and Enum.CraftingReagentType.Basic
 
 local page, form, list
-local scroll, panel
+local pane, holder, panel -- the scroll frame, what it scrolls (the game's form in it), the panel
+local baseHeight          -- the form's own height: the pane's
 local query = ""      -- the search text, when ours does the search
 
 local function Recipe()
@@ -58,6 +62,12 @@ local function Watch(frame)
   local function Again() C_Timer.After(0, function() if Draw then Draw() end end) end
   frame:HookScript("OnShow", Again)
   frame:HookScript("OnHide", Again)
+  -- (in the pane: scrolled and cut with the rest of the recipe)
+  if holder and frame.SetParent then
+    local level = frame:GetFrameLevel()
+    frame:SetParent(holder)
+    frame:SetFrameLevel(level)
+  end
 end
 local function ForeverRecipesBottom()
   if not (_G.ForeverRecipes and page and page.GetChildren) then return nil end
@@ -77,22 +87,88 @@ local function ForeverRecipesBottom()
   return nil
 end
 
+---------------------------------------------------------------------------
+-- The pane: the game's form in a scroll frame of its size and place
+---------------------------------------------------------------------------
+local BELOW = 44 -- room under the panel (the form's Track Recipe box)
+
+-- Its height: the form's own, or what it holds
+local function Fit(height)
+  if not (pane and form) then return end
+  height = math.max(baseHeight, height or baseHeight)
+  if math.abs((form:GetHeight() or 0) - height) > 0.5 then form:SetHeight(height) end
+  holder:SetHeight(height)
+  local more = height > baseHeight + 1
+  if pane.ScrollBar then pane.ScrollBar:SetShown(more) end
+  if pane.UpdateScrollChildRect then pane:UpdateScrollChildRect() end
+  if not more then pane:SetVerticalScroll(0) end
+end
+
+-- Where the game puts the form (its first anchor), the pane goes; the form in the pane
+local function Place()
+  if not (pane and form) then return end
+  local point, rel, relPoint, x, y = form:GetPoint(1)
+  if rel and rel ~= holder then
+    pane:ClearAllPoints()
+    pane:SetPoint(point, rel, relPoint, x, y)
+    form:ClearAllPoints()
+    form:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, 0)
+  end
+  local width = form:GetWidth() or 0
+  if width > 0 then
+    pane:SetSize(width, baseHeight)
+    holder:SetWidth(width)
+  end
+end
+
+local function Wrap()
+  baseHeight = form:GetHeight() or 0
+  if baseHeight < 100 then baseHeight = 484 end -- (its template's)
+  pane = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
+  holder = CreateFrame("Frame", nil, pane)
+  holder:SetSize(math.max(1, form:GetWidth() or 493), baseHeight)
+  pane:SetScrollChild(holder)
+  if pane.EnableMouseWheel then pane:EnableMouseWheel(true) end
+  local bar = pane.ScrollBar
+  if bar then -- (inside its right edge, shown when there is more below)
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -4, -20)
+    bar:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -4, 20)
+    bar:Hide()
+  end
+  Place()
+  local level = form:GetFrameLevel()
+  form:SetParent(holder)
+  form:SetFrameLevel(level)
+  form:ClearAllPoints()
+  form:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, 0)
+  for _, name in ipairs({ "SetMaximized", "SetMinimized" }) do
+    if type(page[name]) == "function" then hooksecurefunc(page, name, Place) end
+  end
+  hooksecurefunc(form, "SetWidth", Place)
+  -- (another recipe: from its top; ForeverRecipes' own pane in its place: the form's own height)
+  form:HookScript("OnHide", function() Fit(baseHeight) end)
+end
+ns.CraftGamePane = function() return pane, holder, panel and panel.frame end -- (for the tests)
+
 function Draw()
   if not (form and form:IsVisible()) then return end
   Chests()
   local id = Recipe()
-  scroll:ClearAllPoints()
-  local under = ForeverRecipesBottom()
-  if under then
-    scroll:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -10)
-  else
-    scroll:SetPoint("TOPLEFT", Lowest(), "BOTTOMLEFT", 0, -10)
+  local f = panel.frame
+  f:ClearAllPoints()
+  local under = ForeverRecipesBottom() or Lowest()
+  f:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -10)
+  local left = under:GetLeft()
+  local right = form:GetRight()
+  local width = (left and right and right - left - 30) or ((form:GetWidth() or 480) - 60)
+  local height = panel:Update(id, math.max(150, width))
+  local need = baseHeight
+  if height > 0 then
+    local top, bottom = holder:GetTop(), f:GetBottom()
+    if top and bottom then need = top - bottom + BELOW end
   end
-  scroll:SetPoint("BOTTOMRIGHT", form, "BOTTOMRIGHT", -30, 40)
-  local width = math.max(150, (scroll:GetWidth() or 0) > 0 and scroll:GetWidth() or (form:GetWidth() or 480) - 60)
-  local height = panel:Update(id, width)
-  scroll:SetShown(height > 0)
-  if scroll.ScrollBar then scroll:UpdateScrollChildRect() end
+  Fit(math.min(need, baseHeight * 4)) -- (never past four times its own: the panel can hold no more)
 end
 
 ---------------------------------------------------------------------------
@@ -181,16 +257,15 @@ local function Setup()
   if not (form and list) or form.claraCraft then return end
   form.claraCraft = true
 
-  scroll = CreateFrame("ScrollFrame", nil, form, "UIPanelScrollFrameTemplate")
-  scroll:SetFrameLevel(form:GetFrameLevel() + 5)
-  local child = CreateFrame("Frame", nil, scroll)
-  child:SetSize(1, 1)
-  scroll:SetScrollChild(child)
-  panel = C.NewPanel(child, Draw)
-  panel.frame:SetPoint("TOPLEFT")
-  scroll:Hide()
+  Wrap()
+  panel = C.NewPanel(holder, Draw)
+  panel.frame:SetFrameLevel(form:GetFrameLevel() + 5)
+  panel.frame:Hide()
 
-  hooksecurefunc(form, "Init", function() C_Timer.After(0, Draw) end)
+  hooksecurefunc(form, "Init", function()
+    pane:SetVerticalScroll(0)
+    C_Timer.After(0, Draw)
+  end)
   if form.Refresh then hooksecurefunc(form, "Refresh", Draw) end
   form:HookScript("OnShow", Draw)
   C.Redraws[#C.Redraws + 1] = Draw
