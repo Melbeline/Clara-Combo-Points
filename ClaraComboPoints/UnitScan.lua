@@ -89,7 +89,7 @@ local function Tracked(name)
   if s and s.hunt and HuntKey() == key then return s.hunt, key end
   if ns:ScanOption("rares") then
     local id = RareKeys()[key]
-    if id then return RareName(id), "#" .. id end
+    if id and not (s and s.skip and s.skip[id]) then return RareName(id), "#" .. id end -- (one taken off: /unitscan)
   end
 end
 
@@ -651,6 +651,27 @@ function ns:ToggleScanName(name)
   return true
 end
 
+-- /unitscan name: looked for if it was not, no longer if it was (a rare of the list too: taken off, back again).
+-- What it did and the name, or nil (nothing typed)
+function ns:ToggleScan(name)
+  local s = Saved()
+  name = name and strtrim(name)
+  if not s or not name or name == "" then return nil end
+  local key = ns:SearchKey(name)
+  local id = ns:ScanOption("rares") and RareKeys()[key]
+  if id and not (s.names and s.names[key]) then
+    s.skip = s.skip or {}
+    if s.skip[id] then
+      s.skip[id] = nil
+      if not next(s.skip) then s.skip = nil end
+      return true, RareName(id)
+    end
+    s.skip[id] = true
+    return false, RareName(id)
+  end
+  return ns:ToggleScanName(name), name
+end
+
 local hunter
 local function HuntButton()
   if InCombatLockdown() then regen:RegisterEvent("PLAYER_REGEN_ENABLED") return end
@@ -728,6 +749,14 @@ local function Start()
   if ns:ScanOption("send") then Sender() end
   if ns:ScanOption("plates") or (Saved() and Saved().plateWas) then ns:ScanPlates() end
   if ns:ScanHunt() then HuntButton() end
+end
+
+SLASH_CLARAUNITSCAN1 = "/unitscan"
+SlashCmdList.CLARAUNITSCAN = function(msg)
+  if not ns:QolRuns("unitscan") then return end
+  local added, name = ns:ToggleScan(msg)
+  if added == nil then ns.Print(L.SCAN_USAGE) return end
+  ns.Print((added and L.SCAN_ADDED or L.SCAN_REMOVED):format(name))
 end
 
 local login = CreateFrame("Frame")
