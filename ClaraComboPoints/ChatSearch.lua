@@ -4,9 +4,11 @@
 -- the newest line holding it, that line in the middle. Its arrows: the match before (up: older) or after (down:
 -- newer), round again at either end; Enter: the match before. "3/12" beside them. Emptied: the window back at its
 -- bottom. Each window keeps its search while the game runs (the menu opened again shows it).
--- Its place, a box on Clara's settings page (on by default): beside the chat tabs, always there, for the tab
--- selected; faint (20 %) while unused, whole while used (the mouse on it, typing) and as long as the chat window is
--- busy (the mouse on it or its tabs), faint again after 10 seconds of quiet. Unticked: in the tab's menu.
+-- Its place, a box on Clara's settings page (on by default): a tab of its own after the chat's tabs (the last one,
+-- whatever windows are added), drawn as the game draws them (its images, its gold text, the selected tab's look
+-- while typing in it), for the tab selected; faint (20 %, as the game's tabs not selected) while unused, whole while
+-- used (the mouse on it, typing) and as long as the chat window is busy (the mouse on it or its tabs), faint again
+-- after 10 seconds of quiet. Unticked: in the tab's menu.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -147,7 +149,7 @@ local function Count(ui, s)
 end
 
 -- An arrow: in a small box with a tooltip's border, the arrow filling it
-local ARROW = 22
+local ARROW, TAB_ARROW = 22, 20
 local EDGE = { bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
   edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 } }
 local function Fill(texture)
@@ -157,9 +159,9 @@ local function Fill(texture)
   texture:SetPoint("BOTTOMRIGHT", -2, 2)
   texture:SetTexCoord(0.2, 0.8, 0.22, 0.78) -- (the arrow without the image's empty edges)
 end
-local function Arrow(ui, up)
+local function Arrow(ui, up, size)
   local b = CreateFrame("Button", nil, ui, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  b:SetSize(ARROW, ARROW)
+  b:SetSize(size or ARROW, size or ARROW)
   if b.SetBackdrop then
     b:SetBackdrop(EDGE)
     b:SetBackdropColor(0, 0, 0, 0.8)
@@ -188,20 +190,27 @@ local function Arrow(ui, up)
 end
 
 -- Made once on its holder: a frame of the menu's (used again for other menus: hidden when it is let go), or the
--- bar beside the tabs
-local function Build(holder)
+-- tab beside the chat's tabs (asTab: the box without its frame, in the tabs' gold text, lower where their text lies)
+local function Build(holder, asTab)
   local ui = CreateFrame("Frame", nil, holder)
   ui:SetAllPoints(holder)
   local box = CreateFrame("EditBox", nil, ui, "SearchBoxTemplate")
-  box:SetSize(118, 20)
-  box:SetPoint("LEFT", ui, "LEFT", 14, 0)
+  box:SetSize(asTab and 128 or 118, 20)
+  box:SetPoint("LEFT", ui, "LEFT", asTab and 10 or 14, asTab and -4 or 0)
   box:SetAutoFocus(false)
   ui.box = box
-  ui.up = Arrow(ui, true)
-  ui.up:SetPoint("LEFT", box, "RIGHT", 5, 0)
-  ui.down = Arrow(ui, false)
+  if asTab then
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do -- (its own frame: none, the tab's is around it)
+      local part = box[key]
+      if part and part.Hide then part:Hide() end
+    end
+    if box.SetFontObject then box:SetFontObject("GameFontNormalSmall") end
+  end
+  ui.up = Arrow(ui, true, asTab and TAB_ARROW)
+  ui.up:SetPoint("LEFT", box, "RIGHT", 4, 0)
+  ui.down = Arrow(ui, false, asTab and TAB_ARROW)
   ui.down:SetPoint("LEFT", ui.up, "RIGHT", 2, 0)
-  ui.count = ui:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  ui.count = ui:CreateFontString(nil, "ARTWORK", asTab and "GameFontNormalSmall" or "GameFontHighlightSmall")
   ui.count:SetPoint("LEFT", ui.down, "RIGHT", 4, 0)
   local timer
   box:HookScript("OnTextChanged", function(self, user)
@@ -290,7 +299,7 @@ local function PlaceBar()
   end
   bar:ClearAllPoints()
   if last then
-    bar:SetPoint("LEFT", last, "RIGHT", 8, 0)
+    bar:SetPoint("LEFT", last, "RIGHT", 1, 0) -- (as the game puts a tab after another)
   else
     bar:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, 0)
   end
@@ -317,16 +326,50 @@ local function Watch(self, elapsed)
   end
 end
 
+-- A chat tab's images, as the game's (ChatTabArtTemplate): its back, the selected tab's look, the mouse's light
+local TAB = "Interface\\ChatFrame\\ChatFrameTab-"
+local function TabArt(tab)
+  local function Part(layer, file, point, x, add)
+    local t = tab:CreateTexture(nil, layer)
+    t:SetTexture(TAB .. file)
+    if add and t.SetBlendMode then t:SetBlendMode("ADD") end
+    if point then t:SetSize(16, 32); t:SetPoint(point, x, 0) else t:SetHeight(32) end
+    return t
+  end
+  local function Row(layer, prefix, add)
+    local left = Part(layer, prefix .. "Left", "BOTTOMLEFT", -2, add)
+    local right = Part(layer, prefix .. "Right", "BOTTOMRIGHT", 2, add)
+    local mid = Part(layer, prefix .. "Mid", nil, nil, add)
+    if mid.SetHorizTile then mid:SetHorizTile(true) end
+    mid:SetPoint("LEFT", left, "RIGHT")
+    mid:SetPoint("RIGHT", right, "LEFT")
+    return { left, mid, right }
+  end
+  tab.back = Row("BACKGROUND", "BG")
+  tab.active = Row("BORDER", "Selected", true)
+  tab.light = Row("HIGHLIGHT", "Highlight", true)
+  local gold = NORMAL_FONT_COLOR or { r = 1, g = 0.82, b = 0 }
+  for _, row in ipairs({ tab.active, tab.light }) do
+    for _, t in ipairs(row) do if t.SetVertexColor then t:SetVertexColor(gold.r, gold.g, gold.b) end end
+  end
+  for _, t in ipairs(tab.active) do t:Hide() end
+end
+local function TabSelected(tab, on) for _, t in ipairs(tab.active) do t:SetShown(on) end end
+
 local function MakeBar()
   local dock = Dock()
   if bar or not dock then return bar end
-  bar = CreateFrame("Frame", "ClaraChatSearchBar", dock)
-  bar:SetSize(232, 28)
+  bar = CreateFrame("Button", "ClaraChatSearchBar", dock)
+  bar:SetSize(236, 32)
+  bar:SetFrameStrata("MEDIUM") -- (the game's tabs')
   bar:SetFrameLevel(dock:GetFrameLevel() + 10)
-  bar.ui = Build(bar)
+  TabArt(bar)
+  bar.ui = Build(bar, true)
   bar:SetAlpha(FAINT)
   bar:SetScript("OnUpdate", Watch)
-  bar.ui.box:HookScript("OnEditFocusGained", function() bar.usedAt = GetTime(); bar:SetAlpha(1) end)
+  bar:SetScript("OnClick", function() bar.ui.box:SetFocus() end) -- (anywhere on the tab: the search)
+  bar.ui.box:HookScript("OnEditFocusGained", function() bar.usedAt = GetTime(); bar:SetAlpha(1); TabSelected(bar, true) end)
+  bar.ui.box:HookScript("OnEditFocusLost", function() TabSelected(bar, false) end)
   if hooksecurefunc then
     if FCFDock_UpdateTabs then hooksecurefunc("FCFDock_UpdateTabs", function(d) if d == Dock() then PlaceBar() end end) end
     if FCFDock_SelectWindow then
