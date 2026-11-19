@@ -685,6 +685,7 @@
 		LeaPlusLC:LockOption("InviteFromWhisper", "InvWhisperBtn", false)			-- Invite from whispers
 		LeaPlusLC:LockOption("NoChatButtons", "NoChatButtonsBtn", true)				-- Hide chat buttons
 		LeaPlusLC:LockOption("FilterChatMessages", "FilterChatMessagesBtn", true)	-- Filter chat messages
+		LeaPlusLC:LockOption("MaxChatHstory", "MaxChatHstoryBtn", true)				-- Increase chat history
 		LeaPlusLC:LockOption("QuestFontChange", "QuestTextBtn", true)				-- Resize quest text
 		LeaPlusLC:LockOption("MinimapModder", "ModMinimapBtn", true)				-- Enhance minimap
 		LeaPlusLC:LockOption("TipModEnable", "MoveTooltipButton", true)				-- Enhance tooltip
@@ -731,6 +732,7 @@
 		or	(LeaPlusLC["FilterChatMessages"]	~= LeaPlusDB["FilterChatMessages"])		-- Filter chat messages
 		or	(LeaPlusLC["RestoreChatMessages"]	~= LeaPlusDB["RestoreChatMessages"])	-- Restore chat messages
 		or	(LeaPlusLC["MaxChatHstory"]			~= LeaPlusDB["MaxChatHstory"])			-- Increase chat history
+		or	(LeaPlusLC["MaxChatHstoryLines"]	~= LeaPlusDB["MaxChatHstoryLines"])		-- Increase chat history (its lines)
 
 		-- Text
 		or	(LeaPlusLC["HideErrorMessages"]		~= LeaPlusDB["HideErrorMessages"])		-- Hide error messages
@@ -7416,9 +7418,33 @@
 		-- Increase chat history (Clara Combo Points: the game keeps 128 lines in each chat window)
 		----------------------------------------------------------------------
 
+		do
+			-- Its settings: how many lines each window keeps
+			local ChatHistoryPanel = LeaPlusLC:CreatePanel("Increase chat history", "ChatHistoryPanel")
+			LeaPlusLC:MakeTx(ChatHistoryPanel, "Lines kept", 16, -72)
+			LeaPlusLC:MakeSL(ChatHistoryPanel, "MaxChatHstoryLines", "Drag to set how many lines each chat window keeps (the game keeps 128).|n|nRestore chat messages puts them all back after a reload or a relog.|n|nA reload applies it.", 1000, 100000, 1000, 16, -92, "%.0f")
+			ChatHistoryPanel.h:Hide()
+			ChatHistoryPanel.b:SetScript("OnClick", function()
+				ChatHistoryPanel:Hide(); LeaPlusLC["PageF"]:Show(); LeaPlusLC["Page3"]:Show()
+				return
+			end)
+			ChatHistoryPanel.r:SetScript("OnClick", function()
+				LeaPlusLC["MaxChatHstoryLines"] = 50000
+				ChatHistoryPanel:Hide(); ChatHistoryPanel:Show()
+			end)
+			LeaPlusCB["MaxChatHstoryBtn"]:SetScript("OnClick", function()
+				if IsShiftKeyDown() and IsControlKeyDown() then
+					LeaPlusLC["MaxChatHstoryLines"] = 50000
+				else
+					ChatHistoryPanel:Show()
+					LeaPlusLC:HideFrames()
+				end
+			end)
+		end
+
 		if LeaPlusLC["MaxChatHstory"] == "On" and not LeaLockList["MaxChatHstory"] then
 
-			local CHAT_LINES = 10000
+			local CHAT_LINES = tonumber(LeaPlusLC["MaxChatHstoryLines"]) or 50000
 			local function MoreLines(chtfrm)
 				if not chtfrm or chtfrm == ChatFrame2 or not chtfrm.SetMaxLines or not chtfrm.GetMaxLines then return end
 				if (chtfrm:GetMaxLines() or 0) >= CHAT_LINES then return end
@@ -7520,6 +7546,8 @@
 				end
 				ClaraNS.ChatRestoring = nil
 			end
+			-- (back in the windows: the saved copy let go, made again as the session ends)
+			ClaraChatHistoryDB = nil
 
 			-- (Leatrix's own single slot, from before: no longer used)
 			LeaPlusDB["ChatHistoryName"] = nil
@@ -13687,6 +13715,7 @@
 				LeaPlusLC:LoadVarChk("BlockDuelSpam", "Off")				-- Block duel spam
 				LeaPlusLC:LoadVarChk("RestoreChatMessages", "On")			-- Restore chat messages
 				LeaPlusLC:LoadVarChk("MaxChatHstory", "On")					-- Increase chat history (Clara Combo Points)
+				LeaPlusLC:LoadVarNum("MaxChatHstoryLines", 50000, 1000, 100000)	-- Increase chat history: lines kept
 
 				-- Text
 				LeaPlusLC:LoadVarChk("HideErrorMessages", "On")			-- Hide error messages
@@ -14056,6 +14085,7 @@
 			LeaPlusDB["BlockDuelSpam"]			= LeaPlusLC["BlockDuelSpam"]
 			LeaPlusDB["RestoreChatMessages"]	= LeaPlusLC["RestoreChatMessages"]
 			LeaPlusDB["MaxChatHstory"]			= LeaPlusLC["MaxChatHstory"]
+			LeaPlusDB["MaxChatHstoryLines"]		= LeaPlusLC["MaxChatHstoryLines"]
 
 			-- Text
 			LeaPlusDB["HideErrorMessages"]		= LeaPlusLC["HideErrorMessages"]
@@ -17555,10 +17585,11 @@
 	LeaPlusLC:MakeCB(LeaPlusLC[pg], "RecentChatWindow"			,	"Recent chat window"			, 	340, -172, 	true,	"If checked, you can hold down the control key and click a chat tab to view recent chat in a copy-friendly window.")
 	LeaPlusLC:MakeCB(LeaPlusLC[pg], "FilterChatMessages"		, 	"Filter chat messages"			,	340, -192, 	true,	"If checked, you can block spell links, drunken spam and duel spam.")
 	LeaPlusLC:MakeCB(LeaPlusLC[pg], "RestoreChatMessages"		, 	"Restore chat messages"			,	340, -212, 	true,	"If checked, the chat will be restored when you reload your interface or log back in (each character its own).")
-	LeaPlusLC:MakeCB(LeaPlusLC[pg], "MaxChatHstory"				, 	"Increase chat history"			,	340, -232, 	true,	"If checked, each chat window keeps its last 10000 lines (the game keeps 128), so the whole session's chat stays in the window.")
+	LeaPlusLC:MakeCB(LeaPlusLC[pg], "MaxChatHstory"				, 	"Increase chat history"			,	340, -232, 	true,	"If checked, each chat window keeps many more lines (the game keeps 128), so the whole session's chat stays in the window.|n|nHow many: its settings.")
 
 	LeaPlusLC:CfgBtn("NoChatButtonsBtn", LeaPlusCB["NoChatButtons"])
 	LeaPlusLC:CfgBtn("FilterChatMessagesBtn", LeaPlusCB["FilterChatMessages"])
+	LeaPlusLC:CfgBtn("MaxChatHstoryBtn", LeaPlusCB["MaxChatHstory"])
 
 ----------------------------------------------------------------------
 -- 	LC4: Text
