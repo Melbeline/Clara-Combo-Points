@@ -149,7 +149,7 @@ local function Count(ui, s)
 end
 
 -- An arrow: in a small box with a tooltip's border, the arrow filling it
-local ARROW, TAB_ARROW = 22, 20
+local ARROW, TAB_ARROW, TAB_WIDTH = 22, 18, 280
 local EDGE = { bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
   edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 } }
 local function Fill(texture)
@@ -189,29 +189,48 @@ local function Arrow(ui, up, size)
   return b
 end
 
+-- The box's own frame, in the tab: none while it is not typed in (the tab's is around it), gold while it is
+local function BoxFramed(ui, on)
+  local gold = NORMAL_FONT_COLOR or { r = 1, g = 0.82, b = 0 }
+  for _, key in ipairs({ "Left", "Middle", "Right" }) do
+    local part = ui.box[key]
+    if part and part.SetShown then
+      part:SetShown(on)
+      if part.SetVertexColor then part:SetVertexColor(gold.r, gold.g, gold.b) end
+    end
+  end
+end
+
 -- Made once on its holder: a frame of the menu's (used again for other menus: hidden when it is let go), or the
--- tab beside the chat's tabs (asTab: the box without its frame, in the tabs' gold text, lower where their text lies)
+-- tab after the chat's tabs (asTab): the box from its left, its count and its arrows inside it at its right end, all
+-- lower where the tabs' text lies, the box in the tabs' gold text and without its frame until it is typed in
 local function Build(holder, asTab)
   local ui = CreateFrame("Frame", nil, holder)
   ui:SetAllPoints(holder)
   local box = CreateFrame("EditBox", nil, ui, "SearchBoxTemplate")
-  box:SetSize(asTab and 128 or 118, 20)
-  box:SetPoint("LEFT", ui, "LEFT", asTab and 10 or 14, asTab and -4 or 0)
   box:SetAutoFocus(false)
   ui.box = box
-  if asTab then
-    for _, key in ipairs({ "Left", "Middle", "Right" }) do -- (its own frame: none, the tab's is around it)
-      local part = box[key]
-      if part and part.Hide then part:Hide() end
-    end
-    if box.SetFontObject then box:SetFontObject("GameFontNormalSmall") end
-  end
   ui.up = Arrow(ui, true, asTab and TAB_ARROW)
-  ui.up:SetPoint("LEFT", box, "RIGHT", 4, 0)
   ui.down = Arrow(ui, false, asTab and TAB_ARROW)
-  ui.down:SetPoint("LEFT", ui.up, "RIGHT", 2, 0)
   ui.count = ui:CreateFontString(nil, "ARTWORK", asTab and "GameFontNormalSmall" or "GameFontHighlightSmall")
-  ui.count:SetPoint("LEFT", ui.down, "RIGHT", 4, 0)
+  if asTab then
+    ui.down:SetPoint("RIGHT", ui, "RIGHT", -8, -4)
+    ui.up:SetPoint("RIGHT", ui.down, "LEFT", -2, 0)
+    ui.count:SetPoint("RIGHT", ui.up, "LEFT", -5, 0)
+    box:SetHeight(20)
+    box:SetPoint("LEFT", ui, "LEFT", 14, -4)
+    box:SetPoint("RIGHT", ui.count, "LEFT", -6, 0)
+    if box.SetFontObject then box:SetFontObject("GameFontNormalSmall") end
+    -- ("Search" where nothing is typed: in the tabs' gold, as their names)
+    if box.Instructions and box.Instructions.SetFontObject then box.Instructions:SetFontObject("GameFontNormalSmall") end
+    BoxFramed(ui, false)
+  else
+    box:SetSize(118, 20)
+    box:SetPoint("LEFT", ui, "LEFT", 14, 0)
+    ui.up:SetPoint("LEFT", box, "RIGHT", 4, 0)
+    ui.down:SetPoint("LEFT", ui.up, "RIGHT", 2, 0)
+    ui.count:SetPoint("LEFT", ui.down, "RIGHT", 4, 0)
+  end
   local timer
   box:HookScript("OnTextChanged", function(self, user)
     if not user or not ui.frame then return end
@@ -360,7 +379,7 @@ local function MakeBar()
   local dock = Dock()
   if bar or not dock then return bar end
   bar = CreateFrame("Button", "ClaraChatSearchBar", dock)
-  bar:SetSize(236, 32)
+  bar:SetSize(TAB_WIDTH, 32)
   bar:SetFrameStrata("MEDIUM") -- (the game's tabs')
   bar:SetFrameLevel(dock:GetFrameLevel() + 10)
   TabArt(bar)
@@ -368,8 +387,11 @@ local function MakeBar()
   bar:SetAlpha(FAINT)
   bar:SetScript("OnUpdate", Watch)
   bar:SetScript("OnClick", function() bar.ui.box:SetFocus() end) -- (anywhere on the tab: the search)
-  bar.ui.box:HookScript("OnEditFocusGained", function() bar.usedAt = GetTime(); bar:SetAlpha(1); TabSelected(bar, true) end)
-  bar.ui.box:HookScript("OnEditFocusLost", function() TabSelected(bar, false) end)
+  -- (typed in: the selected tab's gold look, and the box's frame in gold, around the text, its cross and its arrows)
+  bar.ui.box:HookScript("OnEditFocusGained", function()
+    bar.usedAt = GetTime(); bar:SetAlpha(1); TabSelected(bar, true); BoxFramed(bar.ui, true)
+  end)
+  bar.ui.box:HookScript("OnEditFocusLost", function() TabSelected(bar, false); BoxFramed(bar.ui, false) end)
   if hooksecurefunc then
     if FCFDock_UpdateTabs then hooksecurefunc("FCFDock_UpdateTabs", function(d) if d == Dock() then PlaceBar() end end) end
     if FCFDock_SelectWindow then
