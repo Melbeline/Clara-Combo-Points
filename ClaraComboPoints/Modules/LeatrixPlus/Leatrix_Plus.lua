@@ -12256,6 +12256,9 @@
 					-- Show player name with title and realm
 					local nameText = UnitPVPName(unit)
 					if not nameText or (canaccessvalue(nameText) and nameText == "") then nameText = name end -- Some units (Demolition Fan, 237523) return empty strings for UnitPVPName
+					-- (Clara Combo Points: on WoW Forever, the surname after the first name, as the game's own title shows it:
+					-- UnitPVPName and UnitName give the first name alone)
+					if ClaraNS.UnitWholeName then nameText = ClaraNS.UnitWholeName(unit, nameText) end
 					realm = Safe(realm)
 					-- if nameText and realm and realm ~= "" then nameText = nameText .. " - " .. realm end -- Not used on Forever as realm returns surname
 					if nameText then GameTooltipTextLeft1:SetText(nameText) end
@@ -12407,8 +12410,8 @@
 					local targetUnit = unit .. "target"
 					if UnitExists(targetUnit) then
 
-						-- Get target name (this can be secret)
-						local target = UnitName(targetUnit)
+						-- Get target name (this can be secret; Clara Combo Points: its surname too, on WoW Forever)
+						local target = ClaraNS.UnitWholeName and ClaraNS.UnitWholeName(targetUnit) or UnitName(targetUnit)
 
 						if C_Secrets.CanCompareUnitTokens(targetUnit, "player") and Safe(UnitIsUnit(targetUnit, "player")) then
 							-- If target is you, set target to YOU
