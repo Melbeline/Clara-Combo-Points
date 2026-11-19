@@ -149,6 +149,12 @@ for _, n in ipairs(Flat(provider)) do if n.data.claraAlt and n.data.claraAlt.nam
 local frame = Card(elle)
 check(frame.claraAlt and frame.claraAlt:IsShown() and frame.claraAlt.alt.name == "Elle Woods", "the tooltip and menu layer")
 check(not frame.PartyButton:IsShown(), "the party button hidden")
+frame.claraAlt:Click("RightButton")
+local menuItems = {}
+for _, it in ipairs(M.menu and M.menu.items or {}) do if it.kind == "button" then menuItems[#menuItems + 1] = it.text end end
+check(menuItems[1] == (PARTY_INVITE or INVITE or "Invite") and menuItems[2] == (WHISPER or "Whisper"),
+  "its right-click menu: Invite first, then Whisper (" .. table.concat(menuItems, ", ") .. ")")
+if M.menu then M.menu:Close() end
 check(frame.FriendName._text == "|cff40c7ebElle Woods|r, Level 42 MAGE", "online: one line, her name in her class's color (" .. tostring(frame.FriendName._text) .. ")")
 local akabounet
 for _, n in ipairs(Flat(provider)) do if n.data.accountInfo and n.data.accountInfo.accountName == "Akabounet" then akabounet = n end end
