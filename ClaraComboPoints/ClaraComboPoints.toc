@@ -8,7 +8,7 @@
 ## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB
 ## SavedVariablesPerCharacter: ClaraLFGForeverCharDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, Cheese, WeaponSwingTimer, BuyEmAllClassic, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, LFGForever, Auctionator, ReverseEngineering, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, TipTac, Cheese, WeaponSwingTimer, BuyEmAllClassic, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, LFGForever, Auctionator, ReverseEngineering, ElvUI, EasyFrames, Glass
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -158,6 +158,7 @@ Modules\WhoCooldown\WhoCooldown.lua
 Modules\IdTip\IdTip.lua
 Modules\PetFeed\PetFeed.lua
 Modules\ReportMute\ReportMute.lua
+Modules\TooltipTarget\TooltipTarget.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
 Modules\EnemyCasts\EnemyCasts.lua
 Modules\LFGForever\Bootstrap.lua
