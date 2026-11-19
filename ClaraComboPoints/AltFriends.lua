@@ -64,6 +64,12 @@ AltFriends.Broken = Broken
 -- Its plain letters alone, lower-case (the accented ones, and what is left of a broken one, dropped): a broken name
 -- and its whole spelling alike ("▯clair Chazal", "Éclair Chazal": "clair chazal")
 local function Plain(name) return ((name:gsub("[\128-\255]", "")):lower()) end
+-- A name kept without its accented letters (an earlier version dropped them: "Miss Émilia" kept as "Miss Milia"):
+-- none of its own letters accented, the whole name's plain letters the same, first name and surname
+local function LostAccents(kept, whole)
+  return type(kept) == "string" and not kept:find("[\128-\255]") and whole:find("[\128-\255]") ~= nil
+    and Plain(kept) == Plain(whole)
+end
 
 local function List()
   local sv = ns.sv
@@ -105,7 +111,7 @@ function AltFriends.Mend(heard)
   if not list then return false end
   local plain = Plain(proper)
   for key, alt in pairs(list) do
-    if Broken(alt.name) and Plain(alt.name) == plain then
+    if (Broken(alt.name) or LostAccents(alt.name, proper)) and Plain(alt.name) == plain then
       local name = Normal(proper)
       if not name then return false end
       list[key] = nil
@@ -150,6 +156,27 @@ function AltFriends.Remove(name)
   if not alt then return false end
   list[name:lower()] = nil
   SaySystem((ERR_FRIEND_REMOVED_S or L.ALT_REMOVED):format(alt.name))
+  AltFriends.Refresh()
+  return true
+end
+
+-- Its name typed again, whole (a name an earlier version broke or kept without its accents, never heard whole since:
+-- "Miss Milia" renamed "Miss Émilia"); its place in the list and its section kept
+function AltFriends.Rename(old, typed)
+  local list = List()
+  local name = Normal(typed)
+  if not (list and name and type(old) == "string") then return false end
+  local key, alt
+  for k, a in pairs(list) do if a.name == old then key, alt = k, a break end end
+  if not alt then return false end
+  local new = name:lower()
+  if new ~= key and list[new] then
+    SaySystem((ERR_FRIEND_ALREADY_S or L.ALT_ALREADY):format(list[new].name))
+    return false
+  end
+  list[key] = nil
+  list[new] = alt
+  alt.name = name
   AltFriends.Refresh()
   return true
 end
@@ -246,7 +273,9 @@ end
 -- account's, the gold tracker's, the Battle.net friends' characters in the game (nothing done while none is broken)
 local function MendKnown()
   local any = false
-  for _, alt in pairs(List() or {}) do if Broken(alt.name) then any = true break end end
+  for _, alt in pairs(List() or {}) do
+    if Broken(alt.name) or not alt.name:find("[\128-\255]") then any = true break end -- (broken, or perhaps its accents lost)
+  end
   if not any then return end
   local names = {}
   local sv = ns.sv
@@ -898,6 +927,9 @@ local function Menu(catcher)
         if tell then tell(alt.name) end
       end)
     end
+    root:CreateButton(L.ALT_RENAME, function()
+      ns:AskText(L.ALT_RENAME_ASK, alt.name, L.ALT_RENAME, function(typed) AltFriends.Rename(alt.name, typed) end)
+    end)
     root:CreateButton(L.ALT_REMOVE, function() AltFriends.Remove(alt.name) end)
   end)
 end
