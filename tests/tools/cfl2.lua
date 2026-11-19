@@ -1,6 +1,6 @@
 -- ClassicFriendsList (standalone): characters online or not, the same as Clara's (the same addon messages, "ClaraFriends":
 -- the two speak together): an unseen addon whisper to each by its whole name, one a second; the server's "No player
--- named" = offline (that line hidden), 2 s of silence = online; heard in the chat = online; a hello, its answer
+-- named" = offline (that line hidden), 2 s of silence = online; heard in the chat by the whole name = online; a hello, its answer
 -- (level, class, zone) and a goodbye at once between two players with it or Clara; comings and goings announced
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
@@ -124,9 +124,11 @@ for _ = 1, 3 do M.Tick() M.now = M.now + 1 end
 C_ChatInfo.SendAddonMessage = realSend
 check(A.Known("Lulu Bleue") and not A.Online("Lulu Bleue"), "Lulu: offline at once (TargetOffline)")
 
-out("== a first name heard alone: the one character of the list with it")
+out("== a first name heard alone: not taken (another player may have it)")
 M.Fire("CHAT_MSG_SAY", "coucou", "Lulu")
-check(A.Online("Lulu Bleue"), "Lulu heard by its first name: online")
+check(not A.Online("Lulu Bleue"), "Lulu heard by its first name only: still offline")
+M.Fire("CHAT_MSG_SAY", "coucou", "Lulu Bleue-Realm")
+check(A.Online("Lulu Bleue"), "heard by its whole name: online")
 
 out("== logout: a goodbye to the ones online; none at a reload")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods-Realm") -- (Elle, who has Clara, back online)
