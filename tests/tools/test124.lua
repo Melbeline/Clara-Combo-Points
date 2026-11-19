@@ -39,6 +39,12 @@ local function Run(LC, saved, setup)
   env.hooksecurefunc = function() end
   env.FCF_OpenTemporaryWindow = function() end
   env.ClaraChatHistoryDB = saved
+  -- (Leatrix's own panel helpers: its settings panel made, its gear's click kept)
+  local function Panel() local p = { h = { Hide = function() end }, b = { SetScript = function() end }, r = { SetScript = function() end } } return p end
+  env.LeaPlusLC.CreatePanel = function() return Panel() end
+  env.LeaPlusLC.MakeTx = function() end
+  env.LeaPlusLC.MakeSL = function(_, _, key, _, low, high) env.slider = { key = key, low = low, high = high } end
+  env.LeaPlusCB = { MaxChatHstoryBtn = { SetScript = function(_, _, fn) env.gear = fn end } }
   if setup then setup(env) end
   local fn = assert(loadstring("return function() " .. block .. " end", "@chat"))()
   setfenv(fn, env)
@@ -49,10 +55,14 @@ local function Texts(w) local t = {} for _, m in ipairs(w.lines) do t[#t + 1] = 
 
 out("== the game's 128 lines; Increase chat history: 10000, what the window held kept")
 local env = Run({ MaxChatHstory = "Off", RestoreChatMessages = "Off" })
+check(env.slider and env.slider.key == "MaxChatHstoryLines" and env.slider.low == 1000 and env.slider.high == 100000 and env.gear,
+  "its settings: a slider, 1000 to 100000 lines, behind its gear")
 for i = 1, 200 do env.ChatFrame1:AddMessage("line " .. i) end
 check(#env.ChatFrame1.lines == 128, "off: the game's 128 lines (" .. #env.ChatFrame1.lines .. ")")
-env = Run({ MaxChatHstory = "On", RestoreChatMessages = "Off" }, nil, function(e) e.ChatFrame1:AddMessage("Welcome to World of Warcraft!", 1, 1, 0) end)
-check(env.ChatFrame1:GetMaxLines() == 10000 and env.ChatFrame2:GetMaxLines() == 500, "on: 10000 lines a window (the combat log left as it is)")
+env = Run({ MaxChatHstory = "On", RestoreChatMessages = "Off" })
+check(env.ChatFrame1:GetMaxLines() == 50000, "on, nothing chosen: 50000 lines a window")
+env = Run({ MaxChatHstory = "On", MaxChatHstoryLines = 10000, RestoreChatMessages = "Off" }, nil, function(e) e.ChatFrame1:AddMessage("Welcome to World of Warcraft!", 1, 1, 0) end)
+check(env.ChatFrame1:GetMaxLines() == 10000 and env.ChatFrame2:GetMaxLines() == 500, "10000 chosen: 10000 lines a window (the combat log left as it is)")
 check(Texts(env.ChatFrame1)[1] == "Welcome to World of Warcraft!" and env.ChatFrame1.lines[1][2] == 1, "the line it held kept, in its color")
 for i = 1, 5000 do env.ChatFrame1:AddMessage("line " .. i) end
 check(#env.ChatFrame1.lines == 5001, "5000 more: all kept (" .. #env.ChatFrame1.lines .. ")")
@@ -67,6 +77,7 @@ local l2 = env.ChatFrame1.lines[2]
 check(math.abs(l2[2] - 0x40 / 255) < 0.01 and math.abs(l2[3] - 0xc7 / 255) < 0.01 and math.abs(l2[4] - 0xeb / 255) < 0.01, "each in its color (the whole line)")
 check(t[3]:find("Restored 2 messages from previous session", 1, true) ~= nil, "the notice: " .. tostring(t[3]))
 check(t[4] == "Welcome to World of Warcraft!", "this session's lines after")
+check(env.ClaraChatHistoryDB == nil, "back in the windows: the saved copy let go (made again as the session ends)")
 check(env.ClaraNS.ChatRestoring == nil, "the restoring mark off again")
 check(env.LeaPlusDB.ChatHistory1 == nil and env.LeaPlusDB.ChatHistoryName == nil, "Leatrix's own single slot, from before: cleared")
 env.ChatFrame1:AddMessage("A new line", 1, 1, 1)
