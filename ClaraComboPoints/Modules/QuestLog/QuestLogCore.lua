@@ -509,8 +509,8 @@ function QL.PartyOnQuest(questID)
     local unit = "party" .. i
     local ok, on = pcall(C_QuestLog.IsUnitOnQuest, unit, questID)
     if ok and on == true then
-      -- (names are secret in dungeons: the unit's token then)
-      names[#names + 1] = Q.Safe(UnitName(unit), unit)
+      -- (whole: "First Surname"; names are secret in dungeons: the unit's token then)
+      names[#names + 1] = Q.Safe(ns.UnitWholeName and ns.UnitWholeName(unit) or UnitName(unit), unit)
     end
   end
   return names
