@@ -243,6 +243,7 @@ local function Build()
   Box("SP_INTERACT_ICONS", ns.InteractIcons, ns.SetInteractIcons, "interactIcons")
   Box("SP_LEVEL_SHOTS", ns.LevelShots, ns.SetLevelShots, "levelShots")
   Box("SP_BOSS_SHOTS", ns.BossShots, ns.SetBossShots, "bossShots")
+  Box("SP_MUTE_CONDUCT", ns.MuteConduct, ns.SetMuteConduct, "muteConduct") -- (QuietLogin.lua)
   if not ns:QolRuns("leatrix") then
     Box("QUEST_PLATES", ns.QuestPlates, ns.SetQuestPlates, "questPlates")
     Box("LFG_ZONE", ns.GroupFinderZone, ns.SetGroupFinderZone, "groupFinderZone")
