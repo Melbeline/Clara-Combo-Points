@@ -2235,6 +2235,69 @@ end
 -- (never in the way of the other addons' tooltip lines)
 function AltFriends.AddZone(tooltip) pcall(AddZone, tooltip) end
 
+---------------------------------------------------------------------------
+-- A character's right-click menu (the target's portrait, a group's frame, a name in the chat...): Add Classic friend
+-- in the game's Add Friend submenu, its whole name (first name and surname) put in the list
+---------------------------------------------------------------------------
+local function HookUnitMenus() -- (a function of its own: the file's main chunk is at Lua's 200 locals)
+-- (the game's menus that can hold its Add Friend: those of another player)
+local PLAYER_MENUS = { "TARGET", "FOCUS", "PARTY", "PLAYER", "RAID_PLAYER", "RAID", "ENEMY_PLAYER", "ARENAENEMY",
+  "FRIEND", "FRIEND_OFFLINE", "CHAT_ROSTER", "GUILD", "GUILD_OFFLINE", "COMMUNITIES_MEMBER", "COMMUNITIES_WOW_MEMBER",
+  "COMMUNITIES_GUILD_MEMBER", "NEIGHBORHOOD_ROSTER", "RAF_RECRUIT", "RECENT_ALLY", "RECENT_ALLY_OFFLINE",
+  "PVP_SCOREBOARD", "WORLD_STATE_SCORE" }
+
+-- Its whole name: the unit's (UnitNameUnmodified: first name and surname), else the menu's name and surname
+local function MenuName(contextData)
+  if type(contextData) ~= "table" then return nil end
+  local name
+  local unit = contextData.unit
+  if type(unit) == "string" and not issecretvalue(unit) and ns.UnitWholeName then
+    local ok, whole = pcall(ns.UnitWholeName, unit)
+    if ok then name = whole end
+  end
+  if name == nil then
+    local first, surname = contextData.name, contextData.surname
+    if type(first) ~= "string" or issecretvalue(first) then return nil end
+    name = first:match("^([^%-]+)") or first -- (a realm left out: "Name-Realm")
+    if type(surname) == "string" and not issecretvalue(surname) and surname ~= "" and not name:find(" ", 1, true) then
+      name = name .. " " .. surname
+    end
+  end
+  if type(name) ~= "string" or issecretvalue(name) then return nil end
+  return Normal(name)
+end
+AltFriends.MenuName = MenuName -- (for the tests)
+
+-- The game's Add Friend submenu in a menu (in it, or in one of its submenus)
+local function FriendSubmenu(description, depth)
+  if not (description and description.EnumerateElementDescriptions) then return nil end
+  for _, child in description:EnumerateElementDescriptions() do
+    if MenuUtil.GetElementText(child) == ADD_FRIEND then return child end
+    if depth > 0 then
+      local found = FriendSubmenu(child, depth - 1)
+      if found then return found end
+    end
+  end
+end
+
+local function AddClassicEntry(_, root, contextData)
+  local name = MenuName(contextData)
+  if not name or IsMe(name) then return end
+  local submenu = FriendSubmenu(root, 2)
+  if not submenu then return end
+  local button = submenu:CreateButton(L.ALT_MENU_ADD, function() AltFriends.Add(name) end)
+  local list = List()
+  if list and list[name:lower()] and button and button.SetEnabled then button:SetEnabled(false) end -- (already in it)
+end
+function AltFriends.AddClassicEntry(owner, root, contextData) pcall(AddClassicEntry, owner, root, contextData) end
+
+local menus = _G.Menu -- (the game's menus: "Menu" here is the cards' own right-click menu)
+if type(menus) == "table" and menus.ModifyMenu and MenuUtil and MenuUtil.GetElementText and ADD_FRIEND then
+  for _, which in ipairs(PLAYER_MENUS) do menus.ModifyMenu("MENU_UNIT_" .. which, AltFriends.AddClassicEntry) end
+end
+end
+HookUnitMenus()
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self)
