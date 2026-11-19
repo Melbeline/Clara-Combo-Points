@@ -2172,18 +2172,31 @@ local function FirstWord(name)
   return ((name:match("^([^%-]+)") or name):match("^(%S+)") or ""):lower()
 end
 
+-- The group's entry for a unit: by its whole name ("First Surname"; the roster may write "First-Surname"); by its
+-- first name only when no other member has it (two Charlottes: none guessed)
+local function RosterKey(name) return ((name:gsub("%-", " "):gsub("%s+", " ")):lower()) end
 local function RosterZone(unit)
   if not (GetNumGroupMembers and GetRaidRosterInfo) then return nil end
-  local okName, name = pcall(UnitName, unit)
+  local okName, name, surname = pcall(UnitNameUnmodified or UnitName, unit)
+  if not okName or type(name) ~= "string" or issecretvalue(name) then okName, name, surname = pcall(UnitName, unit) end
   local first = okName and FirstWord(name)
   if not first or first == "" then return nil end
+  local whole = name
+  if type(surname) == "string" and not issecretvalue(surname) and surname ~= "" then whole = name .. " " .. surname end
+  whole = RosterKey(whole)
+  local byFirst, firsts = nil, 0
   for i = 1, GetNumGroupMembers() do
     local ok, rosterName, _, _, _, _, _, zone = pcall(GetRaidRosterInfo, i)
-    if ok and FirstWord(rosterName) == first and type(zone) == "string" and not issecretvalue(zone) and zone ~= "" then
-      return zone
+    if ok and type(rosterName) == "string" and not issecretvalue(rosterName) then
+      local usable = type(zone) == "string" and not issecretvalue(zone) and zone ~= ""
+      if RosterKey(rosterName) == whole and whole:find(" ", 1, true) then return usable and zone or nil end
+      if FirstWord(rosterName) == first then firsts = firsts + 1; byFirst = usable and zone or nil end
     end
   end
+  if firsts == 1 then return byFirst end
+  return nil
 end
+AltFriends.RosterZone = RosterZone -- (for the tests)
 
 local function ListedZone(unit)
   local okName, name, surname = pcall(UnitName, unit)
