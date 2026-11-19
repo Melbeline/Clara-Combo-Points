@@ -4,6 +4,9 @@
 -- the newest line holding it, that line in the middle. Its arrows: the match before (up: older) or after (down:
 -- newer), round again at either end; Enter: the match before. "3/12" beside them. Emptied: the window back at its
 -- bottom. Each window keeps its search while the game runs (the menu opened again shows it).
+-- Its place, a box on Clara's settings page (on by default): beside the chat tabs, always there, for the tab
+-- selected; faint (20 %) while unused, whole while used (the mouse on it, typing) and as long as the chat window is
+-- busy (the mouse on it or its tabs), faint again after 10 seconds of quiet. Unticked: in the tab's menu.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -143,14 +146,33 @@ local function Count(ui, s)
   end
 end
 
+-- An arrow: in a small box with a tooltip's border, the arrow filling it
+local ARROW = 22
+local EDGE = { bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 } }
+local function Fill(texture)
+  if not (texture and texture.SetTexCoord) then return end
+  texture:ClearAllPoints()
+  texture:SetPoint("TOPLEFT", 2, -2)
+  texture:SetPoint("BOTTOMRIGHT", -2, 2)
+  texture:SetTexCoord(0.2, 0.8, 0.22, 0.78) -- (the arrow without the image's empty edges)
+end
 local function Arrow(ui, up)
-  local b = CreateFrame("Button", nil, ui)
-  b:SetSize(18, 18)
+  local b = CreateFrame("Button", nil, ui, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  b:SetSize(ARROW, ARROW)
+  if b.SetBackdrop then
+    b:SetBackdrop(EDGE)
+    b:SetBackdropColor(0, 0, 0, 0.8)
+    b:SetBackdropBorderColor(0.65, 0.65, 0.65, 1)
+  end
   local name = up and "Up" or "Down"
   b:SetNormalTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. name .. "Button-Up")
   b:SetPushedTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. name .. "Button-Down")
   b:SetDisabledTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. name .. "Button-Disabled")
   b:SetHighlightTexture("Interface\\Buttons\\UI-ScrollBar-Scroll" .. name .. "Button-Highlight", "ADD")
+  for _, get in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }) do
+    if b[get] then Fill(b[get](b)) end
+  end
   b:SetScript("OnClick", function()
     local frame = ui.frame
     if not frame then return end
@@ -165,7 +187,8 @@ local function Arrow(ui, up)
   return b
 end
 
--- Made once on a frame of the menu's (its frames are used again for other menus: hidden when it is let go)
+-- Made once on its holder: a frame of the menu's (used again for other menus: hidden when it is let go), or the
+-- bar beside the tabs
 local function Build(holder)
   local ui = CreateFrame("Frame", nil, holder)
   ui:SetAllPoints(holder)
@@ -175,9 +198,9 @@ local function Build(holder)
   box:SetAutoFocus(false)
   ui.box = box
   ui.up = Arrow(ui, true)
-  ui.up:SetPoint("LEFT", box, "RIGHT", 4, 0)
+  ui.up:SetPoint("LEFT", box, "RIGHT", 5, 0)
   ui.down = Arrow(ui, false)
-  ui.down:SetPoint("LEFT", ui.up, "RIGHT", 0, 0)
+  ui.down:SetPoint("LEFT", ui.up, "RIGHT", 2, 0)
   ui.count = ui:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   ui.count:SetPoint("LEFT", ui.down, "RIGHT", 4, 0)
   local timer
@@ -203,18 +226,24 @@ local function Build(holder)
   return ui
 end
 
+-- Its search shown for a window
+local function Attach(ui, frame)
+  ui.frame = frame
+  if not frame then return end
+  Warm(frame)
+  local s = Search(frame)
+  ui.box:SetText(s.query)
+  if ui.box.Instructions then ui.box.Instructions:SetShown(s.query == "") end
+  Count(ui, s)
+end
+
 local function Element(frame)
   local description = MenuUtil.CreateFrame()
   description:AddInitializer(function(holder)
-    holder:SetSize(214, 26)
+    holder:SetSize(232, 28)
     local ui = holder.claraChatSearch or Build(holder)
-    ui.frame = frame
-    Warm(frame)
     ui:Show()
-    local s = Search(frame)
-    ui.box:SetText(s.query)
-    if ui.box.Instructions then ui.box.Instructions:SetShown(s.query == "") end
-    Count(ui, s)
+    Attach(ui, frame)
   end)
   description:AddResetter(function(holder)
     local ui = holder.claraChatSearch
@@ -223,10 +252,111 @@ local function Element(frame)
   return description
 end
 
+---------------------------------------------------------------------------
+-- Its place: beside the tabs (on by default), or in the tab's menu
+---------------------------------------------------------------------------
+function ns:ChatSearchDock() return not self.sv or self.sv.chatSearchDock ~= false end
+
+local bar -- (beside the tabs, once made)
+local QUIET, FAINT, FADE = 10, 0.2, 4 -- seconds before faint, faint's opacity, opacity changed a second
+
 if Menu and Menu.ModifyMenu and MenuUtil and MenuUtil.CreateFrame then
   Menu.ModifyMenu("MENU_FCF_TAB", function(tab, root)
+    if ns:ChatSearchDock() then return end
     local frame = ChatFrameOf(tab)
     if not (frame and root and root.Insert) then return end
     root:Insert(Element(frame), 2) -- (under its first line)
   end)
 end
+
+local function Dock() return rawget(_G, "GENERAL_CHAT_DOCK") end
+local function Selected()
+  local dock = Dock()
+  local frame = dock and FCFDock_GetSelectedWindow and FCFDock_GetSelectedWindow(dock) or DEFAULT_CHAT_FRAME
+  if type(frame) == "table" and frame.GetNumMessages and frame.SetScrollOffset then return frame end
+end
+
+-- After the last tab shown (the dock places them again as they change)
+local function PlaceBar()
+  local dock = Dock()
+  if not (bar and dock) then return end
+  local last, right
+  for _, frame in ipairs(dock.DOCKED_CHAT_FRAMES or {}) do
+    local tab = frame.GetName and _G[frame:GetName() .. "Tab"]
+    if tab and tab:IsShown() then
+      local r = tab:GetRight()
+      if r and (not right or r > right) then last, right = tab, r end
+    end
+  end
+  bar:ClearAllPoints()
+  if last then
+    bar:SetPoint("LEFT", last, "RIGHT", 8, 0)
+  else
+    bar:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, 0)
+  end
+end
+
+-- Used (the mouse on it, typing): whole; the chat window busy keeps it so; 10 seconds of quiet: faint
+local function Busy()
+  local dock, frame = Dock(), bar.ui.frame
+  return (frame and frame:IsMouseOver()) or (dock and dock:IsMouseOver()) or false
+end
+local function Watch(self, elapsed)
+  local now = GetTime()
+  if self.ui.box:HasFocus() or self:IsMouseOver() then
+    self.usedAt = now
+  elseif self.usedAt and now - self.usedAt < QUIET and Busy() then
+    self.usedAt = now
+  end
+  local target = (self.usedAt and now - self.usedAt < QUIET) and 1 or FAINT
+  local alpha = self:GetAlpha()
+  if alpha ~= target then
+    local step = (elapsed or 0) * FADE
+    if alpha < target then alpha = math.min(target, alpha + step * 2) else alpha = math.max(target, alpha - step) end
+    self:SetAlpha(alpha)
+  end
+end
+
+local function MakeBar()
+  local dock = Dock()
+  if bar or not dock then return bar end
+  bar = CreateFrame("Frame", "ClaraChatSearchBar", dock)
+  bar:SetSize(232, 28)
+  bar:SetFrameLevel(dock:GetFrameLevel() + 10)
+  bar.ui = Build(bar)
+  bar:SetAlpha(FAINT)
+  bar:SetScript("OnUpdate", Watch)
+  bar.ui.box:HookScript("OnEditFocusGained", function() bar.usedAt = GetTime(); bar:SetAlpha(1) end)
+  if hooksecurefunc then
+    if FCFDock_UpdateTabs then hooksecurefunc("FCFDock_UpdateTabs", function(d) if d == Dock() then PlaceBar() end end) end
+    if FCFDock_SelectWindow then
+      hooksecurefunc("FCFDock_SelectWindow", function(d, frame) if d == Dock() and bar:IsShown() then Attach(bar.ui, Selected()) end end)
+    end
+  end
+  return bar
+end
+
+local function ShowBar()
+  local on = ns:ChatSearchDock()
+  if on then MakeBar() end
+  if not bar then return end
+  bar:SetShown(on)
+  if on then
+    PlaceBar()
+    Attach(bar.ui, Selected())
+  else
+    bar.ui.box:ClearFocus()
+  end
+end
+ns.ChatSearch.Bar = function() return bar end -- (for the tests)
+
+function ns:SetChatSearchDock(on)
+  if self.sv then
+    if on then self.sv.chatSearchDock = nil else self.sv.chatSearchDock = false end
+  end
+  ShowBar()
+end
+
+local events = CreateFrame("Frame")
+events:RegisterEvent("PLAYER_LOGIN")
+events:SetScript("OnEvent", function() ShowBar() end)
