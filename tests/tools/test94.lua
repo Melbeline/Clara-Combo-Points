@@ -155,6 +155,40 @@ for _, it in ipairs(M.menu and M.menu.items or {}) do if it.kind == "button" the
 check(menuItems[1] == (PARTY_INVITE or INVITE or "Invite") and menuItems[2] == (WHISPER or "Whisper"),
   "its right-click menu: Invite first, then Whisper (" .. table.concat(menuItems, ", ") .. ")")
 if M.menu then M.menu:Close() end
+-- in a group led by another, without being its assistant: Suggest Invite (the same invite: the server hands it to the
+-- leader); the group full: said so, none sent; the leader or an assistant: Invite
+S.group = "party"
+local leader, assistant, full = false, false, false
+UnitIsGroupLeader = function() return leader end
+UnitIsGroupAssistant = function() return assistant end
+SUGGEST_INVITE, ERR_GROUP_FULL = "Suggest Invite", "Your party is full."
+local invited, said = {}, {}
+C_PartyInfo = C_PartyInfo or {}
+C_PartyInfo.InviteUnit = function(n) invited[#invited + 1] = n end
+C_PartyInfo.IsPartyFull = function() return full end
+ChatFrameUtil = ChatFrameUtil or {}
+ChatFrameUtil.DisplaySystemMessageInPrimary = function(t) said[#said + 1] = t end
+local function FirstButton()
+  frame.claraAlt:Click("RightButton")
+  for _, it in ipairs(M.menu and M.menu.items or {}) do if it.kind == "button" then return it end end
+end
+local first = FirstButton()
+check(first and first.text == "Suggest Invite", "in a group led by another: Suggest Invite (" .. tostring(first and first.text) .. ")")
+first.callback()
+check(invited[1] == "Elle Woods", "sent (the server hands it to the leader)")
+full = true
+first.callback()
+check(#invited == 1 and said[1] == "Your party is full.", "the group full: said, none sent")
+M.menu:Close()
+assistant = true
+first = FirstButton()
+check(first and first.text == (PARTY_INVITE or INVITE or "Invite"), "an assistant: Invite")
+M.menu:Close()
+assistant, leader = false, true
+first = FirstButton()
+check(first and first.text == (PARTY_INVITE or INVITE or "Invite"), "the leader: Invite")
+M.menu:Close()
+S.group = nil
 check(frame.FriendName._text == "|cff40c7ebElle Woods|r, Level 42 MAGE", "online: one line, her name in her class's color (" .. tostring(frame.FriendName._text) .. ")")
 local akabounet
 for _, n in ipairs(Flat(provider)) do if n.data.accountInfo and n.data.accountInfo.accountName == "Akabounet" then akabounet = n end end
