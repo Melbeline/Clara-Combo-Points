@@ -49,6 +49,42 @@ check(box and box:GetChecked() == true, "a box under Reload UI, ticked")
 box:Click()
 check(ns.sv.quietLogin == false and not ns:QuietLogin(), "unticked: off, kept")
 
+out("== the game's code of conduct notice at each login: taken out, that line alone, by default")
+local NOTICE = "Remember to act responsibly, protect your personal information, and report anything offensive. View our In-Game Code of Conduct on https://support.blizzard.com/article/42673 for more information."
+ONLINE_SAFETY_NOTICE = NOTICE
+check(ns:MuteConduct() == true and ns.sv.muteConduct == nil, "on by default")
+M.now = 100
+M.Fire("PLAYER_ENTERING_WORLD", true, false)
+say(NOTICE, GAME_STACK) -- (the game's own line: Blizzard_CodeOfConduct)
+check(not has(NOTICE), "the game's notice: taken out")
+say("Looting set to Group Loot.", GAME_STACK)
+check(has("Looting set to Group Loot."), "the game's next line stays")
+say("|cff888888[17:57:35]|r " .. NOTICE, GAME_STACK)
+local stamped = false
+for _, t in ipairs(M.chat) do if t:find("42673", 1, true) then stamped = true end end
+check(not stamped, "with a time a chat addon puts before it: taken out too")
+ONLINE_SAFETY_NOTICE = "Sois responsable, protège tes informations personnelles et signale tout contenu offensant. Consulte notre Code de conduite."
+say(ONLINE_SAFETY_NOTICE, GAME_STACK)
+check(not has(ONLINE_SAFETY_NOTICE), "in another language (the game's own text): taken out")
+-- (a window the hooks missed: looked for again a little after the world shows)
+table.insert(M.chat, NOTICE)
+M.Fire("PLAYER_ENTERING_WORLD", false, true)
+while M.timers and #M.timers > 0 do M.RunTimer() end
+check(not has(NOTICE), "after a reload: looked for again and taken out")
+check(has("Looting set to Group Loot."), "the other lines left")
+local mute
+for _, f in ipairs(M.frames) do
+  local t = f._kind == "CheckButton" and (f.Text or f.text)
+  if t and type(t._text) == "string" and t._text:find("code of conduct", 1, true) and f:IsVisible() then mute = f end
+end
+check(mute and mute:GetChecked() == true, "its box on the settings page, ticked")
+mute:Click()
+check(ns.sv.muteConduct == false and not ns:MuteConduct(), "unticked: off, kept")
+ONLINE_SAFETY_NOTICE = NOTICE
+say(NOTICE, GAME_STACK)
+check(has(NOTICE), "off: the notice shown")
+mute:Click()
+
 out("== the damage meter in the portrait's menu")
 M.OpenUnitMenu("SELF")
 local texts = M.UnitMenuTexts()
