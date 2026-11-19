@@ -2,7 +2,9 @@
 -- for in every line the window holds (colors, links and icons read as the text they show; capitals and accents
 -- ignored), the window scrolled to the newest match (in its middle); up: the match before (older), down: the one
 -- after (newer), round again; Enter: the match before; "2/3"; nothing found said; emptied: the window at its bottom;
--- the search kept for the window while the game runs; the menu's frame given back clean
+-- the search kept for the window while the game runs; the menu's frame given back clean. Beside the tabs (its
+-- setting, on by default): after the last tab, for the tab selected, faint (20 %) until used, whole while used and
+-- while the chat window is busy, faint again after 10 seconds of quiet; bigger arrows with a tooltip's border
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -31,7 +33,25 @@ window.lines[50] = "|cff00ff00You create: |cff1eff00|Hitem:15095::::::::60:::::|
 window.lines[90] = "|cff00ff00You create: |cff1eff00|Hitem:15095::::::::60:::::|h[Nightscape Pants]|h|r.|r"
 window.lines[95] = "|cffff80ffÉlodie whispers: les NIGHTSCAPE pants c'est cher|r"
 window.lines[60] = "|TInterface\\Icons\\inv_misc_note_01:12|t |cffc79c6eÉclair Chazal|r: l'éclair"
+BackdropTemplateMixin = BackdropTemplateMixin or {} -- (the game's: its frames take a backdrop)
 FCF_GetChatFrameByID = function(id) if id == 1 then return window end end
+-- (the dock of tabs above the chat, as the game's: its windows, each with its tab; the one selected)
+local mouseOn = {}
+function window:GetName() return "TestChat" end
+function window:IsMouseOver() return mouseOn.window == true end
+local other = { lines = { "|cffffffffhello merci beaucoup" }, offset = 0 }
+for k, v in pairs(window) do if type(v) == "function" then other[k] = v end end
+function other:GetName() return "TestOther" end
+GENERAL_CHAT_DOCK = CreateFrame("Frame", "GeneralDockManager", UIParent)
+GENERAL_CHAT_DOCK:SetSize(430, 24)
+GENERAL_CHAT_DOCK.DOCKED_CHAT_FRAMES = { window, other }
+function GENERAL_CHAT_DOCK:IsMouseOver() return mouseOn.dock == true end
+local tab1 = CreateFrame("Button", "TestChatTab", GENERAL_CHAT_DOCK); tab1:SetSize(70, 24); tab1:SetPoint("BOTTOMLEFT", GENERAL_CHAT_DOCK, "BOTTOMLEFT", 0, 0); tab1:Show()
+local tab2 = CreateFrame("Button", "TestOtherTab", GENERAL_CHAT_DOCK); tab2:SetSize(90, 24); tab2:SetPoint("LEFT", tab1, "RIGHT", 1, 0); tab2:Show()
+GENERAL_CHAT_DOCK.selected = window
+function FCFDock_GetSelectedWindow(dock) return dock.selected end
+function FCFDock_SelectWindow(dock, frame) dock.selected = frame; FCFDock_UpdateTabs(dock) end
+function FCFDock_UpdateTabs(dock) end
 local tab = { GetID = function() return 1 end }
 
 local ns = {}
@@ -39,6 +59,7 @@ S.class = "ROGUE"; S.locale = "enUS"
 M.LoadAddon(ADDON_DIR, ns)
 M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN")
 
+ns.sv.chatSearchDock = false -- (first in the tab's menu: its setting unticked)
 out("== in the tab's menu, under its first line")
 local root = setmetatable({}, { __index = function() end })
 local mods = M.menuModifiers.MENU_FCF_TAB
@@ -99,5 +120,40 @@ local before = #M.tickers
 check(before >= 1, "its lines read ahead as the menu opens (a part each frame)")
 M.Tick()
 check(#M.tickers == before - 1, "101 lines: read in one frame, then its ticker stopped")
+
+out("== beside the tabs (its setting, on by default)")
+ns:SetChatSearchDock(true)
+check(ns.sv.chatSearchDock == nil and ns:ChatSearchDock(), "on by default, nothing kept")
+local bar = ns.ChatSearch.Bar()
+check(bar and bar:IsShown() and bar._parent == GENERAL_CHAT_DOCK, "its bar on the tabs' dock")
+local p, rel, rp, x = bar:GetPoint(1)
+check(p == "LEFT" and rel == tab2 and rp == "RIGHT" and x == 8, "after the last tab")
+check(bar.ui.frame == window and bar.ui.box:GetText() == "nightscape", "the tab selected's search")
+check(math.abs(bar:GetAlpha() - 0.2) < 0.01, "faint while unused (20 %)")
+check(bar.ui.up:GetWidth() == 22 and bar.ui.up._backdrop and bar.ui.up._backdrop.edgeFile:find("Tooltip", 1, true), "its arrows: 22, a tooltip's border")
+local function Frames(n, dt) for _ = 1, n do M.now = M.now + dt; bar:GetScript("OnUpdate")(bar, dt) end end
+M.now = M.now or 0
+bar.IsMouseOver = function() return mouseOn.bar == true end
+mouseOn.bar = true; Frames(5, 0.1)
+check(math.abs(bar:GetAlpha() - 1) < 0.01, "the mouse on it: whole")
+mouseOn.bar = nil; mouseOn.window = true; Frames(150, 0.1)
+check(math.abs(bar:GetAlpha() - 1) < 0.01, "the chat window busy for 15 s: still whole")
+mouseOn.window = nil; Frames(95, 0.1)
+check(math.abs(bar:GetAlpha() - 1) < 0.01, "9.5 s of quiet: still whole")
+Frames(10, 0.1)
+check(math.abs(bar:GetAlpha() - 0.2) < 0.01, "10 s of quiet: faint again (" .. bar:GetAlpha() .. ")")
+mouseOn.window = true; Frames(5, 0.1)
+check(math.abs(bar:GetAlpha() - 0.2) < 0.01, "faint: the chat window alone does not wake it")
+mouseOn.window = nil
+FCFDock_SelectWindow(GENERAL_CHAT_DOCK, other)
+check(bar.ui.frame == other and bar.ui.box:GetText() == "", "another tab: its own search")
+bar.ui.box:SetText("merci"); bar.ui.box:GetScript("OnTextChanged")(bar.ui.box, true); Wait()
+check(bar.ui.count:GetText() == "1/1", "searched in that tab")
+local elems = { { text = "Edit Mode" } }
+local root3 = { Insert = function(_, d, index) table.insert(elems, index or (#elems + 1), d); return d end }
+for _, fn in ipairs(mods) do fn(tab, root3, {}) end
+check(#elems == 1, "beside the tabs: not in the tab's menu as well")
+ns:SetChatSearchDock(false)
+check(not bar:IsShown() and ns.sv.chatSearchDock == false, "unticked: the bar gone (back in the menu)")
 out(string.format("\n%d failure(s)", fails))
 return fails

@@ -7,6 +7,22 @@ local function check(c, m) print((c and "scenario ok   " or "scenario FAIL ") ..
 local frame = rawget(env, "ChatFrame1")
 local tab = rawget(env, "ChatFrame1Tab")
 check(frame ~= nil and ns.ChatSearch ~= nil, "ChatFrame1 and the search")
+local dock = rawget(env, "GENERAL_CHAT_DOCK")
+print("scenario: the game's dock " .. tostring(dock) .. ", GeneralDockManager " .. tostring(rawget(env, "GeneralDockManager")))
+local bar = ns.ChatSearch.Bar and ns.ChatSearch.Bar()
+if dock then
+  check(bar ~= nil and bar.ui and bar.ui.box, "its bar beside the tabs, made at login on the game's dock")
+else
+  print("scenario: the harness sets no GENERAL_CHAT_DOCK (the game's XML OnLoad does): the bar checked in test125")
+end
+if bar then
+  local ok, e = pcall(bar:GetScript("OnUpdate"), bar, 0.1)
+  check(ok, "its watch (faint, whole) runs " .. tostring(e or ""))
+  ok, e = pcall(ns.SetChatSearchDock, ns, false)
+  check(ok, "unticked: no error " .. tostring(e or ""))
+  ok, e = pcall(ns.SetChatSearchDock, ns, true)
+  check(ok, "ticked again: no error " .. tostring(e or ""))
+end
 if frame and frame.AddMessage then
   for i = 1, 60 do frame:AddMessage("|cffffff00[2. Trade]|r |Hplayer:Lola Moon|h[Lola Moon]|h: line " .. i) end
   frame:AddMessage("|cff00ff00You create: |cff1eff00|Hitem:15095|h[Nightscape Pants]|h|r.|r")
