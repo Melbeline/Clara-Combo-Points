@@ -29,6 +29,43 @@ local FONT_DIR      = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Fonts\\"
 local issecretvalue = issecretvalue or function() return false end
 local UnitIsFeignDeath = UnitIsFeignDeath or function() return false end
 
+-- A unit's whole name as WoW Forever shows it: "First Surname", whatever the game's name settings hide (UnitName
+-- follows them, UnitNameUnmodified does not), or its name alone (a creature, no surname). Given the text shown for
+-- it (its name with a title: UnitPVPName, a tooltip's title), the surname is put after the first name in it
+-- ("Private Clara Moon"), the text left as it is when it is already there. A secret name is only joined to the
+-- text, never read (the title is then left out). nil when the unit has no name.
+local FOREVER = (function()
+  local toc = GetBuildInfo and select(4, GetBuildInfo()) or 0
+  return toc >= 16000 and toc < 20000
+end)()
+local function UnitNames(fn, unit)
+  if type(fn) ~= "function" then return nil end
+  local ok, name, second = pcall(fn, unit)
+  if not ok or name == nil or (not issecretvalue(name) and (type(name) ~= "string" or name == "")) then return nil end
+  return name, second
+end
+function ns.UnitWholeName(unit, shown)
+  local name, surname = UnitNames(UnitNameUnmodified, unit)
+  if name == nil then name, surname = UnitNames(UnitName, unit) end
+  if name == nil then return shown end
+  if not FOREVER then surname = nil end -- (elsewhere the second value is a realm)
+  local consts = Constants and Constants.CharacterNameSeparatorConsts
+  local sep = consts and type(consts.CHARACTERNAME_SURNAME_SEPARATOR) == "string" and consts.CHARACTERNAME_SURNAME_SEPARATOR or " "
+  if issecretvalue(name) or issecretvalue(surname) or issecretvalue(shown) then
+    if surname ~= nil then return name .. sep .. surname end
+    if shown ~= nil then return shown end
+    return name
+  end
+  local whole = name
+  if type(surname) == "string" and surname ~= "" and not name:find(sep .. surname, 1, true) then whole = name .. sep .. surname end
+  if type(shown) ~= "string" or shown == "" then return whole end
+  if shown:find(whole, 1, true) then return shown end -- (already in it)
+  local first = whole:match("^(.-)" .. sep:gsub("%p", "%%%0")) or whole
+  local from, last = shown:find(first, 1, true)
+  if from then return shown:sub(1, from - 1) .. whole .. shown:sub(last + 1) end
+  return whole
+end
+
 -- Geometry is in reference pixels: real screen pixels on the 2560x1440 windowed client the
 -- HUD was designed on (1359 px tall render area). The HUD keeps that size relative to the
 -- window height whatever the in-game UI scale is; the Scale option multiplies it.

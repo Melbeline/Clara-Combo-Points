@@ -348,6 +348,40 @@ loot:SetScript("OnEvent", function(_, event)
 end)
 
 ---------------------------------------------------------------------------
+-- A player's tooltip: its title with the whole name, "First Surname" (WoW Forever's names), whatever
+-- the game's name settings hide; a title (rank) kept. Over a unit frame, the unit from the frame
+-- (the tooltip's own can be secret).
+---------------------------------------------------------------------------
+do
+  local secret = issecretvalue or function() return false end
+  local function Token(unit)
+    if type(unit) == "string" and not secret(unit) and unit ~= "" then return unit end
+  end
+  local function WholeTitle(tip)
+    if not (ns.UnitWholeName and tip and tip.GetName and tip.GetUnit) then return end
+    local unit = Token(select(2, tip:GetUnit()))
+    if not unit and tip.GetOwner then
+      local owner = tip:GetOwner()
+      if owner and not (owner.IsForbidden and owner:IsForbidden()) then unit = Token(owner.unit) end
+    end
+    if not unit then return end
+    local player = UnitIsPlayer(unit)
+    if secret(player) or not player then return end
+    local name = tip:GetName()
+    local line = name and _G[name .. "TextLeft1"]
+    if not (line and line.GetText) then return end
+    local text = line:GetText()
+    local whole = ns.UnitWholeName(unit, text)
+    if whole == nil then return end
+    if secret(whole) or secret(text) or whole ~= text then line:SetText(whole) end
+  end
+  ns.TooltipWholeTitle = WholeTitle -- (for the tests)
+  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tip) pcall(WholeTitle, tip) end)
+  end
+end
+
+---------------------------------------------------------------------------
 -- Unit frames: the unit's tooltip over the whole frame (portrait, name, level, edges and bars) for
 -- the player, target, focus and pet frames and the party and raid frames; and the portrait and the
 -- name clickable (target, menu) even where another frame of the low layer (the chat) lies over them.
