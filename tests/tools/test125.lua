@@ -127,10 +127,22 @@ check(ns.sv.chatSearchDock == nil and ns:ChatSearchDock(), "on by default, nothi
 local bar = ns.ChatSearch.Bar()
 check(bar and bar:IsShown() and bar._parent == GENERAL_CHAT_DOCK, "its bar on the tabs' dock")
 local p, rel, rp, x = bar:GetPoint(1)
-check(p == "LEFT" and rel == tab2 and rp == "RIGHT" and x == 8, "after the last tab")
+check(p == "LEFT" and rel == tab2 and rp == "RIGHT" and x == 1, "after the last tab, as the game puts a tab after another")
+local back = bar.back and bar.back[1]
+check(back and back._layer == "BACKGROUND" and tostring(back._file or ""):find("ChatFrameTab%-BGLeft") and bar:GetHeight() == 32,
+  "drawn as a chat tab: the game's tab images, its height (" .. tostring(back and back._file) .. ")")
+check(bar.active and not bar.active[2]:IsShown(), "not the selected tab's look while unused")
+check(bar.ui.box.Left == nil or not bar.ui.box.Left:IsShown(), "the box without its own frame (the tab's around it)")
+bar:Click()
+check(bar.ui.box:HasFocus(), "a click on the tab: the search")
+bar.ui.box:GetScript("OnEditFocusGained")(bar.ui.box) -- (the game says so as the box takes the keys; the mock does not)
+check(bar.active[2]:IsShown(), "typing in it: the selected tab's look")
+bar.ui.box:ClearFocus()
+check(not bar.active[2]:IsShown(), "left: back to an unselected tab's look")
+bar.usedAt = nil; bar:SetAlpha(0.2)
 check(bar.ui.frame == window and bar.ui.box:GetText() == "nightscape", "the tab selected's search")
 check(math.abs(bar:GetAlpha() - 0.2) < 0.01, "faint while unused (20 %)")
-check(bar.ui.up:GetWidth() == 22 and bar.ui.up._backdrop and bar.ui.up._backdrop.edgeFile:find("Tooltip", 1, true), "its arrows: 22, a tooltip's border")
+check(bar.ui.up:GetWidth() == 20 and bar.ui.up._backdrop and bar.ui.up._backdrop.edgeFile:find("Tooltip", 1, true), "its arrows: 20 in the tab, a tooltip's border")
 local function Frames(n, dt) for _ = 1, n do M.now = M.now + dt; bar:GetScript("OnUpdate")(bar, dt) end end
 M.now = M.now or 0
 bar.IsMouseOver = function() return mouseOn.bar == true end
@@ -149,6 +161,15 @@ FCFDock_SelectWindow(GENERAL_CHAT_DOCK, other)
 check(bar.ui.frame == other and bar.ui.box:GetText() == "", "another tab: its own search")
 bar.ui.box:SetText("merci"); bar.ui.box:GetScript("OnTextChanged")(bar.ui.box, true); Wait()
 check(bar.ui.count:GetText() == "1/1", "searched in that tab")
+-- (a new window docked: the search tab still the last)
+local third = { lines = {}, offset = 0 }
+for k, v in pairs(window) do if type(v) == "function" then third[k] = v end end
+function third:GetName() return "TestThird" end
+local tab3 = CreateFrame("Button", "TestThirdTab", GENERAL_CHAT_DOCK); tab3:SetSize(80, 24); tab3:SetPoint("LEFT", tab2, "RIGHT", 1, 0); tab3:Show()
+table.insert(GENERAL_CHAT_DOCK.DOCKED_CHAT_FRAMES, third)
+FCFDock_UpdateTabs(GENERAL_CHAT_DOCK)
+local _, rel3 = bar:GetPoint(1)
+check(rel3 == tab3, "a new window's tab: the search tab pushed after it, the last")
 local elems = { { text = "Edit Mode" } }
 local root3 = { Insert = function(_, d, index) table.insert(elems, index or (#elems + 1), d); return d end }
 for _, fn in ipairs(mods) do fn(tab, root3, {}) end
