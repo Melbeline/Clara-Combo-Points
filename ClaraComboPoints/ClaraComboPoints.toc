@@ -40,6 +40,7 @@ InteractKey.lua
 QuestPlates.lua
 GroupFinderZone.lua
 ChatCopy.lua
+ChatSearch.lua
 Rares.lua
 RareSpots.lua
 UnitScan.lua
