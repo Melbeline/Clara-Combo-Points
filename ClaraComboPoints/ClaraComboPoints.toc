@@ -6,7 +6,7 @@
 ## Author: Melbeline
 ## Version: 1.7.0
 ## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB, ClaraWaterShieldDB
-## SavedVariablesPerCharacter: ClaraLFGForeverCharDB
+## SavedVariablesPerCharacter: ClaraLFGForeverCharDB, ClaraChatHistoryDB
 ## LoadSavedVariablesFirst: true
 ## OptionalDeps: Leatrix_Plus, TipTac, Cheese, WeaponSwingTimer, BuyEmAllClassic, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, LFGForever, Auctionator, ReverseEngineering, ElvUI, EasyFrames, Glass, WaterShieldTracker
 ## Category: UI

@@ -9,6 +9,7 @@
 -- https://support.blizzard.com/article/42673..." (Blizzard_CodeOfConduct): taken out of the chat, that
 -- line alone, by default; a box on the same page shows it again. Known by the game's own text
 -- (ONLINE_SAFETY_NOTICE: any language) or its link, whatever a chat addon puts before it (a time).
+-- The chat of the session before, which Leatrix Plus puts back at login, is left as it is.
 
 local ADDON, ns = ...
 
@@ -60,6 +61,7 @@ local function Added(frame, message)
     frame:RemoveMessagesByPredicate(Conduct)
     return
   end
+  if ns.ChatRestoring then return end -- (Leatrix Plus putting the chat of the session before back: left as it is)
   if not Quiet() or type(message) ~= "string" or issecretvalue(message) or not FromAddon() then return end
   frame:RemoveMessagesByPredicate(function(text) return not issecretvalue(text) and text == message end)
 end
