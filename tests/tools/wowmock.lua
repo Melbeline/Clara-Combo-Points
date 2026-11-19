@@ -1421,6 +1421,7 @@ end
 function Description:AddInitializer(fn) table.insert(self.initializers, fn) end
 function Description:AddResetter(fn) table.insert(self.resetters, fn) end
 function Description:SetTooltip(fn) self.tooltip = fn end
+function Description:SetEnabled(v) self.enabled = v end
 function Description:Insert(d, index)
   if index then table.insert(self.elements, index, d) else table.insert(self.elements, d) end
   return d
@@ -1443,6 +1444,7 @@ MenuUtil.CreateCheckbox = function(text, isSelected, setSelected)
   return d
 end
 UNIT_FRAME_DROPDOWN_SUBSECTION_TITLE_OTHER = "Other Options"
+ADD_FRIEND = "Add Friend"
 M.menuModifiers = {}
 Menu = { ModifyMenu = function(tag, fn)
   M.menuModifiers[tag] = M.menuModifiers[tag] or {}

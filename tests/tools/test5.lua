@@ -38,12 +38,18 @@ M.LoadAddon(ADDON_DIR, ns)
 M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN")
 check(callbacks.MENU_UNIT_SELF ~= nil, "hooked the player's own portrait menu (MENU_UNIT_SELF) only")
 -- (and the menu of a name in the chat: Copy Chat Message, ChatCopy.lua)
+-- (and another player's menus: Add Classic friend in their Add Friend submenu, AltFriends.lua)
+local PLAYER = {}
+for _, which in ipairs({ "TARGET", "FOCUS", "PARTY", "PLAYER", "RAID_PLAYER", "RAID", "ENEMY_PLAYER", "ARENAENEMY",
+  "FRIEND", "FRIEND_OFFLINE", "CHAT_ROSTER", "GUILD", "GUILD_OFFLINE", "COMMUNITIES_MEMBER", "COMMUNITIES_WOW_MEMBER",
+  "COMMUNITIES_GUILD_MEMBER", "NEIGHBORHOOD_ROSTER", "RAF_RECRUIT", "RECENT_ALLY", "RECENT_ALLY_OFFLINE",
+  "PVP_SCOREBOARD", "WORLD_STATE_SCORE" }) do PLAYER["MENU_UNIT_" .. which] = true end
 local others = {}
 for tag in pairs(callbacks) do
-  if not (tag == "MENU_UNIT_SELF" or tag == "MENU_UNIT_FRIEND" or tag == "MENU_UNIT_BN_FRIEND" or tag == "MENU_UNIT_PARTY"
+  if not (PLAYER[tag] or tag == "MENU_UNIT_SELF" or tag == "MENU_UNIT_FRIEND" or tag == "MENU_UNIT_BN_FRIEND" or tag == "MENU_UNIT_PARTY"
     or tag == "MENU_UNIT_RAID_PLAYER" or tag == "MENU_FCF_TAB" or tag == "MENU_PROFESSIONS_FILTER") then others[#others + 1] = tag end
 end
-check(#others == 0 and callbacks.MENU_UNIT_FRIEND ~= nil, "no other menu touched (the chat name's: Copy Chat Message; the group's: its loot line; the chat tab's; the professions filter) " .. table.concat(others, ","))
+check(#others == 0 and callbacks.MENU_UNIT_FRIEND ~= nil, "no other menu touched (the chat name's: Copy Chat Message; the group's: its loot line; another player's: Add Classic friend; the chat tab's; the professions filter) " .. table.concat(others, ","))
 
 local GAME = { "Lola", "Target Marker Icon", "Set Focus", "Self Highlight", "Player vs. Player", "Loot Options",
   "Pass on Loot: No", "Instance Options", "Reset all instances", "Other Options", "Edit Mode", "Voice Chat", "Leave Party" }

@@ -58,5 +58,19 @@ check(#lines == 3, "Bob: no zone known yet")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|20|WARRIOR|Westfall", "WHISPER", "Bob Twink")
 lines = Hover(partyFrame, "party2")
 check(lines[#lines] == "Westfall", "Bob: Westfall, from his Clara")
+
+out("== two of the same first name in the group: each its own zone, never the other's")
+units.party3 = { "Charlotte", "Moon" }; units.party4 = { "Charlotte", "Elle" }
+roster[#roster + 1] = { "Charlotte-Moon", "Thendal Village" }
+roster[#roster + 1] = { "Charlotte Elle", "Orgrimmar" }
+lines = Hover(partyFrame, "party4")
+check(lines[#lines] == "Orgrimmar", "Charlotte Elle: her own zone, by her whole name (" .. tostring(lines[#lines]) .. ")")
+lines = Hover(partyFrame, "party3")
+check(lines[#lines] == "Thendal Village", "Charlotte Moon: hers (the roster's First-Surname read too)")
+roster[3][1] = "Charlotte"; roster[4][1] = "Charlotte"
+lines = Hover(partyFrame, "party4")
+check(#lines == 3, "the roster giving first names only, two Charlottes: no zone guessed")
+lines = Hover(partyFrame, "party1")
+check(lines[#lines] == "Stranglethorn Vale", "Elle (the only one of her first name): still found by it")
 out(string.format("\n%d failure(s)", fails))
 return fails

@@ -133,16 +133,30 @@ check(back and back._layer == "BACKGROUND" and tostring(back._file or ""):find("
   "drawn as a chat tab: the game's tab images, its height (" .. tostring(back and back._file) .. ")")
 check(bar.active and not bar.active[2]:IsShown(), "not the selected tab's look while unused")
 check(bar.ui.box.Left == nil or not bar.ui.box.Left:IsShown(), "the box without its own frame (the tab's around it)")
+check(bar:GetWidth() == 280, "a wide tab (280)")
+local dp, drel, drp, dx = bar.ui.down:GetPoint(1)
+local up1, uprel, uprp = bar.ui.up:GetPoint(1)
+check(dp == "RIGHT" and drel == bar.ui and drp == "RIGHT" and dx < 0 and up1 == "RIGHT" and uprel == bar.ui.down and uprp == "LEFT",
+  "its arrows inside the tab, at its right end (down last, up before it)")
+local cp, crel = bar.ui.count:GetPoint(1)
+check(cp == "RIGHT" and crel == bar.ui.up, "its count left of the arrows")
+local bl, blrel = bar.ui.box:GetPoint(1)
+local br, brrel = bar.ui.box:GetPoint(2)
+check(bl == "LEFT" and blrel == bar.ui and br == "RIGHT" and brrel == bar.ui.count, "the box from the tab's left to its count")
 bar:Click()
 check(bar.ui.box:HasFocus(), "a click on the tab: the search")
 bar.ui.box:GetScript("OnEditFocusGained")(bar.ui.box) -- (the game says so as the box takes the keys; the mock does not)
 check(bar.active[2]:IsShown(), "typing in it: the selected tab's look")
+local gold = bar.ui.box.Middle
+check(gold and gold:IsShown() and gold._vc and gold._vc[1] == 1 and gold._vc[3] == 0, "typing in it: the box's frame around its text, in gold")
 bar.ui.box:ClearFocus()
+bar.ui.box:GetScript("OnEditFocusLost")(bar.ui.box)
 check(not bar.active[2]:IsShown(), "left: back to an unselected tab's look")
+check(not bar.ui.box.Middle:IsShown(), "left: the box's frame gone again")
 bar.usedAt = nil; bar:SetAlpha(0.2)
 check(bar.ui.frame == window and bar.ui.box:GetText() == "nightscape", "the tab selected's search")
 check(math.abs(bar:GetAlpha() - 0.2) < 0.01, "faint while unused (20 %)")
-check(bar.ui.up:GetWidth() == 20 and bar.ui.up._backdrop and bar.ui.up._backdrop.edgeFile:find("Tooltip", 1, true), "its arrows: 20 in the tab, a tooltip's border")
+check(bar.ui.up:GetWidth() == 18 and bar.ui.up._backdrop and bar.ui.up._backdrop.edgeFile:find("Tooltip", 1, true), "its arrows: 18 in the tab, a tooltip's border")
 local function Frames(n, dt) for _ = 1, n do M.now = M.now + dt; bar:GetScript("OnUpdate")(bar, dt) end end
 M.now = M.now or 0
 bar.IsMouseOver = function() return mouseOn.bar == true end
