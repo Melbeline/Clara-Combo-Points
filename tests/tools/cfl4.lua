@@ -1,6 +1,6 @@
 -- ClassicFriendsList in the game's new social window (Forever's default friends window): the characters in its friends
--- list, as the game builds it (before it lays it out), in two sections of their own (online, offline) after the
--- Battle.net friends, without Battle.net friends too; the game's size cache never ours; our mouse layer on our cards,
+-- list, as the game builds it (before it lays it out), in two sections of their own (online on top, offline after
+-- the Battle.net friends), without Battle.net friends too; the game's size cache never ours; our mouse layer on our cards,
 -- the party button hidden (back on a Battle.net card); the search box; a change drawn in place, a character online
 -- or added in its section at once
 local M, S = MOCK, MOCK.state
@@ -118,11 +118,11 @@ M.Fire("PLAYER_LOGIN")
 check(registered == 0, "nothing registered on the game's list (its card drawing hooked instead)")
 check(A.panel == nil and _G.ClassicFriendsListPanel == nil, "no window of ours")
 
-out("== the list as the game builds it: the Battle.net friends, then ours online, then ours offline")
+out("== the list as the game builds it: ours online on top, the Battle.net friends, then ours offline")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|42|MAGE|Stranglethorn Vale", "WHISPER", "Elle Woods")
 SocialUIFrame:Show()
 view:Refresh()
-check(Names(provider) == "[Friends List], Ekiss, Nadkov, Akabounet, Rorg, [Characters online (1)], *Elle Woods, [Characters offline (1)], *Rose Thorn", Names(provider))
+check(Names(provider) == "[Characters online (1)], *Elle Woods, [Friends List], Ekiss, Nadkov, Akabounet, Rorg, [Characters offline (1)], *Rose Thorn", Names(provider))
 local elle
 for _, n in ipairs(Flat(provider)) do if n.data.classicFriend and n.data.classicFriend.name == "Elle Woods" then elle = n end end
 local info = elle.data.accountInfo
@@ -139,7 +139,7 @@ check(refused == 0, "the game's friend search never refused (" .. refused .. " o
 out("== no Battle.net friend online; none at all: ours shown all the same")
 bnet = { { "Akabounet", false }, { "Rorg", false } }
 view:Refresh()
-check(Names(provider) == "[Friends List], Akabounet, Rorg, [Characters online (1)], *Elle Woods, [Characters offline (1)], *Rose Thorn", Names(provider))
+check(Names(provider) == "[Characters online (1)], *Elle Woods, [Friends List], Akabounet, Rorg, [Characters offline (1)], *Rose Thorn", Names(provider))
 bnet = {}
 view:Refresh()
 check(Names(provider) == "[Characters online (1)], *Elle Woods, [Characters offline (1)], *Rose Thorn", "no Battle.net friend: ours alone (" .. Names(provider) .. ")")
@@ -164,7 +164,7 @@ frame = Card(elle)
 local before = provider
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|43|MAGE|Duskwood", "WHISPER", "Elle Woods")
 A.SocialRefresh()
-check(provider == before and Names(provider) == "[Friends List], Ekiss, Nadkov, Akabounet, Rorg, [Characters online (1)], *Elle Woods, [Characters offline (1)], *Rose Thorn", "the same list (in place)")
+check(provider == before and Names(provider) == "[Characters online (1)], *Elle Woods, [Friends List], Ekiss, Nadkov, Akabounet, Rorg, [Characters offline (1)], *Rose Thorn", "the same list (in place)")
 check(frame.FriendName._text == "|cff40c7ebElle Woods|r, Level 43 MAGE", "her card's text drawn again in place (" .. tostring(frame.FriendName._text) .. ")")
 M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "!", "WHISPER", "Elle Woods")
 A.SocialRefresh()

@@ -1,5 +1,5 @@
 -- The friends window's sections, ClassicFriendsList's (Clara's same code: test116): the characters in two sections of
--- their own (online, offline), after the Battle.net favorites and friends by default; a padlock beside the window's X:
+-- their own (online, offline), the ones online on top by default and those offline after the Battle.net friends; a padlock beside the window's X:
 -- its right-click menu puts the characters online, or offline, above the Battle.net friends (or back after them), and
 -- the first order back; unlocked, a grip on each header in sight; a header dragged goes where it is let go (a line
 -- shows where), the list scrolling by itself pushed against its top or bottom (faster further past); the order kept
@@ -169,8 +169,8 @@ M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "I|42|MAGE|Stranglethorn Vale", "WHISPE
 SocialUIFrame:Show()
 view:Refresh()
 
-out("== by default: the Battle.net favorites and friends, then the characters online, then those offline")
-check(Names() == "[Favorites], Fav, [Friends List], Ekiss, Akabounet, [Characters online (1)], *Elle Woods, [Characters offline (1)], *Rose Thorn", Names())
+out("== by default: the characters online on top, then the Battle.net favorites and friends, then those offline")
+check(Names() == "[Characters online (1)], *Elle Woods, [Favorites], Fav, [Friends List], Ekiss, Akabounet, [Characters offline (1)], *Rose Thorn", Names())
 
 out("== the padlock beside the window's X, locked")
 local lock = A.lockButton
@@ -179,7 +179,7 @@ local point, rel, relPoint = lock:GetPoint(1)
 check(point == "RIGHT" and rel == SocialUIFrame.CloseButton and relPoint == "LEFT", "just left of the X")
 check(lock and lock._normalTex == "Interface\\Buttons\\LockButton-Locked-Up", "locked (" .. tostring(lock and lock._normalTex) .. ")")
 
-out("== its right-click menu: online above, offline above, back after, the first order")
+out("== its right-click menu: online above (by default), offline above, back after, the first order")
 lock:Click("RightButton")
 local items = M.menu and M.menu.items or {}
 local onlineTop, offlineTop, reset
@@ -189,23 +189,40 @@ for _, it in ipairs(items) do
   if it.text == "Default order" then reset = it end
 end
 check(onlineTop and offlineTop and reset and onlineTop.kind == "checkbox", "its two boxes and its button")
-check(onlineTop and not onlineTop.isSelected(), "online: not above by default")
+check(onlineTop and onlineTop.isSelected() and not offlineTop.isSelected(), "online above by default, offline not")
 local before = invalidations
 onlineTop.setSelected()
-check(Sections() == "Characters online | Favorites | Friends List | Characters offline", Sections())
-check(onlineTop.isSelected() and invalidations == before + 1, "checked; the list laid out again once (" .. (invalidations - before) .. ")")
+check(Sections() == "Favorites | Friends List | Characters online | Characters offline", "online after the Battle.net friends: " .. Sections())
+check(not onlineTop.isSelected() and invalidations == before + 1, "unchecked; the list laid out again once (" .. (invalidations - before) .. ")")
 offlineTop.setSelected()
-check(Sections() == "Characters online | Characters offline | Favorites | Friends List", Sections())
+check(Sections() == "Characters offline | Favorites | Friends List | Characters online", Sections())
 onlineTop.setSelected()
-check(Sections() == "Characters offline | Favorites | Friends List | Characters online", "online back after the Battle.net friends: " .. Sections())
+check(Sections() == "Characters online | Characters offline | Favorites | Friends List", "online above, before offline: " .. Sections())
 offlineTop.setSelected()
-check(Sections() == "Favorites | Friends List | Characters online | Characters offline", "offline back after them, after online: " .. Sections())
+check(Sections() == "Characters online | Favorites | Friends List | Characters offline", "offline back after them: " .. Sections())
 onlineTop.setSelected()
 view:Refresh()
-check(Sections() == "Characters online | Favorites | Friends List | Characters offline", "kept as the game builds its list again: " .. Sections())
-check(ClassicFriendsListDB.friendSections and ClassicFriendsListDB.friendSections.order[1] == "online", "kept with the addon's settings")
+check(Sections() == "Favorites | Friends List | Characters online | Characters offline", "kept as the game builds its list again: " .. Sections())
+check(ClassicFriendsListDB.friendSections and ClassicFriendsListDB.friendSections.order[1] == "favorites", "kept with the settings")
 reset.callback()
-check(Sections() == "Favorites | Friends List | Characters online | Characters offline", "the first order back: " .. Sections())
+check(Sections() == "Characters online | Favorites | Friends List | Characters offline", "the first order back: " .. Sections())
+
+out("== the same options in the friends window's own menu (its ≡ button)")
+local modifiers = M.menuModifiers and M.menuModifiers["MENU_SOCIAL_UI_BATTLE_NET_BAR"]
+check(modifiers and #modifiers > 0, "added to it")
+if modifiers then
+  local menu = { items = {} }
+  local root = {}
+  function root:CreateTitle(t) table.insert(menu.items, { kind = "title", text = t }) end
+  function root:CreateDivider() table.insert(menu.items, { kind = "divider" }) end
+  function root:CreateCheckbox(t) table.insert(menu.items, { kind = "checkbox", text = t }) end
+  function root:CreateButton(t) table.insert(menu.items, { kind = "button", text = t }) end
+  for _, fn in ipairs(modifiers) do fn(nil, root) end
+  local has = {}
+  for _, it in ipairs(menu.items) do if it.text then has[it.text] = it.kind end end
+  check(has["Characters online above the Battle.net friends"] == "checkbox" and has["Default order"] == "button"
+    and has["Unlock the sections (to drag them)"] == "button", "its boxes, Unlock and Default order")
+end
 
 out("== unlocked: a grip on each header in sight, none on the cards")
 lock:Click("LeftButton")
@@ -216,23 +233,53 @@ for _, f in ipairs(pools.header) do local g = A.SectionGrip(f) if g and g:IsShow
 for _, f in ipairs(pools.other) do local g = A.SectionGrip(f) if g and g:IsShown() then onCards = onCards + 1 end end
 check(onHeaders == 4 and onCards == 0, "4 headers gripped, no card (" .. onHeaders .. ", " .. onCards .. ")")
 
-out("== a header dragged above the favorites: the line where it goes, then let go there")
-local online = HeaderFrame("online")
-local grip = A.SectionGrip(online)
-M.cursorX, M.cursorY = 200, online._top - 12
+out("== its arrows: a place down, a place up")
+local onlineGrip = A.SectionGrip(HeaderFrame("online"))
+check(onlineGrip.up and onlineGrip.down, "two arrows on the header")
+onlineGrip.down:Click()
+check(Sections() == "Favorites | Characters online | Friends List | Characters offline", "down: " .. Sections())
+M.Frame(0.06)
+A.SectionGrip(HeaderFrame("online")).up:Click()
+check(Sections() == "Characters online | Favorites | Friends List | Characters offline", "up again: " .. Sections())
+M.Frame(0.06)
+
+out("== a header dragged up over another section's card (not its header): before it")
+local offline = HeaderFrame("offline")
+local grip = A.SectionGrip(offline)
+M.cursorX, M.cursorY = 200, offline._top - 12
 M.mouseDown = true
 grip._scripts.OnMouseDown(grip, "LeftButton")
-local fav = HeaderFrame("favorites")
-M.cursorY = fav._top - 6 -- (above the favorites header's middle)
+local ekiss
+for _, f in ipairs(shownFrames) do if f.node.data.accountInfo and f.node.data.accountInfo.accountName == "Ekiss" then ekiss = f end end
+M.cursorY = ekiss._top - 20 -- (on a Battle.net friend's card)
 M.Frame(0.016)
 local marked = false
 for _, f in ipairs(M.frames) do if f._parent == UIParent and f:GetHeight() == 3 and f:IsShown() then marked = true end end
 check(marked, "the line shown")
-check(A.SectionSlot(M.cursorY) == 0, "before the first section")
+check(A.SectionSlot(M.cursorY) == 2, "before the Battle.net friends (after 2: online, favorites)")
+local fav = HeaderFrame("favorites")
+M.cursorY = fav._top - 30 -- (on the favorite's card)
+M.Frame(0.016)
+check(A.SectionSlot(M.cursorY) == 1, "further up, over the favorites: before them")
 M.mouseDown = false
 M.Frame(0.016)
-check(Sections() == "Characters online | Favorites | Friends List | Characters offline", "let go there: " .. Sections())
-check(ClassicFriendsListDB.friendSections.order[1] == "online", "kept")
+check(Sections() == "Characters online | Characters offline | Favorites | Friends List", "let go there: " .. Sections())
+check(ClassicFriendsListDB.friendSections.order[2] == "offline", "kept")
+reset.callback()
+M.Frame(0.06)
+
+out("== a header dragged down over another section: after it")
+local onlineH = HeaderFrame("online")
+M.cursorY = onlineH._top - 12
+M.mouseDown = true
+A.SectionGrip(onlineH)._scripts.OnMouseDown(A.SectionGrip(onlineH), "LeftButton")
+M.cursorY = HeaderFrame("friends")._top - 40 -- (on a Battle.net friend's card)
+M.Frame(0.016)
+M.mouseDown = false
+M.Frame(0.016)
+check(Sections() == "Favorites | Friends List | Characters online | Characters offline", "let go there: " .. Sections())
+reset.callback()
+M.Frame(0.06)
 
 out("== the list scrolled by itself as it is pushed against its top, faster further past")
 reset.callback()
@@ -286,6 +333,12 @@ view:SaveHeaderCollapsedState("cflOffline", false)
 view:Hide()
 check(not A.SectionsUnlocked(), "locked again as the window closes")
 view:Show()
+
+out("== the first order kept before this one (never changed): the characters online on top now; one changed: kept")
+ClassicFriendsListDB.friendSections = { order = { "favorites", "friends", "online", "offline" } }
+check(table.concat(A.SectionStore().order, ", ") == "online, favorites, friends, offline", table.concat(A.SectionStore().order, ", "))
+ClassicFriendsListDB.friendSections = { order = { "friends", "favorites", "online", "offline" } }
+check(table.concat(A.SectionStore().order, ", ") == "friends, favorites, online, offline", "changed by the player: kept (" .. table.concat(A.SectionStore().order, ", ") .. ")")
 
 out("== a kept order made whole again")
 ClassicFriendsListDB.friendSections.order = { "bogus", "offline", "offline", "friends" }
