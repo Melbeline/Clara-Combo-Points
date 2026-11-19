@@ -12401,7 +12401,8 @@
 				--	Show target
 				----------------------------------------------------------------------
 
-				if LeaPlusLC["TipShowTarget"] == "On" then
+				-- (Clara Combo Points: its Tooltip target module shows the unit's target, kept up to date: this one steps aside)
+				if LeaPlusLC["TipShowTarget"] == "On" and not (ClaraNS.TooltipTargetShowsTarget and ClaraNS:TooltipTargetShowsTarget()) then
 
 					local targetUnit = unit .. "target"
 					if UnitExists(targetUnit) then
