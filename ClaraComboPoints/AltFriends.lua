@@ -6,7 +6,7 @@
 -- with their level and class as Clara last saw them (the gold tracker, or the character's own Clara) and when
 -- last seen. Add Character, between Add Friend and Send Message (the three the same width), adds one by its
 -- first name and surname with the suggestions of the mail's To field (the account's characters among them).
--- Over a row: its tooltip; right-click: whisper (online) or remove it from the list.
+-- Over a row: its tooltip; right-click: invite, whisper or remove it from the list.
 -- The game's Add Friend window in the 1.x look, two lines: the game's (a BattleTag, or a name the Forever way)
 -- and one that adds a character to this list, the classic way.
 
@@ -881,13 +881,14 @@ local function Menu(catcher)
   MenuUtil.CreateContextMenu(catcher, function(_, root)
     root:CreateTitle(alt.name)
     if not IsMe(alt.name) then
-      root:CreateButton(WHISPER or "Whisper", function()
-        local tell = (ChatFrameUtil and ChatFrameUtil.SendTell) or ChatFrame_SendTell
-        if tell then tell(alt.name) end
-      end)
+      -- (Invite first, then Whisper)
       root:CreateButton(PARTY_INVITE or INVITE or "Invite", function()
         local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
         if invite then invite(alt.name) end
+      end)
+      root:CreateButton(WHISPER or "Whisper", function()
+        local tell = (ChatFrameUtil and ChatFrameUtil.SendTell) or ChatFrame_SendTell
+        if tell then tell(alt.name) end
       end)
     end
     root:CreateButton(L.ALT_REMOVE, function() AltFriends.Remove(alt.name) end)
