@@ -250,6 +250,11 @@ list.SearchBox = CreateFrame("EditBox", nil, list)
 list.ScrollBox = CreateFrame("Frame", nil, list)
 function list.ScrollBox:SetDataProvider(p) self.provider = p end
 list.NoResultsText = list:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+list:SetSize(274, 484)
+list:SetPoint("TOPLEFT", page, "TOPLEFT", 5, -72)
+form:SetPoint("TOPLEFT", list, "TOPRIGHT", 2, 0) -- (the game's: beside the list)
+local maximized = 0
+function page:SetMaximized() maximized = maximized + 1; form:ClearAllPoints(); form:SetPoint("TOPLEFT", list, "TOPRIGHT", 2, 0) end
 M.Fire("ADDON_LOADED", "Blizzard_Professions")
 ProfessionsFrame:Show(); page:Show(); form:Show()
 db.chars["Alt-Forever"].bank[103] = 2
@@ -300,14 +305,36 @@ check(Listed(p) == "2,3,5", "ticked: only what the bags make")
 root.items[1].set()
 check(not C.FilterOn(), "unticked: off again")
 
-out("== with ForeverRecipes: the panel under its Difficulty and Source panels, never over them")
--- (ForeverRecipes' own frames on the page, as it makes them: its Difficulty with its bar and estimates, its Source)
+out("== the whole recipe pane scrolls as one: the game's form in a scroll frame of its size and place")
 local function Kids(parent) local t = {} for _, f in ipairs(M.frames) do if f._parent == parent then t[#t + 1] = f end end return t end
 function page:GetChildren() return unpack(Kids(self)) end
-local function OurScroll() for _, f in ipairs(Kids(form)) do if f._kind == "ScrollFrame" then return f end end end
-local function Under() local _, rel, relPoint = OurScroll():GetPoint(1) return rel, relPoint end
+local pane, holder, re = ns.CraftGamePane()
+check(pane and pane._kind == "ScrollFrame" and pane._parent == page and holder and form._parent == holder,
+  "the form in the pane's scrolled frame, the pane on the page")
+local p1, rel1, rp1, x1 = pane:GetPoint(1)
+check(p1 == "TOPLEFT" and rel1 == list and rp1 == "TOPRIGHT" and x1 == 2, "the pane where the game put the form (beside the list)")
+local fp, frel = form:GetPoint(1)
+check(fp == "TOPLEFT" and frel == holder, "the form at the top of what scrolls")
+check(math.abs(pane:GetHeight() - 484) < 0.01 and math.abs(pane:GetWidth() - 493) < 0.01, "the pane: the form's own size")
+page:SetMaximized()
+p1, rel1 = pane:GetPoint(1)
+fp, frel = form:GetPoint(1)
+check(rel1 == list and frel == holder, "the game moving the form again (maximized): the pane moved, the form back in it")
+local function Under() local _, rel, relPoint = re:GetPoint(1) return rel, relPoint end
 form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
-check(select(1, Under()) == form.Reagents, "no ForeverRecipes: under the reagents")
+check(select(1, Under()) == form.Reagents, "the panel under the reagents, no scroll of its own")
+check(re._parent == holder, "the panel in what scrolls")
+local tall = form:GetHeight()
+check(tall >= 484, ("the form as tall as what it holds (%d)"):format(tall))
+pane:SetVerticalScroll(120)
+form:Init({ recipeID = 2, name = "Gold Power Core" }); Run()
+check((pane._vs or 0) == 0, "another recipe: from the top")
+form:Hide(); Run()
+check(math.abs(form:GetHeight() - 484) < 0.01, "the form hidden (ForeverRecipes' own pane in its place): its own height")
+form:Show()
+
+out("== with ForeverRecipes: the panel under its Difficulty and Source panels, all in the pane")
+form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
 ForeverRecipes = {}
 local difficulty = CreateFrame("Frame", nil, page)
 difficulty.estimateRows = {}; difficulty.bar = CreateFrame("Frame", nil, difficulty); difficulty.req = difficulty:CreateFontString()
@@ -319,6 +346,9 @@ difficulty:Show(); source:Show()
 form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
 local rel, relPoint = Under()
 check(rel == source and relPoint == "BOTTOMLEFT", "its Source shown: the panel under it")
+check(difficulty._parent == holder and source._parent == holder, "its panels in the pane: scrolled and cut with the recipe")
+check(form:GetHeight() > 484, ("the form taller than its own: the pane scrolls (%d)"):format(form:GetHeight()))
+check(pane.ScrollBar:IsShown(), "its bar shown")
 source:Hide(); Run()
 check(select(1, Under()) == difficulty, "its Source hidden (its option): under its Difficulty, placed again at once")
 difficulty:Hide(); Run()

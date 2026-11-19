@@ -28,6 +28,10 @@ check(has("Welcome to World of Warcraft!"), "the game's own line stays")
 M.now = 29
 say("WeakAuras: 3 auras loaded", ADDON_STACK)
 check(not has("WeakAuras: 3 auras loaded"), "9 s after the world shows: still taken out")
+ns.ChatRestoring = true -- (Leatrix Plus putting the session before's chat back)
+say("[Yesterday] Elle whispers: hi", ADDON_STACK)
+ns.ChatRestoring = nil
+check(has("[Yesterday] Elle whispers: hi"), "the chat Leatrix Plus restores at login: left as it is")
 M.now = 31
 say("Details: segment saved", ADDON_STACK)
 check(has("Details: segment saved"), "past 10 s: shown")
