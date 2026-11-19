@@ -3,6 +3,8 @@
 -- reagents the bank holds, the search (by name or reagent, "Name" in quotes for that recipe alone) and
 -- the filter on what is in reach (its menu's last entries). The list is the game's: what does not
 -- match is taken out of it each time the game makes it.
+-- With the addon ForeverRecipes (left as it is): its panels (Difficulty and its estimates, Source) lie
+-- under the reagents too, the panel goes under the lowest of them shown.
 
 local ADDON, ns = ...
 local C = ns.Craft
@@ -47,12 +49,45 @@ local function Lowest()
   return low or form.Reagents
 end
 
-local function Draw()
+-- ForeverRecipes' panels, under the reagents: its Difficulty (the bar and its estimates) and its
+-- Source under that (frames of its own on the page, without names: known by what they hold). Their
+-- showing or hiding (another recipe, its options) places the panel again.
+local frDifficulty, frSource
+local Draw
+local function Watch(frame)
+  local function Again() C_Timer.After(0, function() if Draw then Draw() end end) end
+  frame:HookScript("OnShow", Again)
+  frame:HookScript("OnHide", Again)
+end
+local function ForeverRecipesBottom()
+  if not (_G.ForeverRecipes and page and page.GetChildren) then return nil end
+  if not (frDifficulty and frSource) then
+    for _, child in ipairs({ page:GetChildren() }) do
+      if not frDifficulty and type(rawget(child, "estimateRows")) == "table" and rawget(child, "bar") and rawget(child, "req") then
+        frDifficulty = child
+        Watch(child)
+      elseif not frSource and type(rawget(child, "rows")) == "table" and rawget(child, "content") == child then
+        frSource = child
+        Watch(child)
+      end
+    end
+  end
+  if frSource and frSource:IsShown() then return frSource end
+  if frDifficulty and frDifficulty:IsShown() then return frDifficulty end
+  return nil
+end
+
+function Draw()
   if not (form and form:IsVisible()) then return end
   Chests()
   local id = Recipe()
   scroll:ClearAllPoints()
-  scroll:SetPoint("TOPLEFT", Lowest(), "BOTTOMLEFT", 0, -10)
+  local under = ForeverRecipesBottom()
+  if under then
+    scroll:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -10)
+  else
+    scroll:SetPoint("TOPLEFT", Lowest(), "BOTTOMLEFT", 0, -10)
+  end
   scroll:SetPoint("BOTTOMRIGHT", form, "BOTTOMRIGHT", -30, 40)
   local width = math.max(150, (scroll:GetWidth() or 0) > 0 and scroll:GetWidth() or (form:GetWidth() or 480) - 60)
   local height = panel:Update(id, width)
