@@ -387,7 +387,6 @@ ns.RARES = {
   [14492] = { "Verifonix", "Drolatix" },
   [14506] = { "Lord Hel'nurath" },
   [14697] = { "Lumbering Horror", "Horreur chancelante", "Schwerfälliger Schrecken" },
-  [16093] = { "Spectral Stalker", "Traqueur spectral", "Spektraler Pirscher" },
   [16184] = { "Nerubian Overseer" },
   [16379] = { "Spirit of the Damned", "Esprit de damné", "Geist der Verdammten" },
   [16380] = { "Bone Witch", "Sorcière des ossements", "Knochenhexe" },
