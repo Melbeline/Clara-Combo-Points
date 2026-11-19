@@ -5,10 +5,10 @@
 ## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
 ## Version: 1.7.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraClassicUIDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, WT_WeaponGrouping, WT_ShowKnownWeaponSkills, WT_SpellDisplay, WT_SideBySide, WT_ScrollTwoPages, WT_FloatingFramePoint, WT_WaypointProvider, WT_ProfessionTabPosition, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraNodeSightDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraClassicUIDB, ClaraTullaRangeDB, ClaraNamesDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraEnhancedRaidFramesDB, ClaraDoesItDieDB, WT_WeaponGrouping, WT_ShowKnownWeaponSkills, WT_SpellDisplay, WT_SideBySide, WT_ScrollTwoPages, WT_FloatingFramePoint, WT_WaypointProvider, WT_ProfessionTabPosition, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB, ClaraWaterShieldDB
 ## SavedVariablesPerCharacter: ClaraClassicUICharDB, WT_LearnedPetAbilities, WT_NeedsToOpenBeastTraining, WT_IgnoredSpells, WT_PriceFaction, WT_HideWeaponSkillSwitcher, WT_Crafting, ClaraLFGForeverCharDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, TipTac, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, WhatsTraining, LFGForever, LOF, Auctionator, ReverseEngineering, ClassicUIForever, ElvUI, EasyFrames, Glass
+## OptionalDeps: Leatrix_Plus, TipTac, Cheese, WeaponSwingTimer, BuyEmAllClassic, NodeSight, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, EnhancedRaidFrames, DoesItDie, WhatsTraining, LFGForever, LOF, Auctionator, ReverseEngineering, ClassicUIForever, ElvUI, EasyFrames, Glass, WaterShieldTracker
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -445,6 +445,7 @@ Modules\IdTip\IdTip.lua
 Modules\PetFeed\PetFeed.lua
 Modules\ReportMute\ReportMute.lua
 Modules\TooltipTarget\TooltipTarget.lua
+Modules\WaterShieldTracker\WaterShieldTracker.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
 Modules\EnemyCasts\EnemyCasts.lua
 Modules\EnhancedRaidFrames\Bootstrap.lua

@@ -38,6 +38,8 @@ ns.QOL_MODULES = {
   { key = "reportmute", name = "Permanent Report Mute", theme = "interface" }, -- (Clara's own: a reported player muted for good)
   -- (Clara's own, as TipTac shows them; TipTac enabled: it shows its own, this one steps aside, TipTac never turned off)
   { key = "tooltiptarget", name = "Tooltip target", standalone = "TipTac", title = "TipTac", keep = true, theme = "interface" },
+  -- (Melbeline's WaterShieldTracker: Water Shield's charges on its icon, for shamans)
+  { key = "watershield", name = "Water Shield Tracker", standalone = "WaterShieldTracker", theme = "combat" },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },
   { key = "enhancedraidframes", name = "Enhanced Raid Frames", standalone = "EnhancedRaidFrames", theme = "combat" },
   { key = "doesitdie", name = "DoesItDie", standalone = "DoesItDie", theme = "combat" },
