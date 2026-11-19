@@ -265,6 +265,15 @@ Rows()[2]:GetScript("OnEnter")(Rows()[2])
 local tip = table.concat(GameTooltip._lines or {}, " | ")
 check(GameTooltip:IsOwned(Rows()[2]) and tip:find("party1", 1, true) ~= nil, "its tooltip names them (" .. tip .. ")")
 Rows()[2]:GetScript("OnLeave")(Rows()[2])
+-- (whole names: "First Surname", whatever the game's name settings hide)
+UnitNameUnmodified = function(u) if u == "party1" then return "Elle", "Durand" end end
+Run()
+Rows()[2]:GetScript("OnEnter")(Rows()[2])
+tip = table.concat(GameTooltip._lines or {}, " | ")
+check(tip:find("Elle Durand", 1, true) ~= nil, "its tooltip: their whole names (" .. tip .. ")")
+Rows()[2]:GetScript("OnLeave")(Rows()[2])
+UnitNameUnmodified = nil
+Run()
 M.Tick()
 local pad = share.pad
 check(pad and pad._secure and pad:IsShown() and pad:GetFrameStrata() == "DIALOG", "the secure pad over it")
