@@ -7,13 +7,14 @@
 -- clicked opens the item in the game's own buy view (each purchase: one click, as the game wants). A full scan (its
 -- button, top right): the whole auction house at once, every item's price kept and judged (once every 15 minutes). Needs
 -- Auctionator (its tab strip; its records feed the prices): none of its code is here, its tab strip is given a
--- tab through what it offers other addons (Auctionator.Tabs.Register).
+-- tab through what it offers other addons (Auctionator.Tabs.Register). A price range (lowest and highest, in gold,
+-- silver and copper; empty: no limit): only the items whose lowest price lies in it are listed.
 local ADDON, ns = ...
 local L = ns.L
 
-local DEFAULTS = { window = 7, mode = "median", pct = 40, sound = true }
+local DEFAULTS = { window = 7, mode = "median", pct = 40, sound = true, minPrice = 0, maxPrice = 0 } -- (prices in copper; 0: no limit)
 local PAUSE = 10        -- seconds between two passes
-local ROWS, ROW_H = 13, 22
+local ROWS, ROW_H = 12, 22
 local WINDOW_KEYS = { [1] = "SNIPER_W_1", [3] = "SNIPER_W_3", [7] = "SNIPER_W_7", [15] = "SNIPER_W_15",
   [30] = "SNIPER_W_30", [91] = "SNIPER_W_91", [182] = "SNIPER_W_182", [365] = "SNIPER_W_365", [0] = "SNIPER_W_0" }
 
@@ -94,11 +95,23 @@ local function Sound()
   if Get("sound") and PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.AUCTION_WINDOW_OPEN or SOUNDKIT.MAP_PING or 0) end
 end
 
+-- Its lowest price in the range asked (0: no limit on that side)?
+function Sn.InRange(price)
+  local lo, hi = Get("minPrice") or 0, Get("maxPrice") or 0
+  if lo > 0 and price < lo then return false end
+  if hi > 0 and price > hi then return false end
+  return true
+end
+
 -- One result looked at: a deal kept (or dropped when it is no more one); a new deal heard
 local function Look(result, quiet)
   if not result or (result.totalQuantity or 0) <= 0 then return false end
   local id = Id(result)
   Sn.seen[id] = result
+  if result.minPrice and not Sn.InRange(result.minPrice) then
+    Sn.deals[id] = nil
+    return false
+  end
   local off, ref, n = Sn.Judge(result)
   if off and off >= Get("pct") then
     local old = Sn.deals[id]
@@ -440,8 +453,69 @@ local function Build(f)
   sound:SetScript("OnClick", function(self) Set("sound", self:GetChecked() and true or false) end)
   f.Sound = sound
 
+  -- the price range: its lowest and its highest, each in gold, silver and copper (empty: no limit)
+  local COINS = { { 10000, 5, 38, "Interface\\MoneyFrame\\UI-GoldIcon" }, { 100, 2, 24, "Interface\\MoneyFrame\\UI-SilverIcon" },
+    { 1, 2, 24, "Interface\\MoneyFrame\\UI-CopperIcon" } }
+  local function PriceTip(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText(L.SNIPER_PRICE_TIP, 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end
+  local function Money(place, text, key)
+    local label = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    place(label)
+    label:SetText(text)
+    local boxes, prev = {}, label
+    for i, coin in ipairs(COINS) do
+      local b = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+      b:SetSize(coin[3], 20)
+      b:SetPoint("LEFT", prev, "RIGHT", i == 1 and 10 or 6, 0)
+      b:SetAutoFocus(false)
+      b:SetNumeric(true)
+      b:SetMaxLetters(coin[2])
+      b:SetJustifyH("RIGHT")
+      local icon = f:CreateTexture(nil, "ARTWORK")
+      icon:SetSize(12, 12)
+      icon:SetTexture(coin[4])
+      icon:SetPoint("LEFT", b, "RIGHT", 2, 0)
+      boxes[i], prev = b, icon
+    end
+    local function Show()
+      local v = Get(key) or 0
+      boxes[1]:SetText(v > 0 and tostring(math.floor(v / 10000)) or "")
+      boxes[2]:SetText(v > 0 and tostring(math.floor(v / 100) % 100) or "")
+      boxes[3]:SetText(v > 0 and tostring(v % 100) or "")
+    end
+    local function Apply()
+      local g = tonumber(boxes[1]:GetText()) or 0
+      local sv = math.min(99, tonumber(boxes[2]:GetText()) or 0)
+      local c = math.min(99, tonumber(boxes[3]:GetText()) or 0)
+      local v = g * 10000 + sv * 100 + c
+      if Get(key) ~= v then Set(key, v) end
+      Show()
+      Sn.Rejudge()
+    end
+    for i, b in ipairs(boxes) do
+      b:SetScript("OnEnterPressed", function(self) Apply(); self:ClearFocus() end)
+      b:SetScript("OnEditFocusLost", function() Apply() end)
+      b:SetScript("OnEscapePressed", function(self) Show(); self:ClearFocus() end)
+      b:SetScript("OnTabPressed", function() boxes[i % #boxes + 1]:SetFocus() end)
+      b:SetScript("OnEnter", PriceTip)
+      b:SetScript("OnLeave", GameTooltip_Hide)
+    end
+    Show()
+    return prev, boxes, Show
+  end
+  -- (on a row of its own, under the share)
+  local minEnd, minBoxes, minShow = Money(function(label) label:SetPoint("TOPLEFT", share, "BOTTOMLEFT", 0, -16) end,
+    L.SNIPER_PRICE_MIN, "minPrice")
+  local _, maxBoxes, maxShow = Money(function(label) label:SetPoint("LEFT", minEnd, "RIGHT", 16, 0) end,
+    L.SNIPER_PRICE_MAX, "maxPrice")
+  f.MinPrice, f.MaxPrice = minBoxes, maxBoxes
+  f.ShowPrices = function() minShow(); maxShow() end
+
   -- the deals
-  local top = -128
+  local top = -150
   local head = {}
   for _, c in ipairs(COLUMNS) do
     local t = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
