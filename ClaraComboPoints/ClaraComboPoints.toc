@@ -41,7 +41,9 @@ QuestPlates.lua
 GroupFinderZone.lua
 ChatCopy.lua
 Rares.lua
+RareSpots.lua
 UnitScan.lua
+RareMap.lua
 Screenshots.lua
 ChatPlace.lua
 Tracker.lua
