@@ -49,8 +49,10 @@ ClassicFriendsListDB.friends = {
   [BAD .. "\136ve lune"] = { name = BAD .. "\136ve Lune" },            -- a Battle.net friend's character
   [BAD .. "\137clair dupont"] = { name = BAD .. "\137clair Dupont" },  -- nobody known by that name: left as it is
   ["eclair chazal"] = { name = "Eclair Chazal" },                      -- whole: never changed
+  ["miss milia"] = { name = "Miss Milia" },                            -- its accented letter lost: heard by its whole name
+  ["ren laval"] = { name = "Ren Laval" },                              -- its accented letter lost: a character seen
 }
-ClassicFriendsListDB.sexes = { ["émile zola"] = 2 }
+ClassicFriendsListDB.sexes = { ["émile zola"] = 2, ["rené laval"] = 1 }
 local function Named(name)
   for key, alt in pairs(A.List()) do if alt.name == name then return key end end
 end
@@ -65,21 +67,32 @@ bnet = { { gameAccountInfo = { characterName = "Ève Lune", isOnline = true } } 
 M.Fire("PLAYER_LOGIN")
 check(Named("Émile Zola") ~= nil and not A.Broken(Named("Émile Zola")), "\"Émile Zola\", under a whole key")
 check(Named("Ève Lune") ~= nil, "\"Ève Lune\"")
+check(Named("René Laval") ~= nil and Named("Ren Laval") == nil, "\"Ren Laval\" (its accented letter lost): \"René Laval\", from the character seen")
 
 out("== heard in a whisper by its whole name")
 check(Named("\137lodie Dupré") ~= nil, "still broken before")
 M.Fire("CHAT_MSG_WHISPER", "coucou", "Élodie Dupré-Realm", "", "", "Élodie Dupré", "", 0, 0, "", 0, 1, "Player-1-0001")
 check(Named("Élodie Dupré") ~= nil, "\"Élodie Dupré\"")
+A.Mend("Miss Émilia-Forever")
+check(Named("Miss Émilia") ~= nil and Named("Miss Milia") == nil, "\"Miss Milia\" (its É lost): \"Miss Émilia\" once heard whole")
+A.Mend("Éclair Chazal")
+check(Named("Eclair Chazal") == "eclair chazal", "\"Eclair Chazal\" (an E of its own, not a lost É): left as it is")
 
 out("== nobody known by that name: left, nothing else changed")
 check(BrokenLeft() == 1 and Named(BAD .. "\137clair Dupont") ~= nil, "one left broken (" .. BrokenLeft() .. ")")
 local count = 0
 for _ in pairs(A.List()) do count = count + 1 end
-check(count == 6, "six characters still (" .. count .. ")")
+check(count == 8, "eight characters still (" .. count .. ")")
 A.Mend("Éclair Chazol")
 check(Named(BAD .. "\137clair Dupont") ~= nil, "another surname: not it")
 A.List(); A.List()
 check(Named("Éclair Chazal") and Named("Élodie Dupré") and Named("Émile Zola"), "the whole names kept as they are, list after list")
+out("== never heard whole: renamed by hand (its right-click menu)")
+check(A.Rename(BAD .. "\137clair Dupont", "éclair dupont") == true and Named("Éclair Dupont") ~= nil and BrokenLeft() == 0,
+  "\"▯clair Dupont\" renamed \"Éclair Dupont\" (typed lower-case: its capitals, its É whole)")
+check(A.Rename("Éclair Dupont", "Eclair Chazal") == false and Named("Éclair Dupont") ~= nil, "a name already in the list: refused, left as it was")
+local n2 = 0 for _ in pairs(A.List()) do n2 = n2 + 1 end
+check(n2 == 8, "still eight characters (" .. n2 .. ")")
 string.upper = plainUpper
 out(string.format("\n%d failure(s)", fails))
 return fails
