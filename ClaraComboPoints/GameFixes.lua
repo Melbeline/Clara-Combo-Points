@@ -696,6 +696,10 @@ function ns:MouseReport()
     local ok, lines = pcall(ns.TrackerFoldsReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
   end
+  if ns.AltFriends and ns.AltFriends.BnetReport then
+    local ok, lines = pcall(ns.AltFriends.BnetReport)
+    if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
+  end
   if ns.FightWindowsReport then
     local ok, lines = pcall(ns.FightWindowsReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
