@@ -2528,6 +2528,8 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
   elseif cmd == "hunt" then
     ns:SetScanHunt(raw)
     Print(raw ~= "" and L.SCAN_HUNT_SET:format(raw) or L.SCAN_HUNT_CLEARED)
+  elseif (cmd == "quetes" or cmd == "quêtes" or cmd == "quests" or cmd == "quest") and ns.GroupQuests then
+    ns.GroupQuests.Report()
   elseif cmd == "help" then
     Print(L.HELP)
   elseif cmd == "souris" or cmd == "mouse" or cmd == "maus" then
