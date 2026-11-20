@@ -259,9 +259,14 @@ local function add(tooltip, id, kind)
   end
 end
 
--- only the creature form carries an npc id, a Player or BattlePet guid holds something else
+-- only the creature form carries an npc id (its sixth part: Creature-0-server-map-copy-npc-spawn), a Player or
+-- BattlePet guid holds something else. The other parts are not read: the game hides the server, realm and spawn
+-- in them (WoW 12.1.7, WoW Forever 1.60.1 hotfix), the npc id stays
 local function npcIdFromGUID(guid)
-  return tonumber(guid:match("^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)%-%x+$"))
+  if type(guid) ~= "string" or (issecretvalue and issecretvalue(guid)) then return nil end
+  local kind, _, _, _, _, id, spawn = strsplit("-", guid)
+  if not spawn or not kind:find("^%a+$") or kind == "Player" or kind == "BattlePet" then return nil end
+  return tonumber(id)
 end
 
 -- during a battle the unit is the pet, whose npc id belongs on no tooltip
