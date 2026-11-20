@@ -93,4 +93,4 @@ root, sub = Open("MENU_UNIT_TARGET", { unit = "target", name = "Charlotte" })
 secret = function() return false end
 check(Entry(sub) == nil, "a secret name: no entry, no error")
 
-out(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
+out(fails == 0 and "ALL OK" or (fails .. " FAILED"))

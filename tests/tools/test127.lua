@@ -93,4 +93,4 @@ for _, fn in ipairs(M.menuModifiers.MENU_UNIT_TARGET) do fn(UIParent, secret, { 
 issecretvalue = was
 check(#s2.elements == 0, "a secret name: no entry, no error")
 
-out(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
+out(fails == 0 and "ALL OK" or (fails .. " FAILED"))
