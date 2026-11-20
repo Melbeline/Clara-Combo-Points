@@ -392,6 +392,38 @@ do
   list.SearchBox:GetScript("OnTextChanged")(list.SearchBox)
 end
 
+out("== an item the game does not have: asked for once, not at each search (the list made again and again)")
+do
+  local asked = {}
+  local oldReq = C_Item.RequestLoadItemDataByID
+  C_Item.RequestLoadItemDataByID = function(id) asked[id] = (asked[id] or 0) + 1 end
+  -- a recipe of reagents the game never loads (99901) and one that comes later (99902)
+  RECIPES[77] = { name = "Ghostly Gizmo", o = 99903, r = { { 99901, 1 }, { 99902, 2 } } }
+  local oldRead = C.Read
+  C.Read = function(id) if id == 77 then return { o = 99903, m = 1, r = { 99901, 1, 99902, 2 }, name = "Ghostly Gizmo" } end return oldRead(id) end
+  for _ = 1, 5 do C.Match(77, "Ghostly Gizmo", "gizmo") end
+  check(asked[99901] == 1 and asked[99902] == 1 and asked[99903] == 1, "searched five times: each unknown item asked for once")
+  M.Fire("GET_ITEM_INFO_RECEIVED", 99901, false)
+  M.ITEMS[99902] = { "Spectral Spring", 1, 1, 0 }
+  M.Fire("GET_ITEM_INFO_RECEIVED", 99902, true)
+  M.Fire("ITEM_DATA_LOAD_RESULT", 99903, false)
+  check(C.ItemMissing(99901) and not C.ItemMissing(99902), "the game's answers: one it has not, one there now")
+  check(C.Match(77, "Ghostly Gizmo", "spectral spring"), "searched by the reagent that came: found")
+  for _ = 1, 5 do C.Match(77, "Ghostly Gizmo", "gizmo") end
+  check(asked[99901] == 1 and asked[99903] == 1, "the ones it has not: never asked for again")
+  -- one never answered: asked once more a minute on, then left
+  M.now = (M.now or 0) + 1
+  C.ItemName(99904); C.ItemName(99904)
+  check(asked[99904] == 1, "no answer yet: not asked again")
+  M.now = M.now + 61
+  C.ItemName(99904); C.ItemName(99904)
+  M.now = M.now + 61
+  C.ItemName(99904)
+  check(asked[99904] == 1 and C.ItemMissing(99904), "no answer a minute on: looked at once more, then left as missing")
+  C.Read = oldRead
+  C_Item.RequestLoadItemDataByID = oldReq
+end
+
 if ns.CraftClassicDetail then
   out("== ClassicUI's professions window (its hooks)")
   check(ns.CraftMatch(2, { name = "Gold Power Core" }, '"gold power core"') and not ns.CraftMatch(1, { name = "Tranquil Mechanical Yeti" }, '"gold power core"'),
