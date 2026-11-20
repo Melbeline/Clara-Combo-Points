@@ -272,7 +272,7 @@ local function Callers()
   local out, seen = {}, {}
   for file, line in stack:gmatch("Interface[/\\]AddOns[/\\]([^%]:\"]+%.lua)[\"%]]*:(%d+)") do
     local at = file .. ":" .. line
-    if not file:find("^Blizzard_") and not file:find("Crafting[/\\]CraftGame%.lua$") and not seen[at] then
+    if not file:find("^Blizzard_") and not seen[at] then
       seen[at] = true
       out[#out + 1] = at
       if #out >= 4 then break end
@@ -302,6 +302,15 @@ local function Watch()
       end)
     end, watch)
   end
+  -- (the game's list updates: each one makes the list again)
+  local updates = CreateFrame("Frame")
+  watch.updates = {}
+  updates:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
+  updates:SetScript("OnEvent", function()
+    local t = watch.updates
+    t[#t + 1] = GetTime()
+    if #t > 50 then table.remove(t, 1) end
+  end)
   if EventRegistry and EventRegistry.RegisterCallback then
     EventRegistry:RegisterCallback("ProfessionsRecipeListMixin.Event.OnRecipeSelected", function(_, info)
       Note(watch.chosen, { at = GetTime(), name = info and tostring(info.name or info.recipeID) or "?" })
@@ -321,7 +330,10 @@ function ns:CraftListReport()
     frame:IsShown() and "shown" or "hidden", tostring(text), query, tostring(C.Option("search")), tostring(filter), tostring(C.FilterOn()))
   local recent = 0
   for _, b in ipairs(watch.builds) do if now - b.at < 10 then recent = recent + 1 end end
-  out[#out + 1] = ("    rebuilt %d time(s) in the last 10 s; the last ones:"):format(recent)
+  local function Within(t) local n = 0 for _, at in ipairs(t or {}) do if now - at < 10 then n = n + 1 end end return n end
+  out[#out + 1] = ("    the game's list updates in the last 10 s: %d; items Clara asked the game for: %d"):format(
+    Within(watch.updates), Within(C.itemRequests))
+  out[#out + 1] = ("    rebuilt %d time(s) in the last 10 s (the last 8 kept); the last ones:"):format(recent)
   for i = #watch.builds, math.max(1, #watch.builds - 4), -1 do
     local b = watch.builds[i]
     out[#out + 1] = ("      %s, %s rows, asked by %s"):format(Ago(b.at), tostring(b.size or "?"), b.by)

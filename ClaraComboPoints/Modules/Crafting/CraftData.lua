@@ -486,12 +486,39 @@ end
 ---------------------------------------------------------------------------
 local hay = {}       -- recipe ID -> { name, item, all } (search keys); kept once every name was there
 
+-- An item's name. One the game does not have yet is asked for once (its answer, GET_ITEM_INFO_RECEIVED or
+-- ITEM_DATA_LOAD_RESULT, says when it came, or that it never will), then left alone: asked again each time the
+-- recipes are searched, the game's answers made the professions list again and again, its rows never clickable
+-- (the list made anew between the press and the release). A request with no answer is tried once more a minute on.
+local asked = {}     -- item ID -> when it was asked for (an answer pending)
+local missing = {}   -- item ID -> true: the game said it has no such item
+C.itemRequests = {}  -- (when items were asked for, for the mouse report)
+local RETRY = 60
 local function ItemName(id)
+  if missing[id] then return nil end
+  local at = asked[id]
+  if at and GetTime() - at < RETRY then return nil end -- (asked: its answer awaited, not asked again)
   local name = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
-  if not name and C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
-  return name
+  if name then
+    asked[id] = nil
+    return name
+  end
+  if at then missing[id] = true return nil end -- (asked twice, never came)
+  asked[id] = GetTime()
+  local list = C.itemRequests
+  list[#list + 1] = GetTime()
+  if #list > 50 then table.remove(list, 1) end
+  if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+  return nil
 end
 C.ItemName = ItemName
+-- The game's answer: the name there now, or none to wait for
+function C.ItemAnswered(id, ok)
+  if type(id) ~= "number" or not asked[id] then return end
+  asked[id] = nil
+  if ok == false then missing[id] = true end
+end
+function C.ItemMissing(id) return missing[id] == true end
 
 local function Hay(id, name)
   local h = hay[id]
@@ -501,11 +528,11 @@ local function Hay(id, name)
   local whole = true
   local parts = { key(ns, name or (r and r.name) or "") }
   local item = r and ItemName(r.o)
-  if r and not item then whole = false end
+  if r and not item and not missing[r.o] then whole = false end
   if item then parts[#parts + 1] = key(ns, item) end
   for _, reagent in ipairs(C.Reagents(id)) do
     local n = ItemName(reagent[1])
-    if n then parts[#parts + 1] = key(ns, n) else whole = false end
+    if n then parts[#parts + 1] = key(ns, n) elseif not missing[reagent[1]] then whole = false end
   end
   h = { name = parts[1], item = item and key(ns, item) or parts[1], all = table.concat(parts, "\n") }
   if whole then hay[id] = h end
@@ -569,7 +596,7 @@ local function Soon(key, fn, delay)
 end
 
 local events = CreateFrame("Frame")
-events:SetScript("OnEvent", function(_, event, arg)
+events:SetScript("OnEvent", function(_, event, arg, arg2)
   if event == "BAG_UPDATE_DELAYED" then
     Soon("bags", function()
       C.ScanBags()
@@ -601,6 +628,8 @@ events:SetScript("OnEvent", function(_, event, arg)
     pending = nil
   elseif event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_SHOW" then
     Soon("learn", C.LearnWindow, 1)
+  elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT" then
+    C.ItemAnswered(arg, arg2)
   end
 end)
 
@@ -627,7 +656,7 @@ local function Start()
   end
   C.ScanBags()
   for _, e in ipairs({ "BAG_UPDATE_DELAYED", "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYERBANKSLOTS_CHANGED", "MAIL_SHOW",
-    "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE" }) do
+    "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE", "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT" }) do
     pcall(events.RegisterEvent, events, e)
   end
 end
