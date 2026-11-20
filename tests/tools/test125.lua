@@ -186,8 +186,16 @@ check(math.abs(bar:GetAlpha() - 0.2) < 0.01, "faint: the chat window alone does 
 mouseOn.window = nil
 FCFDock_SelectWindow(GENERAL_CHAT_DOCK, other)
 check(bar.ui.frame == other and bar.ui.box:GetText() == "", "another tab: its own search")
+Frames(1, 0.1)
+check(not bar.ui.up:IsShown() and not bar.ui.down:IsShown(), "minimized, no search on in that tab: its arrows hidden")
+bar.ui.box:SetFocus(); bar.ui.box:GetScript("OnEditFocusGained")(bar.ui.box)
+check(bar.ui.up:IsShown() and bar.ui.down:IsShown(), "clicked: its arrows shown")
+bar.ui.box:ClearFocus(); bar.ui.box:GetScript("OnEditFocusLost")(bar.ui.box)
+check(not bar.ui.up:IsShown(), "left with nothing searched: hidden again")
 bar.ui.box:SetText("merci"); bar.ui.box:GetScript("OnTextChanged")(bar.ui.box, true); Wait()
 check(bar.ui.count:GetText() == "1/1", "searched in that tab")
+Frames(1, 0.1)
+check(bar.ui.up:IsShown() and bar.ui.down:IsShown(), "a search on: its arrows shown, even unfocused")
 -- (a new window docked: the search tab still the last)
 local third = { lines = {}, offset = 0 }
 for k, v in pairs(window) do if type(v) == "function" then third[k] = v end end

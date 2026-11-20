@@ -34,7 +34,14 @@ local guard = 0 while M.timers and #M.timers > 0 and guard < 50 do M.RunTimer() 
 local function Ours() local t = {} for _, m in ipairs(M.addonSent) do if m[1] == "ClaraFriends" then t[#t + 1] = m end end return t end
 local function Sent() return #Ours() end
 local function LastTo() local t = Ours() return t[#t] end
-local function Chat(pat) for _, line in ipairs(M.chat) do if line:find(pat, 1, true) then return true end end return false end
+-- (a coming or going said a moment later: the timers run first)
+local function Chat(pat)
+  if pat:find("has come online", 1, true) or pat:find("has gone offline", 1, true) then
+    local guard = 0 while M.timers and #M.timers > 0 and guard < 50 do M.RunTimer() guard = guard + 1 end
+  end
+  for _, line in ipairs(M.chat) do if line:find(pat, 1, true) then return true end end
+  return false
+end
 
 out("== at login: nothing asked before the world shows, then everyone at once")
 check(beforeWorld == 0, "nothing asked during the loading")

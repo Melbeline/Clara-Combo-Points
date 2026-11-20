@@ -31,7 +31,14 @@ M.Tick()
 M.Fire("PLAYER_ENTERING_WORLD", true, false)
 local function Timers() local n = 0 while M.timers and #M.timers > 0 and n < 50 do M.RunTimer() n = n + 1 end end
 Timers()
-local function Chat(pat) for _, line in ipairs(M.chat) do if line:find(pat, 1, true) then return true end end return false end
+-- (a coming or going said a moment later: the timers run first)
+local function Chat(pat)
+  if pat:find("has come online", 1, true) or pat:find("has gone offline", 1, true) then
+    local guard = 0 while M.timers and #M.timers > 0 and guard < 50 do M.RunTimer() guard = guard + 1 end
+  end
+  for _, line in ipairs(M.chat) do if line:find(pat, 1, true) then return true end end
+  return false
+end
 local function Asked(name) local n = 0 for _, m in ipairs(M.addonSent) do if m[1] == "ClaraFriends" and m[2] == "?" and m[4] == name then n = n + 1 end end return n end
 -- A system line as the game gives it: each chat window's filter first (hidden when one says so), then the events
 local line = 5000
@@ -100,4 +107,18 @@ M.chat = {}
 local other = NF("Nobody Here")
 check(System(other) == false and Chat(other), "shown at once")
 
+out("== come online and gone offline at once (and the reverse): neither said")
+Timers()
+M.chat = {}
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods") -- (its hello: online)
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "!", "WHISPER", "Elle Woods") -- (its goodbye a moment later: offline)
+Timers()
+check(not Chat("Elle Woods"), "online then offline at once: no line")
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods")
+check(Chat("[Elle Woods]|h has come online"), "online and staying: said, a moment later")
+M.chat = {}
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "!", "WHISPER", "Elle Woods")
+M.Fire("CHAT_MSG_ADDON", "ClaraFriends", "?", "WHISPER", "Elle Woods")
+Timers()
+check(not Chat("Elle Woods"), "offline then online at once: no line")
 out(fails == 0 and "ALL OK" or (fails .. " FAILED"))
