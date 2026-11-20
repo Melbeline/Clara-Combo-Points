@@ -9,6 +9,7 @@
 -- finder window, ClassicUI Forever's), after the game has made them.
 
 local ADDON, ns = ...
+local L = ns.L
 
 local issecretvalue = issecretvalue or function() return false end
 
@@ -79,6 +80,75 @@ local function Filter(box, provider)
     pcall(totals.SetText, totals, WHO_FRAME_TOTAL_TEMPLATE:format(provider:GetSize()))
   end
 end
+---------------------------------------------------------------------------
+-- Exact names: a box left of the Who window's search line (the group finder's Who tab), its line made narrower for
+-- it. Ticked, a name typed alone is put in quotes as it is typed ("Charlotte"): the search above, for players with
+-- that first name or surname only, not every name with it inside. Kept for the account.
+---------------------------------------------------------------------------
+function ns:WhoExact() return self.sv and self.sv.whoExact == true or false end
+local EXACT_SIZE, EXACT_ROOM = 22, 30 -- (the box; the room it takes from the line's left, the gap included)
+
+-- A name alone (one word: no space, digit, quote or filter's hyphen), in quotes; else nil
+local function Quoted(text)
+  if type(text) ~= "string" or issecretvalue(text) then return nil end
+  text = text:gsub("^%s+", ""):gsub("%s+$", "")
+  if text == "" or text:find('[%s%d"%-]') then return nil end
+  return '"' .. text .. '"'
+end
+-- A name alone in quotes: the name; else nil
+local function Unquoted(text)
+  if type(text) ~= "string" or issecretvalue(text) then return nil end
+  local inner = text:match('^%s*"([^"]*)"%s*$')
+  if inner and Quoted(inner) then return inner end
+end
+ns.WhoQuoted = Quoted -- (for the tests)
+
+local exact -- (the box, once made)
+local function Requote(edit, on)
+  local text = edit:GetText()
+  local now = on and Quoted(text) or (not on and Unquoted(text))
+  if now then
+    edit:SetText(now)
+    if edit.SetCursorPosition then edit:SetCursorPosition(on and #now - 1 or #now) end
+  end
+end
+local function MakeExact(frame)
+  local edit = type(frame) == "table" and frame.EditBox
+  if exact or type(edit) ~= "table" or not (edit.GetPoint and edit.HookScript and edit.GetText) then return end
+  local point, rel, relPoint, x, y = edit:GetPoint(1)
+  if not point then return end
+  exact = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+  exact:SetSize(EXACT_SIZE, EXACT_SIZE)
+  -- (the line from further right, as much narrower: its search button and its filter stay where they are)
+  edit:ClearAllPoints()
+  edit:SetPoint(point, rel, relPoint, (x or 0) + EXACT_ROOM, y or 0)
+  edit:SetWidth(math.max(60, (edit:GetWidth() or 0) - EXACT_ROOM))
+  exact:SetPoint("RIGHT", edit, "LEFT", -8, 0) -- (where the line began; its frame reaches 5 left of it)
+  if edit.GetFrameStrata then exact:SetFrameStrata(edit:GetFrameStrata()) end
+  exact:SetChecked(ns:WhoExact())
+  exact:SetScript("OnShow", function(self) self:SetChecked(ns:WhoExact()) end)
+  exact:SetScript("OnClick", function(self)
+    local on = self:GetChecked() and true or false
+    if ns.sv then ns.sv.whoExact = on or nil end
+    Requote(edit, on)
+  end)
+  exact:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(L.WHO_EXACT, 1, 1, 1)
+    GameTooltip:AddLine(L.WHO_EXACT_TIP, nil, nil, nil, true)
+    GameTooltip:Show()
+  end)
+  exact:SetScript("OnLeave", GameTooltip_Hide)
+  -- (typed: put in quotes, the cursor before the closing one; emptied of its letters: empty, "Search" shown again)
+  edit:HookScript("OnTextChanged", function(self, user)
+    if not user or not ns:WhoExact() then return end
+    local text = self:GetText()
+    if text == '""' then self:SetText("") return end
+    Requote(self, true)
+  end)
+end
+ns.WhoExactBox = function() return exact end -- (for the tests)
+
 local hooked = {}
 local function Watch(frame)
   local box = frame and frame.ScrollBox
@@ -88,6 +158,7 @@ local function Watch(frame)
 end
 local function WatchAll()
   Watch(_G.LFGWhoListFrame) -- (WoW Forever: the Who list is the group finder's third tab)
+  MakeExact(_G.LFGWhoListFrame)
   Watch(_G.WhoFrame)
 end
 WatchAll()
