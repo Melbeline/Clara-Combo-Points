@@ -7,10 +7,11 @@ local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 
+local sent = {}
 C_FriendList = {
   GetNumWhoResults = function() return 0, 0 end,
   GetWhoInfo = function() return nil end,
-  SendWho = function() end,
+  SendWho = function(text) sent[#sent + 1] = text end,
 }
 -- the game's Who tab (WhoList.xml): its search line at 56,-40, 255 wide, its search button after it
 LFGWhoListFrame = CreateFrame("Frame", "LFGWhoListFrame", UIParent)
@@ -19,6 +20,10 @@ edit:SetSize(255, 20)
 edit:SetPoint("TOPLEFT", LFGWhoListFrame, "TOPLEFT", 56, -40)
 edit:SetFrameStrata("HIGH")
 LFGWhoListFrame.EditBox = edit
+-- (the game's Enter on the line and its /who, as WhoList.lua and SlashCommands.lua have them)
+edit:SetScript("OnEnterPressed", function(self) C_FriendList.SendWho(self:GetText()); self:ClearFocus() end)
+SlashCmdList = SlashCmdList or {}
+SlashCmdList.WHO = function(msg) edit:SetText(msg); C_FriendList.SendWho(msg) end
 local search = CreateFrame("Button", nil, LFGWhoListFrame)
 search:SetPoint("LEFT", edit, "RIGHT", -6, -1)
 LFGWhoListFrame.WhoSearch = search
@@ -75,4 +80,35 @@ check(GameTooltip._shown and tip[1] == "Exact names" and tostring(tip[2]):find('
 M.Fire("ADDON_LOADED", "Blizzard_GroupFinder_VanillaStyle")
 local p2, _, _, x2 = edit:GetPoint(1)
 check(x2 == 86 and edit:GetWidth() == 225 and ns.WhoExactBox() == exact, "made once: the line not moved twice")
+
+out("== ticked: every search of a name alone sent in quotes, the list only that first name or surname")
+ns.sv.whoExact = true
+SlashCmdList.WHO("lea")
+check(sent[#sent] == '"lea"' and edit:GetText() == '"lea"', "/who lea in the chat: sent as /who \"lea\", the line shows it")
+edit:SetText("lea") -- (written by the game or another addon: no typing)
+edit:GetScript("OnEnterPressed")(edit)
+check(sent[#sent] == '"lea"', "Enter on the line: sent in quotes")
+edit:SetText("lea")
+search:GetScript("PreClick")(search)
+check(edit:GetText() == '"lea"', "the search button: in quotes before the game reads the line")
+SlashCmdList.WHO("lea z-darnassus")
+check(sent[#sent] == "lea z-darnassus", "a filter: sent as typed")
+-- (sent without quotes all the same, by another way: the list still only Lea)
+C_FriendList.SendWho("lea")
+check(ns.WhoKeep({ fullName = "Lea Moon" }) and ns.WhoKeep({ fullName = "Léa Sun" }) and ns.WhoKeep({ fullName = "Anna Lea" }),
+  "sent without quotes: Lea, Léa, Anna Lea kept")
+check(not ns.WhoKeep({ fullName = "Paradox Leafwalker" }) and not ns.WhoKeep({ fullName = "Eleanor Bogwright" })
+  and not ns.WhoKeep({ fullName = "Leath Ain" }), "Leafwalker, Eleanor, Leath taken out")
+ns.sv.whoNames = false
+C_FriendList.SendWho("lea")
+check(not ns.WhoKeep({ fullName = "Paradox Leafwalker" }), "the quotes' own setting off: the box still filters")
+ns.sv.whoNames = nil
+
+out("== unticked: the game's search as typed")
+ns.sv.whoExact = nil
+SlashCmdList.WHO("lea")
+check(sent[#sent] == "lea", "/who lea: as typed")
+check(ns.WhoKeep({ fullName = "Paradox Leafwalker" }), "the list as the game gives it")
+edit:SetText("lea"); edit:GetScript("OnEnterPressed")(edit)
+check(sent[#sent] == "lea", "Enter: as typed")
 out(fails == 0 and "ALL OK" or (fails .. " FAILED"))
