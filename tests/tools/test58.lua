@@ -255,6 +255,12 @@ list:SetPoint("TOPLEFT", page, "TOPLEFT", 5, -72)
 form:SetPoint("TOPLEFT", list, "TOPRIGHT", 2, 0) -- (the game's: beside the list)
 local maximized = 0
 function page:SetMaximized() maximized = maximized + 1; form:ClearAllPoints(); form:SetPoint("TOPLEFT", list, "TOPRIGHT", 2, 0) end
+-- (the game's scroll list callbacks and event registry, as the list's watch for the mouse report uses them)
+local initCallbacks, events = {}, {}
+ScrollUtil = { AddInitializedFrameCallback = function(sb, cb, owner) table.insert(initCallbacks, cb) end }
+EventRegistry = EventRegistry or {}
+EventRegistry.RegisterCallback = EventRegistry.RegisterCallback or function(_, event, fn, owner) events[event] = events[event] or {}; table.insert(events[event], { fn, owner }) end
+local function Trigger(event, ...) for _, e in ipairs(events[event] or {}) do e[1](e[2], ...) end end
 M.Fire("ADDON_LOADED", "Blizzard_Professions")
 ProfessionsFrame:Show(); page:Show(); form:Show()
 db.chars["Alt-Forever"].bank[103] = 2
@@ -358,6 +364,33 @@ check(select(1, Under()) == source, "shown again: under its Source")
 check(next(rawget(difficulty, "estimateRows")) == nil and source.content == source, "its frames left as they were")
 difficulty:Hide(); source:Hide(); Run()
 ForeverRecipes = nil
+
+out("== the mouse report: what the list did (its rebuilds, the presses on its rows, the recipes chosen)")
+do
+  M.now = (M.now or 0) + 100
+  list.SearchBox:SetText("hillman")
+  list.SearchBox:GetScript("OnTextChanged")(list.SearchBox)
+  local pp = Provider()
+  list.ScrollBox:SetDataProvider(pp)
+  local row = CreateFrame("Button", nil, list)
+  local node = pp.root.nodes[1] and pp.root.nodes[1].nodes[2]
+  function row:GetElementData() return node end
+  for _, cb in ipairs(initCallbacks) do cb(nil, row, node) end
+  M.now = M.now + 1
+  local press = row:GetScript("OnMouseDown")
+  if press then press(row, "LeftButton") end
+  Trigger("ProfessionsRecipeListMixin.Event.OnRecipeSelected", { recipeID = 2, name = "Gold Power Core" })
+  M.now = M.now + 2
+  local lines = ns:CraftListReport()
+  local text = table.concat(lines, "\n")
+  out(text)
+  check(text:find('search "hillman"', 1, true) and text:find("rebuilt %d+ time"), "the search and the rebuilds counted")
+  check(text:find("mouse pressed on a row 1 time", 1, true) and text:find("2.0 s ago on", 1, true), "a press on a row: when, and on which recipe")
+  check(text:find("recipe chosen 2.0 s ago: Gold Power Core", 1, true), "the recipe chosen after")
+  check(text:find("recipe shown now:", 1, true), "the recipe shown now")
+  list.SearchBox:SetText("")
+  list.SearchBox:GetScript("OnTextChanged")(list.SearchBox)
+end
 
 if ns.CraftClassicDetail then
   out("== ClassicUI's professions window (its hooks)")
