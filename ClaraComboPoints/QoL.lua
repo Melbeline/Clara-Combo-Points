@@ -21,6 +21,7 @@ ns.QOL_MODULES = {
   { key = "dialogkey", name = "DialogKey", standalone = "DialogKey_Numy", theme = "quests" },
   { key = "xtolevel", name = "XToLevel", standalone = "XToLevel", theme = "quests" },
   { key = "questlog", name = "Quest log", theme = "quests" }, -- (Clara's own: ClassicUI Forever's 1.x quest log)
+  { key = "groupquests", name = "Group quest progress", theme = "quests" }, -- (Clara's own: the group members' quest progress in the tooltips)
   { key = "minimapdrawer", name = "MinimapDrawer", standalone = "MinimapDrawer", theme = "interface" },
   { key = "tullarange", name = "tullaRange", standalone = "tullaRange", theme = "combat" },
   { key = "mail", name = "Mail", theme = "economy" }, -- (Clara's own: no addon of its own)
