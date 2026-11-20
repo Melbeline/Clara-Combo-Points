@@ -7,6 +7,10 @@
 -- seen in it before (reset or not, entered again or not). The hour counts the entries of the
 -- account on the realm, the day those of the character (the game's two limits). Read from the
 -- target, the mouseover and the nameplates; nothing else runs.
+-- WoW 12.1.7 (and WoW Forever's 1.60.1 hotfix) hides the realm, server and spawn in creatures' GUIDs: their
+-- world copy may then be no copy at all. Seen so (not a number; three copies at once; more than four new ones in
+-- five minutes on one map), the layer is "hidden by the game" for the session, never a wrong one, and a dungeon
+-- entered again can no longer be told: each entry then counts.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -20,6 +24,19 @@ local realm, me
 local current = {}           -- the copy last seen: map, zone, at
 local pending                -- an instance just entered, its copy not yet seen
 local issecret = issecretvalue or function() return false end
+local NEW_WINDOW, NEW_MAX = 300, 4 -- (more new copies than this in that many seconds: not copies)
+local hidden = false         -- the game hides the copies (kept for this game build: sv.layerHidden)
+local fresh = {}             -- [map] = { [zone] = first seen this session }
+local function Build() return GetBuildInfo and tostring((select(2, GetBuildInfo()))) or "?" end
+-- The copies are no copies: none read any more with this build, the ones kept (scrambled) dropped
+local function Hide()
+  hidden = true
+  current.map, current.zone = nil, nil
+  if ns.sv then
+    ns.sv.layerHidden = Build()
+    ns.sv.layers = {}
+  end
+end
 
 local function Now() return time() end
 
@@ -27,10 +44,24 @@ local function Now() return time() end
 local function Creature(unit)
   local guid = UnitGUID(unit)
   if not guid or issecret(guid) then return end
-  local kind, _, _, map, zone = strsplit("-", guid)
+  local kind, _, _, map, zone, _, spawn = strsplit("-", guid)
   if kind ~= "Creature" and kind ~= "Vehicle" then return end
-  return tonumber(map), tonumber(zone)
+  map, zone = tonumber(map), tonumber(zone)
+  if spawn and not (map and zone) and not hidden then Hide() end -- (a creature's GUID, its copy no number: hidden)
+  return map, zone
 end
+
+-- Too many new copies on one map, too fast for players changing layers: the game scrambles them
+local function Scrambled(map, zone)
+  local seen = fresh[map] or {}
+  fresh[map] = seen
+  if seen[zone] then return false end
+  local now, recent = Now(), 0
+  seen[zone] = now
+  for _, at in pairs(seen) do if now - at < NEW_WINDOW then recent = recent + 1 end end
+  return recent > NEW_MAX
+end
+function ns.LayerHidden() return hidden end
 
 local function Where()
   local _, kind, _, _, _, _, _, map = GetInstanceInfo()
@@ -62,14 +93,22 @@ end
 
 local function Seen(unit)
   local map, zone = Creature(unit)
+  if hidden then
+    if pending and map and pending.map == map then Settle(nil) end -- (counted: entered again or not, unknown)
+    return
+  end
   if not (map and zone) then return end
   local here, kind = Where()
   if map ~= here then return end
   if kind == "party" or kind == "raid" then
     if pending and pending.map == map then Settle(zone) end
-    return
+    return map, zone
   end
   if kind ~= "none" and kind ~= nil then return end -- (battlegrounds, arenas...)
+  if Scrambled(map, zone) then -- (in the world only: dungeons reset in a row are new copies)
+    Hide()
+    return
+  end
   local layers = Saved()
   if not (layers and realm) then return end
   layers[realm] = layers[realm] or {}
@@ -77,22 +116,37 @@ local function Seen(unit)
   layers[realm][map] = copies
   copies[zone] = Now()
   current.map, current.zone = map, zone
+  return map, zone
 end
 
--- What can be seen now: the target, the mouseover, the nameplates
+-- What can be seen now: the target, the mouseover, the nameplates (all in one copy: three at once are none)
 local function Look()
-  Seen("target")
-  Seen("mouseover")
+  local now = {}
+  local function See(unit)
+    local map, zone = Seen(unit)
+    if map and zone then
+      now[map] = now[map] or {}
+      now[map][zone] = true
+    end
+  end
+  See("target")
+  See("mouseover")
   if C_NamePlate and C_NamePlate.GetNamePlates then
     for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
       local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
-      if unit then Seen(unit) end
+      if unit then See(unit) end
     end
+  end
+  for _, zones in pairs(now) do
+    local n = 0
+    for _ in pairs(zones) do n = n + 1 end
+    if n >= 3 and not hidden then Hide() end
   end
 end
 
 -- The layer you are on, by its order among the ones seen on this continent; nil if not known
 function ns.Layer()
+  if hidden then return end
   local layers = Saved()
   local here, kind = Where()
   if not (layers and realm and current.zone and current.map == here) or (kind ~= "none" and kind ~= nil) then return end
@@ -141,6 +195,8 @@ local function AddLines()
   local _, kind = Where()
   if layer then
     GameTooltip:AddLine(L.LAYER_N:format(layer), NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+  elseif hidden and (kind == "none" or kind == nil) then
+    GameTooltip:AddLine(L.LAYER_HIDDEN, .6, .6, .6)
   elseif kind == "none" or kind == nil then
     GameTooltip:AddLine(L.LAYER_UNKNOWN, .6, .6, .6)
   end
@@ -177,6 +233,9 @@ events:SetScript("OnEvent", function(self, event, arg1)
     realm = GetRealmName and GetRealmName() or "?"
     me = (UnitName("player") or "?") .. "-" .. realm
     Saved()
+    if ns.sv and ns.sv.layerHidden ~= nil then
+      if ns.sv.layerHidden == Build() then hidden = true else ns.sv.layerHidden = nil end -- (a new build: looked at again)
+    end
     -- an instance entered before a reload, its copy not seen yet
     local kept = ns.sv and ns.sv.instancePending
     if kept and Now() - (kept.at or 0) < HOUR then pending = kept end
