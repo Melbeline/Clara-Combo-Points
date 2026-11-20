@@ -214,11 +214,11 @@ local function Build(holder, asTab)
   ui.down = Arrow(ui, false, asTab and TAB_ARROW)
   ui.count = ui:CreateFontString(nil, "ARTWORK", asTab and "GameFontNormalSmall" or "GameFontHighlightSmall")
   if asTab then
-    ui.down:SetPoint("RIGHT", ui, "RIGHT", -8, -4)
+    ui.down:SetPoint("RIGHT", ui, "RIGHT", -8, -3)
     ui.up:SetPoint("RIGHT", ui.down, "LEFT", -2, 0)
     ui.count:SetPoint("RIGHT", ui.up, "LEFT", -5, 0)
     box:SetHeight(20)
-    box:SetPoint("LEFT", ui, "LEFT", 14, -4)
+    box:SetPoint("LEFT", ui, "LEFT", 14, -3)
     box:SetPoint("RIGHT", ui.count, "LEFT", -6, 0)
     if box.SetFontObject then box:SetFontObject("GameFontNormalSmall") end
     -- ("Search" where nothing is typed: in the tabs' gold, as their names)
@@ -373,7 +373,26 @@ local function TabArt(tab)
   end
   for _, t in ipairs(tab.active) do t:Hide() end
 end
-local function TabSelected(tab, on) for _, t in ipairs(tab.active) do t:SetShown(on) end end
+
+-- Typed in: one gold border around the whole tab, its line, its count and its arrows, none of them under it (the
+-- selected tab's own look, its edge across the arrows, left off); the tab's neighbour on its left never under it
+local RING = { bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } }
+local function Ring(tab)
+  local ring = CreateFrame("Frame", nil, tab, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  -- (the tab's own height, 2 lower: its line and arrows a few pixels inside it, above and below)
+  ring:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, -2)
+  ring:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 2, -2)
+  ring:SetFrameLevel(tab:GetFrameLevel() + 1) -- (above the tab's images, below its line and arrows)
+  if ring.SetBackdrop then
+    ring:SetBackdrop(RING)
+    ring:SetBackdropColor(0, 0, 0, 0.6)
+    local gold = NORMAL_FONT_COLOR or { r = 1, g = 0.82, b = 0 }
+    ring:SetBackdropBorderColor(gold.r, gold.g, gold.b, 1)
+  end
+  ring:Hide()
+  return ring
+end
 
 local function MakeBar()
   local dock = Dock()
@@ -383,15 +402,17 @@ local function MakeBar()
   bar:SetFrameStrata("MEDIUM") -- (the game's tabs')
   bar:SetFrameLevel(dock:GetFrameLevel() + 10)
   TabArt(bar)
+  bar.ring = Ring(bar)
   bar.ui = Build(bar, true)
+  bar.ui:SetFrameLevel(bar:GetFrameLevel() + 3)
   bar:SetAlpha(FAINT)
   bar:SetScript("OnUpdate", Watch)
   bar:SetScript("OnClick", function() bar.ui.box:SetFocus() end) -- (anywhere on the tab: the search)
-  -- (typed in: the selected tab's gold look, and the box's frame in gold, around the text, its cross and its arrows)
+  -- (typed in: the gold border around the whole tab, and the box's frame in gold around its text and its cross)
   bar.ui.box:HookScript("OnEditFocusGained", function()
-    bar.usedAt = GetTime(); bar:SetAlpha(1); TabSelected(bar, true); BoxFramed(bar.ui, true)
+    bar.usedAt = GetTime(); bar:SetAlpha(1); bar.ring:Show(); BoxFramed(bar.ui, true)
   end)
-  bar.ui.box:HookScript("OnEditFocusLost", function() TabSelected(bar, false); BoxFramed(bar.ui, false) end)
+  bar.ui.box:HookScript("OnEditFocusLost", function() bar.ring:Hide(); BoxFramed(bar.ui, false) end)
   if hooksecurefunc then
     if FCFDock_UpdateTabs then hooksecurefunc("FCFDock_UpdateTabs", function(d) if d == Dock() then PlaceBar() end end) end
     if FCFDock_SelectWindow then
