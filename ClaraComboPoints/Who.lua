@@ -149,6 +149,44 @@ local function MakeExact(frame)
 end
 ns.WhoExactBox = function() return exact end -- (for the tests)
 
+---------------------------------------------------------------------------
+-- Sort by guild: in the Who tab's Filter menu, its Sort submenu (Name, Class, Level), Guild after Level. The game's
+-- own sort ("guild": the one its older Who window had), in the order picked below it (ascending or descending): its
+-- sort kept as the game keeps its own, so its order lines sort the guilds too and its other sorts take over again
+---------------------------------------------------------------------------
+local GUILD_SORT = "guild"
+local function AddGuildSort(root)
+  local util = _G.LFGWhoListFilterUtil
+  if type(root) ~= "table" or not root.EnumerateElementDescriptions or type(util) ~= "table" then return end
+  if not (MenuUtil and MenuUtil.CreateRadio and MenuUtil.GetElementText and F.SortWho) then return end
+  local sortMenu
+  for _, d in root:EnumerateElementDescriptions() do
+    if MenuUtil.GetElementText(d) == WHO_SORT_LABEL then sortMenu = d end
+  end
+  if not (sortMenu and sortMenu.EnumerateElementDescriptions and sortMenu.Insert) then return end
+  local after
+  for i, d in sortMenu:EnumerateElementDescriptions() do
+    if MenuUtil.GetElementText(d) == LEVEL then after = i end
+  end
+  local radio = MenuUtil.CreateRadio(GUILD or L.WHO_SORT_GUILD,
+    function() return util.sortMode == GUILD_SORT end,
+    function()
+      util.sortMode = GUILD_SORT
+      F.SortWho(GUILD_SORT, util.sortOrder ~= 2) -- (2: descending, as the game counts it)
+      return MenuResponse and MenuResponse.Refresh
+    end, GUILD_SORT)
+  sortMenu:Insert(radio, after and after + 1 or nil)
+end
+ns.WhoAddGuildSort = AddGuildSort -- (for the tests)
+local sortHooked = false
+local function HookSort()
+  local util = _G.LFGWhoListFilterUtil
+  if sortHooked or type(util) ~= "table" or type(util.InitSortOptions) ~= "function" then return end
+  sortHooked = true
+  -- (the menu made again each time it opens: Guild added each time, after the game's own)
+  hooksecurefunc(util, "InitSortOptions", function(root) pcall(AddGuildSort, root) end)
+end
+
 local hooked = {}
 local function Watch(frame)
   local box = frame and frame.ScrollBox
@@ -159,6 +197,7 @@ end
 local function WatchAll()
   Watch(_G.LFGWhoListFrame) -- (WoW Forever: the Who list is the group finder's third tab)
   MakeExact(_G.LFGWhoListFrame)
+  HookSort()
   Watch(_G.WhoFrame)
 end
 WatchAll()
