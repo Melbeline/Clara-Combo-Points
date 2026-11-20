@@ -40,7 +40,6 @@ InteractKey.lua
 QuestPlates.lua
 GroupFinderZone.lua
 ChatCopy.lua
-ChatSearch.lua
 Rares.lua
 RareSpots.lua
 UnitScan.lua
@@ -156,6 +155,7 @@ Modules\QuestLog\QuestLogDetail.lua
 Modules\QuestLog\QuestLogWindow.lua
 Modules\QuestLog\QuestLogOpen.lua
 Modules\WhoCooldown\WhoCooldown.lua
+Modules\ChatSearch\ChatSearch.lua
 Modules\IdTip\IdTip.lua
 Modules\PetFeed\PetFeed.lua
 Modules\ReportMute\ReportMute.lua
