@@ -54,6 +54,7 @@ Look.lua
 Options.lua
 SettingsPage.lua
 QoL.lua
+ShopButton.lua
 ScanPage.lua
 Modules\BuyEmAll\BuyEmAll.lua
 Modules\DialogKey\Bootstrap.lua
