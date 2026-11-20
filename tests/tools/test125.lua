@@ -146,12 +146,25 @@ check(bl == "LEFT" and blrel == bar.ui and br == "RIGHT" and brrel == bar.ui.cou
 bar:Click()
 check(bar.ui.box:HasFocus(), "a click on the tab: the search")
 bar.ui.box:GetScript("OnEditFocusGained")(bar.ui.box) -- (the game says so as the box takes the keys; the mock does not)
-check(bar.active[2]:IsShown(), "typing in it: the selected tab's look")
+check(bar.ring and bar.ring:IsShown() and not bar.active[2]:IsShown(), "typing in it: the gold border around the tab (not the selected tab's look)")
+local r1, rrel1, rrp1, rx1, ry1 = bar.ring:GetPoint(1)
+local r2, rrel2, rrp2, rx2, ry2 = bar.ring:GetPoint(2)
+check(r1 == "TOPLEFT" and rrel1 == bar and rx1 == 0 and ry1 == -2 and r2 == "BOTTOMRIGHT" and rrel2 == bar and rx2 == 2 and ry2 == -2,
+  "the border the tab's whole width and height (2 lower), never over the tab on its left")
+-- (inside it, 3 thick: the line 20 high and the arrows 18, 3 lower than the tab's middle: 2 to 3 pixels clear below, 4 to 5 above)
+local inner = { bottom = -2 + 3, top = 32 - 2 - 3 }
+local mid = 16 - 3
+check(mid - 10 > inner.bottom and mid + 10 < inner.top and mid - 9 > inner.bottom and mid + 9 < inner.top,
+  "the line and the arrows inside the border, clear of it")
+local _, _, _, _, dy = bar.ui.down:GetPoint(1)
+local _, _, _, _, by = bar.ui.box:GetPoint(1)
+check(dy == -3 and by == -3 and bar.ui.box:GetHeight() == 20, "the line and the arrows at that height")
+check(bar.ui:GetFrameLevel() > bar.ring:GetFrameLevel(), "the line and the arrows above the border's dark inside")
 local gold = bar.ui.box.Middle
 check(gold and gold:IsShown() and gold._vc and gold._vc[1] == 1 and gold._vc[3] == 0, "typing in it: the box's frame around its text, in gold")
 bar.ui.box:ClearFocus()
 bar.ui.box:GetScript("OnEditFocusLost")(bar.ui.box)
-check(not bar.active[2]:IsShown(), "left: back to an unselected tab's look")
+check(not bar.ring:IsShown() and not bar.active[2]:IsShown(), "left: the border gone, an unselected tab's look")
 check(not bar.ui.box.Middle:IsShown(), "left: the box's frame gone again")
 bar.usedAt = nil; bar:SetAlpha(0.2)
 check(bar.ui.frame == window and bar.ui.box:GetText() == "nightscape", "the tab selected's search")
