@@ -33,4 +33,23 @@ if exact then
   check(ok, "ticked, typed, its tooltip, unticked: no error " .. tostring(e or ""))
   print("scenario: the line's text after " .. tostring(edit:GetText()))
 end
+-- Sort by guild: the game's filter menu, its Sort part, Guild after Level
+local util = rawget(env, "LFGWhoListFilterUtil")
+local MU = rawget(env, "MenuUtil")
+print("scenario: LFGWhoListFilterUtil " .. tostring(util) .. ", root descriptions " .. tostring(MU and MU.CreateRootMenuDescription))
+if util and util.SetupFilterMenu and MU and MU.CreateRootMenuDescription and rawget(env, "MenuVariants") then
+  local ok, e = pcall(function()
+    local root = MU.CreateRootMenuDescription(env.MenuVariants.GetDefaultContextMenuMixin())
+    util.InitSortOptions(root)
+    local texts = {}
+    for _, d in root:EnumerateElementDescriptions() do
+      for _, c in d:EnumerateElementDescriptions() do texts[#texts + 1] = tostring(MU.GetElementText(c)) end
+    end
+    print("scenario: its Sort part " .. table.concat(texts, ","))
+  end)
+  check(ok, "the game's Sort part made, Guild added: no error " .. tostring(e or ""))
+elseif ns.WhoAddGuildSort then
+  local ok, e = pcall(ns.WhoAddGuildSort, nil)
+  check(ok, "no menu in the harness: nothing done, no error " .. tostring(e or ""))
+end
 print("scenario: who exact failures " .. fails)

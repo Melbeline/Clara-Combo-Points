@@ -1434,6 +1434,16 @@ function Description:CreateCheckbox(text, isSelected, setSelected)
   return self:Insert(d)
 end
 function Description:CreateDivider() return self:Insert(NewDescription("divider")) end
+function Description:CreateRadio(text, isSelected, setSelected, data)
+  local d = NewDescription("radio", text); d.isSelected, d.setSelected, d.data = isSelected, setSelected, data
+  return self:Insert(d)
+end
+function Description:QueueDivider() return self:Insert(NewDescription("divider")) end -- (laid at once: the next element follows it)
+MenuUtil.CreateRadio = function(text, isSelected, setSelected, data)
+  local d = NewDescription("radio", text); d.isSelected, d.setSelected, d.data = isSelected, setSelected, data
+  return d
+end
+MenuResponse = MenuResponse or { Close = 1, Open = 2, Refresh = 3, CloseAll = 4 }
 MenuUtil.CreateFrame = function() return NewDescription("frame") end
 MenuUtil.CreateButton = function(text, callback) return NewDescription("button", text, callback) end
 MenuUtil.GetElementText = function(d) return d.text end
