@@ -107,14 +107,17 @@ end
 local function StandaloneOn(m, on)
   local A, name, me = C_AddOns, Me()
   if not (A and A.EnableAddOn and A.DisableAddOn and name and ns.sv) then return end
+  -- (the character as the game's addon list and StandaloneRuns name it: its GUID. By its first name alone, a WoW
+  -- Forever character, "First Surname", was not the one turned off: its own addon ran again at each login)
+  local who = UnitGUID and UnitGUID("player") or name
   if on then
     if not TookOver(m.key) then return end -- (turned off by hand: left so)
-    A.EnableAddOn(m.standalone, name)
+    A.EnableAddOn(m.standalone, who)
     ns.sv.qolTookOver[m.key][me] = nil
     if next(ns.sv.qolTookOver[m.key]) == nil then ns.sv.qolTookOver[m.key] = nil end
     if next(ns.sv.qolTookOver) == nil then ns.sv.qolTookOver = nil end
   else
-    A.DisableAddOn(m.standalone, name)
+    A.DisableAddOn(m.standalone, who)
     ns.sv.qolTookOver = ns.sv.qolTookOver or {}
     ns.sv.qolTookOver[m.key] = ns.sv.qolTookOver[m.key] or {}
     ns.sv.qolTookOver[m.key][me] = true
