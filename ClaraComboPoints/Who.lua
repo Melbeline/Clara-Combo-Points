@@ -46,23 +46,29 @@ local function NameHas(name, word)
 end
 
 local word -- the word of the last search (nil: no name search)
+local exactWord = false -- (searched with the Exact names box ticked: filtered whatever the quotes' setting)
+local function Filtering() return word ~= nil and (exactWord or ns:WhoNames()) end
 
 -- A result kept: no name search, the search off, or the word one of its name's
 local function Keep(info)
-  if not word or not ns:WhoNames() then return true end
+  if not Filtering() then return true end
   return type(info) == "table" and NameHas(info.fullName, word)
 end
 ns.WhoKeep = Keep -- (ClassicUI Forever's list reads it)
 
 hooksecurefunc(F, "SendWho", function(text)
   word = Word(text)
+  -- (the Exact names box ticked: a name alone sent without its quotes, from anywhere (/who lea, the Who window's
+  -- line, another addon), taken as one in quotes: the list shows only the players with that first name or surname)
+  if not word and ns.WhoExactWord then word = ns.WhoExactWord(text) end
+  exactWord = word ~= nil and ns:WhoExact()
 end)
 
 -- The game's list: its rows that do not match taken out once it has made them (its own functions untouched), and
 -- its count ("15 People Found") the players left. (RemoveAllByPredicate: the game's RemoveByPredicate takes out the
 -- first match only.)
 local function Filter(box, provider)
-  if not word or not ns:WhoNames() or type(provider) ~= "table" then return end
+  if not Filtering() or type(provider) ~= "table" then return end
   local function Out(data) return type(data) == "table" and data.info ~= nil and not Keep(data.info) end
   if type(provider.RemoveAllByPredicate) == "function" then
     pcall(provider.RemoveAllByPredicate, provider, Out)
@@ -102,6 +108,12 @@ local function Unquoted(text)
   if inner and Quoted(inner) then return inner end
 end
 ns.WhoQuoted = Quoted -- (for the tests)
+-- The box ticked: a name alone, its word, as if typed in quotes; else nil
+function ns.WhoExactWord(text)
+  if not ns:WhoExact() then return nil end
+  local quoted = Quoted(text)
+  return quoted and Word(quoted)
+end
 
 local exact -- (the box, once made)
 local function Requote(edit, on)
@@ -139,6 +151,16 @@ local function MakeExact(frame)
     GameTooltip:Show()
   end)
   exact:SetScript("OnLeave", GameTooltip_Hide)
+  -- (sent in quotes, however it was written: the search button, Enter; the server then looks for that name)
+  local search = frame.WhoSearch
+  if type(search) == "table" and search.HookScript then
+    search:HookScript("PreClick", function() if ns:WhoExact() then Requote(edit, true) end end)
+  end
+  local enter = edit:GetScript("OnEnterPressed")
+  edit:SetScript("OnEnterPressed", function(self, ...)
+    if ns:WhoExact() then Requote(self, true) end
+    if enter then return enter(self, ...) end
+  end)
   -- (typed: put in quotes, the cursor before the closing one; emptied of its letters: empty, "Search" shown again)
   edit:HookScript("OnTextChanged", function(self, user)
     if not user or not ns:WhoExact() then return end
@@ -148,6 +170,21 @@ local function MakeExact(frame)
   end)
 end
 ns.WhoExactBox = function() return exact end -- (for the tests)
+
+-- /who lea typed in the chat, the box ticked: sent as /who "lea" (the game writes it in the Who window's line too).
+-- The game's own /who kept and called; the chat reads its commands again before each one, so it takes this one.
+local slashHooked = false
+local function HookSlash()
+  local list = _G.SlashCmdList
+  local game = type(list) == "table" and list.WHO
+  if slashHooked or type(game) ~= "function" then return end
+  slashHooked = true
+  list.WHO = function(msg, ...)
+    if ns:WhoExact() then msg = Quoted(msg) or msg end
+    return game(msg, ...)
+  end
+end
+ns.WhoHookSlash = HookSlash -- (for the tests)
 
 ---------------------------------------------------------------------------
 -- Sort by guild: in the Who tab's Filter menu, its Sort submenu (Name, Class, Level), Guild after Level. The game's
@@ -198,6 +235,7 @@ local function WatchAll()
   Watch(_G.LFGWhoListFrame) -- (WoW Forever: the Who list is the group finder's third tab)
   MakeExact(_G.LFGWhoListFrame)
   HookSort()
+  HookSlash()
   Watch(_G.WhoFrame)
 end
 WatchAll()
