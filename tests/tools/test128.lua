@@ -83,16 +83,19 @@ check(x2 == 86 and edit:GetWidth() == 225 and ns.WhoExactBox() == exact, "made o
 
 out("== ticked: every search of a name alone sent in quotes, the list only that first name or surname")
 ns.sv.whoExact = true
+local gameWho = SlashCmdList.WHO
+check(SlashCmdList.WHO == gameWho, "the game's /who left as it is (run in the game's name)")
 SlashCmdList.WHO("lea")
-check(sent[#sent] == '"lea"' and edit:GetText() == '"lea"', "/who lea in the chat: sent as /who \"lea\", the line shows it")
+check(sent[#sent] == "lea", "/who lea in the chat: sent as typed")
+check(ns.WhoKeep({ fullName = "Lea Moon" }) and not ns.WhoKeep({ fullName = "Paradox Leafwalker" }), "its list all the same only Lea")
 edit:SetText("lea") -- (written by the game or another addon: no typing)
 edit:GetScript("OnEnterPressed")(edit)
 check(sent[#sent] == '"lea"', "Enter on the line: sent in quotes")
 edit:SetText("lea")
 search:GetScript("PreClick")(search)
 check(edit:GetText() == '"lea"', "the search button: in quotes before the game reads the line")
-SlashCmdList.WHO("lea z-darnassus")
-check(sent[#sent] == "lea z-darnassus", "a filter: sent as typed")
+C_FriendList.SendWho("lea z-darnassus")
+check(ns.WhoKeep({ fullName = "Paradox Leafwalker" }), "a filter: the list as the game gives it")
 -- (sent without quotes all the same, by another way: the list still only Lea)
 C_FriendList.SendWho("lea")
 check(ns.WhoKeep({ fullName = "Lea Moon" }) and ns.WhoKeep({ fullName = "Léa Sun" }) and ns.WhoKeep({ fullName = "Anna Lea" }),
