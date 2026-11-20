@@ -4,16 +4,56 @@
 -- the newest line holding it, that line in the middle. Its arrows: the match before (up: older) or after (down:
 -- newer), round again at either end; Enter: the match before. "3/12" beside them. Emptied: the window back at its
 -- bottom. Each window keeps its search while the game runs (the menu opened again shows it).
--- Its place, a box on Clara's settings page (on by default): a tab of its own after the chat's tabs (the last one,
--- whatever windows are added), drawn as the game draws them (its images, its gold text, the selected tab's look
--- while typing in it), for the tab selected; faint (20 %, as the game's tabs not selected) while unused, whole while
--- used (the mouse on it, typing) and as long as the chat window is busy (the mouse on it or its tabs), faint again
--- after 10 seconds of quiet. Unticked: in the tab's menu.
+-- A module of Clara's own (on by default; Esc > Options > AddOns > Clara > Interface: its card and its page). Its place,
+-- a box on its card and its page (on by default): a tab of its own after the chat's tabs (the last one, whatever
+-- windows are added), drawn as the game draws them (its images, its gold text; a gold border around it while typing
+-- in it), for the tab selected; faint (20 %, as the game's tabs not selected) while unused, whole while used (the
+-- mouse on it, typing) and as long as the chat window is busy (the mouse on it or its tabs), faint again after 10
+-- seconds of quiet. Unticked: in the tab's menu. The words found marked in the lines shown, in the style picked on
+-- its page (six, or none).
 
 local ADDON, ns = ...
 local L = ns.L
 
 local issecret = issecretvalue or function() return false end
+
+---------------------------------------------------------------------------
+-- Its settings (Clara's): its place, beside the tabs or in a tab's menu (sv.chatSearchDock), and how the words found
+-- are marked (sv.chatSearch.style: "none", or A to F as its page tells them; E by default). Its switch on its card,
+-- its page under Interface.
+---------------------------------------------------------------------------
+local STYLES = { "none", "A", "B", "C", "D", "E", "F" }
+local DEFAULT_STYLE = "E"
+ns.CHATSEARCH_STYLES = STYLES
+
+function ns:ChatSearchDock() return not self.sv or self.sv.chatSearchDock ~= false end
+function ns:SetChatSearchDock(on)
+  if self.sv then
+    if on then self.sv.chatSearchDock = nil else self.sv.chatSearchDock = false end
+  end
+  if self.ChatSearchPlaced then self.ChatSearchPlaced() end
+end
+function ns:ChatSearchStyle()
+  local store = self.sv and self.sv.chatSearch
+  local style = type(store) == "table" and store.style or nil
+  for _, key in ipairs(STYLES) do if key == style then return style end end
+  return DEFAULT_STYLE
+end
+function ns:SetChatSearchStyle(style)
+  if not self.sv then return end
+  local store = type(self.sv.chatSearch) == "table" and self.sv.chatSearch or {}
+  store.style = style ~= DEFAULT_STYLE and style or nil
+  self.sv.chatSearch = next(store) and store or nil
+  if self.ChatSearchRestyled then self.ChatSearchRestyled() end
+end
+
+ns:SetQolSwitches("chatsearch", {
+  { label = "SP_CHATSEARCH_DOCK", get = function() return ns:ChatSearchDock() end, set = function(on) ns:SetChatSearchDock(on) end },
+})
+ns:SetQolOpener("chatsearch", function() ns:OpenSettingsTo(ns.chatSearchCategory) end)
+if not ns:QolRuns("chatsearch") then return end
+
+local Marks = {} -- (the words found marked: below)
 local WAIT = 0.3 -- seconds after the last key before the window is searched
 
 ---------------------------------------------------------------------------
@@ -103,13 +143,14 @@ end
 local function Step(frame, step)
   local s = Refind(frame)
   local count = #s.matches
-  if count == 0 then return s end
+  if count == 0 then pcall(Marks.Show, frame) return s end
   if s.at == 0 then
     s.at = 1
   else
     s.at = (s.at - 1 + step) % count + 1
   end
   Reach(frame, s.matches[s.at])
+  Marks.Jumped(frame)
   return s
 end
 
@@ -118,14 +159,272 @@ local function Typed(frame, query)
   local s = Search(frame)
   s.query = query or ""
   s.matches, s.at = {}, 0
+  Marks.Watch(frame)
   if ns:SearchKey(s.query) == "" then
     if frame.ScrollToBottom then frame:ScrollToBottom() end
+    Marks.Redraw(frame) -- (the marks taken off)
     return s
   end
   return Step(frame, 1)
 end
 
 ns.ChatSearch = { Find = Find, Typed = Typed, Step = Step, Search = Search, Warm = Warm } -- (for the tests)
+
+---------------------------------------------------------------------------
+-- The words found marked in the lines the window shows, in the style picked on its page: each time the window draws
+-- its lines again (the game's own callback for it: a new line, a scroll), and as the search changes. The marks are
+-- textures behind the words, where the game's own text selection puts its own (FontString:
+-- CalculateScreenAreaFromCharacterSpan); or the words' text colored (A, and the others where that is missing).
+-- Nothing kept in the window's lines: the next drawing puts them back as they were.
+---------------------------------------------------------------------------
+local GOLD = { 1, 0.78, 0.24 }
+local LOOK = {
+  A = { color = true },
+  B = { back = { 1, 0.84, 0, 0.22 }, backNow = { 1, 0.59, 0, 0.5 } },
+  C = { under = { 1, 0.82, 0.31, 0.55 }, underNow = { 1, 0.82, 0.29, 1 } },
+  D = { band = 0.22, bar = true },
+  E = { back = { 1, 0.84, 0, 0.16 }, backNow = { 1, 0.75, 0.16, 0.36 }, bar = true },
+  F = { backNow = { 1, 0.75, 0.16, 0.3 }, flash = 0.28 },
+}
+local OTHER_COLOR, NOW_COLOR = "|cfffff2c8", "|cffffffff" -- (A: the other matches, the current one)
+local FLASH = 1.5 -- seconds the current match's line stays lit as it is reached (F)
+
+-- The characters a line shows, each with its place in the line's text (its bytes): colors, links' codes, icons and
+-- the game's hidden names left out, as Shown reads them
+local function Chars(text)
+  local chars, i, n = {}, 1, #text
+  while i <= n do
+    local b = text:byte(i)
+    if b == 124 then -- "|"
+      local nx = text:sub(i + 1, i + 1)
+      if nx == "c" and text:sub(i + 2, i + 9):match("^%x%x%x%x%x%x%x%x$") then i = i + 10
+      elseif nx == "r" or nx == "h" then i = i + 2
+      elseif nx == "H" then local close = text:find("|h", i + 2, true); i = close and close + 2 or n + 1
+      elseif nx == "T" or nx == "A" or nx == "K" then
+        local close = text:find("|" .. nx:lower(), i + 2, true); i = close and close + 2 or n + 1
+      elseif nx == "|" then chars[#chars + 1] = { i, i + 1, "|" }; i = i + 2
+      else chars[#chars + 1] = { i, i, "|" }; i = i + 1 end
+    else
+      local len = b >= 240 and 4 or b >= 224 and 3 or b >= 192 and 2 or 1
+      chars[#chars + 1] = { i, i + len - 1, text:sub(i, i + len - 1) }
+      i = i + len
+    end
+  end
+  return chars
+end
+
+-- A character as the search reads it (as ns:SearchKey: apostrophes out, punctuation and spaces one space, capitals
+-- and accents off)
+local function Fold(ch)
+  if ch == "'" or ch == "\226\128\153" then return "" end
+  if #ch == 1 and ch:match("[%p%s]") then return " " end
+  return ns:SearchKey(ch)
+end
+
+-- Where the words are in a line's text: { first byte, last byte } each
+local function Spans(text, key)
+  local chars = Chars(text)
+  local parts, owner, len, last = {}, {}, 0, " "
+  for index, c in ipairs(chars) do
+    local f = Fold(c[3])
+    if f == " " and last == " " then f = "" end -- (spaces run together, none first)
+    if f ~= "" then
+      parts[#parts + 1] = f
+      for k = 1, #f do owner[len + k] = index end
+      len = len + #f
+      last = f:sub(-1)
+    end
+  end
+  local folded, spans, from = table.concat(parts), {}, 1
+  while key ~= "" do
+    local a, z = folded:find(key, from, true)
+    if not a then break end
+    spans[#spans + 1] = { chars[owner[a]][1], chars[owner[z]][2] }
+    from = z + 1
+  end
+  return spans
+end
+ns.ChatSearch.Spans = Spans -- (for the tests)
+
+-- A line's text, its words colored (A): the color around them taken up again after them
+local function Colored(text, spans, now)
+  local out, pos = {}, 1
+  for _, sp in ipairs(spans) do
+    local before, open, closed = text:sub(1, sp[1] - 1), nil, 0
+    for at, code in before:gmatch("()(|c%x%x%x%x%x%x%x%x)") do open = { at, code } end
+    for at in before:gmatch("()|r") do closed = at end
+    out[#out + 1] = text:sub(pos, sp[1] - 1)
+    out[#out + 1] = now and NOW_COLOR or OTHER_COLOR
+    out[#out + 1] = text:sub(sp[1], sp[2])
+    out[#out + 1] = "|r" .. ((open and open[1] > closed) and open[2] or "")
+    pos = sp[2] + 1
+  end
+  out[#out + 1] = text:sub(pos)
+  return table.concat(out)
+end
+
+-- Each window's textures, used again from one drawing to the next
+local pools = setmetatable({}, { __mode = "k" })
+local function Pool(frame)
+  local pool = pools[frame]
+  if not pool then
+    pool = { textures = {}, used = 0, parent = frame.FontStringContainer or frame }
+    pools[frame] = pool
+  end
+  return pool
+end
+local function Texture(pool)
+  pool.used = pool.used + 1
+  local t = pool.textures[pool.used]
+  if not t then
+    t = pool.parent:CreateTexture(nil, "BACKGROUND", nil, 1) -- (where the game's text selection draws: under the text)
+    pool.textures[pool.used] = t
+  end
+  t:ClearAllPoints()
+  t:SetAlpha(1)
+  t:Show()
+  return t
+end
+local function Release(pool)
+  for _, t in ipairs(pool.textures) do t:Hide() end
+  pool.used, pool.band = 0, nil
+end
+
+local function Areas(line, from, to)
+  if type(line.CalculateScreenAreaFromCharacterSpan) ~= "function" then return nil end
+  local ok, areas = pcall(line.CalculateScreenAreaFromCharacterSpan, line, from, to)
+  if ok and type(areas) == "table" and type(areas[1]) == "table" then return areas end
+  return nil
+end
+local function Back(pool, line, area, c)
+  local t = Texture(pool)
+  t:SetColorTexture(c[1], c[2], c[3], c[4])
+  t:SetPoint("BOTTOMLEFT", line, "BOTTOMLEFT", area.left, area.bottom)
+  t:SetPoint("TOPRIGHT", line, "BOTTOMLEFT", area.left + area.width, area.bottom + area.height)
+end
+local function Under(pool, line, area, c, thick)
+  local t = Texture(pool)
+  t:SetColorTexture(c[1], c[2], c[3], c[4])
+  t:SetPoint("BOTTOMLEFT", line, "BOTTOMLEFT", area.left, area.bottom)
+  t:SetSize(area.width, thick)
+end
+local function Bar(pool, line) -- (in the margin, left of the line)
+  local t = Texture(pool)
+  t:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+  t:SetPoint("TOPRIGHT", line, "TOPLEFT", -3, 0)
+  t:SetPoint("BOTTOMRIGHT", line, "BOTTOMLEFT", -3, 0)
+  t:SetWidth(3)
+end
+local function Band(pool, line, alpha) -- (behind the whole line, fading to the right)
+  local t = Texture(pool)
+  t:SetPoint("TOPLEFT", line, "TOPLEFT", -2, 1)
+  t:SetPoint("BOTTOMRIGHT", line, "BOTTOMRIGHT", 2, -1)
+  if t.SetGradient and CreateColor then
+    t:SetColorTexture(1, 1, 1, 1)
+    t:SetGradient("HORIZONTAL", CreateColor(GOLD[1], GOLD[2], GOLD[3], alpha), CreateColor(GOLD[1], GOLD[2], GOLD[3], alpha * 0.27))
+  else
+    t:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], alpha)
+  end
+  return t
+end
+
+-- F: the current match's line lit as it is reached, fading out
+local flashes = setmetatable({}, { __mode = "k" }) -- window -> when its current match was reached
+local flasher = CreateFrame("Frame")
+flasher:Hide()
+flasher:SetScript("OnUpdate", function(self)
+  local any = false
+  for frame, at in pairs(flashes) do
+    local left, pool = FLASH - (GetTime() - at), pools[frame]
+    if left <= 0 then
+      flashes[frame] = nil
+      if pool and pool.band then pool.band:Hide(); pool.band = nil end
+    else
+      any = true
+      if pool and pool.band then pool.band:SetAlpha(left / FLASH) end
+    end
+  end
+  if not any then self:Hide() end
+end)
+
+function Marks.Show(frame)
+  local pool = pools[frame]
+  if pool then Release(pool) end
+  local style = ns:ChatSearchStyle()
+  local look = LOOK[style]
+  local s = searches[frame]
+  local key = s and ns:SearchKey(s.query or "") or ""
+  local lines = type(frame) == "table" and frame.visibleLines
+  if not look or key == "" or #s.matches == 0 or type(lines) ~= "table" then return end
+  pool = Pool(frame)
+  local total = frame:GetNumMessages() or 0
+  local offset = frame.GetScrollOffset and frame:GetScrollOffset() or 0
+  local current = s.matches[s.at]
+  for index, line in ipairs(lines) do
+    local info = line.messageInfo
+    local text = type(info) == "table" and info.message or nil
+    if type(text) == "string" and not issecret(text) and line:IsShown() then
+      local spans = Spans(text, key)
+      if #spans > 0 then
+        local now = current ~= nil and total - (index + offset) + 1 == current
+        local colored = look.color
+        for _, sp in ipairs(spans) do
+          local c, u = now and look.backNow or not now and look.back, now and look.underNow or not now and look.under
+          if not colored and (c or u) then
+            local areas = Areas(line, sp[1], sp[2])
+            if not areas then colored = true break end -- (where the game cannot tell: the words colored)
+            for _, area in ipairs(areas) do
+              if c then Back(pool, line, area, c) end
+              if u then Under(pool, line, area, u, now and 2 or 1) end
+            end
+          end
+        end
+        if colored then line:SetText(Colored(text, spans, now)) end
+        if now and look.bar then Bar(pool, line) end
+        if now and look.band then Band(pool, line, look.band) end
+        if now and look.flash and flashes[frame] then
+          local left = FLASH - (GetTime() - flashes[frame])
+          if left > 0 then
+            pool.band = Band(pool, line, look.flash)
+            pool.band:SetAlpha(left / FLASH)
+            flasher:Show()
+          end
+        end
+      end
+    end
+  end
+end
+
+-- A match reached: its line lit a moment (F), the marks drawn again
+function Marks.Jumped(frame)
+  if ns:ChatSearchStyle() == "F" then flashes[frame] = GetTime() end
+  Marks.Watch(frame)
+  pcall(Marks.Show, frame)
+end
+
+-- The window's own drawing followed (its callback, else its function), once
+local watched = setmetatable({}, { __mode = "k" })
+function Marks.Watch(frame)
+  if type(frame) ~= "table" or watched[frame] then return end
+  watched[frame] = true
+  if type(frame.AddOnDisplayRefreshedCallback) == "function" then
+    frame:AddOnDisplayRefreshedCallback(function(f) pcall(Marks.Show, f) end)
+  elseif hooksecurefunc and type(frame.RefreshDisplay) == "function" then
+    hooksecurefunc(frame, "RefreshDisplay", function(f) pcall(Marks.Show, f) end)
+  end
+end
+
+-- The marks taken off, and the words' colors (A): the window draws its lines again
+function Marks.Redraw(frame)
+  pcall(Marks.Show, frame)
+  if type(frame) == "table" and type(frame.MarkDisplayDirty) == "function" then frame:MarkDisplayDirty() end
+end
+
+-- Another style picked: every window searched drawn again
+ns.ChatSearchRestyled = function()
+  for frame in pairs(searches) do Marks.Redraw(frame) end
+end
+ns.ChatSearch.Marks = Marks -- (for the tests)
 
 ---------------------------------------------------------------------------
 -- In the tab's menu: the box, its arrows and its count
@@ -259,6 +558,7 @@ local function Attach(ui, frame)
   ui.frame = frame
   if not frame then return end
   Warm(frame)
+  Marks.Watch(frame)
   local s = Search(frame)
   ui.box:SetText(s.query)
   if ui.box.Instructions then ui.box.Instructions:SetShown(s.query == "") end
@@ -283,8 +583,6 @@ end
 ---------------------------------------------------------------------------
 -- Its place: beside the tabs (on by default), or in the tab's menu
 ---------------------------------------------------------------------------
-function ns:ChatSearchDock() return not self.sv or self.sv.chatSearchDock ~= false end
-
 local bar -- (beside the tabs, once made)
 local QUIET, FAINT, FADE = 10, 0.2, 4 -- seconds before faint, faint's opacity, opacity changed a second
 
@@ -329,8 +627,19 @@ local function Busy()
   local dock, frame = Dock(), bar.ui.frame
   return (frame and frame:IsMouseOver()) or (dock and dock:IsMouseOver()) or false
 end
+-- Its arrows (and its count) only while it is typed in or a search is on: minimized, the tab its line alone
+local function Arrows(ui)
+  local on = ui.box:HasFocus() or (ui.frame ~= nil and ns:SearchKey(Search(ui.frame).query or "") ~= "")
+  if ui.up:IsShown() ~= on then
+    ui.up:SetShown(on)
+    ui.down:SetShown(on)
+    ui.count:SetShown(on)
+  end
+end
+
 local function Watch(self, elapsed)
   local now = GetTime()
+  Arrows(self.ui)
   if self.ui.box:HasFocus() or self:IsMouseOver() then
     self.usedAt = now
   elseif self.usedAt and now - self.usedAt < QUIET and Busy() then
@@ -410,9 +719,9 @@ local function MakeBar()
   bar:SetScript("OnClick", function() bar.ui.box:SetFocus() end) -- (anywhere on the tab: the search)
   -- (typed in: the gold border around the whole tab, and the box's frame in gold around its text and its cross)
   bar.ui.box:HookScript("OnEditFocusGained", function()
-    bar.usedAt = GetTime(); bar:SetAlpha(1); bar.ring:Show(); BoxFramed(bar.ui, true)
+    bar.usedAt = GetTime(); bar:SetAlpha(1); bar.ring:Show(); BoxFramed(bar.ui, true); Arrows(bar.ui)
   end)
-  bar.ui.box:HookScript("OnEditFocusLost", function() bar.ring:Hide(); BoxFramed(bar.ui, false) end)
+  bar.ui.box:HookScript("OnEditFocusLost", function() bar.ring:Hide(); BoxFramed(bar.ui, false); Arrows(bar.ui) end)
   if hooksecurefunc then
     if FCFDock_UpdateTabs then hooksecurefunc("FCFDock_UpdateTabs", function(d) if d == Dock() then PlaceBar() end end) end
     if FCFDock_SelectWindow then
@@ -436,13 +745,85 @@ local function ShowBar()
 end
 ns.ChatSearch.Bar = function() return bar end -- (for the tests)
 
-function ns:SetChatSearchDock(on)
-  if self.sv then
-    if on then self.sv.chatSearchDock = nil else self.sv.chatSearchDock = false end
-  end
-  ShowBar()
-end
+ns.ChatSearchPlaced = ShowBar -- (its box ticked or unticked: in its place at once)
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function() ShowBar() end)
+
+---------------------------------------------------------------------------
+-- Its page: under its theme's page in Clara's options (Esc > Options > AddOns > Clara > Interface > Chat search):
+-- its place, and the style the words found are marked in (one picked at a time)
+---------------------------------------------------------------------------
+local page = CreateFrame("Frame")
+page:Hide()
+local built
+local updates, parts = {}, {}
+ns.ChatSearchPage, ns.ChatSearchParts = page, parts -- (for the tests)
+
+local function Click() if SOUNDKIT and PlaySound then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end end
+local function Refresh() for _, fn in ipairs(updates) do fn() end end
+
+local function Box(key, label, y, get, set)
+  local check = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+  check:SetSize(26, 26)
+  check:SetPoint("TOPLEFT", 10, y)
+  local text = check.Text or check.text
+  if text then
+    text:SetFontObject("GameFontHighlight")
+    text:SetText(label)
+  end
+  check:SetScript("OnClick", function(self)
+    Click()
+    set(self:GetChecked() and true or false)
+    Refresh()
+    if ns.RefreshOptions then ns:RefreshOptions() end
+  end)
+  parts[key] = check
+  updates[#updates + 1] = function() check:SetChecked(get()) end
+end
+
+local function Build()
+  built = true
+  local title = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
+  title:SetPoint("TOPLEFT", 7, -22)
+  title:SetText(L.QOL_NAV_CHATSEARCH)
+  local rule = page:CreateTexture(nil, "ARTWORK")
+  rule:SetAtlas("Options_HorizontalDivider", true)
+  rule:SetPoint("TOP", 0, -50)
+  local hint = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  hint:SetPoint("TOPLEFT", 14, -62)
+  hint:SetPoint("RIGHT", -24, 0)
+  hint:SetJustifyH("LEFT")
+  hint:SetWordWrap(true)
+  hint:SetTextColor(.6, .6, .65)
+  hint:SetText(L.CHATSEARCH_HINT)
+
+  Box("dock", L.SP_CHATSEARCH_DOCK, -100, function() return ns:ChatSearchDock() end, function(on) ns:SetChatSearchDock(on) end)
+
+  local head = page:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  head:SetPoint("TOPLEFT", 14, -142)
+  head:SetText(L.CHATSEARCH_STYLE)
+  -- (one at a time: ticked, it is the one; the one ticked clicked again stays so)
+  for i, style in ipairs(STYLES) do
+    Box("style" .. style, L["CHATSEARCH_STYLE_" .. style:upper()], -162 - (i - 1) * 28,
+      function() return ns:ChatSearchStyle() == style end, function() ns:SetChatSearchStyle(style) end)
+  end
+end
+
+page:SetScript("OnShow", function()
+  if not built then Build() end
+  Refresh()
+end)
+
+if Settings and Settings.RegisterCanvasLayoutCategory then
+  local ok, category = pcall(function()
+    if ns:QolCategory("chatsearch") and Settings.RegisterCanvasLayoutSubcategory then
+      return Settings.RegisterCanvasLayoutSubcategory(ns:QolCategory("chatsearch"), page, L.QOL_NAV_CHATSEARCH)
+    end
+    local c = Settings.RegisterCanvasLayoutCategory(page, L.QOL_NAV_CHATSEARCH)
+    Settings.RegisterAddOnCategory(c)
+    return c
+  end)
+  if ok and category then ns.chatSearchCategory = category end
+end
