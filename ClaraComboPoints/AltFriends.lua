@@ -2337,17 +2337,18 @@ function AltFriends.StartProbes()
 end
 
 ---------------------------------------------------------------------------
--- The zone in a character's tooltip over a frame (a party, raid or target frame, a list), as the 1.15 client shows a
--- group member away: from the group's roster (any group member), else from the character's own Clara (one of this
--- list, online). Not over the world (the character is right there, in the zone shown on the minimap).
+-- The zone in a character's tooltip, on its last line (its whole name, its level, race and class, its faction, then
+-- its zone), wherever the tooltip shows (over the world, a party, raid or target frame, a list): a group member's
+-- from the game's map for that member (else the group's roster, by its whole name only: never another's of the same
+-- first name), one in sight yours (it is right there), one of Clara's list online its own Clara's word.
 ---------------------------------------------------------------------------
 local function FirstWord(name)
   if type(name) ~= "string" or issecretvalue(name) then return nil end
   return ((name:match("^([^%-]+)") or name):match("^(%S+)") or ""):lower()
 end
 
--- The group's entry for a unit: by its whole name ("First Surname"; the roster may write "First-Surname"); by its
--- first name only when no other member has it (two Charlottes: none guessed)
+-- The group's entry for a unit: by its whole name ("First Surname"; the roster may write "First-Surname"), never by
+-- its first name alone (another may have it)
 local function RosterKey(name) return ((name:gsub("%-", " "):gsub("%s+", " ")):lower()) end
 local function RosterZone(unit)
   if not (GetNumGroupMembers and GetRaidRosterInfo) then return nil end
@@ -2358,22 +2359,19 @@ local function RosterZone(unit)
   local whole = name
   if type(surname) == "string" and not issecretvalue(surname) and surname ~= "" then whole = name .. " " .. surname end
   whole = RosterKey(whole)
-  local byFirst, firsts = nil, 0
   for i = 1, GetNumGroupMembers() do
     local ok, rosterName, _, _, _, _, _, zone = pcall(GetRaidRosterInfo, i)
-    if ok and type(rosterName) == "string" and not issecretvalue(rosterName) then
-      local usable = type(zone) == "string" and not issecretvalue(zone) and zone ~= ""
-      if RosterKey(rosterName) == whole and whole:find(" ", 1, true) then return usable and zone or nil end
-      if FirstWord(rosterName) == first then firsts = firsts + 1; byFirst = usable and zone or nil end
+    if ok and type(rosterName) == "string" and not issecretvalue(rosterName) and RosterKey(rosterName) == whole then
+      if type(zone) == "string" and not issecretvalue(zone) and zone ~= "" then return zone end
+      return nil
     end
   end
-  if firsts == 1 then return byFirst end
   return nil
 end
 AltFriends.RosterZone = RosterZone -- (for the tests)
 
 local function ListedZone(unit)
-  local okName, name, surname = pcall(UnitName, unit)
+  local okName, name, surname = pcall(UnitNameUnmodified or UnitName, unit)
   if not okName or type(name) ~= "string" or issecretvalue(name) then return nil end
   local whole = name
   if type(surname) == "string" and not issecretvalue(surname) and surname ~= "" then whole = name .. " " .. surname end
@@ -2393,21 +2391,69 @@ local function HasLine(tooltip, text)
   return false
 end
 
+-- A group member's own token (party2, raid5) for a unit shown under another (mouseover, target, a frame's)
+function AltFriends.GroupToken(unit)
+  if not (IsInGroup and IsInGroup()) then return nil end
+  local raid = IsInRaid and IsInRaid()
+  local count = raid and (GetNumGroupMembers and GetNumGroupMembers() or 0) or 4
+  for i = 1, count do
+    local token = (raid and "raid" or "party") .. i
+    local ok, same = pcall(UnitIsUnit, unit, token)
+    if ok and not issecretvalue(same) and same == true then return token end
+  end
+end
+
+-- The zone a group member is in, as the game's map tells it for that member (a building's or a cave's map: its
+-- zone's; a dungeon's: the dungeon)
+function AltFriends.MapZone(token)
+  if not (C_Map and C_Map.GetBestMapForUnit and C_Map.GetMapInfo) then return nil end
+  local ok, map = pcall(C_Map.GetBestMapForUnit, token)
+  if not ok or type(map) ~= "number" or issecretvalue(map) then return nil end
+  local micro = Enum and Enum.UIMapType and Enum.UIMapType.Micro or 5
+  local okInfo, info = pcall(C_Map.GetMapInfo, map)
+  local guard = 0
+  while okInfo and type(info) == "table" and info.mapType == micro and (info.parentMapID or 0) > 0 and guard < 5 do
+    okInfo, info = pcall(C_Map.GetMapInfo, info.parentMapID)
+    guard = guard + 1
+  end
+  local name = okInfo and type(info) == "table" and info.name or nil
+  if type(name) == "string" and not issecretvalue(name) and name ~= "" then return name end
+end
+
+-- Its zone: a group member's (the game's map for it, else the group's roster by its whole name), one in sight
+-- yours, one of Clara's list online its own Clara's word
+function AltFriends.UnitZone(unit)
+  local token = AltFriends.GroupToken(unit)
+  if token then
+    local zone = AltFriends.MapZone(token) or RosterZone(unit)
+    if zone then return zone end
+  end
+  local okVisible, visible = pcall(UnitIsVisible, unit)
+  if okVisible and not issecretvalue(visible) and visible == true then
+    local here = GetRealZoneText and GetRealZoneText()
+    if type(here) == "string" and not issecretvalue(here) and here ~= "" then return here end
+  end
+  return ListedZone(unit)
+end
+
 local function AddZone(tooltip)
-  if tooltip ~= GameTooltip or not tooltip.GetOwner then return end
-  local owner = tooltip:GetOwner()
-  if owner == nil or owner == UIParent or owner == WorldFrame then return end
+  if tooltip ~= GameTooltip then return end
   local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
   if not ok or type(unit) ~= "string" or issecretvalue(unit) then return end
   local okPlayer, isPlayer = pcall(UnitIsPlayer, unit)
-  if not okPlayer or not isPlayer or issecretvalue(isPlayer) or UnitIsUnit(unit, "player") then return end
-  local zone = RosterZone(unit) or ListedZone(unit)
+  if not okPlayer or issecretvalue(isPlayer) or not isPlayer then return end
+  local zone = AltFriends.UnitZone(unit)
   if type(zone) ~= "string" or zone == "" or HasLine(tooltip, zone) then return end
   tooltip:AddLine(zone, 1, 1, 1)
   tooltip:Show()
 end
 -- (never in the way of the other addons' tooltip lines)
 function AltFriends.AddZone(tooltip) pcall(AddZone, tooltip) end
+-- (heard as the file loads, before the modules' own lines (the target's, Tooltip target): the zone right after the
+-- game's lines, the faction its last)
+if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip) AltFriends.AddZone(tooltip) end)
+end
 
 ---------------------------------------------------------------------------
 -- A character's right-click menu (the target's portrait, a group's frame, a name in the chat...): Add Classic friend
@@ -2485,9 +2531,6 @@ events:SetScript("OnEvent", function(self)
   if mine then mine[Key(me)] = time and time() or true end
   List()
   Hook()
-  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum.TooltipDataType then
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip) AltFriends.AddZone(tooltip) end)
-  end
   local dressed, social = AltFriends.DressAddFriend(), AltFriends.HookSocial()
   if not (dressed and social) then
     -- (the game's Add Friend window and its social window load with their friends windows: dressed as they come)
