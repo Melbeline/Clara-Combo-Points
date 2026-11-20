@@ -47,6 +47,7 @@ RareMap.lua
 Screenshots.lua
 ChatPlace.lua
 ChatFocus.lua
+ProfessionBar.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
