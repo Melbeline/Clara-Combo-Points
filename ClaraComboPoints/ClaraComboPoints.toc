@@ -40,7 +40,6 @@ InteractKey.lua
 QuestPlates.lua
 GroupFinderZone.lua
 ChatCopy.lua
-ChatSearch.lua
 Rares.lua
 RareSpots.lua
 UnitScan.lua
@@ -442,6 +441,7 @@ Modules\TooltipAnchor\TooltipAnchor.lua
 Modules\BarScale\BarScale.lua
 Modules\XPText\XPText.lua
 Modules\WhoCooldown\WhoCooldown.lua
+Modules\ChatSearch\ChatSearch.lua
 Modules\IdTip\IdTip.lua
 Modules\PetFeed\PetFeed.lua
 Modules\ReportMute\ReportMute.lua

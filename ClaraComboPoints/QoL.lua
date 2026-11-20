@@ -33,6 +33,7 @@ ns.QOL_MODULES = {
   { key = "barscale", name = "Bar scale", theme = "interface" }, -- (Clara's own: the bars, micro menu and bags at once)
   { key = "xptext", name = "XP bar text", theme = "interface" }, -- (Clara's own: the game's XP bar text, the pet's beside it)
   { key = "whocooldown", name = "/who cooldown", theme = "interface" }, -- (Clara's own: the time left before the next /who)
+  { key = "chatsearch", name = "Chat search", theme = "interface" }, -- (Clara's own: the chat searched, the words found marked)
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
   { key = "petfeed", name = "Pet feeding", theme = "combat" }, -- (Clara's own: a hunter's Feed Pet time left on the pet frame)
   { key = "reportmute", name = "Permanent Report Mute", theme = "interface" }, -- (Clara's own: a reported player muted for good)
