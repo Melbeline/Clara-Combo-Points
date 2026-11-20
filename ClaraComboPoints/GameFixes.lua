@@ -708,6 +708,11 @@ function ns:MouseReport()
     local ok, lines = pcall(ns.BagClickTaintReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
   end
+  if ns.CraftListReport then
+    local ok, lines = pcall(ns.CraftListReport, ns)
+    if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end
+    elseif not ok then out[#out + 1] = "professions list: " .. tostring(lines) end
+  end
   local text = table.concat(out, "\n")
   -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
   if ns.sv then ns.sv.mouseReport = text end

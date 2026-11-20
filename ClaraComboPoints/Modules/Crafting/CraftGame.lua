@@ -171,6 +171,13 @@ function Draw()
   Fit(math.min(need, baseHeight * 4)) -- (never past four times its own: the panel can hold no more)
 end
 
+-- (what the list did, for the mouse report: see CraftListReport below)
+local watch = { builds = {}, presses = {}, chosen = {}, searches = {} }
+local function Note(t, entry)
+  t[#t + 1] = entry
+  if #t > 8 then table.remove(t, 1) end
+end
+
 ---------------------------------------------------------------------------
 -- The list: what does not match taken out
 ---------------------------------------------------------------------------
@@ -231,10 +238,15 @@ local function OnSearch(box)
   local was = query
   query = text
   local api = C_TradeSkillUI
+  local cleared = false
   if text ~= "" and api.GetRecipeItemNameFilter and (api.GetRecipeItemNameFilter() or "") ~= "" then
     api.SetRecipeItemNameFilter(nil)
+    cleared = true
   end
-  if was ~= query then C.Relist() end
+  if was ~= query then
+    Note(watch.searches, { at = GetTime(), text = text, cleared = cleared })
+    C.Relist()
+  end
 end
 
 ---------------------------------------------------------------------------
@@ -247,6 +259,90 @@ local function FilterMenu(_, root)
   for _, e in ipairs(C.FilterEntries()) do
     root:CreateCheckbox(e.label, function() return C.Filter()[e.key] == true end, function() C.ToggleFilter(e.key) end)
   end
+end
+
+---------------------------------------------------------------------------
+-- What the list did, for the mouse report (/cl souris): its rebuilds (and the addon code that asked for each),
+-- the mouse pressed on its rows (did it reach one?), the recipes chosen and shown after, the search
+---------------------------------------------------------------------------
+-- The addon code in the stack (file:line, the game's own and this hook's left out), the nearest first
+local function Callers()
+  local ok, stack = pcall(debugstack, 3, 20, 0)
+  if not ok or type(stack) ~= "string" then return "?" end
+  local out, seen = {}, {}
+  for file, line in stack:gmatch("Interface[/\\]AddOns[/\\]([^%]:\"]+%.lua)[\"%]]*:(%d+)") do
+    local at = file .. ":" .. line
+    if not file:find("^Blizzard_") and not file:find("Crafting[/\\]CraftGame%.lua$") and not seen[at] then
+      seen[at] = true
+      out[#out + 1] = at
+      if #out >= 4 then break end
+    end
+  end
+  return #out > 0 and table.concat(out, " < ") or "the game"
+end
+local function RecipeName(node)
+  local data = node and node.GetData and node:GetData()
+  local info = data and data.recipeInfo
+  return info and tostring(info.name or info.recipeID) or "?"
+end
+local function Watch()
+  if list.ScrollBox and list.ScrollBox.SetDataProvider then
+    hooksecurefunc(list.ScrollBox, "SetDataProvider", function(_, provider)
+      local ok, size = pcall(function() return provider:GetSize(false) end)
+      Note(watch.builds, { at = GetTime(), by = Callers(), size = ok and size or nil })
+    end)
+  end
+  if ScrollUtil and ScrollUtil.AddInitializedFrameCallback and list.ScrollBox then
+    ScrollUtil.AddInitializedFrameCallback(list.ScrollBox, function(_, row)
+      if row.claraWatched or not row.HookScript then return end
+      row.claraWatched = true
+      -- (OnMouseDown: the game's initializer sets OnClick again each time, which drops a hook on it)
+      row:HookScript("OnMouseDown", function(self, button)
+        Note(watch.presses, { at = GetTime(), name = RecipeName(self.GetElementData and self:GetElementData()), button = button })
+      end)
+    end, watch)
+  end
+  if EventRegistry and EventRegistry.RegisterCallback then
+    EventRegistry:RegisterCallback("ProfessionsRecipeListMixin.Event.OnRecipeSelected", function(_, info)
+      Note(watch.chosen, { at = GetTime(), name = info and tostring(info.name or info.recipeID) or "?" })
+    end, watch)
+  end
+end
+
+function ns:CraftListReport()
+  local frame = ProfessionsFrame
+  if not (frame and list) then return { "professions list: not opened this session" } end
+  local now = GetTime()
+  local function Ago(at) return ("%.1f s ago"):format(now - at) end
+  local out = {}
+  local text = list.SearchBox and list.SearchBox:GetText() or ""
+  local filter = C_TradeSkillUI and C_TradeSkillUI.GetRecipeItemNameFilter and C_TradeSkillUI.GetRecipeItemNameFilter() or "?"
+  out[#out + 1] = ('professions list (%s): search "%s", Clara\'s "%s" (by reagent %s), the game\'s name filter "%s", Clara\'s filter %s'):format(
+    frame:IsShown() and "shown" or "hidden", tostring(text), query, tostring(C.Option("search")), tostring(filter), tostring(C.FilterOn()))
+  local recent = 0
+  for _, b in ipairs(watch.builds) do if now - b.at < 10 then recent = recent + 1 end end
+  out[#out + 1] = ("    rebuilt %d time(s) in the last 10 s; the last ones:"):format(recent)
+  for i = #watch.builds, math.max(1, #watch.builds - 4), -1 do
+    local b = watch.builds[i]
+    out[#out + 1] = ("      %s, %s rows, asked by %s"):format(Ago(b.at), tostring(b.size or "?"), b.by)
+  end
+  for i = #watch.searches, math.max(1, #watch.searches - 2), -1 do
+    local s = watch.searches[i]
+    out[#out + 1] = ('    search changed %s: "%s" (the game\'s filter cleared: %s)'):format(Ago(s.at), s.text, tostring(s.cleared))
+  end
+  out[#out + 1] = ("    mouse pressed on a row %d time(s) recorded%s"):format(#watch.presses, #watch.presses == 0 and " (none reached a row)" or ":")
+  for i = #watch.presses, math.max(1, #watch.presses - 3), -1 do
+    local p = watch.presses[i]
+    out[#out + 1] = ("      %s on %s (%s)"):format(Ago(p.at), p.name, tostring(p.button))
+  end
+  for i = #watch.chosen, math.max(1, #watch.chosen - 3), -1 do
+    local c = watch.chosen[i]
+    out[#out + 1] = ("    recipe chosen %s: %s"):format(Ago(c.at), c.name)
+  end
+  local info = form and form.GetRecipeInfo and form:GetRecipeInfo()
+  out[#out + 1] = ("    recipe shown now: %s; mouse focus frames: %d"):format(info and tostring(info.name or info.recipeID) or "none",
+    #((GetMouseFoci and GetMouseFoci()) or {}))
+  return out
 end
 
 ---------------------------------------------------------------------------
@@ -272,6 +368,7 @@ local function Setup()
 
   if list.ScrollBox and list.ScrollBox.SetDataProvider then hooksecurefunc(list.ScrollBox, "SetDataProvider", Pruned) end
   if list.SearchBox then list.SearchBox:HookScript("OnTextChanged", OnSearch) end
+  Watch()
   if Menu and Menu.ModifyMenu then Menu.ModifyMenu("MENU_PROFESSIONS_FILTER", FilterMenu) end
 end
 
