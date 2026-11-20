@@ -75,10 +75,13 @@ M.now = 1018; M.Tick()
 check(Sent() == 3, "asked again 3 s on while it stays open")
 FriendsFrame:Hide()
 
-out("== a whisper of the player's own to an offline friend: shown")
+out("== a whisper of the player's own to an offline friend: held back 3 s, then shown")
 M.now = 1200
 local mine = ERR_CHAT_PLAYER_NOT_FOUND_S:format("Piou Piou")
-check(filters.CHAT_MSG_SYSTEM(nil, "CHAT_MSG_SYSTEM", mine) == false, "not our question: the line stays")
+M.chat = {}
+check(filters.CHAT_MSG_SYSTEM(DEFAULT_CHAT_FRAME, "CHAT_MSG_SYSTEM", mine) == true and not Chat(mine), "not our question: held back a moment")
+local held = 0 while M.timers and #M.timers > 0 and held < 10 do M.RunTimer() held = held + 1 end
+check(Chat(mine), "not heard from meanwhile: the line shown then")
 
 out("== heard in the chat: online at once")
 M.chat = {}
@@ -88,6 +91,7 @@ check(A.Online("Piou Piou") and Chat("[Piou Piou]|h has come online"), "Piou onl
 
 out("== two Clara: a hello at its login, its answer, its goodbye, at once")
 M.Fire("CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Elle Woods"))
+local held = 0 while M.timers and #M.timers > 0 and held < 10 do M.RunTimer() held = held + 1 end -- (held back 3 s)
 check(not A.Online("Elle Woods"), "Elle offline")
 M.chat = {}
 M.addonSent = {}

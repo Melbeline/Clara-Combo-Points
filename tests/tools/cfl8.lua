@@ -49,7 +49,7 @@ check(Filter(77) == true, "the late answer hidden")
 check(Filter(77) == true, "the same line in another chat window: hidden there too")
 M.Fire("CHAT_MSG_SYSTEM", text, "", "", "", "", "", 0, 0, "", 0, 77)
 check(not A.Online("Elle Woods"), "Elle: offline after all")
-check(Filter(78) == false, "another such line, no question left waiting: shown")
+check(Filter(78) == true, "another such line, no question left waiting: held back a moment (shown 3 s on unless heard from)")
 
 out("== the server's slowness learned: a longer wait after a slow answer")
 check(A.Wait() > 2, ("Elle's answer came 2.5 s late: the next questions wait %.1f s"):format(A.Wait()))

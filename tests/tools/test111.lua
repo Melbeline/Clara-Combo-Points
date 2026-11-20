@@ -185,7 +185,11 @@ local asked
 for _ = 1, 15 do M.now = M.now + 1 M.Tick() if AskedOf("Kiki Kaka") > 0 then asked = true break end end
 M.Fire("CHAT_MSG_SAY", "coucou", "Kiki Kaka-Realm") -- (heard: online, its question answered)
 check(asked and A.Online("Kiki Kaka"), "Kiki heard in the chat: online")
-check(filters.CHAT_MSG_SYSTEM(nil, "CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Kiki Kaka"), "", "", "", "", "", 0, 0, "", 0, 1000) == false,
-  "its later logout, the player's whisper: the line stays (the question was answered)")
+check(filters.CHAT_MSG_SYSTEM(DEFAULT_CHAT_FRAME, "CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Kiki Kaka"), "", "", "", "", "", 0, 0, "", 0, 1000) == true,
+  "the server's late word on the question asked just before it was heard: hidden")
+check(A.Online("Kiki Kaka"), "and nothing said of it: still online")
+M.now = M.now + 6
+check(filters.CHAT_MSG_SYSTEM(DEFAULT_CHAT_FRAME, "CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format("Kiki Kaka"), "", "", "", "", "", 0, 0, "", 0, 1001) == true,
+  "its later logout, the player's whisper: held back a moment (the question was answered)")
 out(string.format("\n%d failure(s)", fails))
 return fails
