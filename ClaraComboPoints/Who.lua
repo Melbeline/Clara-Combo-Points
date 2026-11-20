@@ -171,20 +171,8 @@ local function MakeExact(frame)
 end
 ns.WhoExactBox = function() return exact end -- (for the tests)
 
--- /who lea typed in the chat, the box ticked: sent as /who "lea" (the game writes it in the Who window's line too).
--- The game's own /who kept and called; the chat reads its commands again before each one, so it takes this one.
-local slashHooked = false
-local function HookSlash()
-  local list = _G.SlashCmdList
-  local game = type(list) == "table" and list.WHO
-  if slashHooked or type(game) ~= "function" then return end
-  slashHooked = true
-  list.WHO = function(msg, ...)
-    if ns:WhoExact() then msg = Quoted(msg) or msg end
-    return game(msg, ...)
-  end
-end
-ns.WhoHookSlash = HookSlash -- (for the tests)
+-- (/who lea typed in the chat goes as typed: the game's own /who left untouched, so that it runs in the game's name,
+-- its Who window opened in a fight too; the list it brings is filtered all the same, above)
 
 ---------------------------------------------------------------------------
 -- Sort by guild: in the Who tab's Filter menu, its Sort submenu (Name, Class, Level), Guild after Level. The game's
@@ -235,7 +223,6 @@ local function WatchAll()
   Watch(_G.LFGWhoListFrame) -- (WoW Forever: the Who list is the group finder's third tab)
   MakeExact(_G.LFGWhoListFrame)
   HookSort()
-  HookSlash()
   Watch(_G.WhoFrame)
 end
 WatchAll()
