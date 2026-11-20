@@ -1,6 +1,6 @@
 -- Clara Combo Points - the rare creatures UnitScan (UnitScan.lua) looks for by default, by NPC ID: the rares and rare
 -- elites of WoW Forever as UnitScan Hardcore Forever lists them (its Alliance and Horde lists, 332 creatures, with their
--- names in English, French and German; nil: as in English), and the 156 more RareScanner for WoW Forever (1.60.1.5) knows:
+-- names in English, French and German; nil: as in English; Spectral Stalker and Onyxia's Elite Guard left out: no rares), and the 156 more RareScanner for WoW Forever (1.60.1.5) knows:
 -- the rares new in Forever (the starting zones, Mount Hyjal, the Zephras Isles, the Riverglades...), classic rares the
 -- first list missed, the dungeons' rares and those of events (their names in English only; its test creature and two
 -- friendly quest NPCs left out). A creature is known by its ID here, and other players' sightings come by name, in
@@ -317,7 +317,6 @@ ns.RARES = {
   [12431] = { "Gorefang", "Croquetripe", "Blutmaul" },
   [12432] = { "Old Vicejaw", "Vieux Vile mâchoire", "Zwingenkiefer" },
   [12433] = { "Krethis Shadowspinner", "Krethis Tisse-l'ombre", "Krethis Schattennetz" },
-  [12739] = { "Onyxia's Elite Guard", "Garde d'élite d'Onyxia", "Elitewache von Onyxia" },
   [13896] = { "Scalebeard", "Barbe-d'écailles", "Schuppenbart" },
   [14221] = { "Gravis Slipknot", "Gravis Lecollet", "Gravis Galgenknoten" },
   [14222] = { "Araga" },
