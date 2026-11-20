@@ -46,6 +46,7 @@ UnitScan.lua
 RareMap.lua
 Screenshots.lua
 ChatPlace.lua
+ChatFocus.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
