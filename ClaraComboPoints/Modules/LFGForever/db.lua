@@ -36,7 +36,7 @@ local GLOBAL_NAMES = {
 --- the state the addon keeps by itself. Fields:
 ---   key       the name in the saved table
 ---   scope     "account" (LFGForeverDB) or "character" (LFGForeverCharDB)
----   variable  the Blizzard Settings variable, for the eleven that are settings
+---   variable  the Blizzard Settings variable, for those that are settings
 ---             (prefixed with the addon's name: variables share one registry
 ---             across every addon, Blizzard_Setting.lua:390-395)
 ---   type      the Lua type a usable value has
@@ -48,27 +48,9 @@ LFGF.SAVED_KEYS = {
 	{ key = "whisperLogSize", scope = ACCOUNT, variable = "LFGFOREVER_WHISPER_LOG_SIZE",
 		type = "number", default = 200, min = 1 },
 
-	-- Ask to Join: whisper the leader with the message, or open a whisper box.
-	{ key = "askToJoinAutoWhisper", scope = ACCOUNT, variable = "LFGFOREVER_ASK_TO_JOIN_AUTO_WHISPER",
-		type = "boolean", default = true },
-	-- The Ask to Join whisper, PER CHARACTER since 0.11.0. Four placeholders are
-	-- filled in when the button is clicked (LFGF.AskToJoinMessage, core/main.lua):
-	-- %class%, %level%, %talents% and %role%, rather than string.format's %s and
-	-- %d, because the player edits this text and a stray % must not be read as a
-	-- format directive. No addon tag: the leader reads a greeting from a player,
-	-- not an advert. %role% (0.20.0-dev.2) is not in the default, by the author's
-	-- decision: players add it themselves (.claude/rules/role-placeholder.md).
-	{ key = "askToJoinMessage", scope = CHARACTER, variable = "LFGFOREVER_ASK_TO_JOIN_MESSAGE",
-		type = "string", default = "Hi! I am a %talents% %class%, %level%. Inv please" },
-
-	-- Invite: whisper the invited player with the message (0.12.0-dev.1).
-	{ key = "inviteAutoWhisper", scope = ACCOUNT, variable = "LFGFOREVER_INVITE_AUTO_WHISPER",
-		type = "boolean", default = true },
-	-- The Invite whisper, per character from the start, %dungeon% filled in from
-	-- the player's own listing or the ticked activities (LFGF.InviteWhisperMessage,
-	-- core/main.lua; .claude/rules/invite-whisper.md). The wording is the author's.
-	{ key = "inviteMessage", scope = CHARACTER, variable = "LFGFOREVER_INVITE_MESSAGE",
-		type = "string", default = "Hey! Want to join %dungeon%?" },
+	-- (Clara: "Auto-whisper on Ask to Join" and "Auto-whisper on Invite", with
+	-- their messages, are removed; their old keys are cleared on load,
+	-- LFGF.REMOVED_KEYS below.)
 
 	-- SHOW ALL LEVEL ACTIVITIES: when on, the filter panel offers and searches
 	-- every activity, not only those whose suggested level range holds the
@@ -215,8 +197,6 @@ end
 -- THE OLD DEFAULT CONSTANTS, kept as names (settings.lua and the specs read
 -- them) and taken from the table, so each value exists once.
 LFGF.WHISPER_LOG_DEFAULT_SIZE = byKey.whisperLogSize.default
-LFGF.ASK_TO_JOIN_DEFAULT_MESSAGE = byKey.askToJoinMessage.default
-LFGF.INVITE_WHISPER_DEFAULT_MESSAGE = byKey.inviteMessage.default
 LFGF.SHOW_ALL_LEVEL_RANGES_DEFAULT = byKey.showAllLevelRanges.default
 LFGF.SHOW_ACTIVITY_LEVEL_RANGES_DEFAULT = byKey.showActivityLevelRanges.default
 LFGF.MARK_GUILDMATES_DEFAULT = byKey.markGuildmates.default
@@ -224,3 +204,7 @@ LFGF.MARK_FRIENDS_DEFAULT = byKey.markFriends.default
 LFGF.SHOW_MINIMAP_BUTTON_DEFAULT = byKey.showMinimapButton.default
 LFGF.MINIMAP_DEFAULT_ANGLE = byKey.minimapAngle.default
 LFGF.PLAYER_SORT_ORDER_DEFAULT = byKey.playerSortOrder.default
+
+-- Clara: the keys of the removed auto-whispers, cleared from both saved tables on
+-- load (core/settings.lua), so nothing of them stays on disk.
+LFGF.REMOVED_KEYS = { "askToJoinAutoWhisper", "askToJoinMessage", "inviteAutoWhisper", "inviteMessage" }

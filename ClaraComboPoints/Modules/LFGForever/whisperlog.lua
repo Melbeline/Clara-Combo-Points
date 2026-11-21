@@ -317,9 +317,9 @@ end
 
 --- Build a row's regions, once per pooled frame.
 ---
---- WHY THE ROW IS BUILT HERE AND NOT INHERITED. The addon's only XML is the
---- settings row (core/settings.xml), so there is no row template of ours to
---- name -- the view is given the FRAME TYPE
+--- WHY THE ROW IS BUILT HERE AND NOT INHERITED. The addon has no XML of its
+--- own (Clara: its settings row went with the auto-whispers), so there is no
+--- row template of ours to name -- the view is given the FRAME TYPE
 --- "Frame" instead, which SetElementInitializer accepts as an alternative to a
 --- template (its argument is `frameTemplateOrFrameType`,
 --- ScrollBoxListView.lua:496; FrameFactoryMixin:Create falls back to treating

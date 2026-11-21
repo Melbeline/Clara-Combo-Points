@@ -86,10 +86,9 @@ local ASK_TO_JOIN_ICON_ATLAS = "transmog-icon-chat"
 -- as its filter-section titles.
 local ASK_TO_JOIN_LABEL = L.ASK_TO_JOIN
 
--- THE WHISPER IS A SETTING NOW: "Auto-whisper on Ask to Join" and its message,
--- under Options -> AddOns -> LFG Forever (core/settings.lua). The text, with
--- its placeholders (%class%, %level%, %talents%, %role%) filled in, comes from
--- LFGF.AskToJoinMessage in core/main.lua at CLICK time.
+-- ASK TO JOIN SENDS NOTHING ITSELF (Clara): it opens a whisper box to the
+-- leader for the player to type in. The auto-whispers and their messages
+-- were removed (core/main.lua).
 
 -- THE BUTTON SHAPE AND THE ACTION COOLDOWN NOW LIVE IN core/main.lua, because
 -- core/whisperlog.lua puts the same plus on an incoming whisper. Sharing the
@@ -118,10 +117,9 @@ end
 
 --- Whether a row's actions (Invite, Ask to Join) may show at all: a live
 --- listing, not the player's own, whose leader's name can be read. Both
---- actions hand that name to an AllowedWhenUntainted API (InviteUnit,
---- PartyInfoDocumentation.lua:360; SendChatMessage, ChatInfoDocumentation.lua:
---- 568), so an unreadable one hides them rather than offering a click the
---- client would refuse.
+--- actions hand that name on (InviteUnit, an AllowedWhenUntainted API,
+--- PartyInfoDocumentation.lua:360; ChatFrameUtil.SendTell, which formats it),
+--- so an unreadable one hides them rather than offering a click that fails.
 local function CanActOnRow(row, info, isDelisted)
 	return not isDelisted and not row.hasSelf and canaccessvalue(info.leaderName)
 end
@@ -140,21 +138,9 @@ end
 --- icon, so it is hidden. Blizzard's menu item checks only that the name is
 --- non-nil (:1016) and still offers it.
 ---
---- THEN THE WHISPER (.claude/rules/invite-whisper.md):
---- after Blizzard's invite, the click whispers the player
---- LFGF.InviteWhisperMessage() (core/main.lua) when that answers text --
---- "Hey! Want to join Deadmines?". Invite first, by the author's decision, so
---- the whisper arrives with the invite popup. Neither call says whether it
---- worked (InviteUnit returns nothing and may wait on a confirmation,
---- PartyInfoDocumentation.lua:361), so the whisper does not wait on the
---- invite. Read at CLICK time, as Ask to Join's is. Only this button: the
---- whisper log's Invite link and Blizzard's right-click Group Invite never send
---- it.
----
---- The target is the row's leaderName, readable by CanActOnRow, and checked
---- again inside the click by LFGF.Whisper, for the reason
---- UpdateAskToJoinButton gives. One click is one action under the shared
---- two-second lock (RunAction, core/main.lua).
+--- NO WHISPER (Clara): the click only invites, as Blizzard's own menu item.
+--- One click is one action under the shared two-second lock (RunAction,
+--- core/main.lua).
 ---
 --- Set on EVERY update, because rows are pooled: a row that was a solo listing
 --- keeps its button otherwise.
@@ -170,13 +156,8 @@ local function UpdateInviteButton(row, info, isDelisted)
 
 	local _, inviteFunc = LFGBrowseUtil_GetInviteActionForResult(row.resultID)
 	if inviteFunc ~= nil then
-		local leaderName = info.leaderName
 		button.action = function()
 			inviteFunc()
-			local message = LFGF.InviteWhisperMessage()
-			if message ~= nil then
-				LFGF.Whisper(leaderName, message)
-			end
 		end
 	end
 	button:SetShown(inviteFunc ~= nil)
@@ -193,23 +174,15 @@ end
 --- guard below hides it anyway. One check covers both, because
 --- SecretInChatMessagingLockdown makes the WHOLE return secret at once.
 ---
---- THAT GUARD IS ALSO THE LOCKDOWN GUARD. C_ChatInfo.SendChatMessage is
---- SecretArguments = "AllowedWhenUntainted" (ChatInfoDocumentation.lua:568), so
---- a secret target from an addon is refused -- and the state that makes
---- leaderName secret is the same state C_ChatInfo.InChatMessagingLockdown
---- reports, so there is nothing for a second call to add.
+--- THAT GUARD IS ALSO THE LOCKDOWN GUARD: the state that makes leaderName
+--- secret is the same state C_ChatInfo.InChatMessagingLockdown reports.
 ---
---- WHAT THE CLICK DOES follows the setting, read when the button is CLICKED so
---- a change in the settings takes effect on rows already drawn:
----   * LFGF.AskToJoinMessage() returns text -> whisper it to the leader;
----   * it returns nil (checkbox off, or an empty message) -> open a whisper to
----     the leader for the player to type in, ChatFrameUtil.SendTell
----     (ChatFrameUtil.lua:383-386), the call Blizzard's own "Send Message"
----     makes (Blizzard_LFGVanilla_Browse.lua:1014). It string.formats the name
----     (:374), which the readable-name guard already covers.
---- Only the auto-whisper starts the shared cooldown: opening a whisper box
---- sends nothing, so that path returns false and RunAction leaves the buttons
---- live.
+--- WHAT THE CLICK DOES: open a whisper to the leader for the player to type
+--- in, ChatFrameUtil.SendTell (ChatFrameUtil.lua:383-386), the call
+--- Blizzard's own "Send Message" makes (Blizzard_LFGVanilla_Browse.lua:1014).
+--- It string.formats the name (:374), which the readable-name guard covers.
+--- Nothing is sent (Clara: the auto-whisper was removed), so the click
+--- starts no cooldown: it returns false and RunAction leaves the buttons live.
 ---
 --- RE-CHECKED INSIDE THE CLICK, and that guard is the one thing here the test
 --- harness cannot falsify -- removing it fails no example. It is kept because
@@ -234,13 +207,9 @@ local function UpdateAskToJoinButton(row, info, isDelisted, isSolo)
 		if not canaccessvalue(leaderName) then
 			return
 		end
-		local message = LFGF.AskToJoinMessage()
-		if message == nil then
-			ChatFrameUtil.SendTell(leaderName)
-			-- Nothing was sent, so no cooldown (see RunAction, core/main.lua).
-			return false
-		end
-		LFGF.Whisper(leaderName, message)
+		ChatFrameUtil.SendTell(leaderName)
+		-- Nothing was sent, so no cooldown (see RunAction, core/main.lua).
+		return false
 	end
 	button:Show()
 end

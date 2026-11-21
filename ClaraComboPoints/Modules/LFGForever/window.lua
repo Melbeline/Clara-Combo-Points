@@ -166,13 +166,6 @@ local function BuildContentPanels(content)
 	-- wires the two columns together, and neither panel learns of the other.
 	-- Not a search: no spinner, no query. See .claude/rules/saved-filters.md.
 	list:UseFilters(filter:CurrentFilters())
-
-	-- The invite whisper names the activities ticked in the filter panel when
-	-- the player has no listing (core/main.lua, InviteWhisperMessage). The
-	-- list panel's invite button asks main.lua, and main.lua asks the filter
-	-- panel through this, so the two panels still never learn of each other.
-	-- Read at click time, so a tick counts before any Search.
-	LFGF.SetInviteActivitySource(function() return filter:SelectedActivityIDs() end)
 end
 
 -- The side tab strip, mirroring Blizzard's own so a player can move between all
@@ -753,9 +746,6 @@ local function BuildWindow()
 		-- LFGF.RequestGuildRoster in core/relations.lua. A request, not a
 		-- listener: nothing here waits for the answer.
 		LFGF.RequestGuildRoster()
-		-- The player's talent points per tree, for the active spec
-		-- (core/talents.lua). Read on every open; nothing listens for changes.
-		LFGF.LoadTalentPoints()
 	end)
 	frame:SetScript("OnHide", function()
 		PlaySound(SOUNDKIT.IG_CHARACTER_INFO_CLOSE)

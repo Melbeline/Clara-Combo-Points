@@ -14,10 +14,7 @@
 -- Enabling or disabling the pack in the AddOns list is the language switch;
 -- with no pack, nothing here changes a word. .claude/rules/language-packs.md
 --
--- NOT HERE, by the author's decisions: the whisper text sent to other players
--- (the two default messages, the class and talent words, the "or" joiner; all
--- in core/main.lua and core/talents.lua), which stays English whatever the
--- pack; the %class%-style placeholders; the name "LFG Forever"; and anything
+-- NOT HERE, by the author's decisions: the name "LFG Forever"; and anything
 -- the game itself names -- dungeons, zones, categories, playstyles.
 local addonName, ClaraNS = ... -- (Clara Combo Points: LFG Forever built in, QoL.lua; addonName is Clara's)
 if not ClaraNS.LFGForeverRuns then return end
@@ -68,29 +65,6 @@ local L = {
 	SETTINGS_WHISPER_LOG_SIZE_LABEL = "Whisper log size",
 	SETTINGS_WHISPER_LOG_SIZE_TOOLTIP =
 		"How many received whispers the Whispers tab keeps. When there are more, the oldest are removed.",
-	SETTINGS_ASK_TO_JOIN_AUTO_WHISPER_LABEL = "Auto-whisper on Ask to Join",
-	SETTINGS_ASK_TO_JOIN_AUTO_WHISPER_TOOLTIP = "When on, Ask to Join whispers the group leader your message. "
-		.. "When off, it opens a whisper so you can type your own.",
-	SETTINGS_ASK_TO_JOIN_MESSAGE_LABEL = "Message",
-	SETTINGS_ASK_TO_JOIN_MESSAGE_TOOLTIP = "%class% and %level% become your class and level. %talents% becomes your active talent tree: the one you have spent the most points in. %role% becomes the roles you selected in Blizzard's Group Finder. Up to 200 characters. Saved for this character.",
-	-- The "?" beside each message box: a title, then one bulleted line per
-	-- keyword, "<keyword> - <description>". Only the description is here: the
-	-- keyword, its colour and the bullet are added by core/settings.lua.
-	SETTINGS_PLACEHOLDERS_TITLE = "Placeholders",
-	SETTINGS_PLACEHOLDER_CLASS = "your class",
-	SETTINGS_PLACEHOLDER_LEVEL = "your level",
-	SETTINGS_PLACEHOLDER_TALENTS = "your main talent tree: the one with the most points",
-	SETTINGS_PLACEHOLDER_ROLE = "the roles you selected in Blizzard's Group Finder",
-	SETTINGS_PLACEHOLDER_DUNGEON = "the dungeons of your listing, or with no listing, "
-		.. "the activities ticked in the activity filter",
-	SETTINGS_INVITE_AUTO_WHISPER_LABEL = "Auto-whisper on Invite",
-	SETTINGS_INVITE_AUTO_WHISPER_TOOLTIP = "When on, inviting a player from the players list also "
-		.. "whispers them your message. When off, it only invites.",
-	SETTINGS_INVITE_MESSAGE_LABEL = "Message",
-	SETTINGS_INVITE_MESSAGE_TOOLTIP = "%dungeon% becomes the dungeon of your listing, or all of them "
-		.. "if it has several (\"Deadmines, Wailing Caverns or Shadowfang Keep\"). "
-		.. "With no listing, it becomes the activities ticked in the activity filter. "
-		.. "Up to 200 characters. Saved for this character.",
 	SETTINGS_SEARCH_HEADER = "Search",
 	SETTINGS_SHOW_ALL_LEVELS_LABEL = "Show all level activities",
 	SETTINGS_SHOW_ALL_LEVELS_TOOLTIP = "Show activities for every dungeon and raid, not only the "

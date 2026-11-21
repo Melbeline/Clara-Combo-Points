@@ -2140,16 +2140,6 @@ function LFGF.CreateFilterPanel(parent)
 	--- so the list starts filtered the way the restored boxes say.
 	function panel:CurrentFilters() return FilterSnapshot(self) end
 
-	--- The activities ticked in the activity dropdown RIGHT NOW, in the order
-	--- they were ticked, as a fresh copy: nothing outside can change the
-	--- selection through it. Not a search snapshot -- a tick counts before
-	--- Search is clicked. core/window.lua hands this to the invite whisper
-	--- (LFGF.SetInviteActivitySource, core/main.lua), which names them when the
-	--- player has no listing. Deliberately NOT part of FilterSnapshot: that
-	--- shape is what is saved and what My filters keep, and activities are
-	--- neither (.claude/rules/saved-filters.md).
-	function panel:SelectedActivityIDs() return CopyTable(self.selectedActivityIDs) end
-
 	local category = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
 	category:SetWidth(CATEGORY_DROPDOWN_WIDTH)
 	category:SetDefaultText(L.CATEGORY)

@@ -1,8 +1,8 @@
 -- Clara Combo Points - LFG Forever's words in French and German (Clara's: LFG Forever ships English only, and
 -- other languages as packs, which load only with the standalone). Read by locale.lua before a pack, each word
 -- checked the way a pack's is (a format keeps its % conversions); the game's own words (roles, classes, dungeons,
--- buttons) are already in the client's language there. The whispers sent to other players stay English, by its
--- author's decision.
+-- buttons) are already in the client's language there. (Clara: no whisper is ever sent
+-- by it: its auto-whispers are removed.)
 local _, ClaraNS = ...
 if not ClaraNS.LFGForeverRuns then return end
 
@@ -11,20 +11,6 @@ local STRINGS = {
     COMBAT_SETTINGS = "les options ne s'ouvrent pas en combat.",
     SETTINGS_WHISPER_LOG_SIZE_LABEL = "Taille du journal des chuchotements",
     SETTINGS_WHISPER_LOG_SIZE_TOOLTIP = "Combien de chuchotements reçus l'onglet Chuchotements garde. Au-delà, les plus anciens sont retirés.",
-    SETTINGS_ASK_TO_JOIN_AUTO_WHISPER_LABEL = "Chuchoter en demandant à rejoindre",
-    SETTINGS_ASK_TO_JOIN_AUTO_WHISPER_TOOLTIP = "Activé, Demander à rejoindre chuchote ton message au chef du groupe. Désactivé, une fenêtre de chuchotement s'ouvre pour que tu écrives le tien.",
-    SETTINGS_ASK_TO_JOIN_MESSAGE_LABEL = "Message",
-    SETTINGS_ASK_TO_JOIN_MESSAGE_TOOLTIP = "%class% et %level% deviennent ta classe et ton niveau. %talents% devient ton arbre de talents actif : celui où tu as mis le plus de points. %role% devient les rôles choisis dans la recherche de groupe du jeu. Jusqu'à 200 caractères. Gardé pour ce personnage.",
-    SETTINGS_PLACEHOLDERS_TITLE = "Variables",
-    SETTINGS_PLACEHOLDER_CLASS = "ta classe",
-    SETTINGS_PLACEHOLDER_LEVEL = "ton niveau",
-    SETTINGS_PLACEHOLDER_TALENTS = "ton arbre de talents principal : celui qui a le plus de points",
-    SETTINGS_PLACEHOLDER_ROLE = "les rôles choisis dans la recherche de groupe du jeu",
-    SETTINGS_PLACEHOLDER_DUNGEON = "les donjons de ton annonce ou, sans annonce, les activités cochées dans le filtre d'activités",
-    SETTINGS_INVITE_AUTO_WHISPER_LABEL = "Chuchoter en invitant",
-    SETTINGS_INVITE_AUTO_WHISPER_TOOLTIP = "Activé, inviter un joueur de la liste des joueurs lui chuchote aussi ton message. Désactivé, ça l'invite seulement.",
-    SETTINGS_INVITE_MESSAGE_LABEL = "Message",
-    SETTINGS_INVITE_MESSAGE_TOOLTIP = "%dungeon% devient le donjon de ton annonce, ou tous s'il y en a plusieurs (« Les Mortemines, Cavernes des Lamentations or Donjon d'Ombrecroc »). Sans annonce, il devient les activités cochées dans le filtre d'activités. Jusqu'à 200 caractères. Gardé pour ce personnage.",
     SETTINGS_SEARCH_HEADER = "Recherche",
     SETTINGS_SHOW_ALL_LEVELS_LABEL = "Activités de tous niveaux",
     SETTINGS_SHOW_ALL_LEVELS_TOOLTIP = "Montre les activités de tous les donjons et raids, pas seulement celles conseillées pour ton niveau.",
@@ -112,20 +98,6 @@ local STRINGS = {
     COMBAT_SETTINGS = "die Einstellungen lassen sich im Kampf nicht öffnen.",
     SETTINGS_WHISPER_LOG_SIZE_LABEL = "Größe des Flüsterprotokolls",
     SETTINGS_WHISPER_LOG_SIZE_TOOLTIP = "Wie viele empfangene Flüsternachrichten der Reiter Flüstern behält. Sind es mehr, werden die ältesten entfernt.",
-    SETTINGS_ASK_TO_JOIN_AUTO_WHISPER_LABEL = "Beim Beitrittsantrag anflüstern",
-    SETTINGS_ASK_TO_JOIN_AUTO_WHISPER_TOOLTIP = "Ein: Beitritt anfragen flüstert dem Gruppenleiter deine Nachricht. Aus: ein Flüsterfenster öffnet sich, damit du deine eigene schreibst.",
-    SETTINGS_ASK_TO_JOIN_MESSAGE_LABEL = "Nachricht",
-    SETTINGS_ASK_TO_JOIN_MESSAGE_TOOLTIP = "%class% und %level% werden zu deiner Klasse und deiner Stufe. %talents% wird zu deinem aktiven Talentbaum: dem mit den meisten Punkten. %role% wird zu den Rollen, die du in der Gruppensuche des Spiels gewählt hast. Bis zu 200 Zeichen. Für diesen Charakter gespeichert.",
-    SETTINGS_PLACEHOLDERS_TITLE = "Platzhalter",
-    SETTINGS_PLACEHOLDER_CLASS = "deine Klasse",
-    SETTINGS_PLACEHOLDER_LEVEL = "deine Stufe",
-    SETTINGS_PLACEHOLDER_TALENTS = "dein Haupttalentbaum: der mit den meisten Punkten",
-    SETTINGS_PLACEHOLDER_ROLE = "die Rollen, die du in der Gruppensuche des Spiels gewählt hast",
-    SETTINGS_PLACEHOLDER_DUNGEON = "die Dungeons deiner Ausschreibung, oder ohne Ausschreibung die im Aktivitätsfilter angehakten Aktivitäten",
-    SETTINGS_INVITE_AUTO_WHISPER_LABEL = "Beim Einladen anflüstern",
-    SETTINGS_INVITE_AUTO_WHISPER_TOOLTIP = "Ein: einen Spieler aus der Spielerliste einzuladen flüstert ihm auch deine Nachricht. Aus: er wird nur eingeladen.",
-    SETTINGS_INVITE_MESSAGE_LABEL = "Nachricht",
-    SETTINGS_INVITE_MESSAGE_TOOLTIP = "%dungeon% wird zum Dungeon deiner Ausschreibung, oder zu allen, wenn es mehrere sind („Die Todesminen, Die Höhlen des Wehklagens or Burg Schattenfang“). Ohne Ausschreibung wird es zu den im Aktivitätsfilter angehakten Aktivitäten. Bis zu 200 Zeichen. Für diesen Charakter gespeichert.",
     SETTINGS_SEARCH_HEADER = "Suche",
     SETTINGS_SHOW_ALL_LEVELS_LABEL = "Aktivitäten aller Stufen",
     SETTINGS_SHOW_ALL_LEVELS_TOOLTIP = "Zeigt die Aktivitäten aller Dungeons und Schlachtzüge, nicht nur die für deine Stufe empfohlenen.",
