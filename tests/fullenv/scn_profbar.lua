@@ -1,4 +1,4 @@
--- The professions rank bar in 1.15.9's skin (ProfessionBar.lua) on the game's own rank bar template
+-- The professions rank bars in 1.15.9's skin (ProfessionBar.lua) on the game's own rank bar template, the recipes' page's and the Professions tab's
 -- (ProfessionsRankBarTemplate): Era's bar on it, the game's art hidden, filled; no error
 local H = ...
 local env, ns = H.env, H.ns
@@ -21,5 +21,13 @@ if rankBar and rankBar.Update then
   local bar = rankBar.claraClassicBar
   check(ok and bar ~= nil, "filled: no error (the harness's bars keep no value: test141 checks it) " .. tostring(e or ""))
   check(rankBar.Fill and not rankBar.Fill:IsShown() and rankBar.Border and not rankBar.Border:IsShown(), "the game's fill and frame hidden")
+end
+-- a Professions tab's bar: the template with the tab's own settings (fill from 2, 190 wide, cut 5 short)
+local okBook, book = pcall(env.CreateFrame, "Frame", nil, env.UIParent, "ProfessionsRankBarTemplate")
+if okBook and book then
+  book.overrideFillAnchorLeft, book.overrideMaskRightOffset = 2, -5
+  book:SetWidth(190)
+  local ok, e = pcall(ns.DressProfessionBar, book)
+  check(ok and book.claraClassicBar ~= nil, "a Professions tab's bar (its own start and width) dressed " .. tostring(e or ""))
 end
 print("scenario: profbar failures " .. fails)
