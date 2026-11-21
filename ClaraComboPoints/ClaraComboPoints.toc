@@ -48,6 +48,7 @@ Screenshots.lua
 ChatPlace.lua
 ChatFocus.lua
 ProfessionBar.lua
+MailSubject.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
