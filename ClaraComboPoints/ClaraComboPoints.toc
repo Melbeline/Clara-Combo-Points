@@ -544,9 +544,7 @@ Modules\LFGForever\locale.lua
 Modules\LFGForever\db.lua
 Modules\LFGForever\main.lua
 Modules\LFGForever\relations.lua
-Modules\LFGForever\talents.lua
 Modules\LFGForever\settings.lua
-Modules\LFGForever\settings.xml
 Modules\LFGForever\listpanel.lua
 Modules\LFGForever\whisperlog.lua
 Modules\LFGForever\filterpanel_shared.lua
