@@ -1,8 +1,8 @@
 -- Clara Combo Points - the chat windows: the general chat (and the windows docked with it) is placed and sized
 -- in Edit Mode only, as the game does (a place kept apart from it, Leatrix Plus's easy resizing, pulled the chat
 -- and Edit Mode each their way: both are gone). A window taken out of the dock: Reset chat position, the last line
--- of its tab's right-click menu, puts it back in the middle of the screen. The chat channels' order and colours: the
--- game's own (below).
+-- of its tab's right-click menu, puts it back in the middle of the screen. The chat channels: their order the game's
+-- own, their colours kept for each channel (below).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -78,10 +78,18 @@ events:SetScript("OnEvent", function(self)
 end)
 
 ---------------------------------------------------------------------------
--- The chat channels: their order and their colours are the game's own, left to it entirely (nothing of Clara's
--- moves or recolours them). Only the addons' hidden channels (UnitScan Hardcore's ushccomms, Clara Sync's) wait
--- until the game's channels and the ones the server rejoins are in (settled), to take the last numbers rather
--- than one of the player's (UnitScan.lua, Sync.lua).
+-- The chat channels. Their order is the game's own, left to it. Their colours are kept for each channel, whatever
+-- its number: the game keeps a colour by number (CHANNEL1, CHANNEL2...), and the number of a channel changes (a
+-- channel rejoined at login takes the next free one; dragging channels in Chat settings > Channels swaps the colours
+-- for the session only, the numbers keep their old ones for the next): each login gave the channels each other's
+-- colours. A channel's colour: the one picked for it (Chat settings, the game's colour picker: kept for the account),
+-- else its default: the custom channel l2p 00A9FF, the community L2P 40FF40, any other FFC0C0. Given back to the
+-- game under the channel's number now (ChangeChatColor: the game keeps it for the next login too) once the channels
+-- have joined, and each time they change (a join, a leave, a swap). The game's Defaults button (Chat settings):
+-- the colours picked forgotten, the defaults back.
+-- The addons' hidden channels (UnitScan Hardcore's ushccomms, Clara Sync's) wait until the game's channels and the
+-- ones the server rejoins are in (settled), to take the last numbers rather than one of the player's (UnitScan.lua,
+-- Sync.lua).
 ---------------------------------------------------------------------------
 local loginAt -- (GetTime() at login)
 local lastChannelChange = 0
@@ -91,14 +99,170 @@ local function Settled()
   return now - loginAt >= 60 or (now - loginAt >= 10 and now - lastChannelChange >= 6)
 end
 
+local issecret = issecretvalue or function() return false end
+local function Hex(hex) return { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255 } end
+local DEFAULT_OTHER = Hex("FFC0C0")
+local DEFAULT_L2P = Hex("00A9FF")       -- (the custom channel l2p)
+local DEFAULT_L2P_CLUB = Hex("40FF40")  -- (the community L2P)
+
+-- A channel's identity: a community's channel by its community and stream ("community:12:1", whatever its name);
+-- another by its name, lower-case, its zone left out ("General - Elwynn Forest" is "general")
+local function Key(name)
+  if type(name) ~= "string" or issecret(name) or name == "" then return nil end
+  local club, stream = name:match("^[Cc]ommunity:(%d+):(%d+)")
+  if club then return "community:" .. club .. ":" .. stream, true end
+  return (name:gsub("%s+%-%s+.*$", "")):lower(), false
+end
+
+-- The name shown for a community's channel (its community's, and its stream's); nil while the game has not the
+-- community yet (right after login)
+local function Shown(name)
+  local util = ChatFrameUtil
+  if not (util and util.ResolveChannelName) then return nil end
+  local ok, shown = pcall(util.ResolveChannelName, name)
+  if not ok or type(shown) ~= "string" or issecret(shown) or shown == "" or shown == name then return nil end
+  return shown
+end
+
+-- (nil: a community's channel whose name is not known yet: left until it is)
+local function Default(key, club, name)
+  if club then
+    local shown = Shown(name)
+    if not shown then return nil end
+    if shown:lower():find("^l2p") then return DEFAULT_L2P_CLUB end
+    return DEFAULT_OTHER
+  end
+  if key == "l2p" then return DEFAULT_L2P end
+  return DEFAULT_OTHER
+end
+
+local function Picks()
+  local sv = ns.sv
+  if not sv then return nil end
+  if type(sv.channelColors) ~= "table" then sv.channelColors = {} end
+  return sv.channelColors
+end
+
+-- The channels joined, by number: { { index = 1, key = "l2p", club = false, name = "l2p" }, ... }
+local function Joined()
+  local list = {}
+  if not GetChannelList then return list end
+  local ok, raw = pcall(function() return { GetChannelList() } end)
+  if not ok then return list end
+  for i = 1, #raw, 3 do
+    local index, name = raw[i], raw[i + 1]
+    local key, club = Key(name)
+    if type(index) == "number" and not issecret(index) and key then
+      list[#list + 1] = { index = index, key = key, club = club, name = name }
+    end
+  end
+  return list
+end
+
+-- The colour a channel should have: the one picked for it, else its default
+local function Wanted(ch)
+  local picks = Picks()
+  local pick = picks and picks[ch.key]
+  if type(pick) == "table" and type(pick[1]) == "number" then return pick end
+  return Default(ch.key, ch.club, ch.name)
+end
+
+local applying = false
+local function Differs(info, c)
+  if not info then return true end
+  return math.abs((info.r or 0) - c[1]) > .004 or math.abs((info.g or 0) - c[2]) > .004 or math.abs((info.b or 0) - c[3]) > .004
+end
+-- Each channel's colour given to the game under its number now; all of them again with force (after a swap: the
+-- game moved its colours for the session only). True when one could not be told yet (a community not loaded).
+local function ApplyColors(force)
+  if not ChangeChatColor then return false end
+  local later = false
+  for _, ch in ipairs(Joined()) do
+    local c = Wanted(ch)
+    local chatType = "CHANNEL" .. ch.index
+    local info = ChatTypeInfo and ChatTypeInfo[chatType]
+    if not c then
+      later = true
+    elseif force or Differs(info, c) then
+      applying = true
+      pcall(ChangeChatColor, chatType, c[1], c[2], c[3])
+      applying = false
+    end
+  end
+  return later
+end
+
+local pendingColors, pendingForce
+local retries = 0
+local ColorsSoon
+function ColorsSoon(force, delay)
+  if force then pendingForce = true end
+  if pendingColors then return end
+  pendingColors = true
+  C_Timer.After(delay or 1, function()
+    pendingColors = nil
+    local f = pendingForce
+    pendingForce = nil
+    -- (a community's channel not known yet: again a few seconds on, a minute at most)
+    if ApplyColors(f) and retries < 12 then
+      retries = retries + 1
+      ColorsSoon(false, 5)
+    end
+  end)
+end
+
+-- A colour picked by the player (Chat settings or the game's colour picker open): kept for that channel
+local function Picking()
+  local config, picker = _G.ChatConfigFrame, _G.ColorPickerFrame
+  return (config and config.IsShown and config:IsShown()) or (picker and picker.IsShown and picker:IsShown()) or false
+end
+local function KeepPick(chatType, r, g, b)
+  if applying or not Picking() then return end
+  local index = type(chatType) == "string" and not issecret(chatType) and tonumber(chatType:match("^CHANNEL(%d+)$"))
+  local picks = Picks()
+  if not (index and picks and type(r) == "number" and type(g) == "number" and type(b) == "number") then return end
+  for _, ch in ipairs(Joined()) do
+    if ch.index == index then picks[ch.key] = { r, g, b } end
+  end
+end
+
+local hooked = false
+local function Hook()
+  if hooked then return end
+  hooked = true
+  if ChangeChatColor then hooksecurefunc("ChangeChatColor", KeepPick) end
+  -- the channels dragged in Chat settings: the game swaps their colours for the session only; given to it again
+  if C_ChatInfo and C_ChatInfo.SwapChatChannelsByChannelIndex then
+    hooksecurefunc(C_ChatInfo, "SwapChatChannelsByChannelIndex", function() ColorsSoon(true, 0.5) end)
+  end
+  -- the game's Defaults (Chat settings): the colours picked forgotten, the defaults back
+  if ResetChatColors then
+    hooksecurefunc("ResetChatColors", function()
+      if ns.sv then ns.sv.channelColors = {} end
+      ColorsSoon(true, 0.5)
+    end)
+  end
+end
+
 local channelEvents = CreateFrame("Frame")
 channelEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
 channelEvents:RegisterEvent("CHANNEL_UI_UPDATE")
+for _, e in ipairs({ "CLUB_STREAMS_LOADED", "CLUB_ADDED", "INITIAL_CLUBS_LOADED" }) do pcall(channelEvents.RegisterEvent, channelEvents, e) end
 channelEvents:SetScript("OnEvent", function(_, event)
-  if event == "CHANNEL_UI_UPDATE" then lastChannelChange = GetTime() return end
+  if event == "CHANNEL_UI_UPDATE" then
+    lastChannelChange = GetTime()
+    if loginAt then ColorsSoon(false, 1) end
+    return
+  end
+  if event ~= "PLAYER_ENTERING_WORLD" then -- (the communities loaded: their channels' names known now)
+    if loginAt then ColorsSoon(false, 1) end
+    return
+  end
   if loginAt then return end
   loginAt = GetTime()
-  -- (the order and colours Clara kept by the channels' names until now: forgotten, the game's own stand)
+  -- (the order and colours an earlier Clara kept by the channels' names: forgotten)
   if ns.sv then ns.sv.chatChannels = nil end
+  Hook()
+  ColorsSoon(false, 2)
 end)
-ns.ChatChannels = { Settled = Settled }
+ns.ChatChannels = { Settled = Settled, Key = Key, Wanted = Wanted, ApplyColors = ApplyColors, Joined = Joined }
