@@ -245,6 +245,7 @@ local function Build()
   Box("SP_BOSS_SHOTS", ns.BossShots, ns.SetBossShots, "bossShots")
   Box("SP_MUTE_CONDUCT", ns.MuteConduct, ns.SetMuteConduct, "muteConduct") -- (QuietLogin.lua)
   Box("SP_CHAT_FOCUS", ns.ChatKeepsFocus, ns.SetChatKeepsFocus, "chatFocus") -- (ChatFocus.lua)
+  Box("SP_MAIL_SUBJECT", ns.MailSubject, ns.SetMailSubject, "mailSubject") -- (MailSubject.lua)
   if not ns:QolRuns("leatrix") then
     Box("QUEST_PLATES", ns.QuestPlates, ns.SetQuestPlates, "questPlates")
     Box("LFG_ZONE", ns.GroupFinderZone, ns.SetGroupFinderZone, "groupFinderZone")
