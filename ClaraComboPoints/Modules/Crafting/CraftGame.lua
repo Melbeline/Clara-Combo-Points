@@ -272,7 +272,9 @@ local function Callers()
   local out, seen = {}, {}
   for file, line in stack:gmatch("Interface[/\\]AddOns[/\\]([^%]:\"]+%.lua)[\"%]]*:(%d+)") do
     local at = file .. ":" .. line
-    if not file:find("^Blizzard_") and not seen[at] then
+    -- (this record's own hook, first in the stack: not a caller)
+    local own = #out == 0 and file:find("Crafting[/\\]CraftGame%.lua$")
+    if not file:find("^Blizzard_") and not seen[at] and not own then
       seen[at] = true
       out[#out + 1] = at
       if #out >= 4 then break end
