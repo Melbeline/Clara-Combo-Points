@@ -49,6 +49,7 @@ ChatPlace.lua
 ChatFocus.lua
 ProfessionBar.lua
 MailSubject.lua
+CraftShortcut.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
