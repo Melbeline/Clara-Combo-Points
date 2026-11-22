@@ -689,6 +689,8 @@ local function Build()
     detail.name:SetPoint("TOPLEFT", detail, "TOPLEFT", 50, -5)
     detail.made = iconButton:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     detail.made:SetPoint("BOTTOMRIGHT", iconButton, "BOTTOMRIGHT", -2, 2)
+    -- Dragged onto an action bar: the recipe's shortcut (Clara Combo Points, CraftShortcut.lua)
+    if ClaraNS.CraftShortcutDragFrom then ClaraNS.CraftShortcutDragFrom(iconButton, function() return selected end) end
     iconButton:SetScript("OnClick", function()
         if not selected or not (IsModifiedClick and IsModifiedClick()) then return end
         local link = C_TradeSkillUI.GetRecipeItemLink and C_TradeSkillUI.GetRecipeItemLink(selected)
