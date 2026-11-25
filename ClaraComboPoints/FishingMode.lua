@@ -1,11 +1,11 @@
--- Clara Combo Points - fishing mode: while it is on, the game's music, ambience, dialogue and the
+-- Clara Combo Points (the same file in Easy Fishing, the standalone addon) - fishing mode: while it is on, the game's music, ambience, dialogue and the
 -- other voices (pets, emotes, error speech) are off, and its reverb and distance filtering; its sound
 -- effects at 100 % (the bobber's splash is one of them: heard with them alone), the master volume
 -- louder (x2 by default, up to x10, never past 100 %), and the sound kept when the game is in the
 -- background: the splash heard over the rest. The game has no volume for one sound, nor any word of
 -- a bite: its own channels only. Turned on and off from the
 -- portrait's menu, the Fishing card of the professions window (the game's and ClassicUI's), and
--- the game's options (Esc > Options > AddOns > Clara Combo Points, with the boost). All given back
+-- the game's options (Esc > Options > AddOns > Clara Combo Points, or Easy Fishing, with the boost). All given back
 -- when it is turned off, and at each logout (put on again at the next login); a setting changed by
 -- the player meanwhile is left as it is.
 
