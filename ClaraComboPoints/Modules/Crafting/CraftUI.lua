@@ -41,6 +41,32 @@ local function ItemTip(self)
   GameTooltip:Show()
 end
 
+-- Characters' names without their realm ("Charlotte-CAMWOWEU5Realm7PvE": Charlotte), each once
+local function NamesOnly(keys)
+  local out, seen = {}, {}
+  for _, key in ipairs(keys) do
+    local name = tostring(key):match("^(.-)%-") or tostring(key)
+    if name ~= "" and not seen[name] then seen[name] = true; out[#out + 1] = name end
+  end
+  table.sort(out)
+  return out
+end
+
+-- A made reagent's icon: the item, then who of the account knows its recipe ("Leatherworking: Charlotte, Elle")
+local function HeaderTip(self)
+  if not self.itemID then return end
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+  GameTooltip:SetItemByID(self.itemID)
+  local known = self.knownBy
+  if known then
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine((known.profession and (known.profession .. ":") or L.CRAFT_KNOWN_BY), 1, .82, 0)
+    GameTooltip:AddLine(table.concat(known.names, ", "), 1, 1, 1, true)
+  end
+  GameTooltip:Show()
+end
+C.HeaderTip = HeaderTip
+
 local function ItemClick(self)
   if not self.itemID or not (IsModifiedClick and IsModifiedClick()) then return end
   local link = Link(self.itemID)
@@ -128,7 +154,7 @@ local function NewHeader(parent)
   h.sub:SetWordWrap(true)
   h.label = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
   h.label:SetText(SPELL_REAGENTS or "Reagents:")
-  h:SetScript("OnEnter", ItemTip)
+  h:SetScript("OnEnter", HeaderTip)
   h:SetScript("OnLeave", GameTooltip_Hide)
   h:SetScript("OnClick", ItemClick)
   -- - / +: its reagents folded away or shown
@@ -259,11 +285,10 @@ local function LayIcons(p, recipeID, width)
     h.name:SetWidth(width - ICON - 16 - FOLD)
     if made > 0 then h.name:SetTextColor(1, .82, 0) else h.name:SetTextColor(.6, .6, .6) end
     local r = C.Recipe(s.recipe)
-    local names, profession, mineToo = C.KnownBy(s.recipe)
+    local names, profession = C.KnownBy(s.recipe)
     local sub = r and r.q and ((REQUIRES_LABEL or "Requires:") .. " " .. r.q) or ""
-    if names and not mineToo and #names > 0 then
-      sub = (sub ~= "" and sub .. "\n" or "") .. "|cff999999" .. (profession and (profession .. " : ") or "") .. table.concat(names, ", ") .. "|r"
-    end
+    -- (who of the account knows its recipe: in its icon's tooltip, not under it; the names without their realm)
+    h.knownBy = names and #names > 0 and { profession = profession, names = NamesOnly(names) } or nil
     h.sub:SetText(sub)
     h.sub:SetWidth(width - ICON - 16 - FOLD)
     h:Show(); h.name:Show(); h.sub:SetShown(sub ~= "")
@@ -591,6 +616,13 @@ local function Build()
   y = y - 26
   Check(L.CRAFT_OPT_SEARCH, y, function() return C.Option("search") end,
     function(on) C.SetOption("search", on); if C.Relist then C.Relist() end end)
+  -- How many each recipe makes, in the recipe list (RecipeCounts.lua): shown, and before the name
+  y = y - 26
+  Check(L.CRAFT_OPT_COUNT, y, function() return C.Option("recipeCount") end,
+    function(on) C.SetOption("recipeCount", on); if ns.RecipeCountsRefresh then ns.RecipeCountsRefresh() end end)
+  y = y - 26
+  Check(L.CRAFT_OPT_COUNT_LEFT, y, function() return C.Option("countLeft") end,
+    function(on) C.SetOption("countLeft", on); if ns.RecipeCountsRefresh then ns.RecipeCountsRefresh() end end)
   y = y - 34
   Text("GameFontNormal", L.CRAFT_HEAD_FILTER, y)
   y = y - 22
