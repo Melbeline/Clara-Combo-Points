@@ -14,6 +14,7 @@ local SELECTED = "ProfessionsRecipeListMixin.Event.OnRecipeSelected"
 -- Two professions' recipes, as the list shows them
 local recipes = { [185] = { 2538, 2540, 2541, 3370, 3371 }, [197] = { 2385, 2386, 2387 } }
 local hidden = {}
+local empty = false -- (the game's list before its recipes have come)
 C_TradeSkillUI = C_TradeSkillUI or {}
 C_TradeSkillUI.GetRecipeInfo = function(id) return { recipeID = id } end
 -- The game's page (Blizzard_ProfessionsCrafting): Init picks the first recipe on a new profession, Reset as it shuts
@@ -26,6 +27,7 @@ list.ScrollBox = { ScrollToElementData = function(_, data) list.scrolledTo = dat
 function list:ProfessionChanged() self.previousRecipeID = nil end
 function list:SelectRecipe(info, scroll)
   local pid = page.professionInfo.professionID
+  if empty then return nil end
   for _, id in ipairs(recipes[pid]) do
     if id == info.recipeID and not hidden[id] then
       self.selected = id
@@ -44,14 +46,17 @@ function page:Init(professionInfo)
   self.RecipeList:SelectRecipe({ recipeID = id }, professionInfo.openRecipeID ~= nil)
 end
 function page:Reset() self.professionInfo = nil end
-local function Open(pid, link) page:Init({ professionID = pid, openRecipeID = link }) end
-local function Shut() page:Reset() end
-local function Pick(id) list:SelectRecipe({ recipeID = id }, false) end
+local ns = {}
+local now = 1000
+GetTime = function() return now end
+local function Open(pid, link) now = now + 5; page:Init({ professionID = pid, openRecipeID = link }) end
+local function Shut() page:Reset(); list.selected = nil; ProfessionsFrame:Show(); ProfessionsFrame:Hide() end
+-- the player's pick: a row of the list pressed, then picked
+local function Pick(id) now = now + 5; ns.RecipeMemoryClick(); list:SelectRecipe({ recipeID = id }, false) end
 
 C_AddOns = C_AddOns or {}
 local isLoaded = C_AddOns.IsAddOnLoaded
 C_AddOns.IsAddOnLoaded = function(name) if name == "Blizzard_Professions" then return true, true end return isLoaded and isLoaded(name) end
-local ns = {}
 S.class = "MAGE"; S.locale = "enUS"
 M.LoadAddon(ADDON_DIR, ns)
 M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN")
@@ -82,7 +87,19 @@ Pick(3371); hidden[3371] = true
 Shut(); Open(185)
 check(list.selected == 2538, "a recipe the list does not show: the game's first")
 hidden[3371] = nil
+out("== the window opened again by the profession's button: set up first with no recipes yet, then again")
+Pick(3370)
+Shut()
+empty = true; Open(185)
+check(list.selected ~= 3370, "(the list empty at first: nothing to pick)")
+empty = false; Open(185) -- (the recipes come: the game sets its page up again, the same profession)
+check(list.selected == 3370 and list.scrolledTo == 3370, "set up again with its recipes: picked again, scrolled to (" .. tostring(list.selected) .. ")")
+Pick(2540); Open(185)
+check(list.selected == 2540, "the player's pick since: theirs (not taken back)")
+Pick(3371)
+
 out("== through a reload")
+M.Fire("PLAYER_ENTERING_WORLD", false, true)
 local who
 for k in pairs(ClaraComboPointsDB.recipeKept or {}) do who = k end
 check(who and ClaraComboPointsDB.recipeKept[who][185] == 3371 and ClaraComboPointsDB.recipeKept[who][197] == 2387, "kept in the saved variables, the character's")

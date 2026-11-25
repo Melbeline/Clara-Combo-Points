@@ -24,6 +24,7 @@ function ClearOverrideBindings(owner)
 end
 local function Player(key, action) binds[key] = action; M.Fire("UPDATE_BINDINGS") end
 
+ClaraComboPointsDB = { sitKeyInit = true } -- (past the very first login: test155 has it)
 local ns = {}
 S.class = "ROGUE"; S.locale = "enUS"
 M.LoadAddon(ADDON_DIR, ns)
@@ -74,7 +75,7 @@ ns:SetSitKey(false)
 check(GetBindingAction("SHIFT-SPACE", true) == "" and not ns:SitKeyBound(), "the override gone")
 check(binds["SHIFT-SPACE"] == nil, "nothing bound in its place")
 
-out("== a binding there before the first login")
+out("== a binding there at a later login")
 binds = { ["SHIFT-SPACE"] = "MOVEBACKWARD" }
 ClaraComboPointsDB.sitKey = nil
 M.Fire("UPDATE_BINDINGS")
