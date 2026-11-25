@@ -1,12 +1,14 @@
--- Clara Combo Points - the professions window's recipe list: how many each recipe makes from the bags, after its name
--- ("Charred Wolf Meat [6]"), as Classic's trade skill window shows it. The game's row has that count (its Count,
+-- Clara Combo Points - the professions window's recipe list: how many each recipe makes from the bags, beside its name
+-- ("[6] Charred Wolf Meat"), as Classic's trade skill window counts it. The game's row has that count (its Count,
 -- " [%d] ") but asks C_TradeSkillUI.GetCraftableCount, which answers 0 on WoW Forever: it never shows. Counted here
 -- from the recipe's reagents in the bags (each basic slot: what the bags hold of it, all its tiers together, over
 -- what one craft takes; the smallest of them), right after the game's own count of each row (its first drawing, and
 -- each refresh as the bags change); a count the game gives itself is kept. Its colour is the recipe's difficulty,
 -- as the skill-up chance beside it (ForeverRecipes' colours): orange, yellow, green, grey; kept when the row is
--- hovered. The name is shortened to leave it room (the game forgets the count there). Not for a recipe not learned,
--- one that costs no reagents, nor on the crafting orders' list (the game hides the count there).
+-- hovered. Before the name by default (after the skill-up chance: always in sight, even beside a long name), or after
+-- it (the game's own place): two boxes on Reverse Engineering's page (both on; without that module, on). The name is
+-- shortened to leave it room. Not for a recipe not learned, one that costs no reagents, nor on the crafting orders'
+-- list (the game hides the count there).
 
 local ADDON, ns = ...
 
@@ -95,35 +97,84 @@ local function Recolor(row)
   if r then count:SetVertexColor(r, g, b) end
 end
 
--- After the game's count of a row: ours when it gave none
-local function Count(row, hideCraftableCount)
-  local count = row.Count
-  if not count or hideCraftableCount then return end
-  local info = RecipeOf(row)
-  if not info then return end
-  if not count:IsShown() then
-    if info.learned == false then return end
-    local n = Craftable(info.recipeID)
-    if n <= 0 then return end
-    count:SetFormattedText(" [%d] ", n)
-    count:Show()
-  end
-  Recolor(row)
+-- Reverse Engineering's two boxes (its page): the count shown, before the name; both on by default, and without it
+local function Opt(key)
+  local C = ns.Craft
+  if not (C and C.Option) then return true end
+  return C.Option(key)
 end
-ns.RecipeCountRow = Count
 
--- After the game's own drawing of a row: the name shortened to leave the count its room (the game counts the count's
--- width only when it shows its own). ForeverRecipes lays out its rows itself, the count counted.
+-- The count before the name (after the skill-up chance, where the name began) or after it (the game's own place)
+local function Place(row, before)
+  local count, label, skill = row.Count, row.Label, row.SkillUps
+  if not (count and label and skill) then return end
+  count:ClearAllPoints()
+  label:ClearAllPoints()
+  if before then
+    count:SetPoint("LEFT", skill, "RIGHT", 4, 0)
+    label:SetPoint("LEFT", count, "RIGHT", 0, 0)
+  else
+    label:SetPoint("LEFT", skill, "RIGHT", 4, 0) -- (the game's anchors: Blizzard_ProfessionsRecipeList.xml)
+    count:SetPoint("LEFT", label, "RIGHT", 0, 0)
+  end
+end
+
+-- The name as wide as the row leaves it: the count, the skill-up chance, the lock, ForeverRecipes' price (the game
+-- counts the count's width only when it shows its own)
 local function FitLabel(row)
   local count, label = row.Count, row.Label
-  if not (count and label and count:IsShown()) or row.frEstimateText then return end
-  local width = row:GetWidth() - count:GetStringWidth() - 10
-  if row.SkillUps then width = width - (row.SkillUps:GetWidth() or 0) end
+  if not (count and label and count:IsShown()) then return end
+  local width = row:GetWidth() - count:GetStringWidth() - 13 - ((row.SkillUps and row.SkillUps:GetWidth() or 0) + 4)
   if row.LockedIcon and row.LockedIcon:IsShown() then width = width - (row.LockedIcon:GetWidth() or 0) end
+  local price = row.frEstimateText
+  if price and price:IsShown() then width = width - (price:GetStringWidth() or 0) end
   label:SetWidth(row:GetWidth())
   label:SetWidth(math.max(1, math.min(width, label:GetStringWidth())))
 end
 ns.RecipeCountFit = FitLabel
+
+local ours = setmetatable({}, { __mode = "k" }) -- the rows whose count is Clara's
+
+-- After the game's count of a row (its drawing, each refresh as the bags change): ours when it gave none
+local function Count(row, hideCraftableCount)
+  local count = row.Count
+  if not count then return end
+  local info = RecipeOf(row)
+  local gameShown = count:IsShown() and not ours[row]
+  local n
+  if not hideCraftableCount and info and Opt("recipeCount") then
+    if gameShown then
+      n = tonumber(tostring(count:GetText() or ""):match("%d+"))
+    elseif info.learned ~= false then
+      local made = Craftable(info.recipeID)
+      if made > 0 then n = made end
+    end
+  end
+  ours[row] = nil
+  if not n then
+    if not gameShown then count:Hide() end
+    Place(row, false)
+    return
+  end
+  local before = Opt("countLeft")
+  count:SetText((before and "[%d] " or " [%d] "):format(n))
+  count:Show()
+  if not gameShown then ours[row] = true end
+  Place(row, before)
+  Recolor(row)
+  FitLabel(row)
+end
+ns.RecipeCountRow = Count
+
+-- Every row shown counted again (Reverse Engineering's boxes changed)
+function ns.RecipeCountsRefresh()
+  local list = ProfessionsFrame and ProfessionsFrame.CraftingPage and ProfessionsFrame.CraftingPage.RecipeList
+  local box = list and list.ScrollBox
+  if not (box and box.ForEachFrame) then return end
+  box:ForEachFrame(function(row)
+    if row.Count then Count(row, list.hideCraftableCount) end
+  end)
+end
 
 local hooked = false
 local function Setup()
