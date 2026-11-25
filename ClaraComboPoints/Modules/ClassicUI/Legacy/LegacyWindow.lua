@@ -180,7 +180,14 @@ local active = false
 
 local function Toggle()
     Build()
-    frame:SetShown(not frame:IsShown())
+    local show = not frame:IsShown()
+    frame:SetShown(show)
+    -- Opened by its button or key: on its tree page (Clara's LegacyTree.lua, its box on Clara's page).
+    if show and ClaraNS.LegacyTree and ClaraNS:LegacyTree() then
+        for _, page in pairs(LG.pages) do
+            if page.key == "tree" then ShowPage(page) end
+        end
+    end
 end
 
 -- The Legacy micro button and key open this window while on, and the minimap icon with them (it presses the button).

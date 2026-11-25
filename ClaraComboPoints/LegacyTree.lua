@@ -1,7 +1,8 @@
 -- Clara Combo Points - the Legacy window (WoW Forever's Legacy button, its key) opened on its Legacy Tree page rather
 -- than on Progress Track, the first page the game shows. As the window shows, its tree page is picked the way its tab
 -- picks it (the game's own event); the challenges, opened from an achievement, still open on their page (the game
--- picks it just after). On by default; its box on Clara's page.
+-- picks it just after). On by default; its box on Clara's page. With ClassicUI's classic Legacy window (built in),
+-- its own Toggle opens it on its tree page too (Modules/ClassicUI/Legacy/LegacyWindow.lua).
 
 local ADDON, ns = ...
 
