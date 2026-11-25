@@ -119,12 +119,59 @@ local function Search(frame)
   return s
 end
 
--- The line in the middle of the window (scrolled by messages from its bottom)
+-- The line reached kept in sight. The window scrolls by messages, a line of its own for each (the newest at its
+-- bottom), and a long message takes several rows: a match put in the middle by count could end above the window's
+-- top, the rows under it taller. Once the window has drawn its lines (its own callback, or at once if they were
+-- drawn already), the rows under the match measured, and the window scrolled by as many messages as it takes for the
+-- match to sit in its middle by height (at its bottom, a message taller than half the window).
+local fitting = setmetatable({}, { __mode = "k" }) -- chat frame -> { index = the match, offset = the window's }
+local function Rows(line)
+  local h = line.GetStringHeight and line:GetStringHeight()
+  if type(h) ~= "number" or issecret(h) or h <= 0 then h = line.GetHeight and line:GetHeight() end
+  if type(h) ~= "number" or issecret(h) or h <= 0 then h = line.GetLineHeight and line:GetLineHeight() end
+  if type(h) ~= "number" or issecret(h) or h <= 0 then h = 14 end
+  local gap = line.GetSpacing and line:GetSpacing()
+  if type(gap) ~= "number" or issecret(gap) then gap = 0 end
+  return h + gap
+end
+local function Fit(frame)
+  local f = fitting[frame]
+  if not f then return end
+  fitting[frame] = nil
+  local lines = frame.visibleLines
+  if type(lines) ~= "table" or not frame.GetScrollOffset then return end
+  if frame.GetInsertMode and SCROLLING_MESSAGE_FRAME_INSERT_MODE_TOP
+    and frame:GetInsertMode() == SCROLLING_MESSAGE_FRAME_INSERT_MODE_TOP then return end -- (its lines from the top)
+  local offset = frame:GetScrollOffset() or 0
+  if offset ~= f.offset then return end -- (scrolled meanwhile)
+  local slot = (frame:GetNumMessages() or 0) - f.index + 1 - offset -- (1: the line at the bottom)
+  local line = lines[slot]
+  if slot < 1 or not line then return end
+  local text = frame:GetMessageInfo(f.index)
+  local info = line.messageInfo
+  if type(info) == "table" and info.message ~= text then return end -- (not the lines of this offset)
+  local height = frame.GetHeight and frame:GetHeight()
+  if type(height) ~= "number" or issecret(height) or height <= 0 then return end
+  local room = (height - Rows(line)) / 2 -- (under the match, for it to sit in the middle)
+  local under = 0
+  for k = 1, slot - 1 do under = under + Rows(lines[k]) end
+  local shift = 0
+  while shift < slot - 1 and under > room do
+    shift = shift + 1
+    under = under - Rows(lines[shift])
+  end
+  if shift > 0 then frame:SetScrollOffset(offset + shift) end
+end
+
+-- The line in the middle of the window (scrolled by messages from its bottom), then kept in sight
 local function Reach(frame, index)
   local total = frame:GetNumMessages() or 0
   local visible = (frame.GetNumVisibleLines and frame:GetNumVisibleLines()) or 0
   if visible <= 0 then visible = 10 end
+  fitting[frame] = nil
   frame:SetScrollOffset(math.max(0, total - index - math.floor(visible / 2)))
+  fitting[frame] = { index = index, offset = frame.GetScrollOffset and frame:GetScrollOffset() or 0 }
+  if not frame.isDisplayDirty then pcall(Fit, frame) end -- (its lines drawn already: the same offset)
 end
 
 -- Its matches made again, the one shown kept where it can be
@@ -168,7 +215,7 @@ local function Typed(frame, query)
   return Step(frame, 1)
 end
 
-ns.ChatSearch = { Find = Find, Typed = Typed, Step = Step, Search = Search, Warm = Warm } -- (for the tests)
+ns.ChatSearch = { Find = Find, Typed = Typed, Step = Step, Search = Search, Warm = Warm, Fit = Fit } -- (for the tests)
 
 ---------------------------------------------------------------------------
 -- The words found marked in the lines the window shows, in the style picked on its page: each time the window draws
@@ -402,15 +449,16 @@ function Marks.Jumped(frame)
   pcall(Marks.Show, frame)
 end
 
--- The window's own drawing followed (its callback, else its function), once
+-- The window's own drawing followed (its callback, else its function), once: the match reached kept in sight, the
+-- marks drawn
 local watched = setmetatable({}, { __mode = "k" })
 function Marks.Watch(frame)
   if type(frame) ~= "table" or watched[frame] then return end
   watched[frame] = true
   if type(frame.AddOnDisplayRefreshedCallback) == "function" then
-    frame:AddOnDisplayRefreshedCallback(function(f) pcall(Marks.Show, f) end)
+    frame:AddOnDisplayRefreshedCallback(function(f) pcall(Fit, f); pcall(Marks.Show, f) end)
   elseif hooksecurefunc and type(frame.RefreshDisplay) == "function" then
-    hooksecurefunc(frame, "RefreshDisplay", function(f) pcall(Marks.Show, f) end)
+    hooksecurefunc(frame, "RefreshDisplay", function(f) pcall(Fit, f); pcall(Marks.Show, f) end)
   end
 end
 
