@@ -8,7 +8,8 @@
 -- Import (title bar): the whole of it as a line of text, for another account. Under Sort by, a button for each
 -- category (and All): one click shows that category's characters alone. Sort by "By category": each category in a
 -- framed block of its own, its name above it, the others last. A search box under them: only the names holding
--- what is typed (case and accents ignored). The game's own window
+-- what is typed (case and accents ignored). A name dragged to another place: the player's own order (My order),
+-- the list showing where it goes as it moves. The game's own window
 -- look; ClassicUI's when it runs (its ClaraMailSkin: Modules/ClassicUI/Windows/ClaraMail.lua).
 
 local ADDON, ns = ...
@@ -35,6 +36,7 @@ local query = "" -- the search box's text, as a search key (ns:SearchKey: case a
 local searchBox
 local filter -- the category shown alone (its button), or nil: all
 local chips, titles = {}, {} -- the category buttons; the categories' names over their blocks (By category)
+local drag -- a name being dragged: { entry, key, order, base, target = { key, after } or nil } (below)
 
 local function Skin(kind, frame)
   local classic = ns.ClassicUIPrivate -- (ClassicUI built in, running)
@@ -78,6 +80,7 @@ local Refresh, Anchor
 
 local function SortName(id)
   if id == "last" then return L.MAIL_SORT_LAST end
+  if id == "custom" then return L.MAIL_SORT_CUSTOM end
   if id == "bycat" then return L.MAIL_SORT_BYCAT end
   return M.CategoryName(id) or L.MAIL_SORT_LAST
 end
@@ -95,9 +98,19 @@ local function Shown(r) return Matches(r) and (not filter or r.cats[filter] == t
 -- The list's lines: { names = { up to COLS entries }, block = framed, top = its frame's first line, bottom = its
 -- last } or { title = a category's name } (By category). Sorted by a category: its characters first, framed; By
 -- category: each category's in a block of its own, its name above it, then the others; the category button: that
--- category's alone; the search: the names holding the text.
-local function Layout()
+-- category's alone; the search: the names holding the text. without: that name left out (a name dragged: the
+-- places the mouse points at, below).
+-- The sort shown: My order while a name is dragged in Last sent (dropped, the list is the player's arrangement)
+local function Sort()
+  if drag and M.db.sort == "last" then return "custom" end
+  return M.db.sort
+end
+
+local function Layout(without)
   local lines = {}
+  local match, show = Matches, Shown
+  local function Matches(r) return r ~= without and match(r) end
+  local function Shown(r) return r ~= without and show(r) end
   local function AddNames(list, block)
     local n = #list
     for i = 1, n, COLS do
@@ -106,8 +119,8 @@ local function Layout()
       lines[#lines + 1] = line
     end
   end
-  if M.db.sort == "bycat" then
-    local all, placed = M.Sorted("last"), {}
+  if Sort() == "bycat" then
+    local all, placed = M.Sorted("bycat"), {}
     for _, c in ipairs(M.Categories()) do
       if not filter or filter == c.id then
         local list = {}
@@ -130,7 +143,7 @@ local function Layout()
     end
     return lines
   end
-  local all, total = M.Sorted()
+  local all, total = M.Sorted(Sort())
   local block, rest = {}, {}
   for i, r in ipairs(all) do
     if Shown(r) then
@@ -172,6 +185,7 @@ local function NameTooltip(self)
   end
   if items > 0 then GameTooltip:AddLine(L.MAIL_NAME_ITEMS:format(items), .4, .78, 1, true) end
   GameTooltip:AddLine(L.MAIL_NAME_TIP, .4, 1, .4, true)
+  if not M.db.fixed then GameTooltip:AddLine(L.MAIL_NAME_DRAG_TIP, .4, 1, .4, true) end
   GameTooltip:Show()
 end
 
@@ -208,7 +222,11 @@ local function Cell(parent, i)
   b:SetHighlightFontObject(GameFontHighlightSmall)
   local fs = b:GetFontString()
   if fs then fs:SetWordWrap(false) end
+  b:RegisterForDrag("LeftButton")
+  b:SetScript("OnDragStart", function(self) if M.DragStart then M.DragStart(self) end end)
+  b:SetScript("OnDragStop", function() if M.DragStop then M.DragStop() end end)
   b:SetScript("OnClick", function(self, button)
+    if drag or (M.dropped and GetTime() - M.dropped < 0.2) then return end -- (the release of a drag)
     ClickSound()
     if GameTooltip then GameTooltip:Hide() end
     if M.Dropped and M.Dropped(self.entry) then return end -- (an item held: given to that character)
@@ -345,6 +363,7 @@ local function Place()
   local w = panel:GetWidth()
   local inner = w - 2 * PAD - ARROWS_W
   local cellW = math.max(math.floor((inner - (COLS - 1) * GAP) / COLS), NeedCell())
+  panel.cellW = cellW
   local top = -(Top() + 10)
   for r = 1, ROWS do
     local y = top - (r - 1) * ROW_H
@@ -410,6 +429,10 @@ function Refresh()
       if entry then
         b:SetText(entry.name)
         b:Show()
+        -- the name dragged: where it would go, faint and lit
+        local moving = drag ~= nil and entry == drag.entry
+        b:SetAlpha(moving and 0.45 or 1)
+        if moving then b:LockHighlight() else b:UnlockHighlight() end
         names = names + 1
       else
         b:Hide()
@@ -420,7 +443,7 @@ function Refresh()
   downButton:SetEnabled(first + ROWS < #lines)
   emptyText:SetShown(#lines == 0)
   emptyText:SetText((query ~= "" or filter) and L.MAIL_SEARCH_NONE or L.MAIL_EMPTY)
-  sortButton.text:SetText(SortName(M.db.sort))
+  sortButton.text:SetText(SortName(Sort()))
 end
 M.Changed = function()
   if panel and panel:IsShown() then
@@ -437,6 +460,11 @@ local function SortMenu(self)
   ToggleMenu(self, function(_, root)
     root:CreateRadio(L.MAIL_SORT_LAST, function() return M.db.sort == "last" end, function()
       M.db.sort = "last"
+      first = 0
+      Refresh()
+    end)
+    root:CreateRadio(L.MAIL_SORT_CUSTOM, function() return M.db.sort == "custom" end, function()
+      M.db.sort = "custom"
       first = 0
       Refresh()
     end)
@@ -482,6 +510,10 @@ local function ManageMenu(self)
     for _, c in ipairs(M.Categories()) do
       root:CreateButton("|TInterface\\Buttons\\UI-GroupLoot-Pass-Up:14:14|t " .. c.name, function() AskDelete(c) end)
     end
+    root:CreateDivider()
+    root:CreateCheckbox(L.MAIL_DRAG, function() return not M.db.fixed end, function()
+      M.db.fixed = (not M.db.fixed) or nil
+    end)
     root:CreateDivider()
     root:CreateButton(L.MAIL_RESET_CATEGORIES, function()
       ns:Ask(L.MAIL_RESET_CATEGORIES_ASK, true, { L.MAIL_RESET, function()
@@ -698,6 +730,7 @@ local function Build()
     Refresh()
   end)
   panel:SetScript("OnHide", function()
+    if M.DragCancel then M.DragCancel() end
     if sortButton.menu and sortButton.menu.Close then sortButton.menu:Close() end
     if manage.menu and manage.menu.Close then manage.menu:Close() end
   end)
@@ -749,6 +782,153 @@ local function Build()
   toggle:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   Skin("toggle", toggle)
   M.panel, M.toggle = panel, toggle -- (for the tests)
+end
+
+---------------------------------------------------------------------------
+-- A name dragged to another place (on by default: Add/remove categories, its box): a copy of its button follows the
+-- mouse, and the list shows where it would go as it moves (the name there, faint and lit, the others moved aside).
+-- Dropped on the names, it stays there: the player's arrangement (Last sent becomes My order; By category and a
+-- category first keep their blocks, the names in them in that order). Dropped away from the names, or where it was:
+-- nothing changed. Held above or below the names, the list scrolls.
+---------------------------------------------------------------------------
+local SCROLL_EVERY = 0.3 -- seconds between rows, scrolled while held above or below the names
+local ghost
+
+local function MakeGhost()
+  ghost = CreateFrame("Button", "ClaraMailDragGhost", UIParent, "UIPanelButtonTemplate")
+  ghost:SetFrameStrata("TOOLTIP")
+  ghost:EnableMouse(false)
+  ghost:SetNormalFontObject(GameFontHighlightSmall)
+  ghost:SetAlpha(0.9)
+  Skin("button", ghost)
+  ghost:Hide()
+end
+
+-- Where the mouse is over the names: their row and column; "up" or "down" above or below them (the list scrolls);
+-- nil away from them
+local function Pointed()
+  local left, top = panel:GetLeft(), panel:GetTop()
+  if not (left and top) then return nil end
+  local x, y = GetCursorPosition()
+  local scale = panel:GetEffectiveScale()
+  local dx, dy = x / scale - left, top - y / scale
+  if dx < 0 or dx > panel:GetWidth() then return nil end
+  local y0 = Top() + 10 -- (the names' top)
+  if dy < y0 - ROW_H or dy > panel:GetHeight() + ROW_H then return nil end
+  local c = math.max(1, math.min(COLS, math.floor((dx - PAD) / ((panel.cellW or 100) + GAP)) + 1))
+  local r = math.floor((dy - y0) / ROW_H) + 1
+  if r < 1 then return 1, c, "up" end
+  if r > ROWS then return ROWS, c, "down" end
+  return r, c
+end
+
+-- The place pointed at, in the list without the name dragged: before the name there; after the last one of the row
+-- (its empty end); before the first one under a category's name; after the last one, past the end
+local function Target(r, c)
+  local lines, i = drag.base, first + r
+  local line = lines[i]
+  if not line then
+    for k = #lines, 1, -1 do
+      local names = lines[k].names
+      if names then for n = COLS, 1, -1 do if names[n] then return { key = M.KeyOf(names[n]), after = true } end end end
+    end
+    return { key = false }
+  end
+  if line.title then
+    for k = i + 1, #lines do
+      local names = lines[k].names
+      if names and names[1] then return { key = M.KeyOf(names[1]) } end
+    end
+    return nil
+  end
+  if line.names[c] then return { key = M.KeyOf(line.names[c]) } end
+  for n = c - 1, 1, -1 do
+    if line.names[n] then return { key = M.KeyOf(line.names[n]), after = true } end
+  end
+  return nil
+end
+
+local function SameTarget(a, b)
+  if a == nil or b == nil then return a == b end
+  return a.key == b.key and a.after == b.after
+end
+
+local function Preview(target)
+  if SameTarget(target, drag.target) then return end
+  drag.target = target
+  M.preview = target and M.Moved(drag.order, drag.key, target.key or nil, target.after) or drag.order
+  Refresh()
+end
+
+local function Follow(self, elapsed)
+  if not drag then self:Hide(); self:SetScript("OnUpdate", nil) return end
+  if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then M.DragStop() return end -- (let go anywhere)
+  local scale = UIParent:GetEffectiveScale()
+  local x, y = GetCursorPosition()
+  self:ClearAllPoints()
+  self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+  local r, c, edge = Pointed()
+  if edge then
+    drag.wait = (drag.wait or 0) + (elapsed or 0)
+    if drag.wait >= SCROLL_EVERY then
+      drag.wait = 0
+      first = math.max(0, first + (edge == "up" and -1 or 1))
+      Refresh()
+    end
+  else
+    drag.wait = 0
+  end
+  Preview(r and Target(r, c) or nil)
+end
+M.DragFollow = Follow -- (for the tests)
+
+function M.DragStart(cell)
+  if drag or M.db.fixed or not (panel and cell and cell.entry) then return end
+  if GetCursorInfo and GetCursorInfo() then return end -- (an item held: given to a name, MailItems.lua)
+  local key = M.KeyOf(cell.entry)
+  if not key then return end
+  if GameTooltip then GameTooltip:Hide() end
+  drag = { entry = cell.entry, key = key }
+  -- the arrangement the drag starts from: the list as seen (Last sent: newest first)
+  drag.order = M.Arrangement(M.db.sort == "last")
+  M.preview = drag.order
+  drag.base = Layout(cell.entry)
+  if not ghost then MakeGhost() end
+  ghost:SetSize(cell:GetWidth(), cell:GetHeight())
+  ghost:SetText(cell.entry.name)
+  ghost:Show()
+  ghost:SetScript("OnUpdate", Follow)
+  Refresh()
+end
+
+local function Same(a, b)
+  if #a ~= #b then return false end
+  for i = 1, #a do if a[i] ~= b[i] then return false end end
+  return true
+end
+
+local function Done()
+  drag, M.preview = nil, nil
+  if ghost then ghost:Hide(); ghost:SetScript("OnUpdate", nil) end
+end
+
+function M.DragStop()
+  if not drag then return end
+  local order, from = M.preview, drag.order
+  local moved = drag.target ~= nil and order ~= nil and not Same(order, from)
+  Done()
+  M.dropped = GetTime()
+  if moved then
+    M.Arrange(order)
+    ClickSound()
+  end
+  Refresh()
+end
+
+function M.DragCancel()
+  if not drag then return end
+  Done()
+  Refresh()
 end
 
 -- The mailbox opened: the window as it was left (open or shut).
