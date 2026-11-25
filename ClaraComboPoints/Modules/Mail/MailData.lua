@@ -1,7 +1,8 @@
 -- Clara Combo Points - the mail module's data (MailUI.lua shows it): the characters mail was sent
--- to, newest first, and the categories each is in (several at once); the account's own characters
--- join the list as Main/alt once they reach level 3. Categories: four to start with (Main/alt, Bank
--- alt, Friend, Customer), the player's own added or deleted. Items given to a category, or to a
+-- to, newest first (or as the player arranged them, the names dragged), and the categories each is
+-- in (several at once); the account's own characters join the list as Main/alt once they reach
+-- level 3. Categories: four to start with (Main/alt, Bank alt, Friend, Customer), the player's own
+-- added or deleted. Items given to a category, or to a
 -- character of it (stage 2), stay remembered when the category goes, doing nothing. All of it is
 -- account-wide (ClaraMailDB), and passed to another account as a line of text (export / import).
 
@@ -74,10 +75,18 @@ local function Clean(db)
   if type(db.guids) == "table" then
     for guid, key in pairs(db.guids) do if type(guid) == "string" and type(key) == "string" then guids[guid] = key end end
   end
-  local sort = type(db.sort) == "string" and (db.sort == "last" or known[db.sort]) and db.sort or "last"
+  local sort = type(db.sort) == "string"
+    and (db.sort == "last" or db.sort == "bycat" or db.sort == "custom" or known[db.sort]) and db.sort or "last"
   local nextId = type(db.nextId) == "number" and db.nextId >= 1 and math.floor(db.nextId) or 1
+  -- the player's own arrangement of the names (dragged in the window): their keys, in order
+  local order, seen = {}, {}
+  if type(db.order) == "table" then
+    for _, key in ipairs(db.order) do
+      if type(key) == "string" and recipients[key] and not seen[key] then seen[key] = true; order[#order + 1] = key end
+    end
+  end
   return { categories = categories, recipients = recipients, items = items, own = own, sort = sort, nextId = nextId,
-    open = db.open == true or nil, guids = guids }
+    open = db.open == true or nil, guids = guids, order = order, fixed = db.fixed == true or nil }
 end
 
 function M.Init()
@@ -251,6 +260,31 @@ local function Me()
   if type(guid) == "string" and not issecretvalue(guid) and M.db.guids[guid] then me[M.db.guids[guid]] = true end
   return me
 end
+-- The player's own arrangement (the names dragged in the window, MailUI.lua): each key's place in it. While a name is
+-- dragged, M.preview: the arrangement as it would be, dropped there.
+local function Places()
+  local list = M.preview or M.db.order
+  if type(list) ~= "table" or #list == 0 then return nil end
+  local at = {}
+  for i, key in ipairs(list) do at[key] = i end
+  return at
+end
+
+-- The order of the list: Last sent, newest first (never mailed: by name); any other sort, the player's arrangement
+-- when there is one (the names not placed in it, mailed since: before the others, newest first), else newest first.
+local function Order(sort)
+  local at = sort ~= "last" and Places() or nil
+  local place = {}
+  if at then
+    for key, r in pairs(M.db.recipients) do place[r] = at[key] or 0 end
+  end
+  return function(a, b)
+    if at and place[a] ~= place[b] then return place[a] < place[b] end
+    if a.last ~= b.last then return a.last > b.last end
+    return a.name:lower() < b.name:lower()
+  end
+end
+
 function M.Sorted(sort)
   sort = sort or M.db.sort
   local first, rest = {}, {}
@@ -260,15 +294,47 @@ function M.Sorted(sort)
       if sort ~= "last" and r.cats[sort] then first[#first + 1] = r else rest[#rest + 1] = r end
     end
   end
-  local function Newer(a, b)
-    if a.last ~= b.last then return a.last > b.last end
-    return a.name:lower() < b.name:lower()
-  end
+  local Newer = Order(sort)
   table.sort(first, Newer)
   table.sort(rest, Newer)
   local n = #first
   for _, r in ipairs(rest) do first[#first + 1] = r end
   return first, n
+end
+
+-- An entry's key in the list
+function M.KeyOf(r)
+  for key, e in pairs(M.db.recipients) do if e == r then return key end end
+end
+
+-- The arrangement as it is (every name of the list, this character's too), its keys in order; newest: as Last sent
+-- shows them
+function M.Arrangement(newest)
+  local list, Before = {}, Order(newest and "last" or "custom")
+  for _, r in pairs(M.db.recipients) do list[#list + 1] = r end
+  table.sort(list, Before)
+  for i, r in ipairs(list) do list[i] = M.KeyOf(r) end
+  return list
+end
+
+-- The arrangement with one name moved: before another one, or after it (after = true); nil: at the end
+function M.Moved(order, key, target, after)
+  local list = {}
+  for _, k in ipairs(order) do if k ~= key then list[#list + 1] = k end end
+  local at = #list + 1
+  if target then
+    for i, k in ipairs(list) do
+      if k == target then at = after and i + 1 or i break end
+    end
+  end
+  table.insert(list, at, key)
+  return list
+end
+
+-- A name dropped: the arrangement kept; Last sent becomes My order (the names as the player put them)
+function M.Arrange(order)
+  M.db.order = order
+  if M.db.sort == "last" then M.db.sort = "custom" end
 end
 
 -- One character listed twice (its first name alone, from when the game's settings hid its surname,
@@ -343,7 +409,7 @@ M.OWN_LEVEL = OWN_LEVEL
 function M.Export()
   local d = M.db
   return EXPORT_PREFIX .. ns.Encode64(ns.Serialize({ v = 1, categories = d.categories, recipients = d.recipients,
-    items = d.items, own = d.own, sort = d.sort, nextId = d.nextId }))
+    items = d.items, own = d.own, sort = d.sort, nextId = d.nextId, order = d.order }))
 end
 
 -- The data in a line of text, checked; nil and why when it is not one of ours.
