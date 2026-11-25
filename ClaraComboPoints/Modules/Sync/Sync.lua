@@ -12,8 +12,12 @@
 --   their entries compared in small batches. Every message is signed with the key;
 --   between sessions: the Windows script (Synchro\ClaraSync.ps1) writes the other WoW accounts' data
 --   into this one's saved file (ClaraSyncIncoming), merged here at login.
--- A character met in a group is trusted once the player says it is one of theirs (or it is known: met
--- by the sync, or Main/alt or Bank alt in the mail module); the two then share their key.
+-- Only the player's own WoW accounts: this one and those the Windows script brings from this computer's WTF folders
+-- (their ids kept); a character is one of theirs when it logged in on one of them (each account keeps the ones that
+-- logged in there, mine; the script brings the others'), or the gold tracker has it on one of those accounts. Nothing goes to the group any more (a party's addons could read it: signed, not hidden), only the hidden
+-- channel and whispers to those characters; no "is this one of yours?" question (a friend once said yes stayed
+-- trusted). Once (KEY_GEN): a new key (a friend trusted before knew the old one), and what came from accounts that are
+-- not the player's dropped (the gold tracker's characters and accounts, their stock, the mail module's own list).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -30,6 +34,7 @@ local CHAR_EVERY = 30         -- a character's bags sent at most this often
 local SEND_EVERY = 0.12       -- between two messages
 local CHUNK = 150             -- entries in one message, at most (a scan's prices: several messages)
 local THROTTLED = { [3] = true, [8] = true, [11] = true } -- (the game's SendAddonMessageResult: throttled, locked)
+local KEY_GEN = 1             -- the key's generation: 1, made again once the sync kept to the player's own accounts
 
 local S = {}
 ns.Sync = S
@@ -46,7 +51,8 @@ local function Clean(db)
     return out
   end
   return { key = type(db.key) == "string" and #db.key >= 8 and db.key or nil, trusted = Set(db.trusted),
-    declined = Set(db.declined), off = db.off == true or nil }
+    declined = Set(db.declined), off = db.off == true or nil, own = Set(db.own),
+    mine = Set(db.mine), ownChars = Set(db.ownChars), gen = type(db.gen) == "number" and db.gen or 0 }
 end
 
 local CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -410,8 +416,8 @@ local function Push(text, chatType, target)
 end
 
 local msgCount = 0
--- A message, signed with the key and cut in parts; to: a character (whispered), or everyone (group and
--- channel); unsigned: the key itself, whispered
+-- A message, signed with the key and cut in parts; to: a character (whispered), or everyone (the hidden channel:
+-- never the group, whose addons could read it); unsigned: the key itself, whispered
 local function Send(msg, to, unsigned)
   local payload = ns.Encode64(ns.Serialize(msg))
   local text = (unsigned and "------" or Hex(Hash(sdb.key .. payload))) .. payload
@@ -423,7 +429,6 @@ local function Send(msg, to, unsigned)
     if to then
       Push(part, "WHISPER", to)
     else
-      if IsInRaid and IsInRaid() then Push(part, "RAID") elseif IsInGroup and IsInGroup() then Push(part, "PARTY") end
       if channelId then Push(part, "CHANNEL", tostring(channelId)) end
     end
   end
@@ -439,16 +444,19 @@ local function KeyOf(sender)
   return sender .. "-" .. (realm or "")
 end
 
+-- One of the player's own WoW accounts: this one, or one the Windows script brought from this computer
+local function OwnAccount(id)
+  if not id then return false end
+  if Gd and Gd.db and Gd.db.me == id then return true end
+  return sdb ~= nil and sdb.own[id] == true
+end
+S.OwnAccount = OwnAccount
+
 local function Trusted(key)
-  if not key then return false end
-  if sdb.trusted[key] then return true end
-  if C and C.db.chars[key] and not C.db.chars[key].remote then return true end
-  local short = key:match("^(.-)%-") or key
-  if M and M.db then
-    if M.db.own[short:lower()] then return true end
-    if M.HasCategory(short, "mainalt") or M.HasCategory(short, "bankalt") then return true end
-  end
-  return false
+  if not (key and sdb) then return false end
+  if sdb.mine[key] or sdb.ownChars[key] then return true end -- (logged in here, or on another of this computer's)
+  local rec = Gd and Gd.db and Gd.db.chars[key]
+  return rec ~= nil and OwnAccount(rec.a)
 end
 S.Trusted = Trusted
 
@@ -592,30 +600,6 @@ end
 S.Touched = Touched
 
 ---------------------------------------------------------------------------
--- Trusting a character met in a group
----------------------------------------------------------------------------
-local asked = {}
-local function Trust(key)
-  sdb.trusted[key] = true
-  sdb.declined[key] = nil
-  Send({ t = "K", k = myKey }, key, true)
-  Hello()
-end
-S.Trust = Trust
-
-local function Ask(key)
-  if asked[key] or sdb.declined[key] then return end
-  asked[key] = true
-  if not (StaticPopupDialogs and StaticPopup_Show) then return end
-  StaticPopupDialogs.CLARA_SYNC_TRUST = StaticPopupDialogs.CLARA_SYNC_TRUST or {
-    text = L.SYNC_TRUST, button1 = YES or "Yes", button2 = NO or "No", timeout = 0, whileDead = true, hideOnEscape = true,
-    OnAccept = function(_, data) if data then Trust(data) end end,
-    OnCancel = function(_, data, reason) if data and reason ~= "timeout" then sdb.declined[data] = true end end,
-  }
-  StaticPopup_Show("CLARA_SYNC_TRUST", (key:match("^(.-)%-") or key), nil, key)
-end
-
----------------------------------------------------------------------------
 -- Receiving
 ---------------------------------------------------------------------------
 local parts = {}   -- sender .. id -> { n, got, list }
@@ -635,14 +619,12 @@ local function Handle(sender, chatType, text)
     return
   end
   if tag ~= Hex(Hash(myKey .. payload)) then
-    -- not signed with our key: met in a group, maybe one of the player's characters
-    if msg.t == "H" and (chatType == "PARTY" or chatType == "RAID") then
-      if Trusted(key) then Send({ t = "K", k = myKey }, key, true) else Ask(key) end
-    end
+    -- not signed with our key: one of the player's own characters with another key gets ours, whispered
+    if msg.t == "H" and Trusted(key) then Send({ t = "K", k = myKey }, key, true) end
     return
   end
-  -- signed: one of ours (the channel's are trusted by the key itself)
-  if not sdb.trusted[key] then sdb.trusted[key] = true end
+  -- signed: and one of the player's own accounts' characters (a key once known elsewhere opens nothing)
+  if not Trusted(key) then return end
   if msg.t == "Q" then -- (logging out)
     local was = S.seen[key]
     S.seen[key] = nil
@@ -705,17 +687,67 @@ local function TakeIncoming()
       }
       -- that account's name: its folder, as the Windows script names its part (unless the player named it)
       if Gd and d.money.me and Gd.FolderName(d.money.me, folder) then any = true end
+      if d.money and d.money.me then -- (an account of this computer: the player's, and the characters played there)
+        sdb.own[d.money.me] = true
+        for key, rec in pairs(d.money.chars or {}) do
+          if type(rec) == "table" and rec.a == d.money.me then sdb.ownChars[key] = true end
+        end
+      end
       if S.MergeFrom(d) then any = true end
       local other = type(src.ClaraSyncDB) == "table" and Clean(src.ClaraSyncDB)
       if other then
-        if other.key and other.key < sdb.key then sdb.key = other.key end
-        for k in pairs(other.trusted) do sdb.trusted[k] = true end
+        for id in pairs(other.own) do sdb.own[id] = true end
+        for key in pairs(other.mine) do sdb.ownChars[key] = true end
+        for key in pairs(other.ownChars) do sdb.ownChars[key] = true end
+        -- (the newer generation of key wins, then the smaller key)
+        if other.key and (other.gen > sdb.gen or (other.gen == sdb.gen and other.key < sdb.key)) then
+          sdb.key, sdb.gen = other.key, other.gen
+        end
       end
     end
   end
   return any
 end
 S.TakeIncoming = TakeIncoming
+
+-- What came from accounts that are not the player's (a friend once trusted): their characters out of the gold tracker
+-- (forgotten: gone everywhere), their stock out of Reverse Engineering, their names out of the mail module's own list,
+-- their accounts out of the gold window. Only once this computer's accounts are known (the script brought one).
+local function PurgeOthers()
+  if not (Gd and Gd.db and Gd.db.chars) then return false end
+  local known = false
+  for id in pairs(sdb.own) do if id ~= Gd.db.me then known = true break end end
+  if not known then return false end
+  -- (a character's names as the mail module keys them: its whole name, its first name)
+  local function MailKeys(rec, key)
+    local first = rec.n or key:match("^(.-)%-") or key
+    local out = { first:lower() }
+    if rec.s then out[2] = (first .. " " .. rec.s):lower() end
+    return out
+  end
+  local gone, ownNames = {}, {}
+  for key, rec in pairs(Gd.db.chars) do
+    if rec.a and not OwnAccount(rec.a) then
+      gone[#gone + 1] = key
+    else
+      for _, k in ipairs(MailKeys(rec, key)) do ownNames[k] = true end
+    end
+  end
+  for _, key in ipairs(gone) do
+    local rec = Gd.db.chars[key]
+    if M and M.db and M.db.own then
+      for _, k in ipairs(MailKeys(rec, key)) do if not ownNames[k] then M.db.own[k] = nil end end
+    end
+    if Gd.Forget then Gd.Forget(key) else Gd.db.chars[key] = nil end
+    if C and C.db and C.db.chars[key] then C.db.chars[key] = nil end
+  end
+  local any = #gone > 0
+  for id in pairs(Gd.db.accounts or {}) do
+    if not OwnAccount(id) then Gd.db.accounts[id] = nil; any = true end
+  end
+  return any
+end
+S.PurgeOthers = PurgeOthers
 
 ---------------------------------------------------------------------------
 -- Start
@@ -755,9 +787,15 @@ local function Start()
   sdb = ClaraSyncDB
   S.db = sdb
   if not sdb.key then sdb.key = Random(16) end
+  -- (once: a new key, the trusted characters of before let go: a friend once said one of the player's knew the old)
+  if sdb.gen < KEY_GEN then
+    sdb.key, sdb.gen = Random(16), KEY_GEN
+    sdb.trusted, sdb.declined = {}, {}
+  end
   realm = GetNormalizedRealmName and GetNormalizedRealmName() or (GetRealmName and GetRealmName() or ""):gsub("%s", "")
   local name = UnitName("player")
   me = type(name) == "string" and (name .. "-" .. (realm or "")) or nil
+  if me then sdb.mine[me] = true end -- (a character played on this account: the player's, for the other accounts)
   -- this WoW account's mark on the mail categories it makes (never shared with another account's)
   local sv = ns.sv
   if sv then
@@ -765,6 +803,7 @@ local function Start()
     if M then M.idMark = "-" .. sv.syncMark end
   end
   if TakeIncoming() then Changed() end
+  if PurgeOthers() then Changed() end
   myKey = sdb.key
   channelName = ChannelName(myKey)
   if M then M.Touched = Touched end
@@ -792,8 +831,9 @@ end
 function S.Status()
   local online = 0
   for _, at in pairs(S.seen) do if GetTime() - at < 300 then online = online + 1 end end
-  local trusted = 0
-  for _ in pairs(sdb.trusted) do trusted = trusted + 1 end
+  local trusted = 0 -- (the player's own accounts known: this one and those the script brought)
+  for id in pairs(sdb.own) do if not (Gd and Gd.db and Gd.db.me == id) then trusted = trusted + 1 end end
+  if Gd and Gd.db and Gd.db.me then trusted = trusted + 1 end
   return { on = S.On(), channel = channelId ~= nil, online = online, trusted = trusted, key = myKey and Hex(Hash(myKey)) }
 end
 
