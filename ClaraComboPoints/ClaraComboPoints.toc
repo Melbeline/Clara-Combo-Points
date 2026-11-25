@@ -53,6 +53,7 @@ CraftShortcut.lua
 RecipeCounts.lua
 QuestShare.lua
 SitKey.lua
+EnchantConfirm.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
