@@ -51,6 +51,7 @@ ProfessionBar.lua
 MailSubject.lua
 CraftShortcut.lua
 RecipeCounts.lua
+QuestShare.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
