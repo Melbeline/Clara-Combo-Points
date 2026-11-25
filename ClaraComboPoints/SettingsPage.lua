@@ -14,8 +14,11 @@ local labels, updates = {}, {} -- texts (again on a language change), states sho
 
 local function Click() if SOUNDKIT and PlaySound then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end end
 
+local body -- what the page shows, in a scroll frame: the whole page scrolls when it is taller than the game's panel
+local scroll
+
 local function Button(key, w, onClick)
-  local b = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+  local b = CreateFrame("Button", nil, body, "UIPanelButtonTemplate")
   b:SetSize(w, 24)
   if key then labels[#labels + 1] = function() b:SetText(L[key]) end end
   b:SetScript("OnClick", function(self) Click(); onClick(self) end)
@@ -23,15 +26,75 @@ local function Button(key, w, onClick)
 end
 
 local function Text(fontObject, key)
-  local fs = page:CreateFontString(nil, "ARTWORK", fontObject)
+  local fs = body:CreateFontString(nil, "ARTWORK", fontObject)
   fs:SetJustifyH("LEFT")
   if key then labels[#labels + 1] = function() fs:SetText(L[key]) end end
   return fs
 end
 
+-- Under the window's size, the rest one under the other: each row placed under the shown one before it (a row not
+-- shown takes no room), its texts wrapped in the page's width, its height theirs (Layout).
+local TOP = 166 -- (where the rows start: under the window's size)
+local rows = {}
+local function Row(region, x, height, shown, gap)
+  rows[#rows + 1] = { region = region, x = x, height = height, shown = shown, gap = gap or 0 }
+end
+
+local function Layout()
+  if not body then return end
+  local w = scroll:GetWidth()
+  if not w or w <= 0 then w = 600 end
+  body:SetWidth(w)
+  local y = -TOP
+  for _, r in ipairs(rows) do
+    local on = r.shown == nil or r.shown() and true or false
+    r.region:SetShown(on)
+    if on then
+      y = y - r.gap
+      r.region:ClearAllPoints()
+      r.region:SetPoint("TOPLEFT", body, "TOPLEFT", r.x, y)
+      y = y - r.height(w - r.x)
+    end
+  end
+  body:SetHeight(-y + 12)
+end
+
+-- A text row: wrapped in the page's width
+local function TextRow(fs, x, gap)
+  fs:SetWordWrap(true)
+  Row(fs, x, function(w)
+    fs:SetWidth(w - 14)
+    return math.ceil(fs:GetStringHeight() or 12) + 4
+  end, nil, gap)
+end
+
+-- A box and its words beside it, wrapped in the page's width (their first line beside the box)
+local function Check(key, get, set, field, shown)
+  local check = CreateFrame("CheckButton", nil, body, "UICheckButtonTemplate")
+  check:SetSize(26, 26)
+  local text = check.Text or check.text
+  text:ClearAllPoints()
+  text:SetPoint("TOPLEFT", check, "TOPRIGHT", 0, -7)
+  text:SetJustifyH("LEFT")
+  text:SetWordWrap(true)
+  labels[#labels + 1] = function() text:SetText(L[key]) end
+  check:SetScript("OnClick", function(self)
+    Click()
+    set(ns, self:GetChecked() and true or false)
+  end)
+  updates[#updates + 1] = function() check:SetChecked(get(ns)) end
+  if field then page[field] = check end
+  Row(check, 10, function(w)
+    text:SetWidth(w - 40)
+    return math.max(24, math.ceil(text:GetStringHeight() or 12) + 10)
+  end, shown)
+  return check
+end
+
 local function Update()
   for _, fn in ipairs(labels) do fn() end
   for _, fn in ipairs(updates) do fn() end
+  Layout()
 end
 
 -- The options window (the game's options closed first, out of combat: they would cover it).
@@ -42,13 +105,21 @@ end
 
 local function Build()
   built = true
-  local title = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
+  scroll = CreateFrame("ScrollFrame", "ClaraComboPointsSettingsScroll", page, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 0, 0)
+  scroll:SetPoint("BOTTOMRIGHT", -26, 4)
+  body = CreateFrame("Frame", nil, scroll)
+  body:SetSize(600, 10)
+  scroll:SetScrollChild(body)
+  page.body = body
+
+  local title = body:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
   title:SetPoint("TOPLEFT", 7, -22)
   title:SetText("Clara")
-  local version = page:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+  local version = body:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   version:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 8, 2)
   version:SetText("v" .. ns.VERSION)
-  local rule = page:CreateTexture(nil, "ARTWORK")
+  local rule = body:CreateTexture(nil, "ARTWORK")
   rule:SetAtlas("Options_HorizontalDivider", true)
   rule:SetPoint("TOP", 0, -50)
 
@@ -70,13 +141,13 @@ local function Build()
   -- The options window's size, as its bottom right corner sets it
   local sizeLabel = Text("GameFontNormal", "SP_WINDOW_SIZE")
   sizeLabel:SetPoint("TOPLEFT", 14, -142)
-  local slider = CreateFrame("Slider", nil, page, "UISliderTemplate")
+  local slider = CreateFrame("Slider", nil, body, "UISliderTemplate")
   slider:SetSize(200, 17)
   slider:SetOrientation("HORIZONTAL")
   slider:SetMinMaxValues(ns.MIN_WINDOW_SCALE * 100, ns.MAX_WINDOW_SCALE * 100)
   slider:SetValueStep(5)
   if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
-  slider:SetPoint("LEFT", page, "TOPLEFT", 250, -149)
+  slider:SetPoint("LEFT", body, "TOPLEFT", 250, -149)
   local value = Text("GameFontHighlightSmall")
   value:SetPoint("LEFT", slider, "RIGHT", 8, 0)
   slider:SetScript("OnValueChanged", function(self, v)
@@ -97,149 +168,66 @@ local function Build()
     value:SetText(v .. " %")
   end
   local hint = Text("GameFontHighlightSmall", "SP_HINT")
-  hint:SetPoint("TOPLEFT", 14, -166)
-  hint:SetPoint("RIGHT", -14, 0)
   hint:SetTextColor(.6, .6, .65)
-  hint:SetWordWrap(true)
+  TextRow(hint, 14)
 
   -- What the addon adds to the portrait's right-click menu, each part shown or not
-  Text("GameFontNormal", "SP_MENU"):SetPoint("TOPLEFT", 14, -196)
-  local function MenuCheck(key, field, y)
-    local check = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-    check:SetSize(26, 26)
-    check:SetPoint("TOPLEFT", 10, y)
-    local text = check.Text or check.text
-    labels[#labels + 1] = function() text:SetText(L[key]) end
-    check:SetScript("OnClick", function(self)
-      Click()
-      ns:SetMenuOption(field, self:GetChecked()) -- (the options window's Visibility page too)
+  TextRow(Text("GameFontNormal", "SP_MENU"), 14, 10)
+  local function MenuCheck(key, field)
+    Check(key, function() return ns.sv.menu[field] ~= false end, function(_, on)
+      ns:SetMenuOption(field, on) -- (the options window's Visibility page too)
     end)
-    updates[#updates + 1] = function() check:SetChecked(ns.sv.menu[field] ~= false) end
   end
-  MenuCheck("SP_MENU_LINE", "line", -214)
-  MenuCheck("SP_MENU_RELOAD", "reload", -238)
+  MenuCheck("SP_MENU_LINE", "line")
+  MenuCheck("SP_MENU_RELOAD", "reload")
 
   -- The chat quiet while logging in: the addons' messages of the first 10 seconds taken out
-  local quiet = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-  quiet:SetSize(26, 26)
-  quiet:SetPoint("TOPLEFT", 10, -262)
-  local quietText = quiet.Text or quiet.text
-  labels[#labels + 1] = function() quietText:SetText(L.SP_QUIET_LOGIN) end
-  quiet:SetScript("OnClick", function(self)
-    Click()
-    ns:SetQuietLogin(self:GetChecked())
-  end)
-  updates[#updates + 1] = function() quiet:SetChecked(ns:QuietLogin()) end
-  page.quietLogin = quiet
-
+  Check("SP_QUIET_LOGIN", ns.QuietLogin, ns.SetQuietLogin, "quietLogin")
   -- /who by first name or surname (Who.lua)
-  local who = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-  who:SetSize(26, 26)
-  who:SetPoint("TOPLEFT", 10, -286)
-  local whoText = who.Text or who.text
-  labels[#labels + 1] = function() whoText:SetText(L.SP_WHO_NAMES) end
-  who:SetScript("OnClick", function(self)
-    Click()
-    ns:SetWhoNames(self:GetChecked())
-  end)
-  updates[#updates + 1] = function() who:SetChecked(ns:WhoNames()) end
-  page.whoNames = who
-
+  Check("SP_WHO_NAMES", ns.WhoNames, ns.SetWhoNames, "whoNames")
   -- The game's icon in the taskbar not flashing (GameFixes.lua)
-  local blink = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-  blink:SetSize(26, 26)
-  blink:SetPoint("TOPLEFT", 10, -310)
-  local blinkText = blink.Text or blink.text
-  labels[#labels + 1] = function() blinkText:SetText(L.SP_NO_BLINK) end
-  blink:SetScript("OnClick", function(self)
-    Click()
-    ns:SetNoBlink(self:GetChecked())
-  end)
-  updates[#updates + 1] = function() blink:SetChecked(ns:NoBlink()) end
-  page.noBlink = blink
-
+  Check("SP_NO_BLINK", ns.NoBlink, ns.SetNoBlink, "noBlink")
   -- The threat percent over the game's target and focus frames (UnitBoxes.lua)
-  local threat = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-  threat:SetSize(26, 26)
-  threat:SetPoint("TOPLEFT", 10, -334)
-  local threatText = threat.Text or threat.text
-  labels[#labels + 1] = function() threatText:SetText(L.SP_THREAT_BOX) end
-  threat:SetScript("OnClick", function(self)
-    Click()
-    ns:SetThreatBox(self:GetChecked())
-  end)
-  updates[#updates + 1] = function() threat:SetChecked(ns:ThreatBox()) end
-  page.threatBox = threat
-
+  Check("SP_THREAT_BOX", ns.ThreatBox, ns.SetThreatBox, "threatBox")
   -- Alt + left click in the bags: Disenchant (Disenchant.lua)
-  local disenchant = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-  disenchant:SetSize(26, 26)
-  disenchant:SetPoint("TOPLEFT", 10, -358)
-  local disenchantText = disenchant.Text or disenchant.text
-  labels[#labels + 1] = function() disenchantText:SetText(L.SP_DISENCHANT) end
-  disenchant:SetScript("OnClick", function(self)
-    Click()
-    ns:SetDisenchantClick(self:GetChecked())
-  end)
-  updates[#updates + 1] = function() disenchant:SetChecked(ns:DisenchantClick()) end
-  page.disenchant = disenchant
+  Check("SP_DISENCHANT", ns.DisenchantClick, ns.SetDisenchantClick, "disenchant")
 
-  -- Fishing mode, and how much louder its sound effects (FishingMode.lua)
-  local fishing = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-  fishing:SetSize(26, 26)
-  fishing:SetPoint("TOPLEFT", 10, -382)
-  local fishingText = fishing.Text or fishing.text
-  labels[#labels + 1] = function() fishingText:SetText(L.SP_FISHING_MODE) end
-  fishing:SetScript("OnClick", function(self)
-    Click()
-    ns:SetFishingMode(self:GetChecked())
-  end)
-  updates[#updates + 1] = function() fishing:SetChecked(ns:FishingMode()) end
-  page.fishingMode = fishing
-  local boostLabel = Text("GameFontHighlight", "SP_FISHING_BOOST")
-  boostLabel:SetPoint("TOPLEFT", 40, -414)
-  local boost = CreateFrame("Slider", nil, page, "UISliderTemplate")
+  -- Fishing mode, and how much louder its sound effects (FishingMode.lua); the module off, or Easy Fishing runs: not
+  -- here (no room taken)
+  local function Fishing() return ns:QolRuns("fishing") end
+  Check("SP_FISHING_MODE", ns.FishingMode, ns.SetFishingMode, "fishingMode", Fishing)
+  local boostRow = CreateFrame("Frame", nil, body)
+  boostRow:SetSize(400, 30)
+  local boostLabel = boostRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  boostLabel:SetPoint("TOPLEFT", 0, -6)
+  labels[#labels + 1] = function() boostLabel:SetText(L.SP_FISHING_BOOST) end
+  local boost = CreateFrame("Slider", nil, boostRow, "UISliderTemplate")
   boost:SetSize(200, 17)
   boost:SetOrientation("HORIZONTAL")
   boost:SetMinMaxValues(1, ns.FISHING_BOOST_MAX)
   boost:SetValueStep(1)
   if boost.SetObeyStepOnDrag then boost:SetObeyStepOnDrag(true) end
-  boost:SetPoint("LEFT", page, "TOPLEFT", 250, -421)
-  local boostValue = Text("GameFontHighlightSmall")
+  boost:SetPoint("LEFT", boostRow, "TOPLEFT", 210, -13)
+  local boostValue = boostRow:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   boostValue:SetPoint("LEFT", boost, "RIGHT", 8, 0)
   boost:SetScript("OnValueChanged", function(self, v)
     v = floor(v + .5)
     boostValue:SetText("×" .. v)
     if not self.silent then ns:SetFishingBoost(v) end
   end)
-  updates[#updates + 1] = function() -- (the module off, or Easy Fishing runs: not here)
-    local shown = ns:QolRuns("fishing")
-    fishing:SetShown(shown) boostLabel:SetShown(shown) boost:SetShown(shown) boostValue:SetShown(shown)
+  updates[#updates + 1] = function()
     boost.silent = true
     boost:SetValue(ns:FishingBoost())
     boost.silent = false
     boostValue:SetText("×" .. ns:FishingBoost())
   end
+  Row(boostRow, 40, function() return 34 end, Fishing)
   page.fishingBoost = boost
 
   -- More boxes, one under the other: the Interact Key's icons (InteractKey.lua); without Leatrix
   -- Plus (its Interface page has them otherwise), quest progress on nameplates (QuestPlates.lua)
   -- and the zone in the group finder (GroupFinderZone.lua)
-  local y = -440
-  local function Box(key, get, set, field)
-    local check = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-    check:SetSize(26, 26)
-    check:SetPoint("TOPLEFT", 10, y)
-    local text = check.Text or check.text
-    labels[#labels + 1] = function() text:SetText(L[key]) end
-    check:SetScript("OnClick", function(self)
-      Click()
-      set(ns, self:GetChecked() and true or false)
-    end)
-    updates[#updates + 1] = function() check:SetChecked(get(ns)) end
-    page[field] = check
-    y = y - 24
-  end
+  local function Box(key, get, set, field) Check(key, get, set, field) end
   Box("SP_INTERACT_ICONS", ns.InteractIcons, ns.SetInteractIcons, "interactIcons")
   Box("SP_LEVEL_SHOTS", ns.LevelShots, ns.SetLevelShots, "levelShots")
   Box("SP_BOSS_SHOTS", ns.BossShots, ns.SetBossShots, "bossShots")
@@ -254,35 +242,26 @@ local function Build()
     Box("LFG_ZONE", ns.GroupFinderZone, ns.SetGroupFinderZone, "groupFinderZone")
   end
 
-  -- How the addon works
-  local how = Text("GameFontNormalLarge", "SP_HOW")
-  how:SetPoint("TOPLEFT", 14, y - 8)
-  local box = CreateFrame("Frame", nil, page, "InsetFrameTemplate")
-  box:SetPoint("TOPLEFT", 10, y - 30)
-  box:SetPoint("BOTTOMRIGHT", -10, 10)
-  local scroll = CreateFrame("ScrollFrame", "ClaraComboPointsReadmeScroll", box, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", 10, -8)
-  scroll:SetPoint("BOTTOMRIGHT", -30, 8)
-  local child = CreateFrame("Frame", nil, scroll)
-  child:SetSize(600, 10)
-  scroll:SetScrollChild(child)
-  local readme = child:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  readme:SetPoint("TOPLEFT")
+  -- How the addon works: its text in a framed box, the page scrolling over it
+  TextRow(Text("GameFontNormalLarge", "SP_HOW"), 14, 12)
+  local box = CreateFrame("Frame", nil, body, "InsetFrameTemplate")
+  local readme = box:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  readme:SetPoint("TOPLEFT", 10, -8)
   readme:SetJustifyH("LEFT")
   if readme.SetJustifyV then readme:SetJustifyV("TOP") end
   if readme.SetSpacing then readme:SetSpacing(3) end
   readme:SetWordWrap(true)
-  -- the text follows the page's width (set by the game's panel), and the scroll its height
-  local function Fit()
-    local w = scroll:GetWidth()
-    if not w or w <= 0 then w = 600 end
-    child:SetWidth(w)
-    readme:SetWidth(w - 4)
-    readme:SetText(L.SP_README)
-    child:SetHeight(readme:GetStringHeight() + 12)
-  end
-  updates[#updates + 1] = Fit
-  scroll:SetScript("OnSizeChanged", Fit)
+  labels[#labels + 1] = function() readme:SetText(L.SP_README) end
+  Row(box, 10, function(w)
+    box:SetWidth(w - 10)
+    readme:SetWidth(w - 34)
+    local h = math.ceil(readme:GetStringHeight() or 0) + 18
+    box:SetHeight(h)
+    return h
+  end, nil, 6)
+  page.readme = readme
+
+  scroll:SetScript("OnSizeChanged", Layout)
 end
 
 -- Shown by the game's options panel (each time it opens, and when the page is picked).
