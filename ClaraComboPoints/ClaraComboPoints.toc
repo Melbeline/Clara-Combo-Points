@@ -52,6 +52,7 @@ MailSubject.lua
 CraftShortcut.lua
 RecipeCounts.lua
 QuestShare.lua
+SitKey.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
