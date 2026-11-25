@@ -15,7 +15,20 @@ ERR_FRIEND_ONLINE_SS = "|Hplayer:%s|h[%s]|h has come online."
 ERR_FRIEND_OFFLINE_S = "%s has gone offline."
 local filters = {}
 ChatFrameUtil = ChatFrameUtil or {}
-ChatFrameUtil.AddMessageEventFilter = function(event, fn) filters[event] = fn end
+local chains = {}
+ChatFrameUtil.AddMessageEventFilter = function(event, fn) -- (as the game: every filter of the event, in order)
+  chains[event] = chains[event] or {}
+  table.insert(chains[event], fn)
+  filters[event] = function(frame, ev, ...)
+    local n, args = select("#", ...), { ... }
+    for _, f in ipairs(chains[event]) do
+      local r = { f(frame, ev, unpack(args, 1, n)) }
+      if r[1] then return true end
+      if r[2] ~= nil then n = math.max(n, #r - 1); args = { select(2, unpack(r, 1, n + 1)) } end
+    end
+    return false, unpack(args, 1, n)
+  end
+end
 FriendsFrame = CreateFrame("Frame", "FriendsFrame", UIParent)
 FriendsFrame:Hide()
 function UnitNameUnmodified(u) if u == "player" then return "Lola", "Moon" end end

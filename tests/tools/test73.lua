@@ -41,7 +41,7 @@ ClaraSyncIncoming = { ["WANJ"] = { ClaraPricesDB = { items = {
   ["Forever/4306"] = { m = 900, d = DAY - 1, a = 3, t = now - 86400 },
   ["Other/4306"] = { m = 5, d = DAY, t = now - 10 },
   ["Forever/2592"] = { m = 77, d = DAY - 40, t = now - 40 * 86400 }, -- (older than 30 days: dropped)
-} }, ClaraSyncDB = { key = "0000aaaa0000aaaa" } } }
+} }, ClaraSyncDB = { key = "0000aaaa0000aaaa", mine = { ["Frank-Forever"] = true } } } } -- (Frank: played on WANJ, one of the player's)
 
 local ns = {}
 S.class = "ROGUE"; S.locale = "enUS"

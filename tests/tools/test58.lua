@@ -153,8 +153,13 @@ local panel = C.NewPanel(UIParent)
 local h = panel:Update(1, 300)
 check(h > 100 and panel.title:IsShown() and panel.title:GetText() == "Subcomponents", "the panel: its title, as tall as its blocks")
 local headers = panel.headers.items
-check(headers[1].name:GetText() == "Cured Rugged Hide" and headers[1].sub:GetText():find("Leatherworking : Alt", 1, true),
-  "a reagent of another profession: who of the account makes it")
+check(headers[1].name:GetText() == "Cured Rugged Hide" and not (headers[1].sub:GetText() or ""):find("Alt", 1, true),
+  "a reagent of another profession: who of the account makes it, not under it any more")
+GameTooltip._lines = {}
+C.HeaderTip(headers[1])
+local tipText = table.concat(GameTooltip._lines or {}, " | ")
+check(tipText:find("Leatherworking:", 1, true) and tipText:find("Alt", 1, true) and not tipText:find("-", 1, true),
+  "in its icon's tooltip: the profession, the names without their realm (" .. tipText .. ")")
 check(headers[3].name:GetText() == "Gold Power Core" and headers[3].count:GetText() == 4 and headers[3].sub:GetText():find("Anvil", 1, true),
   "Gold Power Core: 4 from the bags, its tools")
 local function Reagent(id) for _, b in ipairs(panel.reagents.items) do if b:IsShown() and b.itemID == id then return b end end end

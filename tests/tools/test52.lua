@@ -87,5 +87,8 @@ for _, c in ipairs(M.settingsCategories) do if c.name == " Clara" then category 
 M.ShowSettingsPage(category)
 local page = category.frame
 check(page.disenchant and page.disenchant:GetChecked() == true, "its box in Esc > Options > AddOns > Clara")
+check(de:GetAttribute("useOnKeyDown") == false, "it acts on the release, whatever the game's cast-on-key-down")
+local report = ns.DisenchantReport and ns:DisenchantReport() or ""
+check(report:find("Alt-click disenchant: box true, Disenchant known", 1, true), "its line in the mouse report (" .. report .. ")")
 out("")
 out(fails .. " failure(s)")

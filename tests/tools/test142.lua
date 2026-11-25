@@ -3,7 +3,8 @@
 -- updates: the first item's name (its count past one) while the subject is empty or still that name, following the
 -- first item, gone with the last; a subject typed or a reply's kept; the setting off: the game's way. C.O.D. on: the
 -- game names it, Clara has nothing to do, no window. The game fixed (it names the mail itself, C.O.D. off): a window
--- once, never again; a subject typed equal to an item's name is not taken for the fix.
+-- once, Clara standing aside; a subject typed equal to an item's name is not taken for the fix. The game failing again:
+-- Clara names it again by itself, a later fix told again. The box unticked on the old window's advice: ticked again once.
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -148,4 +149,26 @@ check(Subject() == "", "cleared")
 Put(1, "Silk Cloth")
 check(M.popup == nil, "never again")
 Empty()
+check(M.popup == nil and ns:MailSubject(), "Clara standing aside, its box still ticked")
+
+out("== the game failing again one day: Clara names it again, by itself; a later fix told again")
+fixedGame = false
+Put(1, "Linen Cloth")
+check(Subject() == "Linen Cloth", "the game left it empty: Clara named it (" .. Subject() .. ")")
+check(ns.sv.mailSubjectFixed == nil, "the fix no longer taken as there")
+Take(1); Put(1, "Wool Cloth")
+check(Subject() == "Wool Cloth", "follows the first item, as before")
+Empty()
+fixedGame = true
+Put(1, "Silk Cloth")
+check(M.popup and M.popup.which == ns.MailSubjectFixedPopup, "fixed again: told again")
+if M.popup then M.PopupClick(1) end
+Empty()
+
+out("== unticked on the fix's advice (before Clara stood aside by itself): ticked again, once")
+ns.sv.mailSubject = false; ns.sv.mailSubjectAuto = nil
+check(ns:MailSubject() and ns.sv.mailSubject == nil, "ticked again")
+ns:SetMailSubject(false)
+check(not ns:MailSubject(), "unticked since: kept unticked")
+ns:SetMailSubject(true)
 out(fails == 0 and "ALL OK" or (fails .. " FAILED"))

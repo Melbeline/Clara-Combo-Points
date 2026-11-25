@@ -137,6 +137,21 @@ check(waypoint and waypoint.map == 1429 and waypoint.x == .4 and waypoint.y == .
 pins[1] = { IsMouseOver = function() return true end }
 check(pinHandler and pinHandler(WorldMapFrame, 1, "MiddleButton") == true, "a middle click on a pin: ours")
 check(waypoint == nil and tracked == false, "on the map pin itself: taken off")
+pins[1] = nil
+S.inCombat = true
+local said = {}
+UIErrorsFrame = UIErrorsFrame or {}
+local oldAdd = UIErrorsFrame.AddMessage
+UIErrorsFrame.AddMessage = function(_, t) said[#said + 1] = t end
+up(WorldMapFrame.ScrollContainer, "MiddleButton")
+check(waypoint == nil and (said[#said] or ""):find("once the fight is over", 1, true), "in a fight: no pin yet (the game refuses it), said")
+S.inCombat = false
+M.Fire("PLAYER_REGEN_ENABLED")
+check(waypoint and waypoint.map == 1429 and tracked == true, "the fight over: the pin put there")
+C_Map.ClearUserWaypoint(); tracked = false
+M.Fire("PLAYER_REGEN_ENABLED")
+check(waypoint == nil, "once")
+UIErrorsFrame.AddMessage = oldAdd
 
 out("== the new rank on the bars")
 actions = { [1] = 205, [2] = 116, [5] = 205, [7] = 133 }

@@ -1,7 +1,8 @@
 -- The sync between the WoW accounts (Modules/Sync): the other accounts' files merged at login (the newer
 -- entry wins, an entry removed stays removed, the lists from before the sync put together), the key
--- shared (the smaller kept), the hidden channel, a character met in a group trusted once the player says
--- so, the entries exchanged live (signed, in parts), each change sent as it comes
+-- shared (a newer generation first, then the smaller), the hidden channel, only the player's own accounts' characters
+-- (played on one of them: each account's own list, brought by the script), nothing to the group, no question asked of
+-- a stranger met in a group, the entries exchanged live (signed, in parts), each change sent as it comes
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -35,7 +36,7 @@ ClaraSyncIncoming = { ["WANJ"] = {
     st = { r = { carol = 2000, frank = 2500, erin = 2900 }, o = { frank = 2500 } } },
   ClaraCraftDB = { chars = { ["Frank-Forever"] = { bags = { [106] = 7 }, bank = {}, mail = {}, at = 2600, class = "MAGE" } },
     sends = { ["Frank-Forever-2700-1"] = { to = "Lola-Forever", at = 2700, items = { [106] = 3 } } } },
-  ClaraSyncDB = { key = "0000aaaa0000aaaa", trusted = { ["Frank-Forever"] = true } },
+  ClaraSyncDB = { key = "0000aaaa0000aaaa", trusted = { ["Frank-Forever"] = true }, mine = { ["Frank-Forever"] = true } },
 } }
 
 local ns = {}
@@ -58,7 +59,9 @@ check(mdb.recipients.dave.cats.friend and mdb.recipients.dave.cats.bankalt and m
   "from before the sync on both sides: the two put together")
 check(Craft.db.chars["Frank-Forever"] and Craft.db.chars["Frank-Forever"].bags[106] == 7, "the other account's stock")
 check(Craft.Mailed("Lola-Forever", 106) == 3, "and the mail it sent here")
-check(ClaraSyncDB.key == "0000aaaa0000aaaa" and ClaraSyncDB.trusted["Frank-Forever"], "the smaller key kept, its trusted characters too")
+check(ClaraSyncDB.gen == 1 and ClaraSyncDB.key ~= "0000aaaa0000aaaa" and next(ClaraSyncDB.trusted) == nil,
+  "a file's key of an older generation: this account's own new one kept (made again once), no trusted list of before")
+check(Sync.Trusted("Frank-Forever") and ClaraSyncDB.ownChars["Frank-Forever"], "the characters played there: the player's")
 -- (WANJ's file has no gold: an account without gold, the script copies only what exists)
 for _ = 1, 30 do if not (M.timers and #M.timers > 0) then break end M.RunTimer() end
 local warned = false
@@ -72,7 +75,7 @@ end
 
 out("== the channel")
 Run()
-local channel = "ClaraSync" .. ("%06x"):format(Sync.Hash("0000aaaa0000aaaa"))
+local channel = "ClaraSync" .. ("%06x"):format(Sync.Hash(ClaraSyncDB.key))
 local function Joined(name) for _, n in ipairs(M.joined) do if n == name then return true end end return false end
 check(Joined(channel), "the hidden channel joined, after the game's own")
 table.insert(S.channels, channel)
@@ -153,27 +156,35 @@ buckets = 0
 for _, m in ipairs(Sent(mark)) do if m.msg.t == "B" then buckets = buckets + 1 end end
 check(buckets == 0, "the same digests: nothing sent")
 
-out("== a character met in a group")
+out("== a character met in a group, not the player's")
 S.group = "party"
-Deliver({ t = "H", d = {} }, "Zed", "PARTY", "zedkey0000000000")
-local popup = StaticPopupDialogs.CLARA_SYNC_TRUST
-check(popup and M.popup and M.popup.which == "CLARA_SYNC_TRUST" and M.popup.text:find("Zed uses Clara too", 1, true),
-  "unknown, its hello unsigned with our key: the player is asked")
 mark = #M.addonSent + 1
-popup.OnAccept(nil, "Zed-Forever")
+Deliver({ t = "H", d = {} }, "Zed", "PARTY", "zedkey0000000000")
+Run()
+check(not (M.popup and M.popup.which == "CLARA_SYNC_TRUST"), "unknown, its hello: no question asked")
+check(#Sent(mark) == 0, "and nothing sent to it")
+local before = ClaraSyncDB.key
+Deliver({ t = "K", k = "0000000000000001" }, "Zed", "WHISPER", false)
+check(ClaraSyncDB.key == before, "a key whispered by one not the player's: ignored")
+Deliver({ t = "B", k = "r", e = { { "ivy", 9999, { n = "Ivy", l = 1, c = {} } } } }, "Zed", "CHANNEL")
+check(mdb.recipients.ivy == nil, "signed with our key by one not the player's (a key once known elsewhere): nothing taken")
+
+out("== the player's own character, with another key")
+mark = #M.addonSent + 1
+Deliver({ t = "H", d = {} }, "Frank", "PARTY", "frankkey00000000")
 Run()
 local key
 for _, m in ipairs(Sent(mark)) do if m.msg.t == "K" and m.chatType == "WHISPER" then key = m end end
-check(ClaraSyncDB.trusted["Zed-Forever"] and key and key.target == "Zed-Forever" and key.tag == "------", "trusted: the key whispered to it")
-Deliver({ t = "K", k = "00000000zzzzzzzz" }, "Zed", "WHISPER", false)
+check(key and key.target == "Frank-Forever" and key.tag == "------", "our key whispered to it")
+Deliver({ t = "K", k = "00000000zzzzzzzz" }, "Frank", "WHISPER", false)
 Run()
 check(ClaraSyncDB.key == "00000000zzzzzzzz", "its key smaller: taken")
 check(Joined("ClaraSync" .. ("%06x"):format(Sync.Hash("00000000zzzzzzzz"))), "the channel changed with it")
-Deliver({ t = "K", k = "000" }, "Yan", "WHISPER", false)
-check(ClaraSyncDB.key == "00000000zzzzzzzz", "a key from a character not trusted: ignored")
-Deliver({ t = "H", d = {} }, "Wil", "PARTY", "wilkey0000000000")
-popup.OnCancel(nil, "Wil-Forever", "clicked")
-check(ClaraSyncDB.declined["Wil-Forever"], "said no: not asked again")
+table.insert(S.channels, "ClaraSync" .. ("%06x"):format(Sync.Hash("00000000zzzzzzzz")))
+M.Fire("PLAYER_ENTERING_WORLD"); Run()
+local group = false
+for _, p in ipairs(M.addonSent) do if p[1] == "ClaraSync" and (p[3] == "PARTY" or p[3] == "RAID") then group = true end end
+check(not group, "nothing of the sync ever sent to the group")
 
 out("== the stock")
 mark = #M.addonSent + 1
