@@ -1537,8 +1537,13 @@ do
   local QUIET_FOR = 600
   local seen = {} -- text -> { line = its line ID, at = when it first showed }, while nothing is done
   if AddFilter then
+    -- ("No player named ..." left to the friends list (AltFriends.lua): it holds such a line back and shows it again;
+    -- taken here for a repeat, it never came back)
+    local notFound = type(ERR_CHAT_PLAYER_NOT_FOUND_S) == "string"
+      and ("^" .. ERR_CHAT_PLAYER_NOT_FOUND_S:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%%%s", ".+") .. "$") or nil
     AddFilter("CHAT_MSG_SYSTEM", function(_, _, text, ...)
       if type(text) ~= "string" or issecretRepeat(text) or text == "" then return false end
+      if notFound and text:find(notFound) then return false end
       local line = select(10, ...)
       if issecretRepeat(line) then line = nil end
       local now = GetTime()
