@@ -4,16 +4,26 @@
 -- or a reply's, is kept. WoW Forever's mail does it only while C.O.D. can be used (SendMailFrame_Update: the subject
 -- inside its C.O.D. test), and C.O.D. is off there: its subject stays empty. Done right after each of the game's
 -- updates of the mail, by the game's own rule, its code untouched (its record of the name it gave, only read).
--- Should the game be seen naming a mail itself while C.O.D. is off (Blizzard's fix), a window says so, once; Clara's
--- naming then has nothing left to do (the subject is never empty nor Clara's any more when it looks).
--- On by default; its box on Clara's page.
+-- Clara steps in only while the game fails: after the game's update, the subject it should have named still empty.
+-- Should the game be seen naming a mail itself while C.O.D. is off (Blizzard's fix), a window says so, once, and Clara
+-- stands aside (the subject is never empty nor Clara's any more when it looks); should the game leave it empty again
+-- one day, Clara names it again, by itself, as long as the game fails to (and a later fix is told again).
+-- On by default; its box on Clara's page. (Unticked when the fix was told, before Clara stood aside by itself: ticked
+-- again once, the player having asked for it to come back on its own.)
 
 local ADDON, ns = ...
 local L = ns.L
 
 local given -- the subject Clara gave the mail (an item's name), as the box holds it
 
-function ns:MailSubject() return not self.sv or self.sv.mailSubject ~= false end
+function ns:MailSubject()
+  local sv = self.sv
+  if sv and not sv.mailSubjectAuto then -- (once: the box unticked on the fix's advice, ticked again)
+    sv.mailSubjectAuto = true
+    if sv.mailSubject == false and sv.mailSubjectFixed then sv.mailSubject = nil end
+  end
+  return not sv or sv.mailSubject ~= false
+end
 function ns:SetMailSubject(on)
   if not self.sv then return end
   if on then self.sv.mailSubject = nil else self.sv.mailSubject = false end
@@ -57,6 +67,12 @@ local function Fixed()
 end
 ns.MailSubjectFixedPopup = POPUP
 
+-- The game seen failing again (the subject it should have named left empty): Clara names it, and a later fix is told
+local function Failing()
+  local sv = ns.sv
+  if sv and sv.mailSubjectFixed then sv.mailSubjectFixed = nil end
+end
+
 local function Update()
   local box = SendMailSubjectEditBox
   if not (box and HasSendMailItem and GetSendMailItem) then return end
@@ -67,6 +83,8 @@ local function Update()
   if any and title and subject == title and not CodOn() and SendMailFrame and SendMailFrame.previousItem == subject then
     Fixed()
   end
+  -- the game failing: an item's name to give, the subject left empty
+  if any and title and subject == "" then Failing() end
   if not ns:MailSubject() then return end
   if any then
     if subject == "" or (given and subject == given) then
