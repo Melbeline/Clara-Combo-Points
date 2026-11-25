@@ -14,6 +14,15 @@ local restoring -- the game's page setting a profession up (its first recipe abo
 local pending -- the page set up anew (opened again, another profession): the recipe kept still to be picked again
 local clicked -- when a row of the list was last pressed (the player's pick follows)
 local rowsWatched = setmetatable({}, { __mode = "k" })
+local trace, setup = {}, {} -- (the mouse report, /cl souris: what happened lately, and what got hooked)
+local function Note(text)
+  trace[#trace + 1] = { at = GetTime(), text = text }
+  if #trace > 14 then table.remove(trace, 1) end
+end
+local function NameOf(id)
+  local info = id and C_TradeSkillUI and C_TradeSkillUI.GetRecipeInfo and C_TradeSkillUI.GetRecipeInfo(id)
+  return ("%s (%s)"):format(tostring(info and info.name or "?"), tostring(id))
+end
 
 local function Kept()
   local sv = ns.sv
@@ -34,9 +43,13 @@ local function Picked(page, recipeInfo, list)
   if not page or list ~= page.RecipeList then return end
   local byPlayer = clicked and GetTime() - clicked < 0.5
   clicked = nil
-  if pending and not byPlayer then return end -- (the game's own pick while it sets its page up)
-  if restoring and not byPlayer then return end
-  local id, profession = recipeInfo and recipeInfo.recipeID, ProfessionOf(page)
+  local id = recipeInfo and recipeInfo.recipeID
+  if (pending or restoring) and not byPlayer then -- (the game's own pick while it sets its page up)
+    Note("the game picked " .. NameOf(id) .. ": not kept")
+    return
+  end
+  Note((byPlayer and "the player picked " or "picked ") .. NameOf(id) .. ": kept")
+  local profession = ProfessionOf(page)
   local kept = Kept()
   if kept and id and profession then
     kept[profession] = id
@@ -52,18 +65,20 @@ local function Restore(page, professionInfo)
   if link then -- (opened from a link: the game shows it, the last one shown)
     if kept and profession then kept[profession] = link end
     pending = nil
+    Note("opened from a link: " .. NameOf(link))
     return
   end
   if not pending then return end
   local id = kept and profession and kept[profession]
   local list = page.RecipeList
-  if not id then pending = nil return end -- (nothing kept for it: the game's choice)
+  if not id then pending = nil Note("set up: nothing kept for profession " .. tostring(profession)) return end
   if not (list and list.SelectRecipe and C_TradeSkillUI and C_TradeSkillUI.GetRecipeInfo) then return end
   local info = C_TradeSkillUI.GetRecipeInfo(id)
-  if not info then return end
+  if not info then Note("set up: no recipe info for " .. tostring(id) .. " yet") return end
   local data = list:SelectRecipe(info, false)
-  if not data then return end -- (not in the list yet: tried again at the next set-up)
+  if not data then Note("set up: " .. NameOf(id) .. " not in the list yet, tried again at the next set-up") return end
   pending = nil
+  Note("set up: " .. NameOf(id) .. " picked again")
   if list.ScrollBox and list.ScrollBox.ScrollToElementData then
     list.ScrollBox:ScrollToElementData(data, ScrollBoxConstants and ScrollBoxConstants.AlignCenter or nil)
   end
@@ -75,9 +90,13 @@ local function Setup()
   local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
   local list = page and page.RecipeList
   if not (list and type(list.ProfessionChanged) == "function" and type(page.Init) == "function") then return end
-  hooksecurefunc(list, "ProfessionChanged", function() restoring, pending = true, true end)
+  hooksecurefunc(list, "ProfessionChanged", function()
+    restoring, pending = true, true
+    Note("the game set its page up anew (profession " .. tostring(ProfessionOf(page)) .. ")")
+  end)
   hooksecurefunc(page, "Init", Restore)
-  ProfessionsFrame:HookScript("OnHide", function() pending, restoring = nil, nil end)
+  ProfessionsFrame:HookScript("OnHide", function() pending, restoring = nil, nil Note("the window shut") end)
+  setup.hooked = true
   -- a row pressed: the pick that follows is the player's
   if ScrollUtil and ScrollUtil.AddInitializedFrameCallback and list.ScrollBox then
     ScrollUtil.AddInitializedFrameCallback(list.ScrollBox, function(_, row)
@@ -85,6 +104,7 @@ local function Setup()
       rowsWatched[row] = true
       row:HookScript("OnMouseDown", ns.RecipeMemoryClick)
     end, owner)
+    setup.rows = true
   end
   if EventRegistry and EventRegistry.RegisterCallback then
     EventRegistry:RegisterCallback("ProfessionsRecipeListMixin.Event.OnRecipeSelected", function(_, recipeInfo, from)
@@ -94,6 +114,19 @@ local function Setup()
 end
 if EventUtil and EventUtil.ContinueOnAddOnLoaded then
   EventUtil.ContinueOnAddOnLoaded("Blizzard_Professions", Setup)
+end
+
+-- What it did lately, for the mouse report (/cl souris)
+function ns:RecipeMemoryReport()
+  local out = { ("recipe memory: hooked %s, rows watched %s, waiting to pick again %s"):format(
+    tostring(setup.hooked or false), tostring(setup.rows or false), tostring(pending or false)) }
+  local kept = Kept()
+  local list = {}
+  for profession, id in pairs(kept or {}) do list[#list + 1] = tostring(profession) .. " = " .. NameOf(id) end
+  out[#out + 1] = "    kept: " .. (#list > 0 and table.concat(list, ", ") or "nothing")
+  local now = GetTime()
+  for _, e in ipairs(trace) do out[#out + 1] = ("    %.1f s ago: %s"):format(now - e.at, e.text) end
+  return out
 end
 
 -- A new login (not a reload): this character's recipes forgotten
