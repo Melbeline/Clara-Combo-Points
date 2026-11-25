@@ -3491,14 +3491,31 @@ function ns.QolTabLabel() -- (on ns: Build is at its 60 upvalues)
     L.QOL_TAB)
 end
 
+-- A module's words in Clara's window (its page there: name, line in the list, what it does, its switches; not its own
+-- options pages), as a search key
+local function QolWords(m)
+  local K = m.key:upper()
+  local words = { m.name or "", L["QOL_NAV_" .. K] or "", L["QOL_NAVDESC_" .. K] or "", L["QOL_ABOUT_" .. K] or "" }
+  for _, sw in ipairs(ns.qolSwitches and ns.qolSwitches[m.key] or {}) do words[#words + 1] = L[sw.label] or sw.label or "" end
+  local text = table.concat(words, " "):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|[TA].-|[ta]", "")
+  return " " .. ns:SearchKey(text) .. " "
+end
+
 function ns.BuildQolView(p, OnRefresh)
   local mods = ns.QOL_MODULES or {}
   local view = CreateFrame("Frame", nil, p)
   view:SetPoint("TOPLEFT", 12, NAV_TOP)
   view:SetPoint("BOTTOMRIGHT", -12, 40)
   view:Hide()
+  -- over the list, a search: the modules whose words (in Clara's window) hold every word typed, as it is typed
+  local SEARCH_H = 28
+  local search = CreateFrame("EditBox", "ClaraComboPointsQolSearch", view, "SearchBoxTemplate")
+  search:SetSize(NAV_W - 16 - 8, 20)
+  search:SetPoint("TOPLEFT", 6, -2)
+  search:SetAutoFocus(false)
+  search:SetMaxLetters(40)
   local list = Box(view)
-  list:SetPoint("TOPLEFT")
+  list:SetPoint("TOPLEFT", 0, -SEARCH_H)
   list:SetPoint("BOTTOMLEFT")
   list:SetWidth(NAV_W - 16)
   -- the list scrolls (the wheel, or its two arrows) while the window is shorter than it
@@ -3550,7 +3567,7 @@ function ns.BuildQolView(p, OnRefresh)
     buttons[i] = b
     -- its page: the module in a group box, the line on the boxes and Reload UI under it
     local sheet = CreateFrame("Frame", nil, view)
-    sheet:SetPoint("TOPLEFT", list, "TOPRIGHT", 14, 0)
+    sheet:SetPoint("TOPLEFT", view, "TOPLEFT", NAV_W - 16 + 14, 0)
     sheet:SetPoint("BOTTOMRIGHT")
     sheet:Hide()
     local box = CreateFrame("Frame", nil, sheet, "BackdropTemplate")
@@ -3589,6 +3606,50 @@ function ns.BuildQolView(p, OnRefresh)
     if not view:IsShown() then return end
     if lays[shown] then lays[shown]() end
   end
+
+  -- The search: the modules found, one under the other in the list (none: said); the module shown not among them:
+  -- the first found shown
+  local none = list:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+  none:SetPoint("TOPLEFT", 10, -10)
+  none:SetPoint("RIGHT", -8, 0)
+  none:SetJustifyH("LEFT")
+  none:SetWordWrap(true)
+  none:Hide()
+  local found = {} -- the modules listed, in order
+  local function Filter()
+    local key = ns:SearchKey(search:GetText() or "")
+    local n, kept = 0, false
+    wipe(found)
+    for i, m in ipairs(mods) do
+      local on = true
+      if key ~= "" then
+        local words = QolWords(m)
+        for word in key:gmatch("%S+") do
+          if not words:find(word, 1, true) then on = false break end
+        end
+      end
+      buttons[i]:SetShown(on)
+      if on then
+        buttons[i]:ClearAllPoints()
+        buttons[i]:SetPoint("TOPLEFT", rows, "TOPLEFT", 4, -2 - n * NAV_ROW_H)
+        n = n + 1
+        found[n] = i
+        if i == shown then kept = true end
+      end
+    end
+    rows:SetHeight(math.max(1, n) * NAV_ROW_H + 4)
+    none:SetText(L.QOL_SEARCH_NONE or "")
+    none:SetShown(n == 0)
+    scroller:Place(0)
+    if n > 0 and not kept then
+      shown = found[1]
+      ns.sv.window.qol = mods[shown].key
+      p:Refresh()
+    end
+  end
+  search:HookScript("OnTextChanged", Filter)
+  search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  view.search, view.Filter = search, Filter -- (for the tests)
   if ns.OnQolRefresh then ns:OnQolRefresh(Lay) end -- (a box or a switch clicked)
   view:SetScript("OnSizeChanged", Lay)
   OnRefresh(function()
@@ -3605,7 +3666,9 @@ function ns.BuildQolView(p, OnRefresh)
   -- the module shown in the list's view (opened again on it, far down the list)
   function view:ShowChosen()
     local h = scroller:GetHeight() or 0
-    if h > 0 then scroller:Place((shown - 1) * NAV_ROW_H - h / 2 + NAV_ROW_H / 2) end
+    local at = shown
+    for n, i in ipairs(found) do if i == shown then at = n end end
+    if h > 0 then scroller:Place((at - 1) * NAV_ROW_H - h / 2 + NAV_ROW_H / 2) end
   end
   p.qolView = view
   return view
