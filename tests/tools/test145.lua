@@ -18,7 +18,7 @@ GREEN_FONT_COLOR = { GetRGB = function() return 0.25, 0.75, 0.25 end }
 GRAY_FONT_COLOR = { GetRGB = function() return 0.6, 0.6, 0.6 end }
 local WHITE = { GetRGB = function() return 1, 1, 1 end }
 HIGHLIGHT_FONT_COLOR = WHITE
-local bags = { [2672] = 13, [2678] = 7, [6889] = 97, [2678.5] = 0 }
+local bags = { [2672] = 13, [2678] = 7, [6889] = 97, [2678.5] = 0, [2318] = 18 }
 C_Item = C_Item or {}
 C_Item.GetItemCount = function(id) return bags[id] or 0 end
 local gameCount = {}
@@ -26,6 +26,8 @@ local schematics = {
   [2538] = { { quantityRequired = 2, reagentType = 0, reagents = { { itemID = 2672 } } }, { quantityRequired = 1, reagentType = 0, reagents = { { itemID = 2678 } } } }, -- 13/2, 7/1: 6
   [8604] = { { quantityRequired = 1, reagentType = 0, reagents = { { itemID = 6889 } } }, { quantityRequired = 1, reagentType = 1, required = false, reagents = { { itemID = 1 } } } }, -- 97 (an optional slot aside)
   [9999] = {},
+  -- Camp Tent as WoW Forever gives it: its basic slot not marked required (the game counts it all the same)
+  [6704] = { { quantityRequired = 5, reagentType = 0, required = false, reagents = { { itemID = 2318 } } } },
 }
 C_TradeSkillUI = {
   GetCraftableCount = function(id) return gameCount[id] or 0 end, -- (WoW Forever: 0)
@@ -153,4 +155,40 @@ if C and C.SetOption then
 else
   out("  (no Reverse Engineering here: always on, before the name)")
 end
+out("== a basic slot not marked required (WoW Forever's Camp Tent): counted, as the game counts it")
+row = Draw(Row(), { recipeID = 6704, name = "Camp Tent", learned = true, relativeDifficulty = 3 })
+r, g, b = RGB(row)
+check(Text(row) == "[3] " and near(r, 0.6) and near(g, 0.6), "18 Light Leather over 5: [3], grey (trivial) (" .. tostring(Text(row)) .. ")")
+
+out("== each row as the window's list shows it (whatever wraps the rows' functions), and as the bags change")
+local inits = {}
+ScrollUtil = { AddInitializedFrameCallback = function(box, fn, owner) inits[#inits + 1] = fn end }
+local shown = {}
+ProfessionsFrame = CreateFrame("Frame", "ProfessionsFrame", UIParent)
+local listFrame = CreateFrame("Frame", nil, ProfessionsFrame)
+ProfessionsFrame.CraftingPage = { RecipeList = listFrame }
+listFrame.ScrollBox = { ForEachFrame = function(_, fn) for _, f in ipairs(shown) do fn(f) end end }
+M.Fire("ADDON_LOADED", "Blizzard_Professions")
+check(#inits == 1, "the list's own callback taken")
+-- a row whose count function another addon wrapped before Clara's hook (the game's own, unhooked, underneath)
+local bare = Row()
+bare.SetCraftableCount = function(self, hide) self.Count:Hide() end
+local node = Node({ recipeID = 6704, name = "Camp Tent", learned = true, relativeDifficulty = 3 })
+bare.GetElementData = function() return node end
+bare:SetCraftableCount(false)
+check(Text(bare) == nil, "(the wrapped function alone: no count)")
+inits[1](nil, bare, node)
+check(Text(bare) == "[3] ", "the list's callback: the count there")
+shown[1] = bare
+bags[2318] = 10
+ProfessionsFrame:Show()
+M.Fire("BAG_UPDATE_DELAYED")
+check(Text(bare) == "[2] ", "the bags change: counted again ([2])")
+check(ns:RecipeCountsReport():find("counts shown", 1, true), "in the mouse report: " .. ns:RecipeCountsReport())
+
+out("== the game's own count of a reagent (what its Create All counts), when it has one")
+ProfessionsUtil = { GetReagentQuantityInPossession = function(reagent) return (bags[reagent.itemID] or 0) + 10 end } -- (its bank too, say)
+ns.RecipeCountRow(bare, false)
+check(Text(bare) == "[4] ", "10 + 10 Light Leather over 5: [4], the game's number (" .. tostring(Text(bare)) .. ")")
+ProfessionsUtil = nil
 out(fails == 0 and "ALL OK" or (fails .. " FAILED"))
