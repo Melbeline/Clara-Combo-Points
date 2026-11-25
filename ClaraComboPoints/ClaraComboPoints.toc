@@ -50,6 +50,7 @@ ChatFocus.lua
 ProfessionBar.lua
 MailSubject.lua
 CraftShortcut.lua
+RecipeCounts.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
