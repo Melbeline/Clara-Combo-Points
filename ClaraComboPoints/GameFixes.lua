@@ -708,6 +708,10 @@ function ns:MouseReport()
     local ok, lines = pcall(ns.BagClickTaintReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
   end
+  if ns.DisenchantReport then
+    local ok, line = pcall(ns.DisenchantReport, ns)
+    if ok and line then out[#out + 1] = line end
+  end
   if ns.CraftListReport then
     local ok, lines = pcall(ns.CraftListReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end

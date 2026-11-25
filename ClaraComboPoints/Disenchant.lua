@@ -16,6 +16,7 @@ function ns:DisenchantClick() return not (self.sv and self.sv.disenchantClick ==
 local button = CreateFrame("Button", "ClaraDisenchantButton", UIParent, "SecureActionButtonTemplate")
 button:SetFrameStrata("TOOLTIP")
 button:RegisterForClicks("LeftButtonUp") -- (the release only: one click, one cast)
+button:SetAttribute("useOnKeyDown", false) -- (on the release whatever the game's "cast on key down": it hears no press)
 for _, prefix in ipairs({ "", "alt-" }) do
   button:SetAttribute(prefix .. "type1", "spell")
   button:SetAttribute(prefix .. "spell1", DISENCHANT)
@@ -44,9 +45,17 @@ function ns:SetDisenchantClick(on)
   if not on then Hide() end
 end
 
+-- Known: any of the game's own answers (a profession's spell is not a class spell: one of them may not count it)
 local function Known()
-  if IsPlayerSpell then return IsPlayerSpell(DISENCHANT) == true end
-  return C_SpellBook and C_SpellBook.IsSpellKnown and C_SpellBook.IsSpellKnown(DISENCHANT) == true
+  local function Yes2(fn, ...)
+    if type(fn) ~= "function" then return false end
+    local ok, v = pcall(fn, ...)
+    return ok and not issecret(v) and v == true
+  end
+  return Yes2(IsPlayerSpell, DISENCHANT) or Yes2(IsSpellKnown, DISENCHANT)
+    or Yes2(IsSpellKnownOrOverridesKnown, DISENCHANT)
+    or Yes2(C_SpellBook and C_SpellBook.IsSpellKnown, DISENCHANT)
+    or Yes2(C_SpellBook and C_SpellBook.IsSpellInSpellBook, DISENCHANT)
 end
 
 -- A weapon or armour, uncommon to epic
@@ -115,3 +124,13 @@ events:SetScript("OnEvent", function(self, event, key, down)
     if down == 1 then Show() else Hide() end
   end
 end)
+
+-- For the mouse report (/cl souris): where Alt + click stands
+function ns:DisenchantReport()
+  local owner = last.owner
+  local name = owner and owner.GetName and owner:GetName() or (owner and "?" or "none")
+  return ("Alt-click disenchant: box %s, Disenchant known %s, last bag item %s (%s, %s), disenchantable %s, Alt %s, its button %s"):format(
+    tostring(ns:DisenchantClick()), tostring(Known()), tostring(name), tostring(last.bag), tostring(last.slot),
+    tostring(last.bag and Disenchantable(last.bag, last.slot) or false), tostring(IsAltKeyDown and IsAltKeyDown() or false),
+    button:IsShown() and "shown" or "hidden")
+end
