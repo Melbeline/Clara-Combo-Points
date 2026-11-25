@@ -708,6 +708,10 @@ function ns:MouseReport()
     local ok, line = pcall(ns.DisenchantReport, ns)
     if ok and line then out[#out + 1] = line end
   end
+  if ns.RecipeCountsReport then
+    local ok, line = pcall(ns.RecipeCountsReport, ns)
+    if ok and line then out[#out + 1] = line end
+  end
   local text = table.concat(out, "\n")
   -- kept in the saved file too (SavedVariables\ClaraComboPoints.lua, written at the next /reload or logout)
   if ns.sv then ns.sv.mouseReport = text end

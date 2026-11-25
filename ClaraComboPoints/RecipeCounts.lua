@@ -1,9 +1,11 @@
 -- Clara Combo Points - the professions window's recipe list: how many each recipe makes from the bags, beside its name
 -- ("[6] Charred Wolf Meat"), as Classic's trade skill window counts it. The game's row has that count (its Count,
 -- " [%d] ") but asks C_TradeSkillUI.GetCraftableCount, which answers 0 on WoW Forever: it never shows. Counted here
--- from the recipe's reagents in the bags (each basic slot: what the bags hold of it, all its tiers together, over
--- what one craft takes; the smallest of them), right after the game's own count of each row (its first drawing, and
--- each refresh as the bags change); a count the game gives itself is kept. Its colour is the recipe's difficulty,
+-- as the game counts its Create All for the recipe picked (ProfessionsCraftingPageMixin:GetCraftableCount: each basic
+-- slot, required or not, what the game says the player holds of its reagents, all tiers together, over what one craft
+-- takes; the smallest of them), with the game's own count of a reagent (ProfessionsUtil.GetReagentQuantityInPossession;
+-- the bags' when it is missing), right after the game's own count of each row (its first drawing, and each refresh as
+-- the bags change), and as the list shows each row; a count the game gives itself is kept. Its colour is the recipe's difficulty,
 -- as the skill-up chance beside it (ForeverRecipes' colours): orange, yellow, green, grey; kept when the row is
 -- hovered. Before the name by default (after the skill-up chance: always in sight, even beside a long name), or after
 -- it (the game's own place): two boxes on Reverse Engineering's page (both on; without that module, on). The name is
@@ -27,12 +29,13 @@ local function Slots(recipeID)
   local slots = {}
   for _, slot in ipairs(schematic.reagentSlotSchematics) do
     local need = tonumber(slot.quantityRequired) or 0
-    if need > 0 and slot.required ~= false and (BASIC == nil or slot.reagentType == nil or slot.reagentType == BASIC) then
-      local items = {}
+    -- (each basic slot, as the game's own count takes them: required or not; ProfessionsCraftingPageMixin:GetCraftableCount)
+    if need > 0 and (BASIC == nil or slot.reagentType == nil or slot.reagentType == BASIC) then
+      local reagents = {}
       for _, reagent in ipairs(slot.reagents or {}) do
-        if reagent.itemID then items[#items + 1] = reagent.itemID end
+        if reagent.itemID or reagent.currencyID then reagents[#reagents + 1] = reagent end
       end
-      if #items > 0 then slots[#slots + 1] = { items = items, need = need } end
+      if #reagents > 0 then slots[#slots + 1] = { reagents = reagents, need = need } end
     end
   end
   slotsOf[recipeID] = slots
@@ -52,11 +55,18 @@ local function Craftable(recipeID)
   local slots = Slots(recipeID)
   if not slots or #slots == 0 then return 0 end
   local most
+  local util = ProfessionsUtil
   for _, slot in ipairs(slots) do
     local have = 0
-    for _, itemID in ipairs(slot.items) do
-      local n = C_Item and C_Item.GetItemCount and C_Item.GetItemCount(itemID, false, false, false) or 0
-      if not Secret(n) then have = have + (tonumber(n) or 0) end
+    for _, reagent in ipairs(slot.reagents) do
+      -- the game's own count of a reagent (what its Create All counts: ProfessionsUtil), else the bags'
+      local n
+      if util and util.GetReagentQuantityInPossession then
+        local ok, v = pcall(util.GetReagentQuantityInPossession, reagent, false)
+        if ok then n = v end
+      end
+      if n == nil and reagent.itemID and C_Item and C_Item.GetItemCount then n = C_Item.GetItemCount(reagent.itemID, false, false, false) end
+      if n ~= nil and not Secret(n) then have = have + (tonumber(n) or 0) end
     end
     local makes = math.floor(have / slot.need)
     if not most or makes < most then most = makes end
@@ -134,6 +144,7 @@ end
 ns.RecipeCountFit = FitLabel
 
 local ours = setmetatable({}, { __mode = "k" }) -- the rows whose count is Clara's
+local seen = { rows = 0 } -- (the mouse report: rows counted, the last one)
 
 -- After the game's count of a row (its drawing, each refresh as the bags change): ours when it gave none
 local function Count(row, hideCraftableCount)
@@ -156,6 +167,7 @@ local function Count(row, hideCraftableCount)
     Place(row, false)
     return
   end
+  seen.rows, seen.last, seen.made = seen.rows + 1, info and (info.name or info.recipeID), n
   local before = Opt("countLeft")
   count:SetText((before and "[%d] " or " [%d] "):format(n))
   count:Show()
@@ -176,15 +188,54 @@ function ns.RecipeCountsRefresh()
   end)
 end
 
+-- What the counts did, for the mouse report (/cl souris)
+function ns:RecipeCountsReport()
+  -- the recipe shown: the game's own count for its row (C_TradeSkillUI.GetCraftableCount) and Clara's
+  local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
+  local form = page and page.SchematicForm
+  local ok, info = pcall(function() return form and form.GetRecipeInfo and form:GetRecipeInfo() end)
+  local shown = ""
+  if ok and type(info) == "table" and info.recipeID then
+    local okGame, game = pcall(C_TradeSkillUI.GetCraftableCount, info.recipeID)
+    shown = ("; %s: the game's row count %s, Clara's %s"):format(tostring(info.name or info.recipeID),
+      okGame and tostring(game) or "?", tostring(Craftable(info.recipeID)))
+  end
+  return ("recipe counts: the game's row hooked %s, the list watched %s, counts shown %d (the last: %s [%s]), shown %s%s"):format(
+    tostring(seen.hooked or false), tostring(seen.watched or false), seen.rows, tostring(seen.last), tostring(seen.made),
+    tostring(Opt("recipeCount")), shown)
+end
+
 local hooked = false
 local function Setup()
   local mixin = ProfessionsRecipeListRecipeMixin
   if hooked or type(mixin) ~= "table" or not mixin.SetCraftableCount then return end
   hooked = true
+  seen.hooked = true
   hooksecurefunc(mixin, "SetCraftableCount", Count)
   if mixin.Init then hooksecurefunc(mixin, "Init", FitLabel) end
   if mixin.SetLabelFontColors then hooksecurefunc(mixin, "SetLabelFontColors", Recolor) end
 end
 if EventUtil and EventUtil.ContinueOnAddOnLoaded then
   EventUtil.ContinueOnAddOnLoaded("Blizzard_ProfessionsTemplates", Setup)
+end
+
+-- And each row as the professions window's list shows it (the game's own callback, as ForeverRecipes uses it), and
+-- every row shown as the bags change: the counts there whatever else wraps the rows' functions
+local owner = {}
+local function Watch()
+  local list = ProfessionsFrame and ProfessionsFrame.CraftingPage and ProfessionsFrame.CraftingPage.RecipeList
+  local box = list and list.ScrollBox
+  if seen.watched or not (box and ScrollUtil and ScrollUtil.AddInitializedFrameCallback) then return end
+  seen.watched = true
+  ScrollUtil.AddInitializedFrameCallback(box, function(_, row)
+    if row and row.Count and row.Label then Count(row, list.hideCraftableCount) end
+  end, owner)
+  local events = CreateFrame("Frame")
+  events:RegisterEvent("BAG_UPDATE_DELAYED")
+  events:SetScript("OnEvent", function()
+    if ProfessionsFrame:IsShown() then ns.RecipeCountsRefresh() end
+  end)
+end
+if EventUtil and EventUtil.ContinueOnAddOnLoaded then
+  EventUtil.ContinueOnAddOnLoaded("Blizzard_Professions", Watch)
 end
