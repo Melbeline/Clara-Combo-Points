@@ -54,6 +54,7 @@ RecipeCounts.lua
 QuestShare.lua
 SitKey.lua
 EnchantConfirm.lua
+RecipeMemory.lua
 Tracker.lua
 Clicks.lua
 LearnedSpells.lua
