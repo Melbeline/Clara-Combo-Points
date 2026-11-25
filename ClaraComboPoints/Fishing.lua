@@ -1,5 +1,6 @@
--- Clara Combo Points - one key to fish, with the keyboard and mouse (no gamepad mode): its key
--- binding (Esc > Options > Keybindings > Clara Combo Points: Fish / Reel in) casts Fishing; while
+-- Clara Combo Points (the same file in Easy Fishing, the standalone addon) - one key to fish, with the keyboard and
+-- mouse (no gamepad mode): its key binding (Esc > Options > Keybindings > Clara Combo Points, or Easy Fishing: Fish /
+-- Reel in) casts Fishing; while
 -- the line is out, the same key is the game's own Interact Key (INTERACTTARGET), which reels in
 -- the bobber the game itself picks (its soft interact target): one press, one action, the moment
 -- left to the player. While fishing, the game's interact settings are set as its gamepad mode sets
@@ -21,11 +22,14 @@ local CVARS = {
   SoftTargetIconInteract = { value = "1" },
 }
 
-BINDING_CATEGORY_CLARA = "Clara"
-_G["BINDING_NAME_CLICK ClaraFishingButton:LeftButton"] = L.FISH_BINDING
+-- The key's button and its binding: Clara's, or the standalone Easy Fishing's (this file is shared with it, as it is:
+-- its Shell.lua names its own button, its Bindings.xml lists the binding)
+local BUTTON = ns.FISHING_BUTTON or "ClaraFishingButton"
+local ACTION = "CLICK " .. BUTTON .. ":LeftButton"
+if not ns.FISHING_BUTTON then BINDING_CATEGORY_CLARA = "Clara" end
+_G["BINDING_NAME_" .. ACTION] = L.FISH_BINDING
 
-
-local button = CreateFrame("Button", "ClaraFishingButton", UIParent, "SecureActionButtonTemplate")
+local button = CreateFrame("Button", BUTTON, UIParent, "SecureActionButtonTemplate")
 button:RegisterForClicks("AnyUp", "AnyDown") -- (the game's template acts on one of them: one press, one cast)
 button:SetAttribute("type", "spell")
 button:Hide()
@@ -156,7 +160,7 @@ local function Reel(on)
   fishing = on
   ClearOverrideBindings(owner)
   if on then
-    for _, key in ipairs({ GetBindingKey("CLICK ClaraFishingButton:LeftButton") }) do
+    for _, key in ipairs({ GetBindingKey(ACTION) }) do
       SetOverrideBinding(owner, true, key, "INTERACTTARGET")
     end
   end
