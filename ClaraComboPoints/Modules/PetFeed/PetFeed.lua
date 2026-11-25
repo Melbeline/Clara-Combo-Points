@@ -33,6 +33,11 @@ local Apply = function() end
 ns:SetQolSwitches("petfeed", {
   { label = "PF_SW_MOVE", get = function() return Store().unlocked == true end,
     set = function(on) Store().unlocked = on or nil Apply() end },
+  -- (PetFeedText.lua: the happiness gained as floating numbers, and their zone moved: /petfeed too)
+  { label = "PF_SW_TEXT", get = function() return Store().text ~= false end,
+    set = function(on) if on then Store().text = nil else Store().text = false end end },
+  { label = "PF_SW_TEXT_MOVE", get = function() return Store().textUnlocked == true end,
+    set = function(on) Store().textUnlocked = on or nil if ns.PetFeedTextApply then ns.PetFeedTextApply() end end },
 })
 if not ns:QolRuns("petfeed") then return end
 
@@ -73,6 +78,14 @@ local function FeedAura()
     if id == FEED_SPELL or (auraName ~= nil and (auraName == name or auraName == FEED_NAME)) then return aura end
   end
   return false
+end
+
+-- Feeding (PetFeedText.lua asks): true, false, nil when the game cannot tell
+ns.PetFeedOn = function()
+  if not (UnitExists and UnitExists("pet")) then return false end
+  local aura = FeedAura()
+  if aura == nil then return nil end
+  return aura and true or false
 end
 
 -- Its seconds, and gone as it ends (kept up while shown)
