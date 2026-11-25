@@ -103,5 +103,10 @@ M.Fire("PLAYER_ENTERING_WORLD", false, true)
 local who
 for k in pairs(ClaraComboPointsDB.recipeKept or {}) do who = k end
 check(who and ClaraComboPointsDB.recipeKept[who][185] == 3371 and ClaraComboPointsDB.recipeKept[who][197] == 2387, "kept in the saved variables, the character's")
+out("== the mouse report (/cl souris)")
+local lines = ns:RecipeMemoryReport()
+local text = table.concat(lines, "\n")
+check(text:find("hooked true", 1, true) and text:find("kept:", 1, true) and text:find("set its page up anew", 1, true)
+  and text:find("picked again", 1, true), "what it did, step by step:\n" .. text)
 out("")
 out(fails .. " failure(s)")

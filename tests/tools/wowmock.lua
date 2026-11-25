@@ -639,6 +639,9 @@ function FontString:GetStringWidth()
 end
 FontString.GetUnboundedStringWidth = FontString.GetStringWidth
 function FontString:IsTruncated() return false end
+function FontString:SetShadowColor(r, g, b, a) self._shadow = { r, g, b, a } end
+function FontString:SetShadowOffset(x, y) self._shadowOffset = { x, y } end
+function Texture:SetRotation(r) self._rotation = r end
 
 local Frame = class("Frame", Region)
 function Frame:SetScript(name, fn)
