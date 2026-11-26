@@ -243,6 +243,7 @@ local function Build()
   Box("SP_FOLLOW_CLICK", ns.FollowClick, ns.SetFollowClick, "followClick") -- (TargetMacro.lua: the portrait)
   Box("SP_TARGET_MACRO_SAY", ns.TargetMacroSay, ns.SetTargetMacroSay, "targetMacroSay") -- (its chat line, off by default)
   Box("SP_PROF_CD", ns.ProfCooldowns, ns.SetProfCooldowns, "profCooldowns") -- (ProfCooldowns.lua)
+  if ns.SetBankView then Box("SP_BANK_VIEW", ns.BankView, ns.SetBankView, "bankView") end -- (Modules/BankView: not in Light)
   Box("SP_LEGACY_TREE", ns.LegacyTree, ns.SetLegacyTree, "legacyTree") -- (LegacyTree.lua)
   if not ns:QolRuns("leatrix") then
     Box("QUEST_PLATES", ns.QuestPlates, ns.SetQuestPlates, "questPlates")
