@@ -3,11 +3,26 @@
 -- unseen addon message to the group, at most one every 5 seconds); hovering the experience bar (or its rest tick), the
 -- tooltip gets, under its first line, one line per member, yourself first: the name in the class's color and the
 -- level, the experience on the level ("26,071 / 90,700 (29%)"), and under it the rested experience still to come
--- ("30,806 (34%)": of the level; up to 150%, 180% with the Legacy talent that raises it, never cut). The lines are the
--- tooltip's own (it widens to them): no name runs past its edge. Members without Clara send nothing: not shown.
+-- ("30,806 (34%)": of the level; up to 150%, 180% with the Legacy talent that raises it, never cut) while Shift is held
+-- (pressed or let go with the mouse on the bar, the tooltip follows; a grey hint says so; a box on the module's card
+-- shows it always). The lines are the tooltip's own (it widens to them): no name runs past its edge. Members without
+-- Clara send nothing: not shown.
 
 local ADDON, ns = ...
 local L = ns.L
+
+-- Its settings, with Clara's (ClaraComboPointsDB.friendsXP): the rested experience always shown, or with Shift only
+local function Store()
+  local sv = ns.sv
+  if not sv then return {} end
+  if type(sv.friendsXP) ~= "table" then sv.friendsXP = {} end
+  return sv.friendsXP
+end
+local Refresh = function() end
+ns:SetQolSwitches("friendsxp", {
+  { label = "FXP_SW_RESTED_ALWAYS", get = function() return Store().restedAlways == true end,
+    set = function(on) Store().restedAlways = on or nil Refresh() end },
+})
 
 if not ns:QolRuns("friendsxp") then return end
 
@@ -157,8 +172,8 @@ local function ClassHex(class)
   return ("ff%02x%02x%02x"):format((color.r or 1) * 255, (color.g or 1) * 255, (color.b or 1) * 255)
 end
 
--- One member's lines: the name and level, the experience on the level; its rested experience under it
-local function Lines(m)
+-- One member's lines: the name and level, the experience on the level; its rested experience under it (withRested)
+local function Lines(m, withRested)
   local out = {}
   local left = ("|c%s%s|r  |cffffd100%d|r"):format(ClassHex(m.class), m.name or "?", m.level or 0)
   local right
@@ -169,7 +184,7 @@ local function Lines(m)
     right = L.FXP_MAX_LEVEL
   end
   out[1] = { left, right, 1, 1, 1, 1, 1, 1 }
-  if (m.rested or 0) > 0 and (m.max or 0) > 0 then
+  if withRested and (m.rested or 0) > 0 and (m.max or 0) > 0 then
     out[2] = { "    " .. L.FXP_RESTED, ("%s (%d%%)"):format(Big(m.rested), math.floor(m.rested / m.max * 100 + 0.5)),
       0.7, 0.7, 0.7, RESTED_COLOR[1], RESTED_COLOR[2], RESTED_COLOR[3] }
   end
@@ -194,11 +209,44 @@ local function Heard()
 end
 
 local inserted -- (the first line written, to know the tooltip has them already)
+local shown -- the tooltip as it was given ours: { tooltip, owner, title, kept }: drawn again as Shift is pressed or let go
+
+local function RestedShown() return Store().restedAlways == true or (IsShiftKeyDown and IsShiftKeyDown()) or false end
+
+-- Ours under the first line, the game's lines after them
+local function Render(state)
+  local tooltip, others = state.tooltip, Heard()
+  if #others == 0 then return end
+  local withRested = RestedShown()
+  local rows, hidden = {}, false
+  local mine = Mine()
+  local list = { mine }
+  for _, m in ipairs(others) do list[#list + 1] = m end
+  for _, m in ipairs(list) do
+    if m then
+      for _, row in ipairs(Lines(m, withRested)) do rows[#rows + 1] = row end
+      if not withRested and (m.rested or 0) > 0 then hidden = true end
+    end
+  end
+  if hidden then rows[#rows + 1] = { L.FXP_SHIFT_HINT, " ", 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 } end
+  tooltip:ClearLines()
+  tooltip:AddLine(state.title, state.tr, state.tg, state.tb)
+  for _, row in ipairs(rows) do tooltip:AddDoubleLine(unpack(row)) end
+  for _, k in ipairs(state.kept) do
+    if k.right then
+      tooltip:AddDoubleLine(k[1], k.right, k[2], k[3], k[4], k.rr, k.rg, k.rb)
+    else
+      tooltip:AddLine(k[1], k[2], k[3], k[4], k.wrap)
+    end
+  end
+  inserted = rows[1] and rows[1][1]
+  tooltip:Show()
+end
+
 local function AddTo(tooltip)
   tooltip = tooltip or GameTooltip
   if not (tooltip and tooltip:IsShown()) or not InGroup() then return end
-  local others = Heard()
-  if #others == 0 then return end
+  if #Heard() == 0 then return end
   local n = tooltip:NumLines()
   local name = tooltip:GetName()
   local first = name and _G[name .. "TextLeft1"]
@@ -223,23 +271,19 @@ local function AddTo(tooltip)
   local title = first:GetText()
   if Secret(title) then return end
   local tr, tg, tb = first:GetTextColor()
-  tooltip:ClearLines()
-  tooltip:AddLine(title or " ", tr, tg, tb)
-  local rows = {}
-  local mine = Mine()
-  if mine then for _, row in ipairs(Lines(mine)) do rows[#rows + 1] = row end end
-  for _, m in ipairs(others) do for _, row in ipairs(Lines(m)) do rows[#rows + 1] = row end end
-  for _, row in ipairs(rows) do tooltip:AddDoubleLine(unpack(row)) end
-  for _, k in ipairs(kept) do
-    if k.right then
-      tooltip:AddDoubleLine(k[1], k.right, k[2], k[3], k[4], k.rr, k.rg, k.rb)
-    else
-      tooltip:AddLine(k[1], k[2], k[3], k[4], k.wrap)
-    end
-  end
-  inserted = rows[1] and rows[1][1]
-  tooltip:Show()
+  shown = { tooltip = tooltip, owner = tooltip.GetOwner and tooltip:GetOwner(), title = title or " ", tr = tr, tg = tg,
+    tb = tb, kept = kept }
+  Render(shown)
 end
+
+-- Shift pressed or let go (or the box changed) while ours shows: drawn again
+Refresh = function()
+  local state = shown
+  if not (state and state.tooltip:IsShown()) then return end
+  if state.tooltip.GetOwner and state.tooltip:GetOwner() ~= state.owner then return end
+  Render(state)
+end
+F.Refresh = function() Refresh() end
 F.AddTo = AddTo
 
 -- The game's experience bar in its two places (the bars' own hover and their rest tick's), hooked once each
@@ -281,6 +325,9 @@ events:SetScript("OnEvent", function(_, event, ...)
     if prefix == PREFIX then F.Heard(text, channel, from) end
   elseif event == "PLAYER_LOGIN" then
     HookBars()
+  elseif event == "MODIFIER_STATE_CHANGED" then
+    local key = ...
+    if key == "LSHIFT" or key == "RSHIFT" then Refresh() end
   elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
     Prune()
     local now = InGroup()
@@ -305,6 +352,6 @@ events:SetScript("OnEvent", function(_, event, ...)
 end)
 if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then pcall(C_ChatInfo.RegisterAddonMessagePrefix, PREFIX) end
 for _, e in ipairs({ "CHAT_MSG_ADDON", "PLAYER_LOGIN", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_XP_UPDATE",
-  "UPDATE_EXHAUSTION", "PLAYER_LEVEL_UP" }) do
+  "UPDATE_EXHAUSTION", "PLAYER_LEVEL_UP", "MODIFIER_STATE_CHANGED" }) do
   pcall(events.RegisterEvent, events, e)
 end
