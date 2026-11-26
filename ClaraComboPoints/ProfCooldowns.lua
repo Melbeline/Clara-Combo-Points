@@ -103,6 +103,17 @@ local function Known(id)
   return ok and yes == true
 end
 
+-- A cooldown's seconds left from the game's start and duration. A cooldown begun before the computer was started has a
+-- start below 0, or one past now (the game's clock wrapped round its 2^32 milliseconds): both counted as they are meant
+local WRAP = 4294967.296
+local function Left(start, dur)
+  if type(start) ~= "number" or type(dur) ~= "number" or dur <= 2 or start == 0 then return 0 end
+  local now = GetTime()
+  if start > now then start = start - WRAP end
+  return max(0, start + dur - now)
+end
+P.Left = Left
+
 -- A spell's time left (seconds), 0 ready, nil not told
 local function SpellLeft(id)
   if not (C_Spell and C_Spell.GetSpellCooldown) then return nil end
@@ -111,8 +122,7 @@ local function SpellLeft(id)
     return info.startTime, info.duration
   end)
   if not ok or issecret(start) or issecret(dur) or type(start) ~= "number" or type(dur) ~= "number" then return nil end
-  if dur <= 2 or start <= 0 then return 0 end
-  return max(0, start + dur - GetTime())
+  return Left(start, dur)
 end
 
 local function TransmutePrefix()
@@ -149,7 +159,7 @@ function P.Scan()
   if type(count) == "number" and count > 0 and C_Container and C_Container.GetItemCooldown then
     local start, dur = C_Container.GetItemCooldown(SALT_SHAKER)
     if type(start) == "number" and type(dur) == "number" and not issecret(start) and not issecret(dur) then
-      Put("i" .. SALT_SHAKER, (dur > 2 and start > 0) and max(0, start + dur - GetTime()) or 0, nil, true)
+      Put("i" .. SALT_SHAKER, Left(start, dur), nil, true)
     end
   elseif type(count) == "number" and count == 0 then
     live["i" .. SALT_SHAKER] = nil
@@ -334,6 +344,7 @@ local function Hook()
   if hooked or not (b and b.HookScript) then return end
   hooked = true
   b:HookScript("OnEnter", function(self)
+    pcall(P.Scan) -- (read again as it is hovered: the bags' and spells' times as they are now)
     if GameTooltip and GameTooltip:IsOwned(self) then P.AddTo(GameTooltip) end
   end)
 end
