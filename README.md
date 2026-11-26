@@ -1,15 +1,135 @@
 # Clara-Combo-Points Light
 
-## TL;DR
+## Clara en bref
 
-**Cette branche (Light, aussi sur main)** : **Clara** léger pour WoW Forever, avec l'interface du jeu et seulement quelques modules. L'addon s'appelle désormais **Clara** ; sa barre (points de combo, énergie, rage, mana, buffs et debuffs) garde le nom **Clara Combo Points**. Le dossier reste `ClaraComboPoints` : tes réglages sont gardés.
+**Cette branche (Light, aussi sur main)** : **Clara** léger pour WoW Forever, avec l'interface du jeu et seulement quelques modules.
 
-- **Toutes les options dans Échap > Options > AddOns > Clara**, en tête de la liste : d'abord **Clara Combo Points** (la barre), puis les modules rangés par thème : **Combat**, **Interface**, **Quêtes et progression**, **Économie et métiers**.
+**Clara** est un addon tout-en-un pour **World of Warcraft: Forever** (1.60.1). Au départ, c'est **Clara Combo Points**, une barre de combat pour les 9 classes : points de combo, énergie ou rage, mana, vie et des lignes d'icônes (buffs, debuffs, recharges, objets), portage du WeakAura « Complete Rogue ». Autour d'elle, des **modules** (des addons connus intégrés et des fonctions propres à Clara), chacun activable ou non, rangés par thème dans **Échap > Options > AddOns > Clara**, et des dizaines de **corrections et de petits conforts** pour le client Forever. `/cl` ouvre ses options ; le dossier s'appelle toujours `ClaraComboPoints` et tes réglages sont gardés.
 
-- **Clara Combo Points** (la barre) : points de combo, énergie ou rage, mana, vie et jusqu'à 6 lignes d'icônes (buffs, debuffs, temps de recharge, objets), pour les 9 classes ; réglages par classe, profils, 3 styles.
-- **Modules intégrés**, chacun désactivable : **BuyEmAll**, **WeaponSwingTimer**, **DialogKey**, **Progression du groupe** (la progression des quêtes de chaque membre du groupe qui a Clara, dans les infobulles), **MinimapDrawer**, **tullaRange**, **Courrier** (destinataires, catégories, envois multiples), **Tooltip Anchor**, **idTip** (identifiants dans les infobulles), **Solo Raid Frame** (cadre de groupe style raid en solo), **Water Shield Tracker** (les charges du Bouclier d'eau, chamans), **DoesItDie** (tes DoTs vont-ils tuer ta cible ?) et **Actions ennemies** (les sorts des ennemis à côté de leur barre d'info). Pas de Leatrix Plus, NodeSight, ClassicUI, Names, DynamicCam ni XToLevel.
-- **UnitScan** : une alerte (fenêtre cliquable pour cibler et poser le crâne, son, écran, icône de la barre des tâches) dès qu'un rare de Forever, un nom ajouté ou le mob chassé est en vue ; reçoit toujours les détections de UnitScan Hardcore Forever, n'envoie rien sans ta permission.
-- **Qualité de vie** : pêche d'une touche et mode pêche, désenchantement Alt + clic, layer et compteur d'instances, repère au clic molette, nouveau rang sur les barres, progression des quêtes sur les barres de nom, zone dans la recherche de groupe, copie du chat et liens web, `/who` par prénom ou nom, captures d'écran (niveaux, premiers kills de boss), menu de l'equipment manager, vitesse d'attaque, menace et distance sur la cible.
+## Toutes les fonctions
+
+Chaque fonction en une ligne ; le détail de chacune est plus bas.
+
+### La barre Clara Combo Points
+
+- **Points de combo, énergie ou rage, mana et vie** : 5 cases de points de combo, la ressource en chiffres, pour les 9 classes (le druide en félin et en ours, le guerrier sans points de combo).
+- **Lignes d'icônes** : jusqu'à 6 lignes de 20 icônes (buffs, debuffs, recharges, objets « Utiliser », imprégnations du chaman), suivies même en combat ; un clic lance le sort ou utilise l'objet.
+- **Mana et rage à consommer** : le coût du sort en incantation marqué sur la barre de mana ; la rage que vont prendre Frappe héroïque, Enchaînement, Mutiler, Heurtoir et Régénération frénétique.
+- **Apparence** : trois styles (plat, Classique, Infobulle), taille, opacité, couleurs, police, tout réglé par classe.
+- **Nouveau sort appris** : un clic sur son nom dans le chat le prend sur le curseur ; tout sort sur le curseur ouvre les lignes d'icônes pour l'y poser.
+- **Panneau des sorts des classes** : tous les buffs et debuffs de chaque classe, à glisser sur la barre.
+- **Profils** par classe : enregistrer, charger, exporter, importer, et chargement tout seul par spécialisation.
+- **Réglages du jeu pour les alts** : un profil d'interface (barres d'action, options du jeu) appliqué une fois à chaque nouveau personnage.
+- **/moan** : l'émote du patch 1.12, revenue.
+
+### Les options
+
+- **Fenêtre d'options** (`/cl`) : au style du jeu, un onglet par classe, des pages qu'on réordonne, le français, l'allemand ou l'anglais, redimensionnable.
+- **Onglet Améliorations** : la liste des modules, avec une recherche qui la filtre en direct (descriptions et options comprises).
+- **Échap > Options > AddOns > Clara** : la page de Clara (toutes ses cases) et une page par thème ; un module prend le relais de son addon d'origine si celui-ci est installé.
+- **`/cl souris`** : un rapport de diagnostic (ce qu'il y a sous la souris et l'état des modules), pour signaler un problème.
+
+### Modules : combat
+
+- **WeaponSwingTimer** : les barres entre deux coups et la barre de tir ; la vitesse d'attaque, la menace et la distance au-dessus de la cible et du focus ; le swing timer des boss.
+- **tullaRange** : les boutons d'action colorés hors de portée, sans assez de mana ou inutilisables.
+- **Solo Raid Frame** : le cadre de groupe style raid affiché même quand tu joues seul.
+- **Water Shield Tracker** (chaman) : les charges du Bouclier d'eau sur son icône, une alerte quand il manque, un clic le relance.
+- **DoesItDie** : les dégâts qu'il reste à faire à tes DoTs marqués sur la barre de vie de la cible, une icône de mort quand ils vont la tuer.
+- **Actions ennemies** : le sort qu'incante un ennemi (rouge s'il est interrompu) et ses derniers sorts, à côté de sa barre d'info.
+- **Nourrir le familier** (chasseur) : l'effet en icône sur le cadre du familier, avec son temps restant.
+
+### Modules : interface
+
+- **MinimapDrawer** : les boutons d'addons de la minicarte rangés dans un tiroir qui s'ouvre depuis le cercle de ton niveau.
+- **Tooltip Anchor** : où s'ouvrent les infobulles (place du jeu, souris, ancre déplaçable).
+- **Échelle des barres** : un seul curseur pour les barres d'action, le micro-menu et les sacs ensemble.
+- **Délai du /who** : le temps avant le prochain `/who` sur le bouton de recherche (barre ou compte à rebours).
+- **Recherche dans le chat** : un onglet de recherche après les onglets du chat, des flèches pour passer d'un message à l'autre, les mots trouvés surlignés (6 styles).
+- **idTip** : les identifiants (sort, objet, créature, quête, icône…) dans les infobulles.
+- **Permanent Report Mute** : un joueur que tu signales reste muet pour de bon, dans toutes les sessions.
+- **Cible dans l'infobulle** : qui l'unité cible (« <<VOUS>> » en rouge) et qui la cible, comme TipTac.
+
+### Modules : quêtes et progression
+
+- **DialogKey** : Espace et les chiffres pour les dialogues, les quêtes et leurs récompenses.
+- **Progression du groupe** : la progression de chaque membre du groupe qui a Clara sur un objectif de quête, dans l'infobulle de l'objet ou de la créature.
+- **FriendsXP** : au survol de la barre d'XP, ton XP et celle des membres du groupe qui ont Clara (nom en couleur de classe, XP sur le niveau ; l'XP reposée en maintenant Maj).
+- **UnitScan** : une alerte dès qu'un rare (486 connus), un nom ajouté ou le mob chassé est en vue ; les rares sur la carte du monde (402 placés) ; `/unitscan nom` ; les détections de UnitScan Hardcore toujours reçues.
+
+### Modules : économie et métiers
+
+- **BuyEmAll** : chez un marchand, Maj + clic pour acheter la quantité voulue.
+- **Courrier** : tes destinataires récents, rangés par catégorie, une recherche, un filtre, l'ordre par glisser-déposer ; des objets affectés à un personnage ajoutés tout seuls ; plus de 12 objets par envoi ; export et import.
+- **Or des personnages** : un clic droit sur la monnaie du sac montre l'or de tous tes personnages, par compte.
+- **Pêche** : une touche pour pêcher puis ferrer, la canne équipée toute seule, et un mode pêche qui met en avant le bruit du bouchon.
+
+### Chat
+
+- **Couleur gardée pour chaque canal**, quel que soit son numéro après une reconnexion.
+- **Barre de saisie comme en 1.15.9** : elle garde le clavier jusqu'à Entrée ou Échap.
+- **Copier un message** (clic droit sur le nom de l'auteur) ; les adresses web deviennent des liens.
+- **Quête acceptée** : un double clic molette sur son nom ouvre la carte sur la quête et la partage en groupe.
+- **Chats de communauté rétablis** après la connexion (un bug du jeu) ; Clara s'arrête seule quand Blizzard l'aura corrigé.
+- **Messages en trop retirés** : le rappel du code de conduite masqué, le message d'inactivité affiché une seule fois.
+- **`/played` toujours affiché**, même en combat.
+- **Chat général placé dans le mode Édition seulement** ; l'annonce Battle.net et l'avertissement « World refresh » au-dessus des onglets du chat.
+
+### Amis, groupe et joueurs
+
+- **Personnages dans la liste d'amis** : les tiens et ceux de tes amis, dans leurs sections « en ligne » et « hors ligne » qu'on déplace, noms accentués gardés, Renommer, Inviter en premier.
+- **Fenêtre « Ajouter un ami » à l'ancienne**, avec une deuxième ligne pour ajouter un personnage ; « Ajouter un ami classique » dans le menu d'un joueur.
+- **`/who` par prénom ou nom de famille** : la case « Noms exacts », le tri par guilde.
+- **Infobulle d'un joueur** : son prénom et son nom entiers, sa zone sur la dernière ligne.
+- **Rôle de groupe gardé** d'un groupe à l'autre ; **butin du groupe en un clic** (Free for All).
+- **Zone des joueurs** dans la recherche de groupe du jeu.
+
+### Carte, quêtes et monde
+
+- **Repère au clic molette** sur la carte du monde (posé à la fin du combat si besoin).
+- **La carte reste ouverte** quand une quête arrive.
+- **Suivi de quêtes replié gardé** après une reconnexion.
+- **Progression des quêtes sur les barres de nom** des créatures (au-dessus de l'icône de Questie).
+- **Layer et instances** dans les infobulles de l'horloge et de « Réinitialiser les instances ».
+- **Captures d'écran** à chaque niveau gagné et au premier kill de chaque boss.
+- **Touche Interagir** : une icône sur ce qu'elle va prendre.
+- **Pistage** : rendu après la mort ; un clic droit sur son bouton de la minicarte l'arrête.
+- **Fenêtre Legacy** ouverte directement sur l'onglet Legacy Tree.
+
+### Métiers
+
+- **Nombre de fabrications possibles** devant chaque recette, avec les composants de tes sacs, dans la couleur de difficulté.
+- **La recette choisie retrouvée** en rouvrant la fenêtre d'un métier (aussi avec la liste de ForeverRecipes).
+- **Une recette sur la barre d'action** : glisse l'icône de l'objet fabriqué sur une barre.
+- **Enchanter en un clic** : une case pour répondre Oui à « remplacer l'enchantement ? ».
+- **Barres de rang des métiers** au look 1.15.9.
+- **Désenchanter par Alt + clic** sur un objet des sacs.
+
+### Sacs, barres et fenêtres
+
+- **Nouveau rang d'un sort** mis tout seul sur tes barres d'action.
+- **Menu de l'equipment manager** placé à côté du slot, sans cacher le personnage.
+- **Sacs au-dessus d'AtlasLoot**.
+- **Molette pour tourner les pages** des livres et des lettres.
+- **Fenêtre de butin vide fermée** toute seule.
+- **Maj + Espace** pour s'asseoir ou se relever, activé par défaut.
+- **Chronomètre gardé** d'une session à l'autre, par personnage.
+
+### Cadres d'unités et infobulles
+
+- **Valeurs de la cible et du focus** au bout de leurs barres.
+- **Infobulle et clics sur tout le cadre d'unité**, pas seulement sur le portrait.
+- **Cadres de raid** qui ne sautent plus en haut de l'écran.
+- **Niveau à côté du crâne** de la cible corrigé.
+- **XP reposée** dans l'infobulle de la barre d'expérience.
+
+### Divers
+
+- **Les boutons Shop** du jeu ouvrent Clara.
+- **Options du jeu réglées une fois** par Clara (Auto Loot, Sticky Targeting coupé, sacs séparés…), puis laissées à ton choix.
+- **`/rl`** recharge l'interface.
+
+## Les fonctions en détail
 
 Addon autonome pour **World of Warcraft: Forever** (bêta 1.60.1, Interface 16001), portage du WeakAura Classic « Complete Rogue » de Faineantt (https://wago.io/WouewStiD).
 
