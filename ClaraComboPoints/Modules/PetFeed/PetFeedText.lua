@@ -172,7 +172,8 @@ local pending = {}
 local waiting = false
 
 -- (the mouse report: what the game told, to see in game where a tick comes from)
-local diag = { combat = 0, feedback = 0, kinds = {}, secretKinds = 0, power = 0, powerKinds = {}, happy = 0, reg = {} }
+local diag = { combat = 0, feedback = 0, kinds = {}, secretKinds = 0, power = 0, powerKinds = {}, happy = 0, reg = {},
+  log = 0, logSecret = 0, logProtected = 0, logRead = 0, logFeed = 0 }
 local function Kinds(t)
   local out = {}
   for k, n in pairs(t) do out[#out + 1] = k .. " " .. n end
@@ -203,8 +204,14 @@ local seen = { ticks = 0, secrets = 0 } -- (the mouse report: the last tick's wo
 -- the happiness rose, or, where its power cannot be read, while the pet is fed (another energize, its focus, is not)
 local function Flush()
   waiting = false
-  local amount, gained, full, secret = pending.amount, pending.gained, pending.full, pending.secret
+  local amount, gained, full, secret, logged = pending.amount, pending.gained, pending.full, pending.secret, pending.log
   pending = {}
+  if logged then
+    -- the combat log's own line read: its number, as it is
+    seen.amount, seen.gained, seen.full, seen.value, seen.at, seen.fed = logged, gained, full, logged, GetTime(), "the combat log's line"
+    if On() then Show(logged) end
+    return
+  end
   if secret ~= nil then
     -- The game gives its number to addons as a secret (WoW 12's UNIT_COMBAT): shown as it is, the combat log's own
     -- number (the tick cut short at the top too: the game's), never read; while the pet is fed, or its happiness rose
@@ -286,7 +293,34 @@ local function OnCombat(event, amount, from)
   pending.amount = (pending.amount or 0) + amount
   Soon()
 end
-ns.PetFeedEvents = { Power = OnPower, Combat = OnCombat, Flush = Flush } -- (for its test)
+-- The combat log's own line ("Your Feed Pet Effect energized The Rake 13.6."), where the game lets an addon read it:
+-- WoW 12 hands its lines to the chat window as protected text (|K...|k: drawn, not readable); counted either way
+local FEED_SPELL = 1539
+local function Plain(text)
+  return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h(.-)|h", "%1"):gsub("|T.-|t", ""):gsub("|A.-|a", ""))
+end
+local function OnLogLine(_, text)
+  diag.log = diag.log + 1
+  if Secret(text) then diag.logSecret = diag.logSecret + 1 return end
+  if type(text) ~= "string" then return end
+  if text:find("|K", 1, true) then diag.logProtected = diag.logProtected + 1 return end
+  diag.logRead = diag.logRead + 1
+  local line = Plain(text)
+  local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(FEED_SPELL)
+  if Secret(name) or type(name) ~= "string" then name = nil end
+  if not ((name and line:find(name, 1, true)) or line:find("Feed Pet Effect", 1, true)) then return end
+  -- (another hunter's pet, with the log showing everyone's: not ours)
+  local pet = UnitName and UnitName("pet")
+  if type(pet) == "string" and not Secret(pet) and pet ~= "" and not line:find(pet, 1, true) then return end
+  diag.logFeed = diag.logFeed + 1
+  diag.logLast = line:sub(-70)
+  local number = line:match("(%d+[%.,]?%d*)%.?%s*$")
+  local value = number and tonumber((number:gsub(",", ".")))
+  if not value or value <= 0 then return end
+  pending.log = value
+  Soon()
+end
+ns.PetFeedEvents = { Power = OnPower, Combat = OnCombat, Flush = Flush, LogLine = OnLogLine } -- (for its test)
 
 function ns:PetFeedTextReport()
   local power, most = Read()
@@ -295,12 +329,14 @@ function ns:PetFeedTextReport()
   for e, r in pairs(diag.reg) do regs[#regs + 1] = e .. " " .. r end
   table.sort(regs)
   return ("pet feeding text: shown %s, zone %s; energizes on the pet %d (secret %d); the last tick: the game's number %s, happiness gained %s (at the top %s), fed %s, shown %s, %s; one point of happiness: %s; happiness power now %s / %s (%s)\n"
-    .. "    the game told: UNIT_COMBAT on the pet %d, the portrait's own numbers %d (kinds: %s; unreadable kinds %d), its power %d (%s), UNIT_HAPPINESS %d; fed now %s; registered: %s; last error: %s"):format(
+    .. "    the game told: UNIT_COMBAT on the pet %d, the portrait's own numbers %d (kinds: %s; unreadable kinds %d), its power %d (%s), UNIT_HAPPINESS %d; fed now %s; registered: %s; last error: %s\n"
+    .. "    the combat log's lines: %d (protected %d, secret %d, readable %d; Feed Pet Effect on the pet %d, the last: %s)"):format(
     tostring(On()), (Store().textUnlocked and "unlocked") or "locked", seen.ticks, seen.secrets, tostring(seen.amount),
     tostring(seen.gained), tostring(seen.full), tostring(seen.fed), tostring(seen.value),
     seen.at and ("%.0f s ago"):format(GetTime() - seen.at) or "never", tostring(Store().ratio), tostring(power), tostring(most),
     tostring(diag.read), diag.combat, diag.feedback, Kinds(diag.kinds), diag.secretKinds, diag.power, Kinds(diag.powerKinds),
-    diag.happy, tostring(fed), #regs > 0 and table.concat(regs, ", ") or "nothing", tostring(diag.err or "none"))
+    diag.happy, tostring(fed), #regs > 0 and table.concat(regs, ", ") or "nothing", tostring(diag.err or "none"),
+    diag.log, diag.logProtected, diag.logSecret, diag.logRead, diag.logFeed, tostring(diag.logLast or "none"))
 end
 
 ---------------------------------------------------------------------------
@@ -402,6 +438,20 @@ local function OnEvent(self, event, unit, arg2, _, arg4)
         if not ok then diag.err = tostring(err) end
       end)
       diag.reg.feedback = "ok"
+    end
+    -- the combat log's lines as they come (not those it fills back when its filter changes)
+    if EventUtil and EventUtil.ContinueOnAddOnLoaded then
+      EventUtil.ContinueOnAddOnLoaded("Blizzard_CombatLog", function()
+        if COMBATLOG and type(COMBATLOG.AddMessage) == "function" then
+          hooksecurefunc(COMBATLOG, "AddMessage", function(...)
+            local ok, err = pcall(OnLogLine, ...)
+            if not ok then diag.err = tostring(err) end
+          end)
+          diag.reg.log = "ok"
+        else
+          diag.reg.log = "no combat log window"
+        end
+      end)
     end
     Build()
     Apply()
