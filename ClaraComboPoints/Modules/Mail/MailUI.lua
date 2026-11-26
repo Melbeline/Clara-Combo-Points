@@ -9,7 +9,7 @@
 -- category (and All): one click shows that category's characters alone. Sort by "By category": each category in a
 -- framed block of its own, its name above it, the others last. A search box under them: only the names holding
 -- what is typed (case and accents ignored). A name dragged to another place: the player's own order (My order),
--- the list showing where it goes as it moves. The game's own window
+-- the list showing where it goes as it moves; the name mailed last stays first (top left) all the same. The game's own window
 -- look; ClassicUI's when it runs (its ClaraMailSkin: Modules/ClassicUI/Windows/ClaraMail.lua).
 
 local ADDON, ns = ...
