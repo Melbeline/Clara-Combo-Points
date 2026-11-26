@@ -120,8 +120,20 @@ ns.PetFeedLastShown = nil
 COMBATLOG:AddMessage("|Kq12|k", 1, 1, 1); Timers()
 check(ns.PetFeedLastShown == nil, "a protected line: nothing (counted)")
 COMBATLOG:AddMessage("Your Arcane Shot hit Boar 22.", 1, 1, 1); Timers()
+out("== the same line by the game's event (COMBAT_LOG_MESSAGE): another addon in the window's place changes nothing")
+ns.PetFeedLastShown = nil
+M.Fire("COMBAT_LOG_MESSAGE", "Your Feed Pet Effect energized The Rake 4.25.", 1, 1, 1, 0); Timers()
+check(ns.PetFeedLastShown == "+4.25", "by its event: +4.25 (" .. tostring(ns.PetFeedLastShown) .. ")")
+ns.PetFeedLastShown = nil
+M.Fire("COMBAT_LOG_MESSAGE", "Your Feed Pet Effect energized The Rake 8.", 1, 1, 1, 1); Timers()
+check(ns.PetFeedLastShown == nil, "a line filled back (the log refiltered): nothing")
+ns.PetFeedLastShown = nil
+M.Fire("COMBAT_LOG_MESSAGE", "Your Feed Pet Effect energized The Rake 2.5.", 1, 1, 1, 0)
+COMBATLOG:AddMessage("Your Feed Pet Effect energized The Rake 2.5.", 1, 1, 1); Timers()
+check(ns.PetFeedLastShown == "+2.5", "the same line both ways: shown once")
 local lr = ns:PetFeedTextReport()
-check(lr:find("the combat log's lines: 5 (protected 1, secret 0, readable 4; Feed Pet Effect on the pet 2", 1, true), "the report: " .. lr)
+check(lr:find("the combat log's lines: by its event 2, by its window 6 (protected 1, secret 0, readable 7; Feed Pet Effect on the pet 5", 1, true)
+  and lr:find("the last line read: Your Feed Pet Effect energized The Rake 2.5.", 1, true), "the report: " .. lr)
 
 out("== its auras hidden (a fight): fed while the effect read last has time left")
 feeding = true
