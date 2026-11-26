@@ -724,10 +724,6 @@ function ns:MouseReport()
     local ok, line = pcall(ns.QuestShareReport, ns)
     if ok and line then out[#out + 1] = line end
   end
-  if ns.PetFeedTextReport then
-    local ok, line = pcall(ns.PetFeedTextReport, ns)
-    if ok and line then out[#out + 1] = line end
-  end
   if ns.CraftListReport then
     local ok, lines = pcall(ns.CraftListReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end

@@ -170,7 +170,6 @@ Modules\WhoCooldown\WhoCooldown.lua
 Modules\ChatSearch\ChatSearch.lua
 Modules\IdTip\IdTip.lua
 Modules\PetFeed\PetFeed.lua
-Modules\PetFeed\PetFeedText.lua
 Modules\ReportMute\ReportMute.lua
 Modules\TooltipTarget\TooltipTarget.lua
 Modules\WaterShieldTracker\WaterShieldTracker.lua
