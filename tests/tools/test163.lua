@@ -2,7 +2,7 @@
 -- ClaraTarget, made the first time ("/tm8" then "/tar <name>"): its first word (a double middle click: the whole
 -- name); its /tar line takes the new name, the player's other lines kept; two clicks apart, a right click: nothing; in a fight:
 -- written as it ends; the box off: nothing; a macro too long: nothing changed; on the name's own button (GameFixes).
--- The icon a file number (134400). The game's own event for a release, the name under the mouse, takes the click too
+-- The icon a file number (134400), given only as the macro is made: one picked later stays. The game's own event for a release, the name under the mouse, takes the click too
 -- (another frame over the name), the same release seen twice counted once; a secret name, an error, a change the game
 -- did not keep: said, in the report.
 local M, S = MOCK, MOCK.state
@@ -13,9 +13,12 @@ local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c th
 local macros = {} -- index -> { name, icon, body, perChar }
 function GetMacroIndexByName(name) for i, m in pairs(macros) do if m.name == name then return i end end return 0 end
 function GetMacroInfo(i) local m = macros[i] if m then return m.name, m.icon, m.body end end
-function EditMacro(i, name, icon, body)
+local edits = {}
+function EditMacro(i, name, icon, body) -- (nil name, nil icon: kept, as in the game)
   assert(not S.inCombat, "EditMacro in combat")
-  macros[i] = { name = name, icon = icon, body = body, perChar = macros[i].perChar }
+  edits[#edits + 1] = { name = name, icon = icon }
+  local m = macros[i]
+  macros[i] = { name = name or m.name, icon = icon or m.icon, body = body or m.body, perChar = m.perChar }
   return i
 end
 function CreateMacro(name, icon, body, perChar)
@@ -59,6 +62,12 @@ macros[1].body = "/tm8\n/tar Hatefury Felsworn\n/cast Shadow Word: Pain"
 targetName = "Gorefang Ravager"
 Double("MiddleButton")
 check(Body() == "/tm8\n/tar Gorefang Ravager\n/cast Shadow Word: Pain", "the /tar line changed, /cast kept: " .. Body():gsub("\n", " | "))
+out("== an icon the player picked: never changed")
+macros[1].icon = 136207
+targetName = "Icon Mob"
+Double("MiddleButton")
+check(macros[1].icon == 136207 and Body():find("/tar Icon Mob", 1, true) and edits[#edits].icon == nil and edits[#edits].name == nil,
+  "the macro written, its icon and name not given: " .. tostring(macros[1].icon))
 out("== a double left click: its first word only")
 targetName = "Hatefury Felsworn"
 Double("LeftButton")
