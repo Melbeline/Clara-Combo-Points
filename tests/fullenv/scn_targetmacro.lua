@@ -1,6 +1,6 @@
 -- The target's name into a macro, and following it (TargetMacro.lua) in the harness: the buttons over the real target
 -- frame's name and portrait (GameFixes.lua) carry the double click's hook; two clicks on the name write the macro,
--- two on the portrait follow the target; the mouse over both: nothing.
+-- two on the portrait follow the target (the frame's own click, never FollowUnit); the mouse over both: nothing.
 local H = ...
 local env, ns = H.env, H.ns
 local fails = 0
@@ -42,7 +42,7 @@ if catcher and portrait then
     check(ok and written == "/tm 8\n/tar Hatefury" and not followed, "a double click on the name: the macro written, the first word " .. tostring(e or written))
     overName, overPortrait = false, true
     ok, e = Double(pup, portrait)
-    check(ok and followed == "Hatefury Felsworn", "a double click on the portrait: followed " .. tostring(e or followed))
+    check(ok and followed == nil, "a double click on the portrait: no FollowUnit (the frame's own click follows) " .. tostring(e or followed))
     followed, written = nil, nil
     overName, overPortrait = true, true
     ok, e = Double(pup, portrait)
@@ -51,5 +51,5 @@ if catcher and portrait then
   end
 end
 local ok, line = pcall(ns.TargetMacroReport, ns)
-check(ok and type(line) == "string" and line:find("follow last: followed", 1, true) ~= nil, "its /cl souris line: " .. tostring(line))
+check(ok and type(line) == "string" and line:find("follow last:", 1, true) ~= nil, "its /cl souris line: " .. tostring(line))
 print("scenario: targetmacro failures " .. fails)
