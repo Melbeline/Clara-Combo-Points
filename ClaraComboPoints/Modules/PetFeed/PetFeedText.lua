@@ -171,11 +171,23 @@ local last -- the pet's happiness power, as last read
 local pending = {}
 local waiting = false
 
+-- (the mouse report: what the game told, to see in game where a tick comes from)
+local diag = { combat = 0, feedback = 0, kinds = {}, secretKinds = 0, power = 0, powerKinds = {}, happy = 0, reg = {} }
+local function Kinds(t)
+  local out = {}
+  for k, n in pairs(t) do out[#out + 1] = k .. " " .. n end
+  table.sort(out)
+  return #out > 0 and table.concat(out, ", ") or "none"
+end
+
 local function Read()
-  if not (UnitExists and UnitExists("pet")) then return nil end
+  if not (UnitExists and UnitExists("pet")) then diag.read = "no pet" return nil end
   local ok, value = pcall(UnitPower, "pet", HAPPINESS)
   local okMax, most = pcall(UnitPowerMax, "pet", HAPPINESS)
-  if not ok or type(value) ~= "number" or Secret(value) then return nil end
+  if not ok then diag.read = "refused: " .. tostring(value) return nil end
+  if Secret(value) then diag.read = "secret" return nil end
+  if type(value) ~= "number" then diag.read = "not a number: " .. type(value) return nil end
+  diag.read = "read"
   if not okMax or type(most) ~= "number" or Secret(most) or most <= 0 then most = nil end
   return value, most
 end
@@ -249,8 +261,20 @@ local function OnPower()
   last = value
 end
 
-local function OnCombat(event, amount)
-  if event ~= "ENERGIZE" or amount == nil then return end
+-- (from: "combat", the event UNIT_COMBAT; "feedback", the game's own number on the pet's portrait)
+local function OnCombat(event, amount, from)
+  from = from or "combat"
+  diag[from] = diag[from] + 1
+  if Secret(event) then
+    -- (its kind unreadable: an energize taken only while the pet is fed)
+    diag.secretKinds = diag.secretKinds + 1
+    if Feeding() ~= true then return end
+  else
+    local kind = tostring(event)
+    diag.kinds[kind] = (diag.kinds[kind] or 0) + 1
+    if kind ~= "ENERGIZE" then return end
+  end
+  if amount == nil then return end
   seen.ticks = seen.ticks + 1
   if Secret(amount) then
     seen.secrets = seen.secrets + 1
@@ -266,10 +290,17 @@ ns.PetFeedEvents = { Power = OnPower, Combat = OnCombat, Flush = Flush } -- (for
 
 function ns:PetFeedTextReport()
   local power, most = Read()
-  return ("pet feeding text: shown %s, zone %s; energizes on the pet %d (secret %d); the last tick: the game's number %s, happiness gained %s (at the top %s), fed %s, shown %s, %s; one point of happiness: %s; happiness power now %s / %s"):format(
+  local fed = Feeding()
+  local regs = {}
+  for e, r in pairs(diag.reg) do regs[#regs + 1] = e .. " " .. r end
+  table.sort(regs)
+  return ("pet feeding text: shown %s, zone %s; energizes on the pet %d (secret %d); the last tick: the game's number %s, happiness gained %s (at the top %s), fed %s, shown %s, %s; one point of happiness: %s; happiness power now %s / %s (%s)\n"
+    .. "    the game told: UNIT_COMBAT on the pet %d, the portrait's own numbers %d (kinds: %s; unreadable kinds %d), its power %d (%s), UNIT_HAPPINESS %d; fed now %s; registered: %s; last error: %s"):format(
     tostring(On()), (Store().textUnlocked and "unlocked") or "locked", seen.ticks, seen.secrets, tostring(seen.amount),
     tostring(seen.gained), tostring(seen.full), tostring(seen.fed), tostring(seen.value),
-    seen.at and ("%.0f s ago"):format(GetTime() - seen.at) or "never", tostring(Store().ratio), tostring(power), tostring(most))
+    seen.at and ("%.0f s ago"):format(GetTime() - seen.at) or "never", tostring(Store().ratio), tostring(power), tostring(most),
+    tostring(diag.read), diag.combat, diag.feedback, Kinds(diag.kinds), diag.secretKinds, diag.power, Kinds(diag.powerKinds),
+    diag.happy, tostring(fed), #regs > 0 and table.concat(regs, ", ") or "nothing", tostring(diag.err or "none"))
 end
 
 ---------------------------------------------------------------------------
@@ -355,21 +386,42 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function(self, event, unit, arg2, _, arg4)
+local function OnEvent(self, event, unit, arg2, _, arg4)
   if event == "PLAYER_LOGIN" then
     if not Hunter() then self:UnregisterAllEvents() return end
-    Build()
-    Apply()
     for _, e in ipairs({ "UNIT_COMBAT", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_HAPPINESS" }) do
-      pcall(self.RegisterUnitEvent, self, e, "pet") -- (an event this build lacks: left out)
+      local ok, err = pcall(self.RegisterUnitEvent, self, e, "pet") -- (an event this build lacks: left out)
+      diag.reg[e] = ok and "ok" or ("refused: " .. tostring(err))
     end
     self:RegisterUnitEvent("UNIT_PET", "player")
+    -- the game's own number on the pet's portrait (its PetFrame, on UNIT_COMBAT): the same tick, from the game's side
+    if type(CombatFeedback_OnCombatEvent) == "function" then
+      hooksecurefunc("CombatFeedback_OnCombatEvent", function(frame, kind, _, amount)
+        if frame ~= PetFrame then return end
+        local ok, err = pcall(OnCombat, kind, amount, "feedback")
+        if not ok then diag.err = tostring(err) end
+      end)
+      diag.reg.feedback = "ok"
+    end
+    Build()
+    Apply()
     last = Read()
   elseif event == "UNIT_PET" then
     last = Read()
   elseif event == "UNIT_COMBAT" then
-    OnCombat(arg2, arg4)
+    OnCombat(arg2, arg4, "combat")
   else
+    if event == "UNIT_HAPPINESS" then
+      diag.happy = diag.happy + 1
+    else
+      diag.power = diag.power + 1
+      local kind = Secret(arg2) and "secret" or tostring(arg2)
+      diag.powerKinds[kind] = (diag.powerKinds[kind] or 0) + 1
+    end
     OnPower()
   end
+end
+events:SetScript("OnEvent", function(...)
+  local ok, err = pcall(OnEvent, ...)
+  if not ok then diag.err = tostring(err) end
 end)
