@@ -77,10 +77,10 @@ if page and page.noBlink then
   local box = page.noBlink
   local text = (box.Text or box.text):GetText()
   check(box:GetChecked() and text:find("EnableBlinkApplicationIcon", 1, true), "ticked by default: " .. tostring(text))
-  local who = page.whoNames
+  local who = page.whoHeader or page.whoNames -- (the /who boxes: the last of them)
   local _, _, _, _, y1 = who:GetPoint(1)
   local _, _, _, _, y2 = box:GetPoint(1)
-  check(y2 == y1 - 24, "under the /who box")
+  check(y2 == y1 - 24, "under the /who boxes")
   box:Click()
   check(ns.sv.noBlink == false and CV.EnableBlinkApplicationIcon == "1", "unticked: the icon flashes again")
   box:Click()
