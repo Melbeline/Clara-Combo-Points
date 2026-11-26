@@ -101,6 +101,7 @@ Modules\TooltipAnchor\TooltipAnchor.lua
 Modules\BarScale\BarScale.lua
 Modules\WhoCooldown\WhoCooldown.lua
 Modules\GroupQuests\GroupQuests.lua
+Modules\FriendsXP\FriendsXP.lua
 Modules\ChatSearch\ChatSearch.lua
 Modules\IdTip\IdTip.lua
 Modules\PetFeed\PetFeed.lua

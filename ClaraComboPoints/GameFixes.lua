@@ -716,6 +716,10 @@ function ns:MouseReport()
     local ok, lines = pcall(ns.RecipeMemoryReport, ns)
     if ok and type(lines) == "table" then for _, line in ipairs(lines) do out[#out + 1] = line end end
   end
+  if ns.FriendsXPReport then
+    local ok, line = pcall(ns.FriendsXPReport, ns)
+    if ok and line then out[#out + 1] = line end
+  end
   if ns.CommunityChatReport then
     local ok, line = pcall(ns.CommunityChatReport, ns)
     if ok and line then out[#out + 1] = line end
