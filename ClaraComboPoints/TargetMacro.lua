@@ -1,7 +1,7 @@
 -- Clara Combo Points - the target's name into a macro: a double click on the target frame's name writes it in the
 -- macro "ClaraTarget" (made the first time, the account's: "/tm8" then "/tar <name>"): its "/tar" (or "/target") line
--- takes the name, every other line of the macro (a "/cast" added by the player...) left as it is; a double middle click
--- writes its first word only ("Hatefury" for "Hatefury Felsworn"). The game lets no addon change a macro in a fight:
+-- takes the name, every other line of the macro (a "/cast" added by the player...) left as it is. A double left click
+-- writes its first word only ("Hatefury" for "Hatefury Felsworn"); a double middle click, the whole name. The game lets no addon change a macro in a fight:
 -- written as the fight ends, a line says so. A box on Clara's page (on by default).
 
 local ADDON, ns = ...
@@ -88,7 +88,7 @@ local function Apply(name)
   end
 end
 
--- A double click on the target's name: the whole name (left), its first word (middle)
+-- A double click on the target's name: its first word (left), the whole name (middle)
 local last, lastAt = nil, 0
 local function OnUp(_, button)
   if not ns:TargetMacro() then return end
@@ -101,7 +101,7 @@ local function OnUp(_, button)
   last = nil
   local name = UnitName and UnitName("target")
   if type(name) ~= "string" or issecret(name) or name == "" then return end
-  if button == "MiddleButton" then name = name:match("^(%S+)") or name end
+  if button == "LeftButton" then name = name:match("^(%S+)") or name end
   Apply(name)
 end
 ns.TargetMacroClick = OnUp -- (for its test)
