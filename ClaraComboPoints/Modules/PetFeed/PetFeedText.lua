@@ -173,7 +173,7 @@ local waiting = false
 
 -- (the mouse report: what the game told, to see in game where a tick comes from)
 local diag = { combat = 0, feedback = 0, kinds = {}, secretKinds = 0, power = 0, powerKinds = {}, happy = 0, reg = {},
-  log = 0, logSecret = 0, logProtected = 0, logRead = 0, logFeed = 0 }
+  log = 0, logEvent = 0, logSecret = 0, logProtected = 0, logRead = 0, logFeed = 0 }
 local function Kinds(t)
   local out = {}
   for k, n in pairs(t) do out[#out + 1] = k .. " " .. n end
@@ -299,13 +299,16 @@ local FEED_SPELL = 1539
 local function Plain(text)
   return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h(.-)|h", "%1"):gsub("|T.-|t", ""):gsub("|A.-|a", ""))
 end
-local function OnLogLine(_, text)
-  diag.log = diag.log + 1
+-- (from: "event", the game's COMBAT_LOG_MESSAGE; "window", the combat log window's AddMessage; the same line may come
+-- both ways: one number shown a tick)
+local function OnLogLine(_, text, from)
+  if from == "event" then diag.logEvent = diag.logEvent + 1 else diag.log = diag.log + 1 end
   if Secret(text) then diag.logSecret = diag.logSecret + 1 return end
   if type(text) ~= "string" then return end
   if text:find("|K", 1, true) then diag.logProtected = diag.logProtected + 1 return end
   diag.logRead = diag.logRead + 1
   local line = Plain(text)
+  diag.logAny = line:sub(-70)
   local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(FEED_SPELL)
   if Secret(name) or type(name) ~= "string" then name = nil end
   if not ((name and line:find(name, 1, true)) or line:find("Feed Pet Effect", 1, true)) then return end
@@ -330,13 +333,14 @@ function ns:PetFeedTextReport()
   table.sort(regs)
   return ("pet feeding text: shown %s, zone %s; energizes on the pet %d (secret %d); the last tick: the game's number %s, happiness gained %s (at the top %s), fed %s, shown %s, %s; one point of happiness: %s; happiness power now %s / %s (%s)\n"
     .. "    the game told: UNIT_COMBAT on the pet %d, the portrait's own numbers %d (kinds: %s; unreadable kinds %d), its power %d (%s), UNIT_HAPPINESS %d; fed now %s; registered: %s; last error: %s\n"
-    .. "    the combat log's lines: %d (protected %d, secret %d, readable %d; Feed Pet Effect on the pet %d, the last: %s)"):format(
+    .. "    the combat log's lines: by its event %d, by its window %d (protected %d, secret %d, readable %d; Feed Pet Effect on the pet %d, the last: %s; the last line read: %s)"):format(
     tostring(On()), (Store().textUnlocked and "unlocked") or "locked", seen.ticks, seen.secrets, tostring(seen.amount),
     tostring(seen.gained), tostring(seen.full), tostring(seen.fed), tostring(seen.value),
     seen.at and ("%.0f s ago"):format(GetTime() - seen.at) or "never", tostring(Store().ratio), tostring(power), tostring(most),
     tostring(diag.read), diag.combat, diag.feedback, Kinds(diag.kinds), diag.secretKinds, diag.power, Kinds(diag.powerKinds),
     diag.happy, tostring(fed), #regs > 0 and table.concat(regs, ", ") or "nothing", tostring(diag.err or "none"),
-    diag.log, diag.logProtected, diag.logSecret, diag.logRead, diag.logFeed, tostring(diag.logLast or "none"))
+    diag.logEvent, diag.log, diag.logProtected, diag.logSecret, diag.logRead, diag.logFeed, tostring(diag.logLast or "none"),
+    tostring(diag.logAny or "none"))
 end
 
 ---------------------------------------------------------------------------
@@ -422,7 +426,14 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-local function OnEvent(self, event, unit, arg2, _, arg4)
+local function OnEvent(self, event, unit, arg2, arg3, arg4, arg5)
+  if event == "COMBAT_LOG_MESSAGE" then
+    -- (text, r, g, b, order: a line filled back as the log's filter changes, the oldest first, left out)
+    local back = Enum and Enum.CombatLogMessageOrder and Enum.CombatLogMessageOrder.Oldest
+    if back ~= nil and arg5 == back then return end
+    OnLogLine(nil, unit, "event")
+    return
+  end
   if event == "PLAYER_LOGIN" then
     if not Hunter() then self:UnregisterAllEvents() return end
     for _, e in ipairs({ "UNIT_COMBAT", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_HAPPINESS" }) do
@@ -430,6 +441,9 @@ local function OnEvent(self, event, unit, arg2, _, arg4)
       diag.reg[e] = ok and "ok" or ("refused: " .. tostring(err))
     end
     self:RegisterUnitEvent("UNIT_PET", "player")
+    -- the combat log's lines, as the game hands them to its window (whatever another addon put in the window's place)
+    local okLog, errLog = pcall(self.RegisterEvent, self, "COMBAT_LOG_MESSAGE")
+    diag.reg.logEvent = okLog and "ok" or ("refused: " .. tostring(errLog))
     -- the game's own number on the pet's portrait (its PetFrame, on UNIT_COMBAT): the same tick, from the game's side
     if type(CombatFeedback_OnCombatEvent) == "function" then
       hooksecurefunc("CombatFeedback_OnCombatEvent", function(frame, kind, _, amount)
@@ -443,8 +457,8 @@ local function OnEvent(self, event, unit, arg2, _, arg4)
     if EventUtil and EventUtil.ContinueOnAddOnLoaded then
       EventUtil.ContinueOnAddOnLoaded("Blizzard_CombatLog", function()
         if COMBATLOG and type(COMBATLOG.AddMessage) == "function" then
-          hooksecurefunc(COMBATLOG, "AddMessage", function(...)
-            local ok, err = pcall(OnLogLine, ...)
+          hooksecurefunc(COMBATLOG, "AddMessage", function(frame, text)
+            local ok, err = pcall(OnLogLine, frame, text, "window")
             if not ok then diag.err = tostring(err) end
           end)
           diag.reg.log = "ok"
