@@ -2,10 +2,11 @@
 -- On its name: the macro "ClaraTarget" (made the first time, the account's: "/tm 8" then "/tar <name>"): its "/tar"
 -- (or "/target") line takes the name, every other line of the macro (a "/cast" added by the player...) left as it is.
 -- A double left click writes its first word only ("Hatefury" for "Hatefury Felsworn"); a double middle click, the
--- whole name. On its portrait: a double left click follows the target (no macro); with Shift held, its first word goes
--- in the macro "ClaraFollow" (its "/follow" line, made the first time: "/follow <name>"); with Ctrl held, its whole
+-- whole name. On its portrait: a double left click follows the target (no macro: the target frame's own click runs
+-- "/follow", as the game's menu Follow; out of a fight); Shift + double left click, its first word goes in the macro
+-- "ClaraFollow" (its "/follow" line, made the first time: "/follow <name>"); Shift + double right click, its whole
 -- name. The two spots never share a point: where the name's and the portrait's overlap, a double click does nothing.
--- A player's whole name is "First Surname", as the game's own menu gives it: followed by it (an exact match), written so.
+-- A player's whole name is "First Surname", as the game's own menu gives it: written so.
 -- The game lets no addon change a macro in a fight: written as the fight ends, a line says so. A macro's icon is
 -- chosen once, as it is made: one the player picks later stays. A "/tm8" line (the first versions made it so: the
 -- game reads no such command) mended to "/tm 8". A box on Clara's page for each spot (on by default); another says in
@@ -220,29 +221,64 @@ local function OnUp(_, button, from)
 end
 ns.TargetMacroClick = OnUp -- (for its test)
 
--- On the portrait (left button): follow it; Shift: its first word in ClaraFollow; Ctrl: its whole name
+-- The follow: the game refuses it to an addon (FollowUnit from one is blocked), not to the target frame's own click. So
+-- after a first plain left click on the portrait, for half a second the frame's next plain left click runs "/follow"
+-- (its "type1" a macro), as the game's menu Follow; then the frame as it was (what another addon put there, Clique's,
+-- given back). The game lets no frame of its change in a fight: none then (undone as one starts).
+local armed, armGen, saved = false, 0, nil
+local function Disarm()
+  if not armed then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  local f = _G.TargetFrame
+  armed = false
+  if type(f) == "table" and f.SetAttribute then
+    f:SetAttribute("type1", saved and saved.type or nil)
+    f:SetAttribute("macrotext1", saved and saved.text or nil)
+  end
+  saved = nil
+end
+local function Arm()
+  if not ns:FollowClick() then return end
+  if InCombatLockdown and InCombatLockdown() then followWhat = "in a fight: the target frame can't be changed" return end
+  local f = _G.TargetFrame
+  if not (type(f) == "table" and f.SetAttribute and f.GetAttribute) then return end
+  if not armed then saved = { type = f:GetAttribute("type1"), text = f:GetAttribute("macrotext1") } end
+  armed = true
+  armGen = armGen + 1
+  local gen = armGen
+  f:SetAttribute("type1", "macro")
+  f:SetAttribute("macrotext1", "/follow")
+  local function Later() if gen == armGen then Disarm() end end
+  if C_Timer and C_Timer.After then C_Timer.After(DOUBLE, Later) end
+end
+ns.TargetFollowArmed = function() return armed end -- (for its test)
+
+-- On the portrait: a plain double left click follows it (the frame's own click, armed by the first); Shift + double
+-- left click: its first word in ClaraFollow; Shift + double right click: its whole name
 local portraitClicks = Clicks()
-local PORTRAIT_BUTTONS = { LeftButton = true }
+local PORTRAIT_BUTTONS = { LeftButton = true, RightButton = true }
 local function OnPortraitUp(_, button, from)
   if not ns:FollowClick() then return end
+  local shift = IsShiftKeyDown and IsShiftKeyDown() and true or false
   local double, first = portraitClicks.Double(button, from, PORTRAIT_BUTTONS)
-  if first then followWhat = "one " .. tostring(button) .. " release, waiting for the second" end
+  if first then
+    followWhat = "one " .. tostring(button) .. " release, waiting for the second"
+    -- (armed on the next frame: this release's own click, its target, done first)
+    if button == "LeftButton" and not shift and not (IsControlKeyDown and IsControlKeyDown()) and not (IsAltKeyDown and IsAltKeyDown()) then
+      if C_Timer and C_Timer.After then C_Timer.After(0, Arm) else Arm() end
+    end
+  end
   if not double then return end
-  local shift, ctrl = IsShiftKeyDown and IsShiftKeyDown(), IsControlKeyDown and IsControlKeyDown()
-  if shift or ctrl then
+  if shift then
     local name = TargetName(FOLLOW)
     if not name then return end
-    if shift then name = name:match("^(%S+)") or name end
+    if button == "LeftButton" then name = name:match("^(%S+)") or name end
     Apply(FOLLOW, name)
     return
   end
-  if not FollowUnit then followWhat = "no FollowUnit" return end
-  -- (by its whole name, an exact match, as the game's own menu does: "target" is not a name it knows)
-  local name = Whole()
-  if type(name) ~= "string" or issecret(name) or name == "" then name = nil end
-  local ok, err
-  if name then ok, err = pcall(FollowUnit, name, true) else ok, err = pcall(FollowUnit, "target") end
-  followWhat = ok and ("followed " .. (name or "the target")) or ("follow: error " .. tostring(err))
+  if button == "LeftButton" then
+    followWhat = armed and "followed (the target frame's own click: /follow)" or "not followed: the frame was not ready (" .. tostring(followWhat) .. ")"
+  end
 end
 ns.FollowClickUp = OnPortraitUp -- (for its test)
 
@@ -311,6 +347,7 @@ ns.OnUnitCatchers = Hook
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("GLOBAL_MOUSE_UP")
 events:RegisterEvent("ADDON_ACTION_BLOCKED")
 events:RegisterEvent("ADDON_ACTION_FORBIDDEN")
@@ -323,7 +360,9 @@ events:SetScript("OnEvent", function(_, event, a, b)
     if a == ADDON and type(b) == "string" and (b:find("Macro", 1, true) or b:find("Follow", 1, true)) then blocked = b end
     return
   end
+  if event == "PLAYER_REGEN_DISABLED" then Disarm() return end -- (the last moment the game lets it)
   Hook()
+  Disarm()
   if event == "PLAYER_REGEN_ENABLED" then
     for _, macro in ipairs({ TARGET, FOLLOW }) do
       if macro.pending then
