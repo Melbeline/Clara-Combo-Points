@@ -3,7 +3,7 @@
 -- time), Ctrl + double click: its whole name, the player's other lines kept, a "/f" line taken; a middle or right
 -- double click: nothing; the box off: nothing. The name's spot and the portrait's never share a point: the mouse
 -- over both, a double click does nothing; over the portrait only, the follow; over the name only, the ClaraTarget
--- macro. The report names both.
+-- macro. A player is followed (and written) by "First Surname", as the game's own menu follows. The report names both.
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -30,14 +30,16 @@ function GetNumMacros()
   for i in pairs(macros) do if i > 120 then c = c + 1 else a = a + 1 end end
   return a, c
 end
-local followed = {}
-function FollowUnit(u) followed[#followed + 1] = u end
+local followed, exacts = {}, {}
+function FollowUnit(u, exact) followed[#followed + 1] = u; exacts[#followed] = exact end
 local shift, ctrl = false, false
 function IsShiftKeyDown() return shift end
 function IsControlKeyDown() return ctrl end
-local targetName = "Hatefury Felsworn"
+local targetName, targetSurname = "Hatefury Felsworn", nil
 local oldName = UnitName
-function UnitName(u) if u == "target" then return targetName end return oldName(u) end
+function UnitName(u) if u == "target" then return targetName, targetSurname end return oldName(u) end
+Constants = Constants or {}
+Constants.CharacterNameSeparatorConsts = { CHARACTERNAME_SURNAME_SEPARATOR = " ", CHARACTERNAME_REALMNAME_SEPARATOR = "-" }
 
 local ns = {}
 S.class = "PRIEST"; S.locale = "enUS"
@@ -52,7 +54,7 @@ local function Body(name) local i = GetMacroIndexByName(name or "ClaraFollow") r
 
 out("== a double left click on the portrait: followed, no macro")
 Double("LeftButton")
-check(#followed == 1 and followed[1] == "target", "FollowUnit(\"target\"): " .. tostring(followed[1]))
+check(#followed == 1 and followed[1] == "Hatefury Felsworn" and exacts[1] == true, "FollowUnit by its whole name, exact, as the game's menu: " .. tostring(followed[1]))
 check(Body() == nil and Body("ClaraTarget") == nil, "no macro made")
 out("== Shift + double click: its first word in ClaraFollow")
 shift = true
@@ -71,6 +73,19 @@ targetName = "Lia Moon"
 Double("LeftButton")
 check(Body() == "/focus\n/follow Lia Moon", "the /f line taken, /focus left: " .. Body():gsub("\n", " | "))
 ctrl = false
+out("== a player (its first name and surname apart, as the game gives them): followed by \"First Surname\"")
+targetName, targetSurname = "Xxjeanne", "Darkxx"
+local before = #followed
+Double("LeftButton")
+check(#followed == before + 1 and followed[#followed] == "Xxjeanne Darkxx", "FollowUnit(\"Xxjeanne Darkxx\", true): " .. tostring(followed[#followed]))
+ctrl = true
+Double("LeftButton")
+check(Body() == "/focus\n/follow Xxjeanne Darkxx", "Ctrl: the whole name, surname too: " .. Body():gsub("\n", " | "))
+ctrl, shift = false, true
+Double("LeftButton")
+check(Body() == "/focus\n/follow Xxjeanne", "Shift: the first name: " .. Body():gsub("\n", " | "))
+shift = false
+targetName, targetSurname = "Hatefury Felsworn", nil
 out("== a middle or right double click: nothing")
 local n = #followed
 Double("MiddleButton"); Double("RightButton")
