@@ -12261,9 +12261,25 @@
 					unit = "mouseover"
 				else
 					unit = select(2, GameTooltip:GetUnit())
-					if not canaccessvalue(unit) then
+					-- (Clara Combo Points: a unit far away, a frame's tooltip of Clara's: no token from the tooltip; its
+					-- owner's unit, the owner's unit attribute, else the unit of its GUID)
+					if not canaccessvalue(unit) or type(unit) ~= "string" then
+						unit = nil
 						local owner = GameTooltip:GetOwner()
-						unit = owner and not owner:IsForbidden() and Safe(owner.unit)
+						if owner and not owner:IsForbidden() then
+							unit = Safe(owner.unit) or Safe(owner.displayedUnit)
+							if type(unit) ~= "string" and owner.GetAttribute then
+								local okAttr, attr = pcall(owner.GetAttribute, owner, "unit")
+								unit = okAttr and Safe(attr) or nil
+							end
+						end
+						if type(unit) ~= "string" and UnitTokenFromGUID then
+							local guid = Safe(select(3, GameTooltip:GetUnit()))
+							if type(guid) == "string" then
+								local okGuid, token = pcall(UnitTokenFromGUID, guid)
+								unit = okGuid and Safe(token) or nil
+							end
+						end
 					end
 				end
 				if type(unit) ~= "string" or not UnitExists(unit) then return end
