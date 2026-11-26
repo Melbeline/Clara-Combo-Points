@@ -8,6 +8,11 @@
 -- Blizzard's fix seen: ten logins in a row from the game started (not reloads) with every community chat joined on its
 -- own: Clara stands aside (nothing joined any more), a line in the chat says it once; seen broken again at a login:
 -- Clara steps in again. A box on Clara's page, on by default.
+-- Who is online in a community: the game's Guild & Communities window asks for a community's members, never for their
+-- presence (its chat channels window does both): its list showed them all offline. The community it shows is subscribed
+-- to its members' presence too (C_Club.SetClubPresenceSubscription, as the chat channels window does), the window
+-- shown; the game lets it go as the window hides. Its own presence (Battle.net's Appear Offline hides a player from the
+-- communities) is the player's choice: left alone.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -110,7 +115,46 @@ function ns:CommunityChatReport()
     tostring(session.shown or "?"), tostring(session.missing or "?"), session.joined,
     session.last and (" (the last: " .. session.last .. (session.at and (", %.0f s ago"):format(GetTime() - session.at) or "") .. ")") or "",
     s.clean or 0, FIXED_AFTER, s.fixed and ("yes (build " .. tostring(s.fixed) .. ")") or "no", tostring(ns:CommunityChat()))
+    .. (ns.CommunityPresenceText and ns.CommunityPresenceText() or "")
 end
+
+---------------------------------------------------------------------------
+-- The communities window's community subscribed to its members' presence
+---------------------------------------------------------------------------
+local presence = { club = nil, times = 0 }
+local function Subscribe(frame, clubId)
+  if not (C_Club and C_Club.SetClubPresenceSubscription) or clubId == nil or issecret(clubId) then return end
+  if not (frame and frame.IsShown and frame:IsShown()) then return end
+  local info = C_Club.GetClubInfo and C_Club.GetClubInfo(clubId)
+  if type(info) == "table" and Enum and Enum.ClubType and info.clubType == Enum.ClubType.Guild then return end -- (the guild's roster has its own)
+  if pcall(C_Club.SetClubPresenceSubscription, clubId) then
+    presence.club, presence.times = clubId, presence.times + 1
+    presence.name = type(info) == "table" and not issecret(info.name) and info.name or nil
+  end
+end
+ns.CommunityPresenceSubscribe = Subscribe -- (for its test)
+ns.CommunityPresenceText = function()
+  return ("; presence asked for %d times (the last: %s)"):format(presence.times, tostring(presence.name or presence.club or "none"))
+end
+
+local presenceHooked = false
+local function HookPresence()
+  local f = _G.CommunitiesFrame
+  if presenceHooked or type(f) ~= "table" or type(f.OnClubSelected) ~= "function" then return end
+  presenceHooked = true
+  hooksecurefunc(f, "OnClubSelected", function(self, clubId) Subscribe(self, clubId) end)
+  f:HookScript("OnShow", function(self)
+    -- (shown again on the community it had: subscribed again, the game having let it go as it hid)
+    if C_Timer and C_Timer.After then C_Timer.After(0, function() Subscribe(self, self.selectedClubId) end) end
+  end)
+end
+HookPresence()
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("ADDON_LOADED")
+loader:SetScript("OnEvent", function(self, _, name)
+  if name == "Blizzard_Communities" then HookPresence() end
+  if presenceHooked then self:UnregisterAllEvents() end
+end)
 
 local cold, looked, ticker
 local function FirstLook()
