@@ -26,18 +26,16 @@ local function Store()
   local sv = ns.sv
   if not sv then return {} end
   if type(sv.petFeed) ~= "table" then sv.petFeed = {} end
-  return sv.petFeed
+  local s = sv.petFeed
+  -- (the floating happiness numbers of an earlier version, taken out: their settings let go)
+  s.text, s.textUnlocked, s.textX, s.textY, s.ratio = nil, nil, nil, nil, nil
+  return s
 end
 
 local Apply = function() end
 ns:SetQolSwitches("petfeed", {
   { label = "PF_SW_MOVE", get = function() return Store().unlocked == true end,
     set = function(on) Store().unlocked = on or nil Apply() end },
-  -- (PetFeedText.lua: the happiness gained as floating numbers, and their zone moved: /petfeed too)
-  { label = "PF_SW_TEXT", get = function() return Store().text ~= false end,
-    set = function(on) if on then Store().text = nil else Store().text = false end end },
-  { label = "PF_SW_TEXT_MOVE", get = function() return Store().textUnlocked == true end,
-    set = function(on) Store().textUnlocked = on or nil if ns.PetFeedTextApply then ns.PetFeedTextApply() end end },
 })
 if not ns:QolRuns("petfeed") then return end
 
@@ -78,22 +76,6 @@ local function FeedAura()
     if id == FEED_SPELL or (auraName ~= nil and (auraName == name or auraName == FEED_NAME)) then return aura end
   end
   return false
-end
-
--- Feeding (PetFeedText.lua asks): true, false, nil when the game cannot tell. Its auras hidden (in a fight): fed
--- while the effect read last has time left
-local fedUntil
-ns.PetFeedOn = function()
-  if not (UnitExists and UnitExists("pet")) then return false end
-  local aura = FeedAura()
-  if aura == nil then
-    if fedUntil and GetTime() < fedUntil then return true end
-    return nil
-  end
-  if not aura then fedUntil = nil return false end
-  local expires = aura.expirationTime
-  fedUntil = (type(expires) == "number" and not Secret(expires) and expires > 0) and expires or nil
-  return true
 end
 
 -- Its seconds, and gone as it ends (kept up while shown)
