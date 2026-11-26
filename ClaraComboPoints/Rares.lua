@@ -3,8 +3,11 @@
 -- names in English, French and German; nil: as in English; Spectral Stalker and Onyxia's Elite Guard left out: no rares), and the 156 more RareScanner for WoW Forever (1.60.1.5) knows:
 -- the rares new in Forever (the starting zones, Mount Hyjal, the Zephras Isles, the Riverglades...), classic rares the
 -- first list missed, the dungeons' rares and those of events (their names in English only; its test creature and two
--- friendly quest NPCs left out). A creature is known by its ID here, and other players' sightings come by name, in
--- their game's language.
+-- friendly quest NPCs left out), and the 5 dungeon rares WoW Forever's other rare addons know and these two did not:
+-- Bruegal Ironknuckle (the Stockade), Quartermaster Zigris and Urok Doomhowl (Blackrock Spire), Timmy the Cruel
+-- (Stratholme), the rares and rare elites of QuestieDB for Forever (1.1.6, which Forever Sightings and Forever Finds
+-- read), with their French and German names, and Ragglesnout (Razorfen Downs), a rare of DungeonMaster (2.0.5). A
+-- creature is known by its ID here, and other players' sightings come by name, in their game's language.
 
 local _, ns = ...
 
@@ -51,6 +54,7 @@ ns.RARES = {
   [1531] = { "Lost Soul", "Ame égarée", "Verirrte Seele" },
   [1533] = { "Tormented Spirit", "Esprit tourmenté", "Gepeinigter Geist" },
   [1552] = { "Scale Belly", "Ventrécaille", "Schuppenbauch" },
+  [1720] = { "Bruegal Ironknuckle", nil, "Bruegal Eisenfaust" },
   [1837] = { "Scarlet Judge", "Juge écarlate", "Scharlachroter Richter" },
   [1838] = { "Scarlet Interrogator", "Interrogateur écarlate", "Scharlachroter Befrager" },
   [1839] = { "Scarlet High Clerist", "Grand prêtre écarlate", "Scharlachroter Hochkleriker" },
@@ -208,6 +212,7 @@ ns.RARES = {
   [7057] = { "Digmaster Shovelphlange" },
   [7104] = { "Dessecus", nil, "Moosmannus" },
   [7137] = { "Immolatus", nil, "Korruptus" },
+  [7354] = { "Ragglesnout", "Groinfendu", "Struppmähne" },
   [7846] = { "Teremus the Devourer", "Teremus le Dévoreur", "Teremus der Verschlinger" },
   [7895] = { "Ambassador Bloodrage", "Ambassadeur Ragesang", "Botschafter Blutzorn" },
   [8199] = { "Warleader Krazzilak", "Chef de guerre Krazzilak", "Kriegsanführer Krazzilak" },
@@ -264,6 +269,7 @@ ns.RARES = {
   [9602] = { "Hahk'Zor" },
   [9604] = { "Gorgon'och" },
   [9718] = { "Ghok Bashguud" },
+  [9736] = { "Quartermaster Zigris", "Intendant Zigris", "Rüstmeister Zigris" },
   [10077] = { "Deathmaw", "Gueule-du-trépas", "Totenreißer" },
   [10078] = { "Terrorspark", "Lueur terrifiante", "Terrorstifter" },
   [10080] = { "Sandarr Dunereaver" },
@@ -287,6 +293,7 @@ ns.RARES = {
   [10509] = { "Jed Runewatcher" },
   [10558] = { "Hearthsinger Forresten" },
   [10559] = { "Lady Vespia", "Dame Vespia" },
+  [10584] = { "Urok Doomhowl", "Urok Hurleruine", "Urok Schreckensbote" },
   [10639] = { "Rorgish Jowl", "Joufflu le croquant", "Grummelkehle" },
   [10640] = { "Oakpaw", "Chênepatte", "Knurrtatze" },
   [10641] = { "Branch Snapper", "Brise-Branche", "Astschnapper" },
@@ -294,6 +301,7 @@ ns.RARES = {
   [10643] = { "Mugglefin", "Moldaileron", "Muggelflosse" },
   [10644] = { "Mist Howler", "Hurleur des brumes", "Nebelheuler" },
   [10647] = { "Prince Raze", nil, "Prinz Schleifer" },
+  [10808] = { "Timmy the Cruel", "Timmy le Cruel", "Timmy der Grausame" },
   [10809] = { "Stonespine" },
   [10817] = { "Duggan Wildhammer", "Duggan Marteau-Hardi" },
   [10820] = { "Duke Ragereaver" },
