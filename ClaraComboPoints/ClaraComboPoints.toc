@@ -47,6 +47,7 @@ RareMap.lua
 Screenshots.lua
 ChatPlace.lua
 ChatFocus.lua
+CommunityChat.lua
 ProfessionBar.lua
 MailSubject.lua
 CraftShortcut.lua
