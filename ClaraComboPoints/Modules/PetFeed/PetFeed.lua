@@ -80,12 +80,20 @@ local function FeedAura()
   return false
 end
 
--- Feeding (PetFeedText.lua asks): true, false, nil when the game cannot tell
+-- Feeding (PetFeedText.lua asks): true, false, nil when the game cannot tell. Its auras hidden (in a fight): fed
+-- while the effect read last has time left
+local fedUntil
 ns.PetFeedOn = function()
   if not (UnitExists and UnitExists("pet")) then return false end
   local aura = FeedAura()
-  if aura == nil then return nil end
-  return aura and true or false
+  if aura == nil then
+    if fedUntil and GetTime() < fedUntil then return true end
+    return nil
+  end
+  if not aura then fedUntil = nil return false end
+  local expires = aura.expirationTime
+  fedUntil = (type(expires) == "number" and not Secret(expires) and expires > 0) and expires or nil
+  return true
 end
 
 -- Its seconds, and gone as it ends (kept up while shown)
