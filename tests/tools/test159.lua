@@ -9,6 +9,7 @@ local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
 GetBuildInfo = function() return "1.60.1", "70938", "Nov 13 2026", 16001 end
 ClaraComboPointsDB = { qol = setmetatable({ petfeed = true }, { __index = function() return false end }) }
+function CombatFeedback_OnCombatEvent() end -- (the game's number on a unit frame's portrait)
 PetFrame = CreateFrame("Button", "PetFrame", UIParent)
 PetFrame:SetSize(120, 49)
 PetFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 100, -200)
@@ -76,6 +77,29 @@ unreadable = true
 check(Tick(M.Secret(13.6), 13600) == "secret:+13.6", "its power unreadable too, fed: shown")
 feeding = false
 check(Tick(M.Secret(50), 0) == nil, "not fed (its focus): nothing")
+out("== the game's own number on the pet's portrait (its UNIT_COMBAT, seen from the game's side)")
+feeding = true
+ns.PetFeedLastShown = nil
+CombatFeedback_OnCombatEvent(PetFrame, "ENERGIZE", "", M.Secret(0.7), 1); Timers()
+check(issecretvalue(ns.PetFeedLastShown) and M.reveal(ns.PetFeedLastShown) == "+0.7", "fed: the portrait's number shown: " .. tostring(M.reveal(ns.PetFeedLastShown)))
+ns.PetFeedLastShown = nil
+CombatFeedback_OnCombatEvent(PetFrame, "WOUND", "", M.Secret(30), 1); Timers()
+check(ns.PetFeedLastShown == nil, "a hit on the pet: nothing")
+ns.PetFeedLastShown = nil
+CombatFeedback_OnCombatEvent(PlayerFrame or UIParent, "ENERGIZE", "", M.Secret(5), 1); Timers()
+check(ns.PetFeedLastShown == nil, "another frame's number: nothing")
+ns.PetFeedLastShown = nil
+CombatFeedback_OnCombatEvent(PetFrame, M.Secret("ENERGIZE"), "", M.Secret(0.7), 1); Timers()
+check(M.reveal(ns.PetFeedLastShown) == "+0.7", "its kind unreadable, fed: shown")
+feeding = false
+ns.PetFeedLastShown = nil
+CombatFeedback_OnCombatEvent(PetFrame, M.Secret("WOUND"), "", M.Secret(30), 1); Timers()
+check(ns.PetFeedLastShown == nil, "its kind unreadable, not fed: nothing")
+feeding = true
+local rep = ns:PetFeedTextReport()
+check(rep:find("the portrait's own numbers 4", 1, true) and rep:find("WOUND 1", 1, true) and rep:find("feedback ok", 1, true)
+  and rep:find("UNIT_COMBAT ok", 1, true), "the report: what the game told\n" .. rep)
+
 out("== its auras hidden (a fight): fed while the effect read last has time left")
 feeding = true
 M.Fire("UNIT_AURA", "pet")
