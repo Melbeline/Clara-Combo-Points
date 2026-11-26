@@ -135,6 +135,12 @@ local shown -- { tip, unit, targetLine, byLine }
 local function TipUnit(tip)
   local ok, _, unit = pcall(tip.GetUnit, tip)
   if ok and type(unit) == "string" and not issecret(unit) then return unit end
+  -- (a unit far away, a frame's tooltip of Clara's: no token from the tooltip; its owner's unit)
+  local okOwner, owner = pcall(tip.GetOwner, tip)
+  if okOwner and type(owner) == "table" and not (owner.IsForbidden and owner:IsForbidden()) then
+    local u = owner.unit or owner.displayedUnit
+    if type(u) == "string" and not issecret(u) and u ~= "" then return u end
+  end
   return nil
 end
 

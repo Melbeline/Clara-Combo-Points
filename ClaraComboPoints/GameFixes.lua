@@ -405,6 +405,7 @@ end
 local function ShowUnitTip(frame, unit, compact)
   if not (GameTooltip and GameTooltip_SetDefaultAnchor) then return end
   GameTooltip_SetDefaultAnchor(GameTooltip, tipOwner)
+  tipOwner.unit = unit -- (its unit known to whoever reads the tooltip's owner: Leatrix's colors, a unit far away)
   local ok, set = pcall(GameTooltip.SetUnit, GameTooltip, unit)
   if not ok or (not issecretTip(set) and set == false) then return end
   if not compact and UNIT_POPUP_RIGHT_CLICK and GameTooltip_AddInstructionLine then
@@ -737,6 +738,17 @@ function ns:MouseReport()
   if ns.TargetMacroReport then
     local ok, line = pcall(ns.TargetMacroReport, ns)
     out[#out + 1] = ok and line or ("target macro: " .. tostring(line))
+  end
+  -- the unit tooltip showing: its owner, the unit the tooltip gives, the owner's (Leatrix's colors read either)
+  if GameTooltip and GameTooltip:IsShown() then
+    local okU, name, unit, guid = pcall(GameTooltip.GetUnit, GameTooltip)
+    local function Show(v) if v == nil then return "none" elseif issecretTip(v) then return "secret" end return tostring(v) end
+    local owner = GameTooltip:GetOwner()
+    local ownerName = owner and (owner.GetDebugName and owner:GetDebugName() or tostring(owner)) or "none"
+    if owner == tipOwner then ownerName = "Clara's (for " .. tostring(tipFor and tipFor.GetName and tipFor:GetName() or "?") .. ")" end
+    out[#out + 1] = ("unit tooltip: owner %s, the tooltip's unit %s (guid %s), the owner's unit %s"):format(
+      ownerName, okU and Show(unit) or "error", okU and (guid ~= nil and (issecretTip(guid) and "secret" or "known") or "none") or "error",
+      owner and Show(owner.unit) or "none")
   end
   if ns.ProfCooldownsReport then
     local ok, line = pcall(ns.ProfCooldownsReport, ns)
