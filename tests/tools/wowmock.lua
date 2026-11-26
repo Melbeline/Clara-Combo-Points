@@ -633,7 +633,12 @@ function FontString:GetStringHeight()
   return lines * (size + (self._spacing or 0))
 end
 function FontString:SetMaxLines(n) self._maxLines = n end
-function FontString:SetFormattedText(fmt, ...) self:SetText(string.format(fmt, ...)) end
+function FontString:SetFormattedText(fmt, ...) -- (a secret among its values: a secret text, as the game makes it)
+  local args, secret = { ... }, false
+  for i = 1, select("#", ...) do if issecretvalue(args[i]) then secret = true; args[i] = reveal(args[i]) end end
+  local text = string.format(fmt, unpack(args, 1, select("#", ...)))
+  self:SetText(secret and M.Secret(text) or text)
+end
 function FontString:GetStringWidth()
   return textWidth(self, plainText(reveal(self._text)))
 end

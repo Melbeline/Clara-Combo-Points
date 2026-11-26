@@ -37,7 +37,9 @@ local function Tick(amount, gain, powerFirst)
   local function combat() M.Fire("UNIT_COMBAT", "pet", "ENERGIZE", "", amount, 1) end
   if powerFirst then power() if amount then combat() end else if amount then combat() end power() end
   Timers()
-  return ns.PetFeedLastShown
+  local shown = ns.PetFeedLastShown
+  if issecretvalue(shown) then return "secret:" .. tostring(M.reveal(shown)) end
+  return shown
 end
 
 out("== Format: as the combat log tells it")
@@ -62,6 +64,29 @@ unreadable = true
 check(Tick(8, 8000) == "+8", "fed: +8")
 feeding = false
 check(Tick(25, 0) == nil, "not fed: nothing")
+unreadable, feeding = false, true
+M.Fire("UNIT_POWER_UPDATE", "pet", "HAPPINESS"); Timers()
+
+out("== WoW 12: the game's number a secret: shown as the game gives it, while the pet is fed")
+feeding = true
+check(Tick(M.Secret(13.6), 13600) == "secret:+13.6", "fed, its happiness up: the game's number: " .. tostring(ns.PetFeedLastShown))
+local r0 = ns:PetFeedTextReport()
+check(not issecretvalue(r0) and r0:find("secret 1", 1, true) ~= nil, "the report says so, never the secret: " .. r0)
+unreadable = true
+check(Tick(M.Secret(13.6), 13600) == "secret:+13.6", "its power unreadable too, fed: shown")
+feeding = false
+check(Tick(M.Secret(50), 0) == nil, "not fed (its focus): nothing")
+out("== its auras hidden (a fight): fed while the effect read last has time left")
+feeding = true
+M.Fire("UNIT_AURA", "pet")
+check(ns.PetFeedOn() == true, "fed, read")
+S.secretAuras = true
+check(ns.PetFeedOn() == true, "hidden, time left: fed")
+check(Tick(M.Secret(13.6), 0) == "secret:+13.6", "a tick then: shown")
+GetTime = function() return 2000 end
+check(ns.PetFeedOn() == nil, "hidden, its time over: cannot tell")
+GetTime = function() return M.now or 0 end
+S.secretAuras = false
 unreadable, feeding = false, true
 M.Fire("UNIT_POWER_UPDATE", "pet", "HAPPINESS"); Timers()
 

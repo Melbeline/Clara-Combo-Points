@@ -1,8 +1,9 @@
--- A quest shared from the chat (QuestShare.lua): the "Quest accepted" line's quest a link (the bubble after it with the
--- box ticked, off by default); over it, out of combat, the secure pad under the mouse; a double middle click on the
--- name, or a left click on the bubble, aims the game's Share at that quest (the macro of /click steps), a single
--- middle click nothing; out of a group, with the map open, or in a fight: nothing, and why said; the pad away as a fight
--- begins; a line that names no quest of the log left as it is.
+-- A quest from the chat (QuestShare.lua): the "Quest accepted" line's quest a link (the bubble after it with the box
+-- ticked, off by default); over it, out of combat, the secure pad under the mouse; a double middle click on the name,
+-- or a left click on the bubble, opens the map on that quest (the game's row of it pressed: its details) and, in a
+-- group, presses the game's Share; the map left open on the quest (no Back, no closing); the map already open: not
+-- opened again; the row not there yet: said; a single middle click nothing; in a fight nothing, and why said; the pad
+-- away as a fight begins; a line that names no quest of the log left as it is.
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -65,28 +66,69 @@ M.cursorX, M.cursorY = 300, 200
 enter(ChatFrame1, "addon:ClaraComboPoints:qshare:quest:1105")
 local pad = _G.ClaraQuestSharePad
 check(pad and pad:IsShown(), "over the quest's name: the pad under the mouse")
+-- the map's quest pane, its row of the quest and its details' Share (the game's)
+QuestMapFrame.DetailsFrame = CreateFrame("Frame", nil, QuestMapFrame)
+QuestMapFrame.DetailsFrame.ShareButton = CreateFrame("Button", nil, QuestMapFrame.DetailsFrame)
+local row = CreateFrame("Button", nil, QuestMapFrame)
+row.questID = 1105
+local rowThere = true
+function QuestLogQuests_GetQuestButton(id) if rowThere and id == row.questID then return row end end
+function issecurevariable() return true end
+local aimed
 local function Click(button)
   pad:GetScript("PreClick")(pad, button)
   local m = pad:GetAttribute("macrotext")
+  aimed = {}
+  if m ~= "" then
+    -- (the macro's /click steps: each one aimed as it runs; the first opens the map)
+    for i = 1, 20 do
+      local step = _G["ClaraQuestShareStep" .. i]
+      if not step then break end
+      local pre = step:GetScript("PreClick")
+      if pre then pre(step, "LeftButton") end
+      aimed[i] = step:GetAttribute("clickbutton")
+      if i == 1 and aimed[1] then WorldMapFrame:Show(); QuestMapFrame:Show() end
+    end
+  end
   pad:GetScript("PostClick")(pad, button)
+  WorldMapFrame:Hide()
   return m
 end
 check(Click("MiddleButton") == "", "a single middle click: nothing")
 now = now + 0.2
 local m = Click("MiddleButton")
-check(m and m:find("/click [nomod] ClaraQuestShareStep1", 1, true) and m:find("/click ClaraQuestShareStep8", 1, true), "a double middle click: the game's Share pressed for that quest")
+check(m and m:find("/click [nomod] ClaraQuestShareStep1", 1, true) and m:find("/click ClaraQuestShareStep8", 1, true)
+  and not m:find("Step9", 1, true), "a double middle click: the macro, eight steps (no Back, no closing)")
+check(aimed[1] == MinimapCluster.ZoneTextButton and aimed[7] == row and aimed[8] == QuestMapFrame.DetailsFrame.ShareButton,
+  "the map opened, the quest's row pressed (its details), the game's Share pressed")
 now = now + 2
 check(Click("LeftButton") == "", "a left click on the name: nothing")
 enter(ChatFrame1, "addon:ClaraComboPoints:qshare:share:1106")
 check((Click("LeftButton") or ""):find("ClaraQuestShareStep", 1, true), "a left click on the bubble: shared")
 
-out("== why not")
+out("== out of a group, the map open, the row not there")
+enter(ChatFrame1, "addon:ClaraComboPoints:qshare:quest:1105")
 grouped = false
-check(Click("LeftButton") == "" and said[#said]:find("not in a group", 1, true), "out of a group: said")
+now = now + 2; Click("MiddleButton"); now = now + 0.2
+m = Click("MiddleButton")
+check(m ~= "" and aimed[7] == row and aimed[8] == nil, "out of a group: its details shown, no Share")
 grouped = true
-WorldMapFrame:Show()
-check(Click("LeftButton") == "" and said[#said]:find("Close the world map", 1, true), "the map open: said")
+WorldMapFrame:Show(); QuestMapFrame:Show()
+local opened = 0
+MinimapCluster.ZoneTextButton:SetScript("OnClick", function() opened = opened + 1 end)
+now = now + 2; pad:GetScript("PreClick")(pad, "MiddleButton"); pad:GetScript("PostClick")(pad, "MiddleButton"); now = now + 0.2
+pad:GetScript("PreClick")(pad, "MiddleButton")
+local step1 = _G.ClaraQuestShareStep1
+check(pad:GetAttribute("macrotext") ~= "" and step1:GetAttribute("clickbutton") == nil, "the map already open: not opened again (nothing said)")
+pad:GetScript("PostClick")(pad, "MiddleButton")
 WorldMapFrame:Hide()
+rowThere = false
+now = now + 2; Click("MiddleButton"); now = now + 0.2
+local before = #said
+m = Click("MiddleButton")
+check(#said == before + 1 and said[#said]:find("double middle click", 1, true), "the row not there yet: said (" .. tostring(said[#said]) .. ")")
+check(ns:QuestShareReport():find("no row", 1, true), "the report says why: " .. ns:QuestShareReport())
+rowThere = true
 pad:GetScript("OnLeave")(pad)
 check(not pad:IsShown(), "the mouse away: the pad away")
 enter(ChatFrame1, "addon:ClaraComboPoints:qshare:quest:1105")
