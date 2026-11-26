@@ -10,6 +10,12 @@ local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c th
 GetBuildInfo = function() return "1.60.1", "70938", "Nov 13 2026", 16001 end
 ClaraComboPointsDB = { qol = setmetatable({ petfeed = true }, { __index = function() return false end }) }
 function CombatFeedback_OnCombatEvent() end -- (the game's number on a unit frame's portrait)
+COMBATLOG = { AddMessage = function() end } -- (the combat log's window, Blizzard_CombatLog)
+C_AddOns = C_AddOns or {}
+local isLoaded = C_AddOns.IsAddOnLoaded
+C_AddOns.IsAddOnLoaded = function(name) if name == "Blizzard_CombatLog" then return true, true end return isLoaded and isLoaded(name) end
+local oldUN = UnitName
+function UnitName(u) if u == "pet" then return "The Rake" end return oldUN(u) end
 PetFrame = CreateFrame("Button", "PetFrame", UIParent)
 PetFrame:SetSize(120, 49)
 PetFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 100, -200)
@@ -99,6 +105,23 @@ feeding = true
 local rep = ns:PetFeedTextReport()
 check(rep:find("the portrait's own numbers 4", 1, true) and rep:find("WOUND 1", 1, true) and rep:find("feedback ok", 1, true)
   and rep:find("UNIT_COMBAT ok", 1, true), "the report: what the game told\n" .. rep)
+
+out("== the combat log's own line, where the game lets it be read")
+ns.PetFeedLastShown = nil
+COMBATLOG:AddMessage("|cffffffff03:22:36>|r Your |Hspell:1539:0|h|cff71d5ffFeed Pet Effect|r|h energized |Hunit:Pet-0-1|hThe Rake|h 0.7.", 1, 1, 1); Timers()
+check(ns.PetFeedLastShown == "+0.7", "read: its number, +0.7 (" .. tostring(ns.PetFeedLastShown) .. ")")
+ns.PetFeedLastShown = nil
+COMBATLOG:AddMessage("Your Feed Pet Effect energized The Rake 13.6.", 1, 1, 1); Timers()
+check(ns.PetFeedLastShown == "+13.6", "+13.6 (" .. tostring(ns.PetFeedLastShown) .. ")")
+ns.PetFeedLastShown = nil
+COMBATLOG:AddMessage("Bob's Feed Pet Effect energized Fluffy 8.", 1, 1, 1); Timers()
+check(ns.PetFeedLastShown == nil, "another hunter's pet: nothing")
+ns.PetFeedLastShown = nil
+COMBATLOG:AddMessage("|Kq12|k", 1, 1, 1); Timers()
+check(ns.PetFeedLastShown == nil, "a protected line: nothing (counted)")
+COMBATLOG:AddMessage("Your Arcane Shot hit Boar 22.", 1, 1, 1); Timers()
+local lr = ns:PetFeedTextReport()
+check(lr:find("the combat log's lines: 5 (protected 1, secret 0, readable 4; Feed Pet Effect on the pet 2", 1, true), "the report: " .. lr)
 
 out("== its auras hidden (a fight): fed while the effect read last has time left")
 feeding = true
