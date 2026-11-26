@@ -18,6 +18,16 @@ function ns:SetWhoNames(on)
   if on then self.sv.whoNames = nil else self.sv.whoNames = false end
 end
 
+-- (the column header's box, further down: defined before the game's functions are looked for, its box always on the page)
+local ApplyHeader = function() end
+function ns:WhoHeader() return not (self.sv and self.sv.whoHeader == false) end
+function ns:SetWhoHeader(on)
+  if self.sv then
+    if on then self.sv.whoHeader = nil else self.sv.whoHeader = false end
+  end
+  ApplyHeader()
+end
+
 local F = C_FriendList
 if not (F and F.GetNumWhoResults and F.GetWhoInfo and F.SendWho) then return end
 
@@ -212,20 +222,234 @@ local function HookSort()
   hooksecurefunc(util, "InitSortOptions", function(root) pcall(AddGuildSort, root) end)
 end
 
+---------------------------------------------------------------------------
+-- The column header, as vanilla's Who window had it: Name, Zone (its menu: Zone, Guild or Race), Lvl, Class, above the
+-- group finder's Who list. A click sorts the list: Name A to Z, again Z to A; Lvl the highest first, again the lowest;
+-- Class (and Zone, Guild, Race) A to Z, again Z to A, the names A to Z within each; the pick kept for the account. The
+-- list sorted here, as the game hands it (its own functions untouched). The game's Filter button hidden (its filters
+-- left as they start: none). A box on Clara's page (on by default): off, the game's own as it was.
+---------------------------------------------------------------------------
+ApplyHeader = function() end
+
+local FIELD = { name = "fullName", level = "level", class = "classStr", zone = "area", guild = "fullGuildName", race = "raceStr" }
+local function Sort()
+  local s = ns.sv and type(ns.sv.whoSort) == "table" and ns.sv.whoSort or nil
+  local key = s and FIELD[s.k] and s.k or nil
+  return key, key and s.d == true or false
+end
+local function Variable()
+  local v = ns.sv and ns.sv.whoVariable
+  return (v == "guild" or v == "race") and v or "zone"
+end
+local function Key(text)
+  if type(text) ~= "string" or issecretvalue(text) then return "" end
+  return ns:SearchKey(text)
+end
+
+-- Two rows of the list (their data: { index, info }) in the order picked
+local function Before(a, b)
+  local key, desc = Sort()
+  local ia, ib = type(a) == "table" and a.info or {}, type(b) == "table" and b.info or {}
+  local na, nb = Key(ia.fullName), Key(ib.fullName)
+  if key == "level" then
+    local la, lb = tonumber(ia.level) or 0, tonumber(ib.level) or 0
+    if la ~= lb then if desc then return la > lb end return la < lb end
+    return na < nb
+  elseif key == "name" then
+    if na ~= nb then if desc then return na > nb end return na < nb end
+    return (tonumber(a.index) or 0) < (tonumber(b.index) or 0)
+  end
+  local fa, fb = Key(ia[FIELD[key]]), Key(ib[FIELD[key]])
+  if fa ~= fb then
+    if fa == "" then return false elseif fb == "" then return true end -- (none, no guild: last)
+    if desc then return fa > fb end
+    return fa < fb
+  end
+  return na < nb
+end
+ns.WhoBefore = Before -- (for the tests)
+
+local function SortList(provider)
+  if not (ns:WhoHeader() and Sort()) or type(provider) ~= "table" then return end
+  if provider.sortComparator == Before and type(provider.Sort) == "function" then
+    pcall(provider.Sort, provider)
+  elseif type(provider.SetSortComparator) == "function" then
+    pcall(provider.SetSortComparator, provider, Before)
+  end
+end
+
+local header, tabs = nil, {}
+local TAB_TEXT = function(key)
+  if key == "name" then return NAME or L.WHO_COL_NAME end
+  if key == "level" then return LEVEL_ABBR or L.WHO_COL_LEVEL end
+  if key == "class" then return CLASS or L.WHO_COL_CLASS end
+  if key == "guild" then return GUILD or L.WHO_COL_GUILD end
+  if key == "race" then return RACE or L.WHO_COL_RACE end
+  return ZONE or L.WHO_COL_ZONE
+end
+
+-- The tabs' texts: the one sorted in gold
+local function Paint()
+  if not header then return end
+  local key = Sort()
+  for k, tab in pairs(tabs) do
+    local on = key == k or (k == "variable" and key == Variable())
+    tab.label:SetText(TAB_TEXT(k == "variable" and Variable() or k))
+    if on then tab.label:SetTextColor(1, 0.82, 0) else tab.label:SetTextColor(1, 1, 1) end
+  end
+end
+
+local function Resort(frame)
+  Paint()
+  local box = frame and frame.ScrollBox
+  local provider = type(box) == "table" and type(box.GetDataProvider) == "function" and box:GetDataProvider() or nil
+  SortList(provider)
+end
+
+-- A click on a tab: that column (again: the other way); a column's first click: Lvl the highest first, the others A to Z
+local function Pick(frame, key)
+  local now, desc = Sort()
+  if now == key then desc = not desc else desc = key == "level" end
+  if ns.sv then ns.sv.whoSort = { k = key, d = desc or nil } end
+  if PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+  Resort(frame)
+end
+ns.WhoPick = function(key) Pick(_G.LFGWhoListFrame, key) end -- (for the tests)
+
+local function Tab(parent, key)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetHeight(24)
+  local file = "Interface\\FriendsFrame\\WhoFrame-ColumnTabs"
+  local left = b:CreateTexture(nil, "BACKGROUND")
+  left:SetTexture(file); left:SetTexCoord(0, 0.078125, 0, 0.75); left:SetSize(5, 24); left:SetPoint("TOPLEFT")
+  local right = b:CreateTexture(nil, "BACKGROUND")
+  right:SetTexture(file); right:SetTexCoord(0.90625, 0.96875, 0, 0.75); right:SetSize(4, 24); right:SetPoint("TOPRIGHT")
+  local middle = b:CreateTexture(nil, "BACKGROUND")
+  middle:SetTexture(file); middle:SetTexCoord(0.078125, 0.90625, 0, 0.75)
+  middle:SetPoint("TOPLEFT", left, "TOPRIGHT"); middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
+  local glow = b:CreateTexture(nil, "HIGHLIGHT")
+  glow:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-Tab-Highlight")
+  glow:SetBlendMode("ADD")
+  glow:SetPoint("TOPLEFT", -2, 5); glow:SetPoint("BOTTOMRIGHT", 2, -7)
+  b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.label:SetPoint("LEFT", 8, 0)
+  b.label:SetJustifyH("LEFT")
+  b.key = key
+  tabs[key] = b
+  return b
+end
+
+local ROOM = 6 -- (the list that much lower for the header)
+local function MakeHeader(frame)
+  local box = type(frame) == "table" and frame.ScrollBox
+  if header or type(box) ~= "table" or not box.GetPoint then return end
+  header = CreateFrame("Frame", nil, frame)
+  header:SetHeight(24)
+  header:SetPoint("BOTTOMLEFT", box, "TOPLEFT", -2, 1)
+  header:SetPoint("BOTTOMRIGHT", box, "TOPRIGHT", 2, 1)
+  header:SetFrameLevel((frame:GetFrameLevel() or 0) + 5)
+  for _, key in ipairs({ "name", "variable", "level", "class" }) do
+    local tab = Tab(header, key)
+    tab:SetScript("OnClick", function() Pick(frame, key == "variable" and Variable() or key) end)
+  end
+  -- (Zone's menu: Zone, Guild or Race, sorted by it as it is picked)
+  local arrow = CreateFrame("Button", nil, tabs.variable)
+  arrow:SetSize(20, 20)
+  arrow:SetPoint("RIGHT", -3, 0)
+  arrow:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+  arrow:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
+  arrow:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+  arrow:SetScript("OnClick", function(self)
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
+    MenuUtil.CreateContextMenu(self, function(_, root)
+      for _, v in ipairs({ "zone", "guild", "race" }) do
+        root:CreateRadio(TAB_TEXT(v), function() return Variable() == v end, function()
+          if ns.sv then ns.sv.whoVariable = v ~= "zone" and v or nil; ns.sv.whoSort = { k = v } end
+          Resort(frame)
+        end, v)
+      end
+    end)
+  end)
+  tabs.variable.arrow = arrow
+  ns.WhoVariablePick = function(v) -- (for the tests: the menu's pick)
+    if ns.sv then ns.sv.whoVariable = v ~= "zone" and v or nil; ns.sv.whoSort = { k = v } end
+    Resort(frame)
+  end
+  -- (the widths: Name 32%, Zone 36%, Lvl 12%, Class the rest)
+  local function Lay()
+    local w = header:GetWidth() or 0
+    if w <= 0 then return end
+    local x = 0
+    for _, part in ipairs({ { "name", 0.32 }, { "variable", 0.36 }, { "level", 0.12 }, { "class", 0 } }) do
+      local tab = tabs[part[1]]
+      local width = part[2] > 0 and math.floor(w * part[2]) or (w - x)
+      tab:ClearAllPoints()
+      tab:SetPoint("TOPLEFT", header, "TOPLEFT", x, 0)
+      tab:SetWidth(width)
+      x = x + width
+    end
+  end
+  header:SetScript("OnSizeChanged", Lay)
+  header:SetScript("OnShow", function() Lay(); Paint() end)
+  Lay()
+  Paint()
+  -- (the game's Filter button kept hidden while the header shows)
+  local filter = frame.FilterDropdown
+  if type(filter) == "table" and filter.HookScript then
+    filter:HookScript("OnShow", function(self) if ns:WhoHeader() then self:Hide() end end)
+  end
+  -- the list moved down a little for the header (its first corner), as the game had it otherwise
+  header.boxPoints = {}
+  for i = 1, 5 do
+    local ok, point, rel, relPoint, x, y = pcall(box.GetPoint, box, i)
+    if not ok or not point then break end
+    header.boxPoints[i] = { point, rel, relPoint, x, y }
+  end
+  ns.WhoHeaderFrame = header -- (for the tests)
+end
+
+ApplyHeader = function()
+  local frame = _G.LFGWhoListFrame
+  if type(frame) ~= "table" then return end
+  if ns:WhoHeader() then MakeHeader(frame) end
+  if not header then return end
+  local on = ns:WhoHeader()
+  header:SetShown(on)
+  local filter = frame.FilterDropdown
+  if type(filter) == "table" and filter.SetShown then filter:SetShown(not on) end
+  local box, points = frame.ScrollBox, header.boxPoints
+  if points and points[1] and points[1][1] and box.SetPoint then
+    box:ClearAllPoints()
+    for i, pt in ipairs(points) do
+      if i == 1 then box:SetPoint(pt[1], pt[2], pt[3], pt[4] or 0, (pt[5] or 0) - (on and ROOM or 0))
+      else box:SetPoint(unpack(pt)) end
+    end
+    if frame.BarTop and frame.BarTop.SetShown then frame.BarTop:SetShown(not on) end
+  end
+  Resort(frame)
+end
+
 local hooked = {}
 local function Watch(frame)
   local box = frame and frame.ScrollBox
   if type(box) ~= "table" or hooked[box] or type(box.SetDataProvider) ~= "function" then return end
   hooked[box] = true
-  hooksecurefunc(box, "SetDataProvider", Filter)
+  hooksecurefunc(box, "SetDataProvider", function(self, provider)
+    Filter(self, provider)
+    SortList(provider)
+  end)
 end
 local function WatchAll()
   Watch(_G.LFGWhoListFrame) -- (WoW Forever: the Who list is the group finder's third tab)
   MakeExact(_G.LFGWhoListFrame)
   HookSort()
   Watch(_G.WhoFrame)
+  if _G.LFGWhoListFrame then ApplyHeader() end
 end
 WatchAll()
+local login = CreateFrame("Frame")
+login:RegisterEvent("PLAYER_LOGIN")
+login:SetScript("OnEvent", function() ApplyHeader() end) -- (Clara's settings read by now: the box's pick)
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(self, _, name)
