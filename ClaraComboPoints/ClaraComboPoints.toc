@@ -57,6 +57,7 @@ SitKey.lua
 TargetMacro.lua
 EnchantConfirm.lua
 RecipeMemory.lua
+ProfCooldowns.lua
 LegacyTree.lua
 Tracker.lua
 Clicks.lua

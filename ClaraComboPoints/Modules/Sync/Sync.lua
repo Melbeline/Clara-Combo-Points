@@ -98,7 +98,7 @@ S.Canon = Canon
 -- The kinds of entries: where each is, its time, its content
 --   r: a character of the mail list   c: a category   i: an item given   o: one of the account's own
 --   h: a character's stock            s: a mail sent  a: the account bank p: a recipe known
---   n: an account's name (gold)       g: a character's gold, level and class
+--   n: an account's name (gold)       g: a character's gold, level and class (and its profession cooldowns)
 -- d is { mail = ClaraMailDB, craft = ClaraCraftDB, money = ClaraMoneyDB } (this account's, or another's from its file)
 ---------------------------------------------------------------------------
 local K = {}
@@ -269,7 +269,7 @@ if Gd then
     stamp = function(d, key) local r = d.money.chars[key]; return r and r.at or d.money.gone[key] or 0 end,
     get = function(d, key)
       local r = d.money.chars[key]
-      return r and { n = r.n, s = r.s, r = r.r, c = r.c, l = r.l, m = r.m, a = r.a } or nil
+      return r and { n = r.n, s = r.s, r = r.r, c = r.c, l = r.l, m = r.m, a = r.a, t = r.t } or nil
     end,
     put = function(key, rec, at)
       if type(key) ~= "string" then return end

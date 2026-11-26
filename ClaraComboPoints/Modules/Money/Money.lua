@@ -20,6 +20,21 @@ local function Random(n)
   return table.concat(out)
 end
 
+-- Its profession cooldowns (ProfCooldowns.lua): { [key] = { e = when ready (time()), g = 1 for a transmute } }, the
+-- key "s<spell>" or "i<item>"
+local function CleanTimers(t)
+  if type(t) ~= "table" then return nil end
+  local out, n = {}, 0
+  for key, v in pairs(t) do
+    if type(key) == "string" and key:match("^[si]%d+$") and type(v) == "table" and type(v.e) == "number" and n < 40 then
+      out[key] = { e = math.max(0, math.floor(v.e)), g = v.g == 1 and 1 or nil }
+      n = n + 1
+    end
+  end
+  return n > 0 and out or nil
+end
+G.CleanTimers = CleanTimers
+
 -- A record as it may be kept (from this account, another's file or a message): only its known fields
 local function CleanChar(rec, at)
   if type(rec) ~= "table" then return nil end
@@ -31,6 +46,7 @@ local function CleanChar(rec, at)
     l = type(rec.l) == "number" and math.floor(rec.l) or 0,
     m = type(rec.m) == "number" and math.max(0, math.floor(rec.m)) or 0,
     a = type(rec.a) == "string" and rec.a or nil,
+    t = CleanTimers(rec.t),
     at = type(at) == "number" and at or (type(rec.at) == "number" and rec.at or 0),
   }
   if not (out.n and out.a) then return nil end
@@ -139,7 +155,8 @@ local function Record()
   local surname = Surname()
   local old = G.db.chars[key]
   if old and old.m == money and old.l == level and old.c == class and old.a == G.db.me and old.s == surname then return end
-  G.db.chars[key] = { n = name, s = surname, r = realm, c = class, l = level, m = money, a = G.db.me, at = time() }
+  G.db.chars[key] = { n = name, s = surname, r = realm, c = class, l = level, m = money, a = G.db.me, t = old and old.t or nil,
+    at = time() }
   G.db.gone[key] = nil
   if G.Touched then G.Touched("g", key) end
   if G.Changed then G.Changed() end
