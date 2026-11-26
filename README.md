@@ -109,7 +109,6 @@ Chaque fonction en une ligne ; le détail de chacune est plus bas.
 
 - **Nouveau rang d'un sort** mis tout seul sur tes barres d'action.
 - **Menu de l'equipment manager** placé à côté du slot, sans cacher le personnage.
-- **Sacs au-dessus d'AtlasLoot**.
 - **Molette pour tourner les pages** des livres et des lettres.
 - **Fenêtre de butin vide fermée** toute seule.
 - **Maj + Espace** pour s'asseoir ou se relever, activé par défaut.
@@ -334,8 +333,6 @@ La page **Clara** elle-même défile d'un bloc quand elle est plus haute que la 
 **Clic droit sur le bouton de pistage de la minicarte** : arrête le pistage en cours (Pister les bêtes, Découverte d'herbes…), comme un clic droit sur son buff en 1.x, en combat aussi ; l'infobulle du bouton le dit quand un pistage est actif. Le clic gauche ouvre toujours le menu du jeu.
 
 **`/played` toujours affiché** : en combat, la réponse du jeu à `/played` arrivait sans qu'aucune fenêtre de chat ne l'affiche. Si aucune ligne « Temps de jeu total » n'apparaît dans le chat juste après la réponse, Clara l'écrit dans la fenêtre de chat principale avec la fonction du jeu elle-même (même texte, même couleur) ; affichée par le jeu, elle n'est jamais écrite deux fois.
-
-**Sacs au-dessus d'AtlasLoot** : la fenêtre d'AtlasLoot est dans une strate au-dessus de celle des sacs, qui passaient dessous. Tant qu'elle est ouverte, les sacs prennent la strate juste au-dessus de la sienne (lue sur sa fenêtre, quelle que soit sa version) ; elle fermée, ils reprennent la leur.
 
 **Chronomètre gardé** : le chronomètre du jeu (`/stopwatch`, le menu de l'horloge) se fermait et repartait de zéro à chaque rechargement ou déconnexion. Il est gardé **pour chaque personnage** : affiché, lancé ou en pause, son temps, et l'heure où tu l'as quitté. À la prochaine connexion de ce personnage (ou après le `/reload`), il revient **avec le temps passé ailleurs** s'il tournait : rechargement (au millième), déconnexion, autre personnage joué entre-temps, jeu fermé (à la seconde, d'après l'horloge de l'ordinateur), comme s'il ne s'était jamais arrêté. En pause, il revient tel quel ; un compte à rebours fini pendant ton absence ne revient pas. Un autre personnage a le sien (aucun s'il ne s'en est pas servi). Un plantage du jeu n'enregistre rien (le jeu n'écrit les sauvegardes qu'à la déconnexion) : le chronomètre reprend alors là où il était à la dernière déconnexion.
 
