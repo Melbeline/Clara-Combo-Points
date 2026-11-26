@@ -1,6 +1,6 @@
 -- The target's name into a macro (TargetMacro.lua): a double click on the target frame's name writes it in the macro
--- ClaraTarget, made the first time ("/tm8" then "/tar <name>"); its /tar line takes the new name, the player's other
--- lines kept; a double middle click: its first word only; two clicks apart, a right click: nothing; in a fight:
+-- ClaraTarget, made the first time ("/tm8" then "/tar <name>"): its first word (a double middle click: the whole
+-- name); its /tar line takes the new name, the player's other lines kept; two clicks apart, a right click: nothing; in a fight:
 -- written as it ends; the box off: nothing; a macro too long: nothing changed; on the name's own button (GameFixes).
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
@@ -45,19 +45,19 @@ local Click = ns.TargetMacroClick
 local function Double(button) Click(nil, button); now = now + 0.2; Click(nil, button); now = now + 2 end
 local function Body() local i = GetMacroIndexByName("ClaraTarget") return i > 0 and macros[i].body or nil end
 
-out("== the first double click: the macro made")
-Double("LeftButton")
+out("== the first double click (middle): the macro made, the whole name")
+Double("MiddleButton")
 check(Body() == "/tm8\n/tar Hatefury Felsworn", "ClaraTarget: /tm8, /tar the whole name: " .. tostring(Body()))
 check(macros[1] and not macros[1].perChar, "the account's")
 check(said[#said]:find("/tar Hatefury Felsworn", 1, true), "said in the chat")
 out("== the player's own line kept")
 macros[1].body = "/tm8\n/tar Hatefury Felsworn\n/cast Shadow Word: Pain"
 targetName = "Gorefang Ravager"
-Double("LeftButton")
-check(Body() == "/tm8\n/tar Gorefang Ravager\n/cast Shadow Word: Pain", "the /tar line changed, /cast kept: " .. Body():gsub("\n", " | "))
-out("== a double middle click: its first word only")
-targetName = "Hatefury Felsworn"
 Double("MiddleButton")
+check(Body() == "/tm8\n/tar Gorefang Ravager\n/cast Shadow Word: Pain", "the /tar line changed, /cast kept: " .. Body():gsub("\n", " | "))
+out("== a double left click: its first word only")
+targetName = "Hatefury Felsworn"
+Double("LeftButton")
 check(Body() == "/tm8\n/tar Hatefury\n/cast Shadow Word: Pain", "/tar Hatefury: " .. Body():gsub("\n", " | "))
 out("== not a double click: nothing")
 targetName = "Someone Else"
@@ -69,15 +69,15 @@ Double("RightButton")
 check(Body():find("/tar Hatefury\n", 1, true), "a right double click (the menu): nothing")
 out("== a macro the player changed: /target line taken, or one put after /tm")
 macros[1].body = "/cast Renew\n/target Old Name"
-Double("LeftButton")
+Double("MiddleButton")
 check(Body() == "/cast Renew\n/tar Someone Else", "its /target line: " .. Body():gsub("\n", " | "))
 macros[1].body = "/tm 8\n/cast Renew"
-Double("LeftButton")
+Double("MiddleButton")
 check(Body() == "/tm 8\n/tar Someone Else\n/cast Renew", "no /tar line: one after /tm: " .. Body():gsub("\n", " | "))
 out("== in a fight: written as it ends")
 S.inCombat = true
 targetName = "Fight Mob"
-local ok = pcall(Double, "LeftButton")
+local ok = pcall(Double, "MiddleButton")
 check(ok and not Body():find("Fight Mob", 1, true) and said[#said]:find("Fight Mob", 1, true), "nothing changed in it, said")
 S.inCombat = false
 M.Fire("PLAYER_REGEN_ENABLED")
@@ -86,7 +86,7 @@ out("== too long for a macro: nothing changed")
 macros[1].body = "/tm8\n/tar x\n/cast " .. ("a"):rep(240)
 local before = macros[1].body
 targetName = "Long Name Here"
-Double("LeftButton")
+Double("MiddleButton")
 check(macros[1].body == before and said[#said]:find("255", 1, true), "left as it was, said")
 out("== the box off: nothing")
 macros[1].body = "/tm8\n/tar x"

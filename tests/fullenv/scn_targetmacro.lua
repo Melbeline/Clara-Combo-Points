@@ -21,7 +21,7 @@ if catcher then
   if up then
     local ok, e = pcall(up, catcher, "LeftButton")
     ok, e = pcall(up, catcher, "LeftButton")
-    check(ok and written == "/tm8\n/tar Hatefury Felsworn", "a double click: the macro written " .. tostring(e or written))
+    check(ok and written == "/tm8\n/tar Hatefury", "a double click: the macro written, the first word " .. tostring(e or written))
   end
 end
 print("scenario: targetmacro failures " .. fails)
