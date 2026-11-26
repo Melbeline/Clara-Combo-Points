@@ -3,8 +3,10 @@
 -- names in English, French and German; nil: as in English; Spectral Stalker and Onyxia's Elite Guard left out: no rares), and the 156 more RareScanner for WoW Forever (1.60.1.5) knows:
 -- the rares new in Forever (the starting zones, Mount Hyjal, the Zephras Isles, the Riverglades...), classic rares the
 -- first list missed, the dungeons' rares and those of events (their names in English only; its test creature and two
--- friendly quest NPCs left out). A creature is known by its ID here, and other players' sightings come by name, in
--- their game's language.
+-- friendly quest NPCs left out), and the 3 dungeon rares neither knew (Bruegal Ironknuckle in the Stockade, Mad Magglish
+-- in the Wailing Caverns' cave, Ragglesnout in Razorfen Downs: rare spawns, as the CMaNGOS Classic database has them;
+-- names in English only). A creature is known by its ID here, and other players' sightings come by name, in their
+-- game's language.
 
 local _, ns = ...
 
@@ -51,6 +53,7 @@ ns.RARES = {
   [1531] = { "Lost Soul", "Ame égarée", "Verirrte Seele" },
   [1533] = { "Tormented Spirit", "Esprit tourmenté", "Gepeinigter Geist" },
   [1552] = { "Scale Belly", "Ventrécaille", "Schuppenbauch" },
+  [1720] = { "Bruegal Ironknuckle" },
   [1837] = { "Scarlet Judge", "Juge écarlate", "Scharlachroter Richter" },
   [1838] = { "Scarlet Interrogator", "Interrogateur écarlate", "Scharlachroter Befrager" },
   [1839] = { "Scarlet High Clerist", "Grand prêtre écarlate", "Scharlachroter Hochkleriker" },
@@ -113,6 +116,7 @@ ns.RARES = {
   [3581] = { "Sewer Beast", "Bête des égouts", "Kanalbestie" },
   [3586] = { "Miner Johnson" },
   [3652] = { "Trigore the Lasher" },
+  [3655] = { "Mad Magglish" },
   [3672] = { "Boahn" },
   [3735] = { "Apothecary Falthis", "Apothicaire Falthis", "Apotheker Falthis" },
   [3773] = { "Akkrilus" },
@@ -208,6 +212,7 @@ ns.RARES = {
   [7057] = { "Digmaster Shovelphlange" },
   [7104] = { "Dessecus", nil, "Moosmannus" },
   [7137] = { "Immolatus", nil, "Korruptus" },
+  [7354] = { "Ragglesnout" },
   [7846] = { "Teremus the Devourer", "Teremus le Dévoreur", "Teremus der Verschlinger" },
   [7895] = { "Ambassador Bloodrage", "Ambassadeur Ragesang", "Botschafter Blutzorn" },
   [8199] = { "Warleader Krazzilak", "Chef de guerre Krazzilak", "Kriegsanführer Krazzilak" },
