@@ -4,15 +4,18 @@
 -- again on that profession, it is picked again and the list scrolled to it. The game sets its page up several times as
 -- the window opens (the first time often before its recipes have come: an empty list): tried again each time until the
 -- recipe is found, or the player picks one; meanwhile the game's own picks (its first recipe) are not the player's: only
--- a pick that follows a click on a row of the list is. A recipe opened from a link: the game's choice (and the one kept).
--- A recipe the list no longer shows (filtered out, folded away, unlearned): the game's choice.
+-- a pick that follows a click in the list is (the game's rows, or an addon's own list over them: ForeverRecipes'). Every
+-- recipe the page shows is seen (its SelectRecipe), whichever list picked it. A recipe opened from a link: the game's
+-- choice (and the one kept). A recipe the list no longer shows (filtered out, folded away, unlearned): the game's choice.
 
 local ADDON, ns = ...
 
 local owner = {} -- (its callback's, in the game's EventRegistry)
 local restoring -- the game's page setting a profession up (its first recipe about to be picked: not the player's)
 local pending -- the page set up anew (opened again, another profession): the recipe kept still to be picked again
-local clicked -- when a row of the list was last pressed (the player's pick follows)
+local clicked -- when the list was last pressed (the player's pick follows)
+local selecting -- (its own pick, the recipe kept picked again)
+local CLICK_WINDOW = 1.5 -- seconds from the press to the pick
 local rowsWatched = setmetatable({}, { __mode = "k" })
 local trace, setup = {}, {} -- (the mouse report, /cl souris: what happened lately, and what got hooked)
 local function Note(text)
@@ -40,10 +43,11 @@ end
 
 -- A recipe picked in the list (by the player): kept for its profession
 local function Picked(page, recipeInfo, list)
-  if not page or list ~= page.RecipeList then return end
-  local byPlayer = clicked and GetTime() - clicked < 0.5
-  clicked = nil
+  if not page or list ~= page.RecipeList or selecting then return end
   local id = recipeInfo and recipeInfo.recipeID
+  if not id then return end
+  local byPlayer = clicked and GetTime() - clicked < CLICK_WINDOW
+  clicked = nil
   if (pending or restoring) and not byPlayer then -- (the game's own pick while it sets its page up)
     Note("the game picked " .. NameOf(id) .. ": not kept")
     return
@@ -75,7 +79,10 @@ local function Restore(page, professionInfo)
   if not (list and list.SelectRecipe and C_TradeSkillUI and C_TradeSkillUI.GetRecipeInfo) then return end
   local info = C_TradeSkillUI.GetRecipeInfo(id)
   if not info then Note("set up: no recipe info for " .. tostring(id) .. " yet") return end
-  local data = list:SelectRecipe(info, false)
+  selecting = true
+  local ok, data = pcall(list.SelectRecipe, list, info, false)
+  selecting = nil
+  if not ok then data = nil end
   if not data then Note("set up: " .. NameOf(id) .. " not in the list yet, tried again at the next set-up") return end
   pending = nil
   Note("set up: " .. NameOf(id) .. " picked again")
@@ -106,11 +113,26 @@ local function Setup()
     end, owner)
     setup.rows = true
   end
-  if EventRegistry and EventRegistry.RegisterCallback then
+  -- every recipe the page shows, whichever list picked it (the game's sends its event, then shows it here)
+  if type(page.SelectRecipe) == "function" then
+    hooksecurefunc(page, "SelectRecipe", function(self, recipeInfo) Picked(self, recipeInfo, self.RecipeList) end)
+    setup.page = true
+  elseif EventRegistry and EventRegistry.RegisterCallback then
     EventRegistry:RegisterCallback("ProfessionsRecipeListMixin.Event.OnRecipeSelected", function(_, recipeInfo, from)
       Picked(page, recipeInfo, from)
     end, owner)
   end
+  -- a press anywhere in the list (an addon's rows over the game's too), its search box and filter aside
+  local presses = CreateFrame("Frame")
+  presses:RegisterEvent("GLOBAL_MOUSE_DOWN")
+  presses:SetScript("OnEvent", function()
+    if not (ProfessionsFrame:IsShown() and list:IsVisible() and list:IsMouseOver()) then return end
+    for _, f in ipairs({ list.SearchBox, list.FilterDropdown, list.FilterButton }) do
+      if f and f.IsMouseOver and f:IsVisible() and f:IsMouseOver() then return end
+    end
+    clicked = GetTime()
+    setup.presses = (setup.presses or 0) + 1
+  end)
 end
 if EventUtil and EventUtil.ContinueOnAddOnLoaded then
   EventUtil.ContinueOnAddOnLoaded("Blizzard_Professions", Setup)
@@ -118,8 +140,9 @@ end
 
 -- What it did lately, for the mouse report (/cl souris)
 function ns:RecipeMemoryReport()
-  local out = { ("recipe memory: hooked %s, rows watched %s, waiting to pick again %s"):format(
-    tostring(setup.hooked or false), tostring(setup.rows or false), tostring(pending or false)) }
+  local out = { ("recipe memory: hooked %s, rows watched %s, page watched %s, presses in the list %d, waiting to pick again %s"):format(
+    tostring(setup.hooked or false), tostring(setup.rows or false), tostring(setup.page or false), setup.presses or 0,
+    tostring(pending or false)) }
   local kept = Kept()
   local list = {}
   for profession, id in pairs(kept or {}) do list[#list + 1] = tostring(profession) .. " = " .. NameOf(id) end
