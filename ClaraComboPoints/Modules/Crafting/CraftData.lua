@@ -38,6 +38,28 @@ local function Counts(t)
   return out
 end
 
+-- A bank as it was seen, slot by slot (Modules/BankView shows it): { at = when, t = { slots of each tab, in order },
+-- b = { [tab] = its bag's icon }, s = { [slot over all the tabs] = "item:...;count" } }
+local function CleanView(v)
+  if type(v) ~= "table" or type(v.t) ~= "table" or type(v.s) ~= "table" then return nil end
+  local out = { at = type(v.at) == "number" and v.at or 0, t = {}, b = {}, s = {} }
+  local total = 0
+  for i, n in ipairs(v.t) do
+    if type(n) ~= "number" or n < 0 or n > 200 or i > 12 then break end
+    out.t[i] = floor(n)
+    total = total + floor(n)
+  end
+  for i, icon in pairs(type(v.b) == "table" and v.b or {}) do
+    if type(i) == "number" and (type(icon) == "number" or type(icon) == "string") then out.b[i] = icon end
+  end
+  for i, item in pairs(v.s) do
+    if type(i) == "number" and i >= 1 and i <= total and type(item) == "string" and #item < 200 and item:find("^item:%d+") then
+      out.s[i] = item
+    end
+  end
+  return out
+end
+
 local function Clean(db)
   db = type(db) == "table" and db or {}
   local chars = {}
@@ -45,7 +67,7 @@ local function Clean(db)
     if type(key) == "string" and key:find("-", 1, true) and type(c) == "table" then
       chars[key] = { bags = Counts(c.bags), bank = Counts(c.bank), mail = Counts(c.mail),
         mailAt = type(c.mailAt) == "number" and c.mailAt or nil, at = type(c.at) == "number" and c.at or 0,
-        class = type(c.class) == "string" and c.class or nil, remote = c.remote == true or nil }
+        class = type(c.class) == "string" and c.class or nil, remote = c.remote == true or nil, view = CleanView(c.view) }
     end
   end
   -- the mails sent to the account's characters: { to, at, items } each, by a key of its own
@@ -88,9 +110,11 @@ local function Clean(db)
   return { mode = MODES[db.mode] and db.mode or nil, chest = Off(db.chest), search = Off(db.search), nested = db.nested == true or nil,
     filter = { on = filter.on == true or nil, bank = filter.bank == true or nil, part = filter.part == true or nil },
     chars = chars, account = Counts(db.account), accountAt = type(db.accountAt) == "number" and db.accountAt or 0,
+    accountView = CleanView(db.accountView),
     recipes = recipes, sends = sends, collapsed = next(collapsed) and collapsed or nil }
 end
 C.Clean = Clean
+C.CleanView = CleanView
 
 local db, me, mine
 local realm
@@ -294,20 +318,65 @@ function C.ScanBags()
   mine.bags, mine.at = bags, time()
   Touch("h", me)
 end
+-- A bank slot by slot, as its window shows it: its tabs in order, each slot's item ("item:...;count"), each tab's bag
+local function ViewOf(list, tabIndex)
+  local api = C_Container
+  if not (api and api.GetContainerNumSlots and api.GetContainerItemInfo) then return nil end
+  local view, at = { t = {}, b = {}, s = {} }, 0
+  for i, bag in ipairs(list) do
+    local n = tonumber(api.GetContainerNumSlots(bag)) or 0
+    view.t[i] = n
+    for slot = 1, n do
+      local ok, info = pcall(api.GetContainerItemInfo, bag, slot)
+      local link, count = ok and type(info) == "table" and info.hyperlink, ok and type(info) == "table" and info.stackCount
+      if type(link) == "string" and not issecret(link) then
+        local item = link:match("|H(item:[%-%d:]+)|h")
+        if item then view.s[at + slot] = item:gsub(":+$", "") .. ";" .. tostring(not issecret(count) and count or 1) end
+      end
+    end
+    at = at + n
+    -- (its bag's icon: the bank's bag slots, the first tab the bank's own)
+    if tabIndex and i > 1 and ItemLocation and C_Item and C_Item.GetItemIcon and C_Item.DoesItemExist then
+      local okL, loc = pcall(ItemLocation.CreateFromBagAndSlot, ItemLocation, tabIndex, i)
+      if okL and loc and pcall(C_Item.DoesItemExist, loc) and C_Item.DoesItemExist(loc) then
+        local okI, icon = pcall(C_Item.GetItemIcon, loc)
+        if okI and icon and not issecret(icon) then view.b[i] = icon end
+      end
+    end
+  end
+  return view
+end
+C.ViewOf = ViewOf -- (for the tests)
+
+local function SameView(a, b)
+  if not (a and b) or #a.t ~= #b.t then return false end
+  for i, n in ipairs(a.t) do if b.t[i] ~= n then return false end end
+  for i, v in pairs(a.s) do if b.s[i] ~= v then return false end end
+  for i in pairs(b.s) do if not a.s[i] then return false end end
+  for i, v in pairs(a.b) do if b.b[i] ~= v then return false end end
+  return true
+end
+
 function C.ScanBank()
   if not (mine and bankOpen) then return end
   local bank = Scan(BANK)
-  if not Same(bank, mine.bank) then
+  local view = ViewOf(BANK, B.Characterbanktab)
+  if not Same(bank, mine.bank) or (view and not SameView(view, mine.view)) then
     mine.bank, mine.at = bank, time()
+    if view then view.at = mine.at; mine.view = view end
     Touch("h", me)
   end
   if #ACCOUNT > 0 then
     local account = Scan(ACCOUNT)
-    if (next(account) or next(db.account)) and not Same(account, db.account) then
+    local aview = ViewOf(ACCOUNT, B.Accountbanktab)
+    local any = next(account) or next(db.account)
+    if (any and not Same(account, db.account)) or (aview and any and not SameView(aview, db.accountView)) then
       db.account, db.accountAt = account, time()
+      if aview then aview.at = db.accountAt; db.accountView = aview end
       Touch("a", "a")
     end
   end
+  if C.BankSeen then C.BankSeen() end
 end
 
 -- The mailbox as it is: what was mailed to this character is in it now

@@ -200,3 +200,4 @@ Modules\Crafting\CraftData.lua
 Modules\Crafting\CraftUI.lua
 Modules\Crafting\CraftGame.lua
 Modules\Sync\Sync.lua
+Modules\BankView\BankView.lua
