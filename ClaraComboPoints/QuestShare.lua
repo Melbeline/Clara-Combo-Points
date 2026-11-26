@@ -1,11 +1,14 @@
--- Clara Combo Points - a quest shared from the chat. Its "Quest accepted: <quest>" line: a double middle click on the
--- quest's name shares it with the group; with the box ticked (off by default; Clara's page), the quest tracker's bubble
--- (its "..." in progress mark) ends the line, and a left click on it shares the quest too.
--- The game lets no addon share a quest (QuestLogPushQuest is protected): as the quest log's own Share (QuestLogCore),
--- a secure pad presses the game's Share for the player. Over a quest of these lines, out of combat, an unseen pad takes
--- the place under the mouse; its click runs, in one press, the map opened, its quest pane and the quest's header, the
--- quest's row and the game's Share, then Back, the pane and the map shut as they were. Out of a group, in a fight, or
--- with the world map open (the press needs it shut), a line says why instead.
+-- Clara Combo Points - a quest from the chat. Its "Quest accepted: <quest>" line: a double middle click on the quest's
+-- name opens the world map on that quest (its details, as a click on it in the map's quest list shows them) and, in a
+-- group, shares it; with the box ticked (off by default; Clara's page), the quest tracker's bubble (its "..." in
+-- progress mark) ends the line, and a left click on it does the same.
+-- The game lets no addon share a quest (QuestLogPushQuest is protected) nor show a quest's details for the player's
+-- Share to work (its Share reads the details' quest): as the quest log's own Share (QuestLogCore), a secure pad presses
+-- the game's own buttons for the player. Over a quest of these lines, out of combat, an unseen pad takes the place
+-- under the mouse; its click runs, in one press, the map opened (if shut), its quest pane and the quest's header, the
+-- quest's row (its details shown) and, in a group, the game's Share; the map stays open on the quest. The quest's row
+-- not there yet (its header just unfolded: the game lists it a moment later): a line asks for the click again. In a
+-- fight, a line says why nothing happens.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -28,10 +31,10 @@ end
 ---------------------------------------------------------------------------
 -- The game's Share pressed for the player (QuestLogCore's own sequence, for any quest of the log)
 ---------------------------------------------------------------------------
-local STEPS = { "Open", "AimPane", "Pane", "AimHeader", "Header", "AimRow", "Row", "Share", "Back", "AimShut", "Shut",
-  "AimClose", "Close" }
-local AIMED = { "Pane", "Header", "Row", "Share", "Back", "Shut", "Close" }
-local proxies, macro, armedID, openedPane, shared
+local STEPS = { "Open", "AimPane", "Pane", "AimHeader", "Header", "AimRow", "Row", "Share" }
+local AIMED = { "Pane", "Header", "Row", "Share" }
+local proxies, macro, armedID, openedPane, shown, grouped
+local why -- (the mouse report: why the last one found no row)
 
 local function SetIf(frame, name, value)
   if frame:GetAttribute(name) ~= value then frame:SetAttribute(name, value) end
@@ -42,7 +45,7 @@ local function Disarm() for _, step in ipairs(AIMED) do Aim(step, nil) end end
 local function MapUp() return armedID ~= nil and not InCombatLockdown() and WorldMapFrame and WorldMapFrame:IsShown() end
 
 local function AimPane()
-  shared, openedPane = false, false
+  shown, openedPane = false, false
   Disarm()
   if not MapUp() then return end
   local toggle = WorldMapFrame.SidePanelToggle
@@ -73,29 +76,18 @@ local function AimHeader()
 end
 
 local function AimRow()
-  if not (MapUp() and QuestMapFrame:IsShown()) then return end
+  if not (MapUp() and QuestMapFrame:IsShown()) then why = "the map or its quest pane not shown" return end
   local find = _G.QuestLogQuests_GetQuestButton
   local row = find and find(armedID)
   local details = QuestMapFrame.DetailsFrame
-  local back = details and details.BackFrame and details.BackFrame.BackButton
-  if not (row and issecurevariable(row, "questID") and details and details.ShareButton and back) then return end
-  shared = true
+  if not row then why = "no row for the quest in the map's list (yet)" return end
+  if not issecurevariable(row, "questID") then why = "its row's quest set by an addon" return end
+  shown, why = true, nil
   Aim("Row", row)
-  Aim("Share", details.ShareButton)
-  Aim("Back", back)
+  if grouped and details and details.ShareButton then Aim("Share", details.ShareButton) end
 end
 
-local function AimShut()
-  local toggle = WorldMapFrame.SidePanelToggle
-  if MapUp() and openedPane and toggle then Aim("Shut", toggle.CloseButton) end
-end
-
-local function AimClose()
-  local border = WorldMapFrame.BorderFrame
-  if MapUp() then Aim("Close", border and border.CloseButton or nil) end
-end
-
-local AIMS = { AimPane = AimPane, AimHeader = AimHeader, AimRow = AimRow, AimShut = AimShut, AimClose = AimClose }
+local AIMS = { AimPane = AimPane, AimHeader = AimHeader, AimRow = AimRow }
 
 local function Proxy(name)
   local proxy = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
@@ -126,13 +118,13 @@ local function Arm(questID)
     if ERR_NOT_IN_COMBAT then Say(ERR_NOT_IN_COMBAT) end
     return nil
   end
-  if not (IsInGroup and IsInGroup()) then return Say(L.QUEST_SHARE_NOT_IN_GROUP) end
   if not (C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetLogIndexForQuestID(questID)) then return nil end
   if not (WorldMapFrame and QuestMapFrame and MinimapCluster and MinimapCluster.ZoneTextButton) then return nil end
-  if WorldMapFrame:IsShown() then return Say(L.QUEST_SHARE_CLOSE_MAP) end
   Build()
   armedID = questID
-  Aim("Open", MinimapCluster.ZoneTextButton)
+  grouped = IsInGroup and IsInGroup() or false
+  -- (the map already open: left as it is)
+  Aim("Open", not WorldMapFrame:IsShown() and MinimapCluster.ZoneTextButton or nil)
   Disarm()
   return macro
 end
@@ -141,8 +133,12 @@ local function After()
   if not proxies or InCombatLockdown() then return end
   Disarm()
   Aim("Open", nil)
-  if armedID and not shared then Say(L.QUEST_SHARE_FROM_MAP) end
+  if armedID and not shown then Say(L.QUEST_SHARE_FROM_MAP) end
   armedID = nil
+end
+
+function ns:QuestShareReport()
+  return ("quest from the chat: the last one %s"):format(why and ("found no row: " .. why) or "shown (or none tried)")
 end
 
 ---------------------------------------------------------------------------
