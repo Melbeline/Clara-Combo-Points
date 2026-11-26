@@ -167,6 +167,7 @@ Modules\QuestLog\QuestLogDetail.lua
 Modules\QuestLog\QuestLogWindow.lua
 Modules\QuestLog\QuestLogOpen.lua
 Modules\GroupQuests\GroupQuests.lua
+Modules\FriendsXP\FriendsXP.lua
 Modules\WhoCooldown\WhoCooldown.lua
 Modules\ChatSearch\ChatSearch.lua
 Modules\IdTip\IdTip.lua
