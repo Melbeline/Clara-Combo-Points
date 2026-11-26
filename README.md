@@ -125,6 +125,7 @@ Chaque fonction en une ligne ; le détail de chacune est plus bas.
 
 ### Sacs, barres et fenêtres
 
+- **La banque de partout** : le bouton du Shop ouvre la banque de chacun de tes personnages (et la banque du compte) telle que vue la dernière fois, dans la fenêtre de banque du jeu ; dans l'infobulle d'un objet, combien en a chacun.
 - **Nouveau rang d'un sort** mis tout seul sur tes barres d'action.
 - **Menu de l'equipment manager** placé à côté du slot, sans cacher le personnage.
 - **Molette pour tourner les pages** des livres et des lettres.
@@ -319,6 +320,14 @@ Dans la fenêtre d'envoi du courrier, un bouton (une lettre) **en bas à droite*
 - **Plus de 12 objets** : une fois les 12 emplacements du courrier remplis, **deux emplacements de plus** terminent la deuxième ligne, puis **une ligne de plus** apparaît sous les autres chaque fois que la dernière est remplie (jusqu'à 6 lignes ; la fenêtre s'agrandit vers le bas). On y met un objet en le **glissant** dessus, par un **clic droit dans les sacs** quand le courrier est plein (pas un objet lié), ou par l'ajout automatique quand un personnage a plus de piles que le courrier n'en tient. Sur l'un d'eux : **clic droit** pour le retirer, **clic** pour le reprendre sur le curseur ; l'infobulle dit dans quel courrier il partira. Le bouton devient **Envoyer (1/2)** : après le clic, les **courriers suivants partent tout seuls**, 12 objets chacun, au même destinataire, avec le même objet suivi de **(2/2)**, sans texte ; l'**argent et le contre-remboursement** ne vont que dans le premier, et **chaque courrier paie son port**. Un courrier qui échoue arrête la suite : le reste attend dans ses emplacements (Envoyer pour reprendre). Si le jeu n'accepte qu'un envoi par clic, le courrier suivant est préparé et le bouton dit lequel cliquer : **Envoyer (2/3)**. Les objets mis dans ces emplacements de plus sont **grisés dans les sacs**, comme ceux du courrier (le jeu ne les verrouille pas : ils attendent les courriers suivants), et reprennent leur couleur une fois retirés ou la boîte aux lettres fermée.
 - **Exporter / Importer** (en haut à droite) : le tout en une ligne de texte, à coller sur un autre compte WoW (le jeu n'a aucun stockage commun à tout le compte Battle.net). L'import remplace ce que ce compte avait, après confirmation. Pour que tes comptes restent à jour tout seuls : voir **Synchro entre tes comptes WoW**.
 - Tout est enregistré **pour tout le compte WoW** (`ClaraMailDB`).
+
+## La banque de partout
+
+- **Le bouton du Shop** du micro-menu (celui de Clara) ouvre la **banque** de tes personnages, même loin d'un banquier, dans une fenêtre dessinée comme la banque de WoW Forever : son cadre, son fond, ses emplacements sur 8 colonnes, **88 par page**, ses **onglets de page à droite** (la banque du personnage, puis la **banque du compte**), ses emplacements de sacs en dessous et sa **recherche** en haut à droite (les objets trouvés restent allumés, les autres s'assombrissent). **Un clic droit** sur le bouton ouvre les options de Clara (le bouton Clara du menu Échap aussi).
+- **En haut à gauche**, un menu pour choisir le **personnage** : tous les tiens, ceux de tes autres comptes WoW compris (la synchro, jamais ceux d'un ami) ; celui dont la banque n'a jamais été vue l'indique.
+- La banque est **telle que vue la dernière fois** (lue case par case à chaque ouverture chez un banquier, avec le module Reverse Engineering) : « Vue il y a 2 h » en bas. **Lecture seule** : le jeu exige d'être au banquier pour sortir un objet. Survoler un objet montre son infobulle, **Maj+clic** le met dans le chat.
+- **Dans l'infobulle de chaque objet** : combien en a chacun de tes personnages (banque, sacs, courrier, dans la couleur de sa classe), la banque du compte et le total.
+- Une case sur la page de Clara (cochée par défaut) ; décochée, le bouton du Shop rouvre les options de Clara. Pas dans la version Light.
 
 ## Synchro entre tes comptes WoW
 

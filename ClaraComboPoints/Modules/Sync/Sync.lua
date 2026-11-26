@@ -195,7 +195,7 @@ if C then
     stamp = function(d, key) local c = d.craft.chars[key]; return c and c.at or 0 end,
     get = function(d, key)
       local c = d.craft.chars[key]
-      return c and { bags = c.bags, bank = c.bank, mail = c.mail, mailAt = c.mailAt, at = c.at, class = c.class, remote = c.remote } or nil
+      return c and { bags = c.bags, bank = c.bank, mail = c.mail, mailAt = c.mailAt, at = c.at, class = c.class, remote = c.remote, view = c.view } or nil
     end,
     put = function(key, rec)
       if type(key) ~= "string" or key == C.me or type(rec) ~= "table" then return end
@@ -219,9 +219,10 @@ if C then
   K.a = { buckets = 1,
     keys = function(d, out) if next(d.craft.account) or (d.craft.accountAt or 0) > 0 then out.a = true end end,
     stamp = function(d) return d.craft.accountAt or 0 end,
-    get = function(d) return { items = d.craft.account } end,
+    get = function(d) return { items = d.craft.account, view = d.craft.accountView } end,
     put = function(_, rec, at)
-      C.db.account = C.Clean({ account = rec and rec.items }).account
+      local clean = C.Clean({ account = rec and rec.items, accountView = rec and rec.view })
+      C.db.account, C.db.accountView = clean.account, clean.accountView
       C.db.accountAt = at
     end,
   }

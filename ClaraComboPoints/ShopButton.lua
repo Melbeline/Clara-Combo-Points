@@ -12,12 +12,17 @@ local function Open()
   if ns.ToggleOptions then ns:ToggleOptions() end
 end
 
+-- (another part of Clara may take the micro button: ns.ShopMicroUse = { title, click(mouseButton), tip(tooltip) };
+-- the Escape menu's button stays Clara's options)
+local function Use() return type(ns.ShopMicroUse) == "table" and ns.ShopMicroUse or nil end
+
 ---------------------------------------------------------------------------
 -- The micro menu's Shop button
 ---------------------------------------------------------------------------
 local micro
 local function Dress(button)
-  button.tooltipText = TITLE
+  local use = Use()
+  button.tooltipText = use and use.title or TITLE
   if button.NotificationOverlay then button.NotificationOverlay:Hide() end
   if button.IsEnabled and not button:IsEnabled() and button.Enable then button:Enable() end
 end
@@ -25,7 +30,17 @@ local function DressMicro()
   local button = _G.StoreMicroButton
   if micro or type(button) ~= "table" or not button.SetScript then return end
   micro = button
-  button:SetScript("OnClick", function() Open() end)
+  button:SetScript("OnClick", function(_, mouse)
+    local use = Use()
+    if use and use.click then use.click(mouse) else Open() end
+  end)
+  if button.RegisterForClicks then button:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
+  if button.HookScript then
+    button:HookScript("OnEnter", function(self)
+      local use = Use()
+      if use and use.tip and GameTooltip and GameTooltip:IsOwned(self) then use.tip(GameTooltip); GameTooltip:Show() end
+    end)
+  end
   -- (the game sets its state again as the store's changes: Clara's tooltip, no "new" mark, enabled, each time)
   if hooksecurefunc then
     if type(button.UpdateMicroButton) == "function" then hooksecurefunc(button, "UpdateMicroButton", Dress) end
@@ -34,6 +49,7 @@ local function DressMicro()
   Dress(button)
 end
 ns.ShopMicroButton = function() return micro end -- (for the tests)
+ns.ShopDress = function() if micro then Dress(micro) end end
 
 ---------------------------------------------------------------------------
 -- The Escape menu's Shop button
