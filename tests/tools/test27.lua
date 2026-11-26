@@ -173,7 +173,7 @@ M.CursorOn(rowsOf.above2.hit)
 rowsOf.above2.hit._scripts.OnReceiveDrag(rowsOf.above2.hit)
 check(#ns.db.rows.above[2] == 1 and ns:EntrySpell(ns.db.rows.above[2][1]) == 774, "dropped on Top 2: added")
 check(M.cursorSpell == nil and not ns.heldDrop and rowsOf.above3.hit:IsVisible(), "the cursor empty: the rows open 5 s more, to move it")
-for _ = 1, 10 do if not M.timers or #M.timers == 0 then break end M.RunTimer() end
+for _ = 1, 30 do if not M.timers or #M.timers == 0 then break end M.RunTimer() end -- (the queue drained: the login's too)
 check(not rowsOf.above3.hit:IsVisible(), "then closed again")
 C_Spell.PickupSpell(774); ClearCursor()
 check(not ns.heldDrop and not rowsOf.above3.hit:IsVisible(), "picked up and put back: closed")
