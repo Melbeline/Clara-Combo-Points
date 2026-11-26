@@ -5,7 +5,8 @@
 -- you, someone else takes it). Names whole: "First Surname" (WoW Forever's names). Its switches on its card; its page:
 -- the switches, <<YOU>>'s color (red by default, any color from the game's color picker, or TipTac's usual white). TipTac
 -- enabled: TipTac shows its own, this one steps aside (TipTac is never turned off). Leatrix Plus's own target line (its
--- Enhance tooltip) steps aside while this one shows it.
+-- Enhance tooltip) steps aside while this one shows it. A player's guild rank after its guild's name, "<Guild> (Rank)"
+-- (a switch, on by default).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -22,6 +23,7 @@ end
 local function ShowTarget() return Store().target ~= false end
 local function ShowTargetedBy() return Store().targetedBy ~= false end
 local function TipTacColor() return Store().tiptacYou == true end
+local function ShowGuildRank() return Store().guildRank ~= false end
 
 -- <<YOU>>'s color: red (it stands out), the one picked, or TipTac's usual white
 local RED, WHITE = { 1, 0x44 / 255, 0 }, { 1, 1, 1 }
@@ -35,6 +37,7 @@ local function YouColor() if TipTacColor() then return WHITE end return Picked()
 ns:SetQolSwitches("tooltiptarget", {
   { label = "TTG_SW_TARGET", get = ShowTarget, set = function(on) Store().target = on and true or false end },
   { label = "TTG_SW_TARGETEDBY", get = ShowTargetedBy, set = function(on) Store().targetedBy = on and true or false end },
+  { label = "TTG_SW_GUILDRANK", get = ShowGuildRank, set = function(on) Store().guildRank = on and true or false end },
   { label = "TTG_TIPTAC_COLOR", get = TipTacColor, set = function(on) Store().tiptacYou = on and true or nil end },
 })
 ns:SetQolOpener("tooltiptarget", function() ns:OpenSettingsTo(ns.tooltipTargetCategory) end)
@@ -165,10 +168,34 @@ local function Update(rec)
   if grew then rec.tip:Show() end
 end
 
+-- A player's guild rank, after its guild's name on the guild's line ("<Guild> (Rank)"); nothing when the game keeps
+-- either secret
+local function Plain(text) return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("^<", ""):gsub(">$", "")) end
+local function GuildRank(tip, unit)
+  if not ShowGuildRank() or Read(UnitIsPlayer, unit) ~= true or not GetGuildInfo then return end
+  local ok, guild, rank = pcall(GetGuildInfo, unit)
+  if not ok or issecret(guild) or issecret(rank) or type(guild) ~= "string" or guild == "" or type(rank) ~= "string" or rank == "" then return end
+  local suffix = " |cffb3b3b3(" .. rank .. ")|r"
+  for i = 2, math.min(tonumber(tip:NumLines()) or 0, 5) do
+    local line = Line(tip, i)
+    local text = line and line:GetText()
+    if type(text) == "string" and not issecret(text) then
+      if text:sub(-#suffix) == suffix then return end -- (written already)
+      if Plain(text) == guild then
+        line:SetText(text .. suffix)
+        tip:Show()
+        return
+      end
+    end
+  end
+end
+ns.TooltipGuildRank = GuildRank -- (for its test)
+
 local function OnUnitTip(tip)
   if tip ~= GameTooltip then return end
   local unit = TipUnit(tip)
   if not unit then shown = nil return end
+  pcall(GuildRank, tip, unit)
   shown = { tip = tip, unit = unit }
   Update(shown)
 end
@@ -247,11 +274,12 @@ local function Build()
 
   Check("target", L.TTG_SW_TARGET, -100, ShowTarget, function(on) Store().target = on end)
   Check("targetedBy", L.TTG_SW_TARGETEDBY, -126, ShowTargetedBy, function(on) Store().targetedBy = on end)
+  Check("guildRank", L.TTG_SW_GUILDRANK, -152, ShowGuildRank, function(on) Store().guildRank = on end)
 
   -- <<YOU>>'s color: its swatch (a click opens the game's color picker, Cancel puts the one before back)
   local swatch = CreateFrame("Button", nil, page)
   swatch:SetSize(22, 22)
-  swatch:SetPoint("TOPLEFT", 14, -170)
+  swatch:SetPoint("TOPLEFT", 14, -196)
   local border = swatch:CreateTexture(nil, "BACKGROUND")
   border:SetAllPoints()
   border:SetColorTexture(0.8, 0.8, 0.8, 1)
@@ -283,11 +311,11 @@ local function Build()
     opening = false
   end)
 
-  Check("tiptac", L.TTG_TIPTAC_COLOR, -200, TipTacColor, function(on) Store().tiptacYou = on or nil end)
+  Check("tiptac", L.TTG_TIPTAC_COLOR, -226, TipTacColor, function(on) Store().tiptacYou = on or nil end)
 
   local reset = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
   reset:SetSize(200, 22)
-  reset:SetPoint("TOPLEFT", 14, -236)
+  reset:SetPoint("TOPLEFT", 14, -262)
   reset:SetText(L.TTG_DEFAULT_COLOR)
   parts.reset = reset
   reset:SetScript("OnClick", function()
@@ -300,7 +328,7 @@ local function Build()
 
   -- What the tooltip shows
   local preview = page:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  preview:SetPoint("TOPLEFT", 16, -276)
+  preview:SetPoint("TOPLEFT", 16, -302)
   parts.preview = preview
   updates[#updates + 1] = function()
     local c = YouColor()
