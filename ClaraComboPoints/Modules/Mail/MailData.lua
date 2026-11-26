@@ -270,15 +270,28 @@ local function Places()
   return at
 end
 
--- The order of the list: Last sent, newest first (never mailed: by name); any other sort, the player's arrangement
--- when there is one (the names not placed in it, mailed since: before the others, newest first), else newest first.
+-- The name mailed last (this character left out): always first
+local function Newest()
+  local me, best = Me(), nil
+  for key, r in pairs(M.db.recipients) do
+    if not me[key] and (tonumber(r.last) or 0) > 0 and (not best or r.last > best.last) then best = r end
+  end
+  return best
+end
+M.Newest = Newest
+
+-- The order of the list: Last sent, newest first (never mailed: by name); any other sort, the name mailed last first
+-- (top left, in its block), then the player's arrangement when there is one (the names not placed in it, mailed
+-- since: before the others, newest first), else newest first.
 local function Order(sort)
   local at = sort ~= "last" and Places() or nil
   local place = {}
   if at then
     for key, r in pairs(M.db.recipients) do place[r] = at[key] or 0 end
   end
+  local newest = at and Newest() or nil
   return function(a, b)
+    if newest and (a == newest) ~= (b == newest) then return a == newest end
     if at and place[a] ~= place[b] then return place[a] < place[b] end
     if a.last ~= b.last then return a.last > b.last end
     return a.name:lower() < b.name:lower()
