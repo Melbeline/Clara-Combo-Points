@@ -1,9 +1,10 @@
 -- FriendsXP (Modules/FriendsXP): the group members with Clara send each other their level, experience and rested
 -- experience (an addon message, at most one every 5 seconds; "H" asks everyone's); the experience bar's tooltip gets,
 -- under its first line, yourself then each member heard in the group's order: the name in the class's color and the
--- level, "xp / max (%)", and under it the rested experience still to come ("amount (%)" of the level, never cut at
--- 150%: 180% with the Legacy talent); the game's lines after them, kept; not twice; nobody heard: nothing; a member
--- gone from the group: forgotten.
+-- level, "xp / max (%)"; with Shift held (pressed or let go while it shows: drawn again; the module's box: always),
+-- under each the rested experience still to come ("amount (%)" of the level, never cut at 150%: 180% with the Legacy
+-- talent), else a grey hint; the game's lines after them, kept; not twice; nobody heard: nothing; a member gone from
+-- the group: forgotten.
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -114,7 +115,14 @@ local function Game()
 end
 local function L_(i) return _G["FXPTipTextLeft" .. i].t, _G["FXPTipTextRight" .. i].shown and _G["FXPTipTextRight" .. i].t or nil end
 Game()
+M.shift = false
 F.AddTo(tip)
+check(tip.lines == 3 + 3 + 1, "Shift not held: you, Xxjeanne, Lia, the hint, no rested: " .. tip.lines)
+local h = L_(5)
+check(h == ns.L.FXP_SHIFT_HINT, "the grey hint: " .. tostring(h))
+out("== Shift pressed while it shows: drawn again, the rested experience under each")
+M.shift = true
+M.Fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
 check(tip.lines == 3 + 2 + 2 + 1, "under the first line: you (2 lines), Xxjeanne (2), Lia (1, no rested): " .. tip.lines)
 local t1 = L_(1)
 check(t1 == "26,071 / 90,700 (29%)", "the first line kept first")
@@ -134,6 +142,16 @@ check(l7 == "Rested  xp: 30,806 - 34%" and l8 == "200% of normal experience gain
   "the game's lines after, as they were (the long one still wrapped)")
 F.AddTo(tip)
 check(tip.lines == 8, "hovered again, the same build: not twice")
+M.shift = false
+M.Fire("MODIFIER_STATE_CHANGED", "LSHIFT", 0)
+check(tip.lines == 7 and L_(5) == ns.L.FXP_SHIFT_HINT, "Shift let go: the rested experience gone again")
+out("== the module's box: the rested experience always shown")
+local sw
+for _, x in ipairs(ns.qolSwitches.friendsxp or {}) do if x.label == "FXP_SW_RESTED_ALWAYS" then sw = x end end
+check(sw and ns.L.FXP_SW_RESTED_ALWAYS and not sw.get(), "its box, unticked by default")
+sw.set(true)
+check(tip.lines == 8, "ticked: shown without Shift, at once")
+M.shift = true
 out("== rested past 150% (the Legacy talent: up to 180%): never cut")
 F.Heard("X^41^50000^94300^169740^WARLOCK", "PARTY", "Xxjeanne Darkxx")
 Game(); F.AddTo(tip)
@@ -143,6 +161,7 @@ out("== nobody heard, or alone: nothing added")
 wipe(F.members)
 Game(); F.AddTo(tip)
 check(tip.lines == 3, "nobody heard: the game's tooltip as it was")
+sw.set(false); M.shift = false
 F.Heard("X^41^50000^94300^24000^WARLOCK", "PARTY", "Xxjeanne Darkxx")
 names.party1 = "Someone Else"
 M.Fire("GROUP_ROSTER_UPDATE")
