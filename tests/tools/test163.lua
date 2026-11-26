@@ -1,10 +1,11 @@
 -- The target's name into a macro (TargetMacro.lua): a double click on the target frame's name writes it in the macro
--- ClaraTarget, made the first time ("/tm8" then "/tar <name>"): its first word (a double middle click: the whole
+-- ClaraTarget, made the first time ("/tm 8" then "/tar <name>"): its first word (a double middle click: the whole
 -- name); its /tar line takes the new name, the player's other lines kept; two clicks apart, a right click: nothing; in a fight:
 -- written as it ends; the box off: nothing; a macro too long: nothing changed; on the name's own button (GameFixes).
 -- The icon a file number (134400), given only as the macro is made: one picked later stays. The game's own event for a release, the name under the mouse, takes the click too
 -- (another frame over the name), the same release seen twice counted once; a secret name, an error, a change the game
--- did not keep: said, in the report.
+-- did not keep: said, in the report. The "written" line only with its box ticked (off by default); a "/tm8" line
+-- (made by the first versions) mended to "/tm 8".
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
@@ -52,16 +53,29 @@ local function Double(button) Click(nil, button); now = now + 0.2; Click(nil, bu
 local function Body() local i = GetMacroIndexByName("ClaraTarget") return i > 0 and macros[i].body or nil end
 
 out("== the first double click (middle): the macro made, the whole name")
+local n0 = #said
 Double("MiddleButton")
-check(Body() == "/tm8\n/tar Hatefury Felsworn", "ClaraTarget: /tm8, /tar the whole name: " .. tostring(Body()))
+check(Body() == "/tm 8\n/tar Hatefury Felsworn", "ClaraTarget: /tm 8, /tar the whole name: " .. tostring(Body()))
 check(macros[1] and not macros[1].perChar, "the account's")
 check(macros[1] and macros[1].icon == 134400, "the question mark icon, as a file number: " .. tostring(macros[1] and macros[1].icon))
-check(said[#said]:find("/tar Hatefury Felsworn", 1, true), "said in the chat")
+check(#said == n0 and not ns:TargetMacroSay(), "nothing said in the chat (its box off by default)")
+ns:SetTargetMacroSay(true)
+macros[1].body = "/tm 8\n/tar x"
+Double("MiddleButton")
+check(said[#said] and said[#said]:find("/tar Hatefury Felsworn", 1, true), "its box ticked: said in the chat: " .. tostring(said[#said]))
+check(ns.sv.targetMacroSay == true, "kept in the saved settings")
+ns:SetTargetMacroSay(false)
+check(ns.sv.targetMacroSay == nil, "unticked: the saved setting let go")
+out("== a \"/tm8\" line (the first versions): mended to \"/tm 8\"")
+macros[1].body = "/tm8\n/tar x\n/cast Renew"
+Double("MiddleButton")
+check(Body() == "/tm 8\n/tar Hatefury Felsworn\n/cast Renew", "mended, the rest kept: " .. Body():gsub("\n", " | "))
+macros[1].body = "/tm 8\n/tar Hatefury Felsworn"
 out("== the player's own line kept")
-macros[1].body = "/tm8\n/tar Hatefury Felsworn\n/cast Shadow Word: Pain"
+macros[1].body = "/tm 8\n/tar Hatefury Felsworn\n/cast Shadow Word: Pain"
 targetName = "Gorefang Ravager"
 Double("MiddleButton")
-check(Body() == "/tm8\n/tar Gorefang Ravager\n/cast Shadow Word: Pain", "the /tar line changed, /cast kept: " .. Body():gsub("\n", " | "))
+check(Body() == "/tm 8\n/tar Gorefang Ravager\n/cast Shadow Word: Pain", "the /tar line changed, /cast kept: " .. Body():gsub("\n", " | "))
 out("== an icon the player picked: never changed")
 macros[1].icon = 136207
 targetName = "Icon Mob"
@@ -71,7 +85,7 @@ check(macros[1].icon == 136207 and Body():find("/tar Icon Mob", 1, true) and edi
 out("== a double left click: its first word only")
 targetName = "Hatefury Felsworn"
 Double("LeftButton")
-check(Body() == "/tm8\n/tar Hatefury\n/cast Shadow Word: Pain", "/tar Hatefury: " .. Body():gsub("\n", " | "))
+check(Body() == "/tm 8\n/tar Hatefury\n/cast Shadow Word: Pain", "/tar Hatefury: " .. Body():gsub("\n", " | "))
 out("== not a double click: nothing")
 targetName = "Someone Else"
 Click(nil, "LeftButton"); now = now + 1; Click(nil, "LeftButton"); now = now + 2
@@ -96,16 +110,16 @@ S.inCombat = false
 M.Fire("PLAYER_REGEN_ENABLED")
 check(Body():find("/tar Fight Mob", 1, true) ~= nil, "the fight over: written")
 out("== too long for a macro: nothing changed")
-macros[1].body = "/tm8\n/tar x\n/cast " .. ("a"):rep(240)
+macros[1].body = "/tm 8\n/tar x\n/cast " .. ("a"):rep(240)
 local before = macros[1].body
 targetName = "Long Name Here"
 Double("MiddleButton")
 check(macros[1].body == before and said[#said]:find("255", 1, true), "left as it was, said")
 out("== the box off: nothing")
-macros[1].body = "/tm8\n/tar x"
+macros[1].body = "/tm 8\n/tar x"
 ns:SetTargetMacro(false)
 Double("LeftButton")
-check(Body() == "/tm8\n/tar x" and not ns:TargetMacro(), "off: nothing")
+check(Body() == "/tm 8\n/tar x" and not ns:TargetMacro(), "off: nothing")
 ns:SetTargetMacro(true)
 out("== the account's macros full: this character's")
 macros = {}
@@ -113,35 +127,35 @@ for i = 1, 120 do macros[i] = { name = "M" .. i, body = "" } end
 Double("LeftButton")
 check(macros[121] and macros[121].name == "ClaraTarget" and macros[121].perChar, "made as this character's")
 out("== the game's event for a release over the name (another frame on top): a double click")
-macros = { [1] = { name = "ClaraTarget", icon = 134400, body = "/tm8\n/tar x" } }
+macros = { [1] = { name = "ClaraTarget", icon = 134400, body = "/tm 8\n/tar x" } }
 local over, visible = false, true
 TargetFrame = { IsVisible = function() return visible end,
   TargetFrameContent = { TargetFrameContentMain = { Name = { IsMouseOver = function() return over end } } } }
 targetName = "Event Mob"
 local function Up(button) M.Fire("GLOBAL_MOUSE_UP", button) end
 Up("LeftButton"); now = now + 0.2; Up("LeftButton"); now = now + 2
-check(Body() == "/tm8\n/tar x", "the mouse elsewhere: nothing")
+check(Body() == "/tm 8\n/tar x", "the mouse elsewhere: nothing")
 over = true
 Up("MiddleButton"); now = now + 0.2; Up("MiddleButton"); now = now + 2
-check(Body() == "/tm8\n/tar Event Mob", "over the name: written: " .. Body():gsub("\n", " | "))
+check(Body() == "/tm 8\n/tar Event Mob", "over the name: written: " .. Body():gsub("\n", " | "))
 visible = false
 targetName = "Hidden Frame"
 Up("MiddleButton"); now = now + 0.2; Up("MiddleButton"); now = now + 2
-check(Body() == "/tm8\n/tar Event Mob", "the target frame hidden: nothing")
+check(Body() == "/tm 8\n/tar Event Mob", "the target frame hidden: nothing")
 visible = true
 out("== one release seen by the button and by the event: counted once")
 targetName = "Once Only"
 Click(nil, "MiddleButton", "button"); Up("MiddleButton") -- (the same moment: one release)
 now = now + 3
-check(Body() == "/tm8\n/tar Event Mob", "a single click seen twice: not a double one")
+check(Body() == "/tm 8\n/tar Event Mob", "a single click seen twice: not a double one")
 Click(nil, "MiddleButton", "button"); Up("MiddleButton"); now = now + 0.2; Up("MiddleButton"); Click(nil, "MiddleButton", "button"); now = now + 2
-check(Body() == "/tm8\n/tar Once Only", "a double click seen twice: written once: " .. Body():gsub("\n", " | "))
+check(Body() == "/tm 8\n/tar Once Only", "a double click seen twice: written once: " .. Body():gsub("\n", " | "))
 over = false
 out("== a secret name: said, nothing written")
 targetName = M.Secret("Secret Mob")
 local n = #said
 Double("MiddleButton")
-check(Body() == "/tm8\n/tar Once Only" and #said == n + 1 and said[#said]:find(ns.L.TM_SECRET, 1, true), "said: " .. tostring(said[#said]))
+check(Body() == "/tm 8\n/tar Once Only" and #said == n + 1 and said[#said]:find(ns.L.TM_SECRET, 1, true), "said: " .. tostring(said[#said]))
 out("== an error from the game: said")
 targetName = "Error Mob"
 local oldEdit = EditMacro
@@ -158,7 +172,7 @@ check(#said == n and #(M.timers or {}) == 1, "nothing said at once, looked at ag
 M.RunTimer()
 check(said[#said] and said[#said]:find(ns.L.TM_NOT_KEPT, 1, true), "then said: " .. tostring(said[#said]))
 local r = ns:TargetMacroReport()
-check(r:find("not kept by the game: Lost Mob", 1, true) and r:find("macro #1 /tm8 | /tar Once Only", 1, true), r)
+check(r:find("not kept by the game: Lost Mob", 1, true) and r:find("macro #1 /tm 8 | /tar Once Only", 1, true), r)
 EditMacro = oldEdit
 out("")
 out(fails .. " failure(s)")

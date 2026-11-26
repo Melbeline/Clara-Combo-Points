@@ -24,7 +24,7 @@ if catcher then
     local ok, e = pcall(up, catcher, "LeftButton")
     t = t + 0.2
     ok, e = pcall(up, catcher, "LeftButton")
-    check(ok and written == "/tm8\n/tar Hatefury", "a double click: the macro written, the first word " .. tostring(e or written))
+    check(ok and written == "/tm 8\n/tar Hatefury", "a double click: the macro written, the first word " .. tostring(e or written))
   end
 end
 local ok, line = pcall(ns.TargetMacroReport, ns)
