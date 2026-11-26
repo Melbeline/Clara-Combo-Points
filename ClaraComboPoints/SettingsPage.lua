@@ -238,6 +238,7 @@ local function Build()
   Box("SP_QUEST_SHARE_BUBBLE", ns.QuestShareBubble, ns.SetQuestShareBubble, "questShareBubble") -- (QuestShare.lua)
   Box("SP_SIT_KEY", ns.SitKey, ns.SetSitKey, "sitKey") -- (SitKey.lua)
   Box("SP_TARGET_MACRO", ns.TargetMacro, ns.SetTargetMacro, "targetMacro") -- (TargetMacro.lua)
+  Box("SP_TARGET_MACRO_SAY", ns.TargetMacroSay, ns.SetTargetMacroSay, "targetMacroSay") -- (its chat line, off by default)
   Box("SP_LEGACY_TREE", ns.LegacyTree, ns.SetLegacyTree, "legacyTree") -- (LegacyTree.lua)
   if not ns:QolRuns("leatrix") then
     Box("QUEST_PLATES", ns.QuestPlates, ns.SetQuestPlates, "questPlates")
