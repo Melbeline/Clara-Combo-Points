@@ -25,7 +25,7 @@ M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN"); M.Fire("PLAY
 local function Run() while M.timers and #M.timers > 0 do M.RunTimer() end end
 local n = 0
 for _ in pairs(ns.RARES) do n = n + 1 end
-check(n == 489, "489 rares in the default list (" .. n .. ")")
+check(n == 486, "486 rares in the default list (" .. n .. ")")
 check(ns.RARES[276194] and ns.RARES[276194][1] == "Dustwind Eggtender", "Dustwind Eggtender by its ID")
 check(ns.RARES[260468] and ns.RARES[260468][1] == '"Pyromancer" Braxton', "a name with quotes kept whole")
 check(not ns.RARES[277981] and not ns.RARES[11383] and not ns.RARES[12116], "the test creature and the friendly quest NPCs left out")
