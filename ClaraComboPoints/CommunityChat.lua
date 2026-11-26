@@ -17,6 +17,9 @@
 local ADDON, ns = ...
 local L = ns.L
 
+-- (Melbeline's other addons carry the same fixes, CommunityFix.lua: Clara's run, theirs stand aside)
+ClaraCommunityFix = ADDON
+
 local FIXED_AFTER = 10 -- logins in a row without the bug: Blizzard's fix
 local FIRST_LOOK = 15  -- seconds after the clubs are in: the game should have joined them by then
 local EVERY = 30       -- seconds: the windows looked at again (a chat lost on the way)
