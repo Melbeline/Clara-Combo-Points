@@ -1,8 +1,9 @@
 -- Clara Combo Points - Pet feeding (a hunter's): each happiness tick of Feed Pet Effect as a small floating number over
 -- the pet frame ("+8"; "+3.75" for the last tick, cut short as happiness tops out), rising and fading, a few gold
 -- sparkles twinkling up with it as the game's drink sparkles do. The number is what the pet gained at that tick: the
--- game's own energize on the pet (UNIT_COMBAT: the number its combat log tells), set by the happiness the pet really
--- gained when the game tells it (its happiness power: the tick cut short at the top). Its zone moves: /petfeed unlocks
+-- game's own energize on the pet (UNIT_COMBAT: the number its combat log tells). WoW 12 gives that number to addons
+-- as a secret: shown as the game gives it (never read), while the pet is fed. Where it comes readable, it is set by
+-- the happiness the pet really gained when the game tells it (its happiness power: the tick cut short at the top). Its zone moves: /petfeed unlocks
 -- it (a box to drag; right-click: its own spot), /petfeed again locks it; its card's boxes (PetFeed.lua) do the same
 -- and turn the numbers off.
 -- Hunters only.
@@ -124,15 +125,26 @@ end
 
 local lastAt, side = 0, 1
 -- One tick shown: its number rising, its sparkles with it
+-- (value: a number of ours, or the game's own, secret: shown as the game gives it, never read)
 local function Show(value)
-  if not zone or value <= 0 then return end
+  if not zone or value == nil then return end
+  local secret = Secret(value)
+  if not secret and value <= 0 then return end
   local item = Item()
-  item.label:SetText("+" .. Format(value))
+  if secret then
+    if not pcall(item.label.SetFormattedText, item.label, "+%s", value) then
+      if not pcall(item.label.SetText, item.label, value) then return end
+    end
+  else
+    item.label:SetText("+" .. Format(value))
+  end
   -- two numbers close together: side by side, not one over the other
   local now = GetTime()
   if now - lastAt < 0.45 then side = -side item.dx = 11 * side else item.dx = 0 end
   lastAt = now
-  local w = math.max(18, item.label:GetStringWidth() or 18)
+  local w = item.label:GetStringWidth()
+  if Secret(w) or type(w) ~= "number" then w = 30 end -- (a secret text's width is secret too)
+  w = math.max(18, w)
   for i, spark in ipairs(item.sparks) do
     local size = 9 + math.random() * 5
     spark:SetSize(size, size)
@@ -174,13 +186,28 @@ local function Feeding()
   return nil
 end
 
-local seen = {} -- (the mouse report: the last tick's words)
+local seen = { ticks = 0, secrets = 0 } -- (the mouse report: the last tick's words)
 -- A tick's words put together: the happiness gained (its power), the game's number (its energize). Shown only when
 -- the happiness rose, or, where its power cannot be read, while the pet is fed (another energize, its focus, is not)
 local function Flush()
   waiting = false
-  local amount, gained, full = pending.amount, pending.gained, pending.full
+  local amount, gained, full, secret = pending.amount, pending.gained, pending.full, pending.secret
   pending = {}
+  if secret ~= nil then
+    -- The game gives its number to addons as a secret (WoW 12's UNIT_COMBAT): shown as it is, the combat log's own
+    -- number (the tick cut short at the top too: the game's), never read; while the pet is fed, or its happiness rose
+    if gained == nil and Read() ~= nil then
+      local value, most = Read()
+      if last and value > last then gained, full = value - last, most ~= nil and value >= most end
+      last = value
+    end
+    local fed = Feeding()
+    seen.amount, seen.gained, seen.full, seen.at, seen.fed = "the game's (secret)", gained, full, GetTime(), fed
+    if not ((gained and gained > 0) or fed == true) then seen.value = "not shown (not fed)" return end
+    seen.value = "the game's number"
+    if On() then Show(secret) end
+    return
+  end
   if gained == nil and amount and Read() ~= nil then
     -- (its power read but not yet told: read now)
     local value, most = Read()
@@ -201,7 +228,7 @@ local function Flush()
   else
     value = amount
   end
-  seen.amount, seen.gained, seen.full, seen.value, seen.at = amount, gained, full, value, GetTime()
+  seen.amount, seen.gained, seen.full, seen.value, seen.at, seen.fed = amount, gained, full, value, GetTime(), nil
   if value and value > 0 and On() then Show(value) end
 end
 
@@ -223,17 +250,26 @@ local function OnPower()
 end
 
 local function OnCombat(event, amount)
-  if event ~= "ENERGIZE" or type(amount) ~= "number" or Secret(amount) or amount <= 0 then return end
+  if event ~= "ENERGIZE" or amount == nil then return end
+  seen.ticks = seen.ticks + 1
+  if Secret(amount) then
+    seen.secrets = seen.secrets + 1
+    pending.secret = amount -- (the latest: one number shown a tick)
+    Soon()
+    return
+  end
+  if type(amount) ~= "number" or amount <= 0 then return end
   pending.amount = (pending.amount or 0) + amount
   Soon()
 end
 ns.PetFeedEvents = { Power = OnPower, Combat = OnCombat, Flush = Flush } -- (for its test)
 
 function ns:PetFeedTextReport()
-  return ("pet feeding text: shown %s, zone %s; the last tick: the game's number %s, happiness gained %s (at the top %s), shown %s, %s; one point of happiness: %s"):format(
-    tostring(On()), (Store().textUnlocked and "unlocked") or "locked", tostring(seen.amount), tostring(seen.gained),
-    tostring(seen.full), tostring(seen.value), seen.at and ("%.0f s ago"):format(GetTime() - seen.at) or "never",
-    tostring(Store().ratio))
+  local power, most = Read()
+  return ("pet feeding text: shown %s, zone %s; energizes on the pet %d (secret %d); the last tick: the game's number %s, happiness gained %s (at the top %s), fed %s, shown %s, %s; one point of happiness: %s; happiness power now %s / %s"):format(
+    tostring(On()), (Store().textUnlocked and "unlocked") or "locked", seen.ticks, seen.secrets, tostring(seen.amount),
+    tostring(seen.gained), tostring(seen.full), tostring(seen.fed), tostring(seen.value),
+    seen.at and ("%.0f s ago"):format(GetTime() - seen.at) or "never", tostring(Store().ratio), tostring(power), tostring(most))
 end
 
 ---------------------------------------------------------------------------
