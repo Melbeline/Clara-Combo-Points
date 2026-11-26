@@ -54,6 +54,7 @@ CraftShortcut.lua
 RecipeCounts.lua
 QuestShare.lua
 SitKey.lua
+TargetMacro.lua
 EnchantConfirm.lua
 RecipeMemory.lua
 LegacyTree.lua

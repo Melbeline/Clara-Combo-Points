@@ -533,10 +533,13 @@ local function CatchAll()
         local content = f.PlayerFrameContent or f.TargetFrameContent
         local main = type(content) == "table" and (content.PlayerFrameContentMain or content.TargetFrameContentMain) or nil
         local label = (name == "PlayerFrame" and _G.PlayerName) or (type(main) == "table" and main.Name) or nil
-        for _, spot in ipairs({ { portrait, CATCH_PAD + 4 }, { label, CATCH_PAD } }) do
+        for _, spot in ipairs({ { portrait, CATCH_PAD + 4, "portrait" }, { label, CATCH_PAD, "name" } }) do
           if type(spot[1]) == "table" then
             local ok, b = pcall(Catch, f, spot[1], spot[2])
-            if ok and b then ns.unitCatchers[#ns.unitCatchers + 1] = b end
+            if ok and b then
+              b.claraFrame, b.claraSpot = name, spot[3] -- (TargetMacro.lua: the target's name, double-clicked)
+              ns.unitCatchers[#ns.unitCatchers + 1] = b
+            end
           end
         end
       end)
@@ -549,7 +552,10 @@ local catchEvents = CreateFrame("Frame")
 catchEvents:RegisterEvent("PLAYER_LOGIN")
 catchEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
 catchEvents:SetScript("OnEvent", function(self)
-  if CatchAll() then self:UnregisterAllEvents() end
+  if CatchAll() then
+    self:UnregisterAllEvents()
+    if ns.OnUnitCatchers then ns.OnUnitCatchers() end
+  end
 end)
 
 ---------------------------------------------------------------------------
