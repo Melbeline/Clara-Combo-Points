@@ -2,7 +2,7 @@
 -- the list showing where it would go (the name there faint and lit, the others moved aside); dropped on the names:
 -- the player's arrangement kept, Last sent becoming My order; dropped away or where it was: nothing changed; held below
 -- the names: the list scrolls; the click of the release not taken as a click; Last sent: newest first again, the
--- arrangement kept; a name mailed since: first in My order; By category: its blocks in that order; the box off: no
+-- arrangement kept; the name mailed last: always first in My order (top left), the others in the arrangement; By category: its blocks in that order; the box off: no
 -- drag; My order and By category kept through a reload (Clean).
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
@@ -78,7 +78,7 @@ local from = Start("Ana Sun")
 check(ghost and ghost:IsShown() and ghost:GetText() == "Ana Sun", "a copy of its button follows the mouse")
 check(Cell("Ana Sun"):GetAlpha() < 1, "at its place: faint")
 Move(1)
-check(Shown():sub(1, 26) == "Ana Sun,Lia Moon,Lola Elle", "over the first place: there, the others moved aside (" .. Shown():sub(1, 30) .. ")")
+check(Shown():sub(1, 26) == "Lia Moon,Ana Sun,Lola Elle", "over the first place: second, the name mailed last staying first (" .. Shown():sub(1, 30) .. ")")
 check(Cell("Ana Sun"):GetAlpha() < 1, "where it would go: faint")
 check(Mail.db.sort == "last" and #Mail.db.order == 0, "nothing kept yet")
 Move(3)
@@ -127,9 +127,12 @@ local top = Shown():sub(1, 26)
 check(top == "Lia Moon,Lola Elle,Ana Sun", "Last sent: newest first again (" .. top .. ")")
 check(#Mail.db.order >= #NAMES, "the arrangement kept")
 Mail.db.sort = "custom"; Mail.Changed()
-check(Shown():sub(1, 9) == "Lola Elle", "My order: the arrangement")
+check(Shown():sub(1, 18) == "Lia Moon,Lola Elle", "My order: the name mailed last first (moved down by hand all the same), then the arrangement (" .. Shown():sub(1, 30) .. ")")
 Mail.Record("Zed New"); Mail.Changed()
-check(Shown():sub(1, 7) == "Zed New", "a name mailed since: first")
+check(Shown():sub(1, 17) == "Zed New,Lola Elle", "a name mailed since: first, the one before back in its place (" .. Shown():sub(1, 30) .. ")")
+Mail.Record("Bea Star"); Mail.Changed()
+local mine = Shown()
+check(mine:sub(1, 8) == "Bea Star" and mine:find("Zed New", 1, true) > 9, "a name already in the arrangement, mailed: first (" .. mine:sub(1, 30) .. ")")
 Mail.db.sort = "bycat"; Mail.Changed()
 local s = Shown()
 check(s:find("Ana Sun,Eve Rain", 1, true) or s:find("Eve Rain,Ana Sun", 1, true), "By category: its block")
