@@ -155,7 +155,7 @@ out("== a secret name: said, nothing written")
 targetName = M.Secret("Secret Mob")
 local n = #said
 Double("MiddleButton")
-check(Body() == "/tm 8\n/tar Once Only" and #said == n + 1 and said[#said]:find(ns.L.TM_SECRET, 1, true), "said: " .. tostring(said[#said]))
+check(Body() == "/tm 8\n/tar Once Only" and #said == n + 1 and said[#said]:find(ns.L.TM_SECRET:format("ClaraTarget"), 1, true), "said: " .. tostring(said[#said]))
 out("== an error from the game: said")
 targetName = "Error Mob"
 local oldEdit = EditMacro
@@ -170,9 +170,9 @@ n = #said
 Double("MiddleButton")
 check(#said == n and #(M.timers or {}) == 1, "nothing said at once, looked at again later")
 M.RunTimer()
-check(said[#said] and said[#said]:find(ns.L.TM_NOT_KEPT, 1, true), "then said: " .. tostring(said[#said]))
+check(said[#said] and said[#said]:find(ns.L.TM_NOT_KEPT:format("ClaraTarget"), 1, true), "then said: " .. tostring(said[#said]))
 local r = ns:TargetMacroReport()
-check(r:find("not kept by the game: Lost Mob", 1, true) and r:find("macro #1 /tm 8 | /tar Once Only", 1, true), r)
+check(r:find("not kept by the game: Lost Mob", 1, true) and r:find("ClaraTarget #1 /tm 8 | /tar Once Only", 1, true), r)
 EditMacro = oldEdit
 out("")
 out(fails .. " failure(s)")
