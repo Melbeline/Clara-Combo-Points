@@ -19,9 +19,14 @@ if catcher then
   local up = catcher:GetScript("OnMouseUp")
   check(up ~= nil, "its OnMouseUp hooked")
   if up then
+    local t = 500
+    env.GetTime = function() return t end -- (two releases, a fifth of a second apart)
     local ok, e = pcall(up, catcher, "LeftButton")
+    t = t + 0.2
     ok, e = pcall(up, catcher, "LeftButton")
     check(ok and written == "/tm8\n/tar Hatefury", "a double click: the macro written, the first word " .. tostring(e or written))
   end
 end
+local ok, line = pcall(ns.TargetMacroReport, ns)
+check(ok and type(line) == "string" and line:find("Hatefury", 1, true) ~= nil, "its /cl souris line: " .. tostring(line))
 print("scenario: targetmacro failures " .. fails)
