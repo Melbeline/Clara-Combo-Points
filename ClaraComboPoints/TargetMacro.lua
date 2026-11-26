@@ -2,7 +2,8 @@
 -- macro "ClaraTarget" (made the first time, the account's: "/tm8" then "/tar <name>"): its "/tar" (or "/target") line
 -- takes the name, every other line of the macro (a "/cast" added by the player...) left as it is. A double left click
 -- writes its first word only ("Hatefury" for "Hatefury Felsworn"); a double middle click, the whole name. The game lets no addon change a macro in a fight:
--- written as the fight ends, a line says so. A box on Clara's page (on by default).
+-- written as the fight ends, a line says so. Its icon is chosen once, as it is made: one the player picks later stays.
+-- A box on Clara's page (on by default).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -65,10 +66,9 @@ local function Write(name)
   if not (GetMacroIndexByName and EditMacro and CreateMacro) then return false, "no macro functions" end
   local old, index = Current()
   if old then
-    local _, icon = GetMacroInfo(index)
     local body = Body(old, name)
     if #body > MAX_BODY then return false, L.TM_TOO_LONG end
-    EditMacro(index, MACRO, icon or ICON, body)
+    EditMacro(index, nil, nil, body) -- (its name and icon left as they are, as the game's own macro window does)
     return true
   end
   local body = "/tm8\n/tar " .. name
