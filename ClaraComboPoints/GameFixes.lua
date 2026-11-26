@@ -730,6 +730,10 @@ function ns:MouseReport()
     local ok, line = pcall(ns.CommunityChatReport, ns)
     if ok and line then out[#out + 1] = line end
   end
+  if ns.TargetMacroReport then
+    local ok, line = pcall(ns.TargetMacroReport, ns)
+    out[#out + 1] = ok and line or ("target macro: " .. tostring(line))
+  end
   if ns.QuestShareReport then
     local ok, line = pcall(ns.QuestShareReport, ns)
     if ok and line then out[#out + 1] = line end
