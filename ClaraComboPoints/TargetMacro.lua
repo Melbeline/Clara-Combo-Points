@@ -1,9 +1,10 @@
 -- Clara Combo Points - the target's name into a macro: a double click on the target frame's name writes it in the
--- macro "ClaraTarget" (made the first time, the account's: "/tm8" then "/tar <name>"): its "/tar" (or "/target") line
+-- macro "ClaraTarget" (made the first time, the account's: "/tm 8" then "/tar <name>"): its "/tar" (or "/target") line
 -- takes the name, every other line of the macro (a "/cast" added by the player...) left as it is. A double left click
 -- writes its first word only ("Hatefury" for "Hatefury Felsworn"); a double middle click, the whole name. The game lets no addon change a macro in a fight:
 -- written as the fight ends, a line says so. Its icon is chosen once, as it is made: one the player picks later stays.
--- A box on Clara's page (on by default).
+-- A "/tm8" line (the first versions made it so: the game reads no such command) mended to "/tm 8". A box on Clara's
+-- page (on by default); a second one says in the chat what went in the macro (off by default).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -20,6 +21,10 @@ function ns:SetTargetMacro(on)
   if not self.sv then return end
   if on then self.sv.targetMacro = nil else self.sv.targetMacro = false end
 end
+function ns:TargetMacroSay() return (self.sv and self.sv.targetMacroSay == true) or false end
+function ns:SetTargetMacroSay(on)
+  if self.sv then self.sv.targetMacroSay = on and true or nil end
+end
 
 local function Say(text)
   if DEFAULT_CHAT_FRAME and text then DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Clara|r: " .. text) end
@@ -30,6 +35,7 @@ local function Body(old, name)
   local line = "/tar " .. name
   local lines, done = {}, false
   for l in ((old or "") .. "\n"):gmatch("(.-)\r?\n") do
+    l = l:gsub("^(%s*/[tT][mM])(%d+%s*)$", "%1 %2") -- ("/tm8": "/tm 8")
     local low = l:lower()
     if not done and (low:match("^%s*/tar%s") or low:match("^%s*/tar$") or low:match("^%s*/target%s")) then
       l, done = line, true
@@ -71,7 +77,7 @@ local function Write(name)
     EditMacro(index, nil, nil, body) -- (its name and icon left as they are, as the game's own macro window does)
     return true
   end
-  local body = "/tm8\n/tar " .. name
+  local body = "/tm 8\n/tar " .. name
   local account, character = GetNumMacros()
   local maxAccount, maxCharacter = tonumber(MAX_ACCOUNT_MACROS) or 120, tonumber(MAX_CHARACTER_MACROS) or 18
   account, character = tonumber(account) or 0, tonumber(character) or 0
@@ -112,7 +118,7 @@ local function Apply(name)
   end
   if Kept(name) then
     lastWhat = "written: " .. name
-    Say(L.TM_WRITTEN:format(MACRO, name))
+    if ns:TargetMacroSay() then Say(L.TM_WRITTEN:format(MACRO, name)) end
     return
   end
   -- (not there at once: looked at again a moment later, the game's answer may come late)
@@ -120,7 +126,7 @@ local function Apply(name)
   local function Again()
     if Kept(name) then
       lastWhat = "written (late): " .. name
-      Say(L.TM_WRITTEN:format(MACRO, name))
+      if ns:TargetMacroSay() then Say(L.TM_WRITTEN:format(MACRO, name)) end
     else
       local body = Current()
       lastWhat = "not kept by the game: " .. name .. (blocked and (", blocked: " .. blocked) or "")
