@@ -184,7 +184,7 @@ check(page and page.parent == ns.qolThemes.quests, "UnitScan under Quests and pr
 M.ShowSettingsPage(page)
 local frame = page.frame
 check(frame.rares:GetChecked() and not frame.send:GetChecked() and frame.far:GetChecked(), "rares on, sending off, far sightings on")
-check((frame.rares.Text or frame.rares.text):GetText():find("486 creatures", 1, true), "the rares counted")
+check((frame.rares.Text or frame.rares.text):GetText():find("489 creatures", 1, true), "the rares counted")
 frame.send:Click()
 check(ns:ScanOption("send") == true, "the send box: on")
 frame.send:Click()
