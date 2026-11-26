@@ -5,6 +5,7 @@
 -- whole name. On its portrait: a double left click follows the target (no macro); with Shift held, its first word goes
 -- in the macro "ClaraFollow" (its "/follow" line, made the first time: "/follow <name>"); with Ctrl held, its whole
 -- name. The two spots never share a point: where the name's and the portrait's overlap, a double click does nothing.
+-- A player's whole name is "First Surname", as the game's own menu gives it: followed by it (an exact match), written so.
 -- The game lets no addon change a macro in a fight: written as the fight ends, a line says so. A macro's icon is
 -- chosen once, as it is made: one the player picks later stays. A "/tm8" line (the first versions made it so: the
 -- game reads no such command) mended to "/tm 8". A box on Clara's page for each spot (on by default); another says in
@@ -163,9 +164,17 @@ local function Apply(macro, name)
   if C_Timer and C_Timer.After then C_Timer.After(0.5, Again) else Again() end
 end
 
--- The target's name, or nil (said when the game hides it)
+-- The target's whole name, as the game's own menu gives it ("First Surname" for a player, the creature's name), or nil
+-- (said when the game hides it)
+local function Whole()
+  local ok, name = pcall(ns.FullName, ns, "target")
+  if ok and type(name) == "string" and not issecret(name) and name ~= "" then return name end
+  name = UnitName and UnitName("target")
+  return name
+end
+
 local function TargetName(macro)
-  local name = UnitName and UnitName("target")
+  local name = Whole()
   if issecret(name) then
     Note(macro, "the target's name hidden by the game (secret)")
     Say(L.TM_SECRET:format(macro.name))
@@ -228,8 +237,12 @@ local function OnPortraitUp(_, button, from)
     return
   end
   if not FollowUnit then followWhat = "no FollowUnit" return end
-  local ok, err = pcall(FollowUnit, "target")
-  followWhat = ok and "followed the target" or ("follow: error " .. tostring(err))
+  -- (by its whole name, an exact match, as the game's own menu does: "target" is not a name it knows)
+  local name = Whole()
+  if type(name) ~= "string" or issecret(name) or name == "" then name = nil end
+  local ok, err
+  if name then ok, err = pcall(FollowUnit, name, true) else ok, err = pcall(FollowUnit, "target") end
+  followWhat = ok and ("followed " .. (name or "the target")) or ("follow: error " .. tostring(err))
 end
 ns.FollowClickUp = OnPortraitUp -- (for its test)
 
