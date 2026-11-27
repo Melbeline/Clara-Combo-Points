@@ -370,6 +370,29 @@ check(next(rawget(difficulty, "estimateRows")) == nil and source.content == sour
 difficulty:Hide(); source:Hide(); Run()
 ForeverRecipes = nil
 
+out("== another addon's lines just under the reagents (Auctionator's To Craft and Profit): the panel under them")
+local function Gap() local _, rel, _, x, y = re:GetPoint(1) return rel, x, y end
+form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
+local _, _, y0 = Gap()
+function form:GetChildren() return unpack(Kids(self)) end
+local ah = CreateFrame("Frame", nil, form) -- (an addon's frame on the form, no key of the game's)
+ah:SetPoint("TOPLEFT", form.Reagents, "BOTTOMLEFT", 0, -6); ah:SetSize(200, 30)
+ah:Show()
+form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
+local relA, xA, yA = Gap()
+check(relA == form.Reagents and xA == 0 and math.abs(yA - (y0 - 36)) < 0.01,
+  ("the panel under its lines, lined up with the reagents (%s, %s)"):format(tostring(y0), tostring(yA)))
+ah:Hide(); Run()
+local _, _, yH = Gap()
+check(math.abs(yH - y0) < 0.01, "its lines hidden (a recipe it does not price): right under the reagents again, at once")
+ah:Show(); Run()
+check(math.abs(select(3, Gap()) - yA) < 0.01, "shown again: under them again")
+local far = CreateFrame("Frame", nil, form) -- (an addon's frame elsewhere on the form: left alone)
+far:SetPoint("TOPLEFT", form, "TOPLEFT", 10, -10); far:SetSize(50, 20); far:Show()
+form:Init({ recipeID = 1, name = "Tranquil Mechanical Yeti" }); Run()
+check(math.abs(select(3, Gap()) - yA) < 0.01, "a frame elsewhere on the form: not counted")
+ah:Hide(); far:Hide(); Run()
+
 out("== the mouse report: what the list did (its rebuilds, the presses on its rows, the recipes chosen)")
 do
   M.now = (M.now or 0) + 100
