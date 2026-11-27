@@ -11,6 +11,10 @@
 -- halt). A line the game keeps secret is left as it is. Lines put back from the previous session keep theirs.
 -- The level: from the units around (target, mouse, group, raid), the game's player info, the last /who; none known:
 -- none shown. Saved with Clara's settings (ClaraComboPointsDB.chatLook).
+-- With Prat (another chat addon), Prat first: its level by the name (its PlayerNames' Show Level) shown, Clara's not; a
+-- level or a race's head another addon already put by the name: Clara's not added; the level and the head outside
+-- Prat's brackets ([38:Name] stays whole); Prat's time at the line's start clickable as the game's; Clara's change made
+-- after Prat has put its time (its Timestamps, which leaves a line already changed as it is).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -165,6 +169,14 @@ end
 ---------------------------------------------------------------------------
 -- The line changed in place: its head, its level, its time and level clickable
 ---------------------------------------------------------------------------
+-- A line as it reads, without the game's markup
+local function PlainLine(text)
+  text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+  text = text:gsub("|H.-|h(.-)|h", "%1"):gsub(" ?|T.-|t", ""):gsub(" ?|A.-|a", "")
+  return (text:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+ns.ChatLookPlain = PlainLine -- (for the tests)
+
 local LINK = "addon:" .. ADDON .. ":line:"
 local session = ("%x"):format(time and time() or 0)
 local serial = 0
@@ -178,6 +190,23 @@ local function Stamp(text)
   local head = text:sub(1, #sample)
   if head:gsub("%d", "0") ~= sample:gsub("%d", "0") then return nil end
   return #sample
+end
+-- Else a time another addon put first, in its color or not (Prat's "|cff999999[20:55:11]|r"): its length
+local function LeadStamp(text)
+  local e = text:match("^|c%x%x%x%x%x%x%x%x[^|]*|r()")
+  if e then
+    local inner = text:sub(11, e - 3)
+    if #inner <= 24 and inner:find("^%[?%d%d?[:%.h]%d%d") then return e - 1 end
+  end
+  local e2 = text:match("^%[%d%d?[:%.h]%d%d[^%]|]*%]()")
+  if e2 then return e2 - 1 end
+end
+
+-- Prat's level by the name, on (its PlayerNames' Show Level): Prat's shown, Clara's not
+local function PratLevels()
+  if not ns.PratModule then return false end
+  local _, profile = ns.PratModule("PlayerNames")
+  return profile ~= nil and profile.level == true
 end
 
 local function Build(text, eventArgs, frame)
@@ -196,14 +225,22 @@ local function Build(text, eventArgs, frame)
     serial = serial + 1
     key = LINK .. session .. "-" .. serial
   end
-  local level = On("level") and LevelOf(guid, sender, gameLevel) or nil
+  local before, link, after = text:sub(1, s - 1), text:sub(s, e), text:sub(e + 1)
+  -- What the line already shows by the name: a level in it (Prat's "38:Name"), a race's head
+  local shownLevel = PlainLine(link):find("%d")
+  local shownHead = text:lower():find("raceicon", 1, true)
+  -- Brackets outside the name's link (Prat's): the level before them, the head after them
+  local open = before:match("()|c%x%x%x%x%x%x%x%x[%[<]|r$") or before:match("()[%[<]$")
+  if open then before, link = before:sub(1, open - 1), before:sub(open) .. link end
+  local close = after:match("^|c%x%x%x%x%x%x%x%x[%]>]|r()") or after:match("^[%]>]()")
+  if close then link, after = link .. after:sub(1, close - 1), after:sub(close) end
+  local level = On("level") and not shownLevel and not PratLevels() and LevelOf(guid, sender, gameLevel) or nil
   local levelText = level and LevelText(level) or nil
   if levelText and key then levelText = "|H" .. key .. "|h" .. levelText .. "|h" end
-  local head = On("heads") and Head(race, sex, frame) or nil
-  local before, link, after = text:sub(1, s - 1), text:sub(s, e), text:sub(e + 1)
+  local head = On("heads") and not shownHead and Head(race, sex, frame) or nil
   local out = before .. (levelText and (levelText .. " ") or "") .. link .. (head and (" " .. head) or "") .. after
   if key then
-    local n = Stamp(out)
+    local n = Stamp(out) or LeadStamp(out)
     if n then
       local stamp, rest = out:sub(1, n), out:sub(n + 1)
       local core, space = stamp:match("^(.-)(%s*)$")
@@ -215,6 +252,31 @@ end
 ns.ChatLookBuild = Build -- (for the tests)
 
 -- After the game's AddMessage: the line just put in the window, if it is this event's
+local function Apply(frame, entry, eventArgs)
+  local text = entry.message
+  if not (Plain(text) and type(text) == "string") then return end
+  local ok, out = pcall(Build, text, eventArgs, frame)
+  if ok and type(out) == "string" and out ~= text then
+    entry.message = out
+    if frame.MarkDisplayDirty then frame:MarkDisplayDirty() end
+  end
+end
+
+-- Lines changed at the next frame: Prat's time put first (its hook, after Clara's, leaves a line already changed as it is)
+local queue = {}
+local runner = CreateFrame("Frame")
+runner:Hide()
+runner:SetScript("OnUpdate", function(self)
+  self:Hide()
+  local q = queue
+  queue = {}
+  for _, item in ipairs(q) do Apply(item[1], item[2], item[3]) end
+end)
+local function Later()
+  return ns.PratModule ~= nil and ns.PratModule("Timestamps") ~= nil
+end
+ns.ChatLookFlush = function() runner:GetScript("OnUpdate")(runner) end -- (for the tests)
+
 local function After(frame, text, _, _, _, _, _, _, event, eventArgs)
   if not (Plain(text) and type(text) == "string" and Plain(event) and EVENTS[event]) then return end
   if not (Plain(eventArgs) and type(eventArgs) == "table") or (canaccesstable and not canaccesstable(eventArgs)) then return end
@@ -224,11 +286,12 @@ local function After(frame, text, _, _, _, _, _, _, event, eventArgs)
   if type(entry) ~= "table" or entry.message ~= text then return end
   local extra = entry.extraData
   if not (type(extra) == "table" and extra[5] == eventArgs and extra[4] == event) then return end
-  local ok, out = pcall(Build, text, eventArgs, frame)
-  if ok and type(out) == "string" and out ~= text then
-    entry.message = out
-    if frame.MarkDisplayDirty then frame:MarkDisplayDirty() end
+  if Later() then
+    queue[#queue + 1] = { frame, entry, eventArgs }
+    runner:Show()
+    return
   end
+  Apply(frame, entry, eventArgs)
 end
 ns.ChatLookAfter = After -- (for the tests)
 
@@ -249,12 +312,6 @@ if FCF_OpenNewWindow then hooksecurefunc("FCF_OpenNewWindow", HookAll) end
 ---------------------------------------------------------------------------
 -- A click on the time or the level: the whole line, selected to copy
 ---------------------------------------------------------------------------
-local function PlainLine(text)
-  text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-  text = text:gsub("|H.-|h(.-)|h", "%1"):gsub(" ?|T.-|t", ""):gsub(" ?|A.-|a", "")
-  return (text:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
-end
-ns.ChatLookPlain = PlainLine -- (for the tests)
 local function Find(link, frame)
   local needle = "|H" .. link .. "|h"
   local frames = {}

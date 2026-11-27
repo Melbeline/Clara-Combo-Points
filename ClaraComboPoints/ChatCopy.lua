@@ -1,11 +1,14 @@
 -- Clara Combo Points - copying from the chat. A right click on a player's name in a chat line opens
 -- the game's menu, with Copy Chat Message: that very line's message (the game keeps each line's
 -- text by its number). Web addresses in the chat are links: a click on one, the same. The game lets
--- no addon write to the clipboard, so the text comes up selected in a small box at the mouse:
--- Ctrl+C copies it and closes the box (Escape, or a click elsewhere, closes it too).
+-- no addon write to the clipboard, so the text comes up selected in a small box at the mouse, the
+-- whole of it on as many lines as it takes: Ctrl+C copies it and closes the box (Escape, Enter, or a
+-- click elsewhere, closes it too).
 -- In the menu, Copy Chat Message is last: the game lets an addon add only after its own entries (one put
 -- higher moves the game's, which are then refused what they do: Copy Character Name's clipboard). Not in
 -- combat: the menu's buttons made for an addon's entries are refused their frame level then.
+-- Prat (another chat addon): what it does too is left to it, Clara's own stepping aside (web addresses
+-- made links by Prat's UrlCopy; the level by the name by its PlayerNames).
 
 local ADDON, ns = ...
 local L = ns.L
@@ -14,38 +17,70 @@ local issecret = issecretvalue or function() return false end
 local LINK = "addon:" .. ADDON .. ":url:"
 
 ---------------------------------------------------------------------------
+-- Prat, when loaded: one of its modules, on, and its settings (nil when Prat or that module is off)
+---------------------------------------------------------------------------
+function ns.PratModule(name)
+  local P = rawget(_G, "Prat")
+  local addon = type(P) == "table" and rawget(P, "Addon")
+  if type(addon) ~= "table" or type(addon.GetModule) ~= "function" then return nil end
+  local ok, m = pcall(addon.GetModule, addon, name, true)
+  if not ok or type(m) ~= "table" then return nil end
+  local profile = type(m.db) == "table" and m.db.profile
+  if type(profile) ~= "table" or profile.on == false then return nil end
+  if type(m.IsEnabled) == "function" then
+    local okOn, on = pcall(m.IsEnabled, m)
+    if okOn and on == false then return nil end
+  end
+  return m, profile
+end
+
+---------------------------------------------------------------------------
 -- The box
 ---------------------------------------------------------------------------
+local WIDTH, PAD, MAX_H = 400, 10, 220
 local box
 local function Box()
   if box then return box end
   box = CreateFrame("Frame", "ClaraChatCopyBox", UIParent, "TooltipBackdropTemplate")
   box:SetFrameStrata("FULLSCREEN_DIALOG")
   box:SetClampedToScreen(true)
-  box:SetSize(360, 52)
+  box:SetSize(WIDTH, 60)
+  box:EnableMouse(true)
   box:Hide()
   box.hint = box:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  box.hint:SetPoint("BOTTOMLEFT", 10, 7)
-  box.hint:SetPoint("BOTTOMRIGHT", -10, 7)
+  box.hint:SetPoint("BOTTOMLEFT", PAD, 7)
+  box.hint:SetPoint("BOTTOMRIGHT", -PAD, 7)
   box.hint:SetJustifyH("LEFT")
+  -- (to measure the text's height on as many lines as it takes, the box's width)
+  box.measure = box:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
+  box.measure:SetWidth(WIDTH - 2 * PAD)
+  box.measure:SetJustifyH("LEFT")
+  box.measure:Hide()
+  -- The text: a width of its own, given (one taken from its anchors only was not known yet as the text was put in, and the
+  -- game showed it scrolled out of sight: the box empty), on several lines (a long line whole, not one end of it)
   local edit = CreateFrame("EditBox", nil, box)
-  edit:SetPoint("TOPLEFT", 10, -8)
-  edit:SetPoint("TOPRIGHT", -10, -8)
-  edit:SetHeight(20)
-  edit:SetFontObject("ChatFontNormal")
+  edit:SetMultiLine(true)
   edit:SetAutoFocus(false)
+  edit:SetFontObject(ChatFontNormal or GameFontHighlight)
+  edit:SetWidth(WIDTH - 2 * PAD)
+  edit:SetHeight(20)
+  edit:SetPoint("TOPLEFT", PAD, -8)
   edit:SetScript("OnEscapePressed", function() box:Hide() end)
+  edit:SetScript("OnEnterPressed", function() box:Hide() end)
   edit:SetScript("OnEditFocusLost", function() box:Hide() end)
+  edit:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
   -- the text stays as it is: a key typed puts it back, selected
   edit:SetScript("OnTextChanged", function(self, user)
     if user and self:GetText() ~= box.text then
-      self:SetText(box.text)
+      self:SetText(box.text or "")
       self:HighlightText()
     end
   end)
   edit:SetScript("OnKeyDown", function(_, key)
     if key == "C" and IsControlKeyDown() then C_Timer.After(0, function() box:Hide() end) end
   end)
+  box:SetScript("OnMouseUp", function() edit:SetFocus() edit:HighlightText() end)
+  box:SetScript("OnHide", function() edit:ClearFocus() end)
   box.edit = edit
   return box
 end
@@ -55,6 +90,10 @@ function ns.ShowCopyBox(text)
   local b = Box()
   b.text = text
   b.hint:SetText(L.COPY_HINT)
+  b.measure:SetText(text)
+  local h = math.min(MAX_H, math.max(16, math.ceil(b.measure:GetStringHeight() or 16) + 4))
+  b.edit:SetHeight(h)
+  b:SetHeight(h + 34)
   local x, y = GetCursorPosition()
   local scale = UIParent:GetEffectiveScale()
   b:ClearAllPoints()
@@ -64,6 +103,15 @@ function ns.ShowCopyBox(text)
   b.edit:SetCursorPosition(0)
   b.edit:SetFocus()
   b.edit:HighlightText()
+  -- once more as the box is drawn: its place and size known
+  C_Timer.After(0, function()
+    if b:IsShown() and b.text == text then
+      if b.edit:GetText() ~= text then b.edit:SetText(text) end
+      b.edit:SetCursorPosition(0)
+      b.edit:SetFocus()
+      b.edit:HighlightText()
+    end
+  end)
 end
 
 ---------------------------------------------------------------------------
@@ -131,6 +179,7 @@ local EVENTS = { "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_WHISPER", "CHAT_MSG_
 
 local function Filter(_, _, message, ...)
   if type(message) ~= "string" or issecret(message) then return false end
+  if ns.PratModule("UrlCopy") then return false end -- (Prat makes them links)
   if not (message:find("://", 1, true) or message:find("www.", 1, true) or message:find("discord.gg/", 1, true)) then return false end
   local linked = Linked(message)
   if linked == message then return false end
