@@ -5,10 +5,10 @@
 ## Notes-deDE: Clara Combo Points (Combopunkte, Energie, Wut, Mana und Gesundheit mit Buff-/Debuff-Symbolen, für alle Klassen) und eingebaute Funktionen anderer Addons (WoW Forever). /clara oder /cl
 ## Author: Melbeline
 ## Version: 1.7.0
-## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB, ClaraWaterShieldDB
+## SavedVariables: ClaraComboPointsDB, ClaraLeaPlusDB, ClaraWSTDB, ClaraDynamicCamDB, ClaraDialogKeyDB, ClaraXToLevelDB, ClaraMinimapDrawerDB, ClaraMailDB, ClaraTullaRangeDB, ClaraTooltipAnchorDB, ClaraIdTipDB, ClaraCraftDB, ClaraSyncDB, ClaraSyncIncoming, ClaraMoneyDB, ClaraLFGForeverDB, ClaraPricesDB, ClaraPriceHistoryDB, ClaraWaterShieldDB, ClaraCliqueDB
 ## SavedVariablesPerCharacter: ClaraLFGForeverCharDB, ClaraChatHistoryDB
 ## LoadSavedVariablesFirst: true
-## OptionalDeps: Leatrix_Plus, TipTac, Cheese, WeaponSwingTimer, BuyEmAllClassic, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, LFGForever, Auctionator, ReverseEngineering, ElvUI, EasyFrames, Glass, WaterShieldTracker
+## OptionalDeps: Leatrix_Plus, TipTac, Cheese, WeaponSwingTimer, BuyEmAllClassic, DynamicCam, DialogKey_Numy, XToLevel, MinimapDrawer, tullaRange, idTip, SoloRaidFrameNV, LFGForever, Auctionator, ReverseEngineering, ElvUI, EasyFrames, Glass, WaterShieldTracker, Clique
 ## Category: UI
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 
@@ -178,6 +178,53 @@ Modules\ReportMute\ReportMute.lua
 Modules\TooltipTarget\TooltipTarget.lua
 Modules\WaterShieldTracker\WaterShieldTracker.lua
 Modules\SoloRaidFrame\SoloRaidFrame.lua
+Modules\Clique\Bootstrap.lua
+Modules\Clique\AddonCore.lua
+Modules\Clique\i18n\Localization.enUS.lua
+Modules\Clique\i18n\Localization.koKR.lua
+Modules\Clique\i18n\Localization.ruRU.lua
+Modules\Clique\i18n\Localization.zhCN.lua
+Modules\Clique\i18n\Localization.zhTW.lua
+Modules\Clique\i18n\Localization.Clara.lua
+Modules\Clique\libs\LibDeflate\LibDeflate.lua
+Modules\Clique\libs\LibSerialize\LibSerialize.lua
+Modules\Clique\core\core.lua
+Modules\Clique\core\database.lua
+Modules\Clique\core\changelog.lua
+Modules\Clique\core\frame_registry.lua
+Modules\Clique\core\proxy_frames.lua
+Modules\Clique\core\bindings.lua
+Modules\Clique\core\binding_attributes.lua
+Modules\Clique\core\attributes.lua
+Modules\Clique\core\binding_status.lua
+Modules\Clique\core\bindset_choices.lua
+Modules\Clique\core\talents.lua
+Modules\Clique\core\utils.lua
+Modules\Clique\core\import_export.lua
+Modules\Clique\core\dialogs.lua
+Modules\Clique\ClickCastTemplate.xml
+Modules\Clique\Clique.xml
+Modules\Clique\catalog\LibCatalog.lua
+Modules\Clique\catalog\ActionCatalog.lua
+Modules\Clique\catalog\MacroCatalog.lua
+Modules\Clique\catalog\SpellbookCatalog.lua
+Modules\Clique\catalog\PetCatalog.lua
+Modules\Clique\config\BindingConfig.lua
+Modules\Clique\config\BrowsePage.lua
+Modules\Clique\config\EditPage.lua
+Modules\Clique\config\EditMacroPage.lua
+Modules\Clique\config\ActionCatalogWindow.lua
+Modules\Clique\config\Utils.lua
+Modules\Clique\config\BlizzFramesConfigPage.lua
+Modules\Clique\config\DenylistPage.lua
+Modules\Clique\config\GeneralOptionsPage.lua
+Modules\Clique\config\ProfilePage.lua
+Modules\Clique\config\ChangelogPage.lua
+Modules\Clique\options\OptionsPanel.lua
+Modules\Clique\options\BlizzardFramesConfig.lua
+Modules\Clique\options\DenylistConfig.lua
+Modules\Clique\modules\blizzard.lua
+Modules\Clique\modules\binding_tooltip.lua
 Modules\EnemyCasts\EnemyCasts.lua
 Modules\LFGForever\Bootstrap.lua
 Modules\LFGForever\Locale_Clara.lua
