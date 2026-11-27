@@ -1,3 +1,4 @@
+-- (The game's windows: the old lines put back above this session's with BackFillMessage, the newest first, 400 a frame.)
 -- Leatrix Plus's chat (Clara's): Increase chat history (each window keeps 10000 lines, the game 128; what it holds
 -- kept), Restore chat messages after a reload or a relog (the character's own saved variables, ClaraChatHistoryDB:
 -- every line each window holds, in its color; the previous session's, a notice, then this one's)
@@ -81,6 +82,31 @@ check(env.ClaraChatHistoryDB == nil, "back in the windows: the saved copy let go
 check(env.ClaraNS.ChatRestoring == nil, "the restoring mark off again")
 check(env.LeaPlusDB.ChatHistory1 == nil and env.LeaPlusDB.ChatHistoryName == nil, "Leatrix's own single slot, from before: cleared")
 env.ChatFrame1:AddMessage("A new line", 1, 1, 1)
+out("== the game's windows (BackFillMessage): put back above this session's lines, the newest first, a batch each frame")
+do
+  local many = { time = 900, [1] = {} }
+  for i = 1, 1000 do many[1][i] = "|cffffffffold " .. i end
+  local queue, adds = {}, 0
+  local envB = Run({ MaxChatHstory = "On", RestoreChatMessages = "On" }, many, function(e)
+    local w = e.ChatFrame1
+    function w:BackFillMessage(t, r, g, b) table.insert(self.lines, 1, { t, r, g, b }) end
+    local add = w.AddMessage
+    w:AddMessage("Welcome to World of Warcraft!", 1, 1, 0)
+    function w:AddMessage(t, ...) if tostring(t):find("^old ") then adds = adds + 1 end return add(self, t, ...) end -- (another addon's hook on it)
+    e.C_Timer = { After = function(_, fn) queue[#queue + 1] = fn end }
+  end)
+  local w = envB.ChatFrame1
+  local tB = Texts(w)
+  check(#tB == 402 and tB[1] == "old 601" and tB[400] == "old 1000" and tB[401]:find("Restored 1000 messages", 1, true)
+    and tB[402] == "Welcome to World of Warcraft!", ("at once: the 400 newest, above the notice and this session's lines (%d, %s)"):format(#tB, tostring(tB[1])))
+  check(#queue == 1, "the rest left for the next frame")
+  while #queue > 0 do table.remove(queue, 1)() end
+  tB = Texts(w)
+  check(#tB == 1002 and tB[1] == "old 1" and tB[1000] == "old 1000" and tB[1002] == "Welcome to World of Warcraft!", "frame by frame: all of them, in their order (" .. #tB .. ")")
+  check(adds == 0, "the windows' AddMessage not run again for them (another addon's hook on it: " .. adds .. ")")
+  check(math.abs(w.lines[1][2] - 1) < 0.01, "in their color")
+  check(envB.ClaraNS.ChatRestoring == nil and envB.ClaraChatHistoryDB == nil, "the restoring mark off, the saved copy let go")
+end
 out("== saved at logout: every line, the notice left out")
 local env2, hs = Run({ MaxChatHstory = "On", RestoreChatMessages = "On" }, saved)
 env2.ChatFrame1:AddMessage("Said today", 1, 0.5, 0)
