@@ -186,6 +186,7 @@ Modules\Clique\i18n\Localization.ruRU.lua
 Modules\Clique\i18n\Localization.zhCN.lua
 Modules\Clique\i18n\Localization.zhTW.lua
 Modules\Clique\i18n\Localization.Clara.lua
+Modules\Clique\libs\AceDB-3.0\AceDB-3.0.lua
 Modules\Clique\libs\LibDeflate\LibDeflate.lua
 Modules\Clique\libs\LibSerialize\LibSerialize.lua
 Modules\Clique\core\core.lua
