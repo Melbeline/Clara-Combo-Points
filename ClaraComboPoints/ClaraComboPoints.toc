@@ -67,6 +67,7 @@ Look.lua
 Options.lua
 SettingsPage.lua
 QoL.lua
+Perf.lua
 ShopButton.lua
 ScanPage.lua
 Libs\AceShared.lua
