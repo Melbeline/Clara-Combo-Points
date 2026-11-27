@@ -1,0 +1,105 @@
+-- Chat look (Modules/ChatLook): in a player's chat line, the small head of their race in their sex after the name,
+-- the level before it, the time and level clickable (the whole line in the copy box); each part with its box; the
+-- line changed in place after the game's AddMessage, only the newest one and only if it is that event's; a line kept
+-- secret, another event's, or a monster's left as it is.
+local M, S = MOCK, MOCK.state
+local out = function(s) io.write(tostring(s), "\n") end
+local fails = 0
+local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
+
+GetBuildInfo = function() return "1.60.1", "70000", "Oct 1 2026", 16001 end
+ClaraComboPointsDB = { qol = { lfgforever = false, whatstraining = false, doesitdie = false, enhancedraidframes = false, buyemall = false, leatrix = false, nodesight = false, wst = false, dynamiccam = false,
+  dialogkey = false, xtolevel = false, minimapdrawer = false, classicui = false, tullarange = false, names = false,
+  tooltipanchor = false, mail = false, reverseengineering = false } }
+-- the game's helpers the module reads
+local info = { ["Player-1-0001"] = { "Druid", "DRUID", "Night Elf", "NightElf", 3, "Lia", "Forever", 40 },
+  ["Player-1-0002"] = { "Warrior", "WARRIOR", "Dwarf", "Dwarf", 2, "Brom", "Forever", nil } }
+function GetPlayerInfoByGUID(guid) local t = info[guid] if t then return unpack(t, 1, 8) end end
+function GetRaceAtlas(race, gender) return ("raceicon-%s-%s"):format(race, gender) end
+C_Texture = C_Texture or {}
+C_Texture.GetAtlasInfo = function(name) return name:find("^raceicon%-") and {} or nil end
+ChatFrameUtil = ChatFrameUtil or {}
+ChatFrameUtil.GetTimestampFormat = function() return "[%H:%M:%S] " end
+TimeUtil = TimeUtil or {}
+TimeUtil.BetterDate = function() return "[12:00:00] " end
+local copied
+local ns = {}
+S.class = "DRUID"; S.locale = "enUS"
+M.LoadAddon(ADDON_DIR, ns)
+M.Fire("ADDON_LOADED", "ClaraComboPoints"); M.Fire("PLAYER_LOGIN")
+if not ns.ChatLookBuild then out("(no chat look in this version)"); out(""); out("0 failure(s)"); return end
+ns.ShowCopyBox = function(text) copied = text end
+
+local LINE = "[19:46:37] |Hchannel:PARTY|h[Party]|h |Hplayer:Lia-Forever:12:PARTY|h[Lia Moon]|h: re"
+local args = { "re", "Lia-Forever", "", "", "", "", 0, 0, "", 0, 12, "Player-1-0001" }
+local frame = { GetFont = function() return "font", 14 end }
+
+out("== a night elf woman's line: her head after her name, her level before, the time and level clickable")
+local o = ns.ChatLookBuild(LINE, args, frame)
+check(o:find("|A:raceicon-nightelf-female:14:14:0:-4|a", 1, true) ~= nil, "her head, in her sex: " .. o)
+local level = o:find("[40]", 1, true)
+local name = o:find("|Hplayer:", 1, true)
+local head = o:find("|A:raceicon", 1, true)
+check(level and name and head and level < name and name < head and o:find("[Lia Moon]|h |A:", 1, true), "the level before the name, the head after it")
+check(o:find("^|Haddon:ClaraComboPoints:line:[%x]+%-%d+|h%[19:46:37%]|h |Hchannel:") ~= nil, "the time a link, its space outside")
+local key = o:match("^|H(addon:ClaraComboPoints:line:[^|]+)|h")
+check(key and o:find("|H" .. key .. "|h|cffb8b8b8[40]|r|h", 1, true), "the level the same link")
+check(ns.ChatLookPlain(o) == "[19:46:37] [Party] [40] [Lia Moon]: re", "the line as copied: " .. ns.ChatLookPlain(o))
+
+out("== a dwarf man's: his head, in his sex; no level known: none")
+local o2 = ns.ChatLookBuild("[19:47:00] |Hplayer:Brom-Forever:13:SAY|h[Brom]|h says: hi", { "hi", "Brom-Forever", [12] = "Player-1-0002" }, frame)
+check(o2:find("raceicon-dwarf-male", 1, true) and not o2:find("%[%d+%]"), "his head, no level: " .. o2)
+out("== his level seen (his target): shown")
+S.target = { guid = "Player-1-0002", level = 22, name = "Brom", player = true }
+UnitGUID = function(u) return u == "target" and "Player-1-0002" or nil end
+UnitLevel = function(u) return u == "target" and 22 or 0 end
+local o3 = ns.ChatLookBuild("[19:47:00] |Hplayer:Brom-Forever:14:SAY|h[Brom]|h says: hi", { "hi", "Brom-Forever", [12] = "Player-1-0002" }, frame)
+check(o3:find("[22]", 1, true) ~= nil, "his level from the unit around")
+
+out("== each part's box")
+local sw = ns.qolSwitches.chatlook
+check(sw and #sw == 3 and sw[1].label == "CL_HEADS" and sw[2].label == "CL_LEVEL" and sw[3].label == "CL_COPY", "its three boxes on its card")
+sw[1].set(false)
+local o4 = ns.ChatLookBuild(LINE, args, frame)
+check(not o4:find("|A:", 1, true) and o4:find("[40]", 1, true), "the head unticked: no head, the level still")
+sw[2].set(false)
+o4 = ns.ChatLookBuild(LINE, args, frame)
+check(not o4:find("[40]", 1, true), "the level unticked: none")
+sw[3].set(false)
+o4 = ns.ChatLookBuild(LINE, args, frame)
+check(not o4:find("|Haddon:", 1, true) and o4 == LINE, "the copy unticked: the line as the game made it")
+check(ClaraComboPointsDB.chatLook.heads == false, "kept with Clara's settings")
+for i = 1, 3 do sw[i].set(true) end
+check(ClaraComboPointsDB.chatLook.heads == nil, "ticked again: the default")
+
+out("== after the game's AddMessage: the newest line changed in place, if it is that event's")
+local entry
+local win = { GetFont = frame.GetFont, dirty = 0 }
+function win:MarkDisplayDirty() self.dirty = self.dirty + 1 end
+win.historyBuffer = { GetEntryAtIndex = function(_, i) return i == 1 and entry or nil end }
+entry = { message = LINE, extraData = { 1, 2, 3, "CHAT_MSG_PARTY", args } }
+ns.ChatLookAfter(win, LINE, 1, 1, 1, 1, 2, 3, "CHAT_MSG_PARTY", args)
+check(entry.message ~= LINE and entry.message:find("raceicon-nightelf-female", 1, true) and win.dirty == 1, "changed, the window redrawn")
+entry = { message = LINE, extraData = { 1, 2, 3, "CHAT_MSG_PARTY", {} } }
+ns.ChatLookAfter(win, LINE, 1, 1, 1, 1, 2, 3, "CHAT_MSG_PARTY", args)
+check(entry.message == LINE, "another event's line (its arguments not these): left as it is")
+entry = { message = LINE, extraData = { 1, 2, 3, "CHAT_MSG_MONSTER_SAY", args } }
+ns.ChatLookAfter(win, LINE, 1, 1, 1, 1, 2, 3, "CHAT_MSG_MONSTER_SAY", args)
+check(entry.message == LINE, "a monster's: left as it is")
+local secret = M.Secret(LINE)
+entry = { message = secret, extraData = { 1, 2, 3, "CHAT_MSG_PARTY", args } }
+local ok = pcall(ns.ChatLookAfter, win, secret, 1, 1, 1, 1, 2, 3, "CHAT_MSG_PARTY", args)
+check(ok and entry.message == secret, "a line kept secret: left as it is, no error")
+
+out("== a click on the time: the whole line, selected to copy")
+local shown = { ns.ChatLookBuild(LINE, args, frame) }
+local k2 = shown[1]:match("^|H(addon:ClaraComboPoints:line:[^|]+)|h")
+local cf = { GetNumMessages = function() return #shown end, GetMessageInfo = function(_, i) return shown[i] end }
+ns.ChatLookClicked(nil, k2, "[19:46:37]", "RightButton", cf)
+check(copied == "[19:46:37] [Party] [40] [Lia Moon]: re", "the right click: " .. tostring(copied))
+copied = nil
+ns.ChatLookClicked(nil, "addon:Other:x", "x", "LeftButton", cf)
+check(copied == nil, "another addon's link: nothing")
+
+out("")
+out(fails .. " failure(s)")
