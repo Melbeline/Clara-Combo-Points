@@ -89,16 +89,23 @@ end
 ---------------------------------------------------------------------------
 -- The game's options set once (Clara's defaults)
 ---------------------------------------------------------------------------
-local GAME_DEFAULTS_VERSION = 1 -- (a new option here: a new version, its options set once more)
+-- Each with the version that brought it: set once, when that version is new to the account (or the character, for an
+-- option the game keeps per character); an option brought before is not set again (the player's own choice since kept)
+local GAME_DEFAULTS_VERSION = 2
 local GAME_DEFAULTS = {
-  { "deselectOnClick", "1" },                -- Sticky Targeting off (its box shows the value negated)
-  { "autoLootDefault", "1" },                -- Auto Loot on
-  { "combinedBags", "0" },                   -- the bags separate, not one combined bag
-  { "UnitNameFriendlySpecialNPCName", "0" }, -- NPC Names: None (the game's own five values for it)
-  { "UnitNameHostleNPC", "0" },
-  { "UnitNameInteractiveNPC", "0" },
-  { "UnitNameNPC", "0" },
-  { "ShowQuestUnitCircles", "1" },
+  { "deselectOnClick", "1", 1 },                -- Sticky Targeting off (its box shows the value negated)
+  { "autoLootDefault", "1", 1 },                -- Auto Loot on
+  { "combinedBags", "0", 1 },                   -- the bags separate, not one combined bag
+  { "UnitNameFriendlySpecialNPCName", "0", 1 }, -- NPC Names: None (the game's own five values for it)
+  { "UnitNameHostleNPC", "0", 1 },
+  { "UnitNameInteractiveNPC", "0", 1 },
+  { "UnitNameNPC", "0", 1 },
+  { "ShowQuestUnitCircles", "1", 1 },
+  -- The character window opened with its right part (the stats) shown, not folded: the game reads this as its interface
+  -- loads (before any addon) and never writes it back, its fold arrow lasting the session only; set here, it is read so
+  -- from the next load (a /reload or a login). The window itself left alone: changed by an addon, it would no longer
+  -- open in a fight.
+  { "characterFrameCollapsed", "0", 2 },
 }
 
 -- Whether the game keeps an option for each character (else for the whole account or computer)
@@ -114,22 +121,23 @@ function ns:ApplyGameDefaults()
   if not (sv and cvar and cvar.GetCVar and cvar.SetCVar) then return 0 end
   local me = UnitGUID and UnitGUID("player")
   sv.gameDefaultsChars = type(sv.gameDefaultsChars) == "table" and sv.gameDefaultsChars or {}
-  local accountDone = (tonumber(sv.gameDefaults) or 0) >= GAME_DEFAULTS_VERSION
-  local charDone = not me or (tonumber(sv.gameDefaultsChars[me]) or 0) >= GAME_DEFAULTS_VERSION
+  local accountHad = tonumber(sv.gameDefaults) or 0
+  local charHad = me and (tonumber(sv.gameDefaultsChars[me]) or 0) or GAME_DEFAULTS_VERSION
   local set = 0
   for _, d in ipairs(GAME_DEFAULTS) do
-    local name, value = d[1], d[2]
+    local name, value, since = d[1], d[2], d[3] or 1
     local now = cvar.GetCVar(name)
-    local done = PerCharacter(name) and charDone or (not PerCharacter(name) and accountDone)
+    local done = (PerCharacter(name) and charHad or accountHad) >= since
     if now ~= nil and not done and now ~= value then
       cvar.SetCVar(name, value)
       set = set + 1
     end
   end
-  sv.gameDefaults = GAME_DEFAULTS_VERSION
-  if me then sv.gameDefaultsChars[me] = GAME_DEFAULTS_VERSION end
+  sv.gameDefaults = math.max(accountHad, GAME_DEFAULTS_VERSION)
+  if me then sv.gameDefaultsChars[me] = math.max(tonumber(sv.gameDefaultsChars[me]) or 0, GAME_DEFAULTS_VERSION) end
   return set
 end
+ns.GameDefaults = GAME_DEFAULTS -- (for the tests)
 
 local login = CreateFrame("Frame")
 login:RegisterEvent("PLAYER_LOGIN")
