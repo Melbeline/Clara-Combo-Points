@@ -42,7 +42,8 @@ end
 -- b = { [tab] = its bag's icon }, s = { [slot over all the tabs] = "item:...;count" } }
 local function CleanView(v)
   if type(v) ~= "table" or type(v.t) ~= "table" or type(v.s) ~= "table" then return nil end
-  local out = { at = type(v.at) == "number" and v.at or 0, t = {}, b = {}, s = {} }
+  local out = { at = type(v.at) == "number" and v.at or 0, t = {}, b = {}, s = {},
+    f = type(v.f) == "string" and #v.f > 0 and #v.f < 60 and v.f or nil } -- (f: the character's whole name)
   local total = 0
   for i, n in ipairs(v.t) do
     if type(n) ~= "number" or n < 0 or n > 200 or i > 12 then break end
@@ -354,13 +355,21 @@ local function SameView(a, b)
   for i, v in pairs(a.s) do if b.s[i] ~= v then return false end end
   for i in pairs(b.s) do if not a.s[i] then return false end end
   for i, v in pairs(a.b) do if b.b[i] ~= v then return false end end
-  return true
+  return a.f == b.f
+end
+
+-- This character's whole name ("First Surname"), kept with its bank as seen
+local function WholeName()
+  local ok, name = pcall(ns.FullName, ns, "player")
+  if ok and type(name) == "string" and name ~= "" and #name < 60 then return name end
+  return nil
 end
 
 function C.ScanBank()
   if not (mine and bankOpen) then return end
   local bank = Scan(BANK)
   local view = ViewOf(BANK, B.Characterbanktab)
+  if view then view.f = WholeName() end
   if not Same(bank, mine.bank) or (view and not SameView(view, mine.view)) then
     mine.bank, mine.at = bank, time()
     if view then view.at = mine.at; mine.view = view end

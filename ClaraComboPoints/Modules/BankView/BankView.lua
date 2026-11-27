@@ -25,6 +25,8 @@ local BASE_HEIGHT, ROW_HEIGHT, BASE_ROWS = 460, 47, 6
 local WIDTH = 560
 local BAG_SLOTS = 6           -- the bank's bag slots under the items (its tabs past the first)
 local TIP_MAX = 8             -- characters listed in an item's tooltip, at most
+local MENU_ROWS = 15          -- the character list's rows shown at once (more: it scrolls)
+local MENU_ROW_HEIGHT = 20    -- (a row of the game's menus)
 
 function ns:BankView() return not (self.sv and self.sv.bankView == false) end
 local Claim = function() end
@@ -39,8 +41,10 @@ end
 ---------------------------------------------------------------------------
 local function Me() return C.me end
 
--- A character's name as the gold tracker knows it ("First Surname"), else from its key
+-- A character's whole name ("First Surname"): as kept with its bank, else as the gold tracker knows it, else from its key
 local function NameOf(key)
+  local c = C.db and C.db.chars and C.db.chars[key]
+  if c and c.view and type(c.view.f) == "string" then return c.view.f end
   local G = ns.Money
   local rec = G and G.db and G.db.chars and G.db.chars[key]
   if rec and G.FullName then return G.FullName(rec) end
@@ -55,11 +59,12 @@ local function ClassHex(class)
   return ("ff%02x%02x%02x"):format(floor((color.r or 1) * 255), floor((color.g or 1) * 255), floor((color.b or 1) * 255))
 end
 
--- The player's characters: this one first, then by name
+-- The player's characters whose bank was seen (the list grows as each one logs in and opens its bank): this one
+-- first, then by name. (The others the data knows, mailed to and never logged in here, are not listed.)
 local function Characters()
   local list = {}
   for key, c in pairs(C.db and C.db.chars or {}) do
-    if type(c) == "table" then list[#list + 1] = key end -- (a bank never seen: listed all the same, said so)
+    if type(c) == "table" and c.view then list[#list + 1] = key end
   end
   table.sort(list, function(a, b)
     if (a == Me()) ~= (b == Me()) then return a == Me() end
@@ -67,7 +72,7 @@ local function Characters()
   end)
   return list
 end
-ns.BankViewCharacters = Characters -- (for the tests)
+ns.BankViewCharacters, ns.BankViewNameOf = Characters, NameOf -- (for the tests)
 
 local function Total(view)
   local n = 0
@@ -331,10 +336,11 @@ local function Build()
     dropdown:SetWidth(180)
     dropdown:SetPoint("TOPLEFT", 60, -31)
     dropdown:SetupMenu(function(_, root)
+      -- (a long list scrolls, MENU_ROWS at a time)
+      if root.SetScrollMode then root:SetScrollMode(MENU_ROWS * MENU_ROW_HEIGHT) end
       for _, key in ipairs(Characters()) do
         local c = C.db.chars[key]
         local label = ("|c%s%s|r"):format(ClassHex(c and c.class), NameOf(key))
-        if not (c and c.view) then label = label .. " |cff808080(" .. L.BV_NOT_SEEN .. ")|r" end
         root:CreateRadio(label, function() return (state.who or Me()) == key end, function()
           state.who, state.bank, state.page = key, "char", 1
           Refresh()
