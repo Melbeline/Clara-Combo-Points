@@ -83,6 +83,16 @@ local c2 = all2:find("2. ClaraComboPoints: 14 ms, its slowest frame 12 ms, 0 fra
 check(q2 and c2 and q2 < c2, "the costliest first: the game's count when bigger (Questie), the frames summed when bigger (Clara)")
 check(all2:find("Details: 6 ms", 1, true) ~= nil, "Details: " .. tostring(all2:match("[^\n]*Details[^\n]*")))
 check(not ns.PerfLoader:IsShown() and ClaraComboPointsDB.perfLoad == nil, "once, then forgotten")
+local box = _G.ClaraMouseReport
+local text = box and box.text or ""
+check(box and box:IsShown() and text:find("1. Questie: 720 ms", 1, true) and text:find("\nlog:\n", 1, true)
+  and text:find("armed (chargement)", 1, true) and text:find("started (loading screen shown)", 1, true)
+  and text:find("LOADING_SCREEN_DISABLED", 1, true) and text:find("the end (a second after the screen's end)", 1, true),
+  "the result and its log in a window to copy:\n" .. text)
+box:Hide()
+SlashCmdList.CLARACOMBOPOINTS("perf journal")
+check(box:IsShown() and box.text:find("the end (a second after", 1, true), "/cl perf journal: shown again")
+box:Hide()
 for k in pairs(said) do said[k] = nil end
 M.Fire("LOADING_SCREEN_ENABLED")
 check(not ns.PerfLoader:IsShown(), "the next loading screen: not measured")
@@ -110,6 +120,7 @@ check(ns.PerfLoader:IsShown(), "still watched just after")
 for _ = 1, #(M.timers or {}) do M.RunTimer() end -- (the world's few seconds)
 now = 404.5; load(ns.PerfLoader)
 check(not ns.PerfLoader:IsShown() and said[#said - 1]:find("login measured", 1, true) ~= nil, "measured a few seconds after the world entered: " .. tostring(said[#said - 1]))
+check(_G.ClaraMouseReport.text:find("taken as over: 3 s after the world entered", 1, true) ~= nil, "the log says why it ended")
 out("== a measure never runs past a minute")
 SlashCmdList.CLARACOMBOPOINTS("perf load")
 now = 500

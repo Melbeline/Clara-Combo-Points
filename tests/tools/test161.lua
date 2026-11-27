@@ -1,5 +1,5 @@
 -- The community chats back after a login (CommunityChat.lua): a community a chat window shows, not joined as the game
--- starts (the game's bug), joined again on its own (C_Club.AddClubStreamChatChannel), silently, the windows' lists
+-- starts (the game's bug), joined again on its own as soon as the communities are loaded (C_Club.AddClubStreamChatChannel), silently, the windows' lists
 -- untouched; one joined, a club left, the box off, a fight: nothing; ten logins in a row from the game started with
 -- every chat joined on its own: Blizzard's fix, a line once, Clara stands aside; broken again: Clara steps in again.
 -- The windows linked again to their joined chats at the first look and after a chat joined again (the game's functions,
@@ -50,8 +50,10 @@ out("== a login from the game started: the clubs in, 15 seconds, a look")
 joined["Community:456:1"] = 3
 M.Fire("PLAYER_ENTERING_WORLD", true, false)
 M.Fire("INITIAL_CLUBS_LOADED")
+check(#calls == 1 and calls[1] == "123:1", "the communities loaded: the one not joined joined again at once, not 15 s later (" .. table.concat(calls, ", ") .. ")")
+check(table.concat(links, ", "):find("+1 Community:123:1", 1, true) ~= nil, "and its windows linked to it at once")
 Timers()
-check(#calls == 1 and calls[1] == "123:1", "the one not joined: joined again (" .. table.concat(calls, ", ") .. ")")
+check(#calls == 1 and calls[1] == "123:1", "the later looks: nothing more to join (" .. table.concat(calls, ", ") .. ")")
 check(joined["Community:123:1"] == 5, "it has its number now")
 check(#ChatFrame1.channelList == 3 and #ChatFrame3.channelList == 3, "the windows' lists untouched")
 check(#said == 0, "silently")
