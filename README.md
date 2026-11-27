@@ -28,7 +28,6 @@ Chaque fonction en une ligne ; le détail de chacune est plus bas.
 - **Onglet Améliorations** : la liste des modules, avec une recherche qui la filtre en direct (descriptions et options comprises).
 - **Échap > Options > AddOns > Clara** : la page de Clara (toutes ses cases) et une page par thème ; un module prend le relais de son addon d'origine si celui-ci est installé.
 - **`/cl souris`** : un rapport de diagnostic (ce qu'il y a sous la souris et l'état des modules), pour signaler un problème.
-- **`/cl perf 20`** : quel addon fait accrocher le jeu. Pendant 20 secondes (de 5 à 120), le temps de chaque addon à chaque image, tel que le mesure le profileur d'addons du jeu ; ensuite dans le chat : les pires images (quand, combien de millisecondes en tout, les trois addons qui en ont pris le plus) et la pire image de chaque addon avec le nombre de ses images au-dessus de 5 ms. Les modules de Clara comptent pour Clara (le jeu mesure par addon).
 
 ### Modules : combat
 

@@ -57,24 +57,8 @@ if not driver and type(CompactPartyFrame_Generate) == "function" then
   hooksecurefunc("CompactPartyFrame_Generate", Drive)
 end
 
--- (until the handler is made: at login, as the world is entered and as the group changes too, in case the party frame
--- came another way than CompactPartyFrame_Generate's own call)
-local WAIT = { "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }
 events:SetScript("OnEvent", function(self, event)
+  self:UnregisterEvent(event)
   Drive()
-  if driver then self:UnregisterAllEvents() end
 end)
-if not driver then for _, e in ipairs(WAIT) do if e ~= "PLAYER_REGEN_ENABLED" then events:RegisterEvent(e) end end end
-
--- Where it stands, for /cl souris: the handler made, armed, the party frame's driver put on, the frame shown, the group
-function ns:SoloRaidFrameReport()
-  local f = CompactPartyFrame
-  local function A(k) return driver and tostring(driver:GetAttribute(k)) or "-" end
-  local shown = f and f.IsShown and f:IsShown()
-  local inGroup = IsInGroup and IsInGroup()
-  local raidStyle = EditModeManagerFrame and EditModeManagerFrame.UseRaidStylePartyFrames
-    and select(2, pcall(EditModeManagerFrame.UseRaidStylePartyFrames, EditModeManagerFrame))
-  return ("solo raid frame: handler %s, armed %s, state %s, the party frame's driver %s, party frame %s, shown %s, in a group %s, raid-style party frames %s"):format(
-    driver and "made" or "not made", A("armed"), A("state-arm"), A("driving"), f and "there" or "missing",
-    tostring(shown), tostring(inGroup), tostring(raidStyle))
-end
+if not driver then events:RegisterEvent("PLAYER_LOGIN") end
