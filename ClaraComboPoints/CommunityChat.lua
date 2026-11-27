@@ -1,20 +1,21 @@
 -- Clara Combo Points - the community chats back after a login: a bug of the game's (WoW's own for years, WoW Forever's
 -- too): a community whose chat a window shows (Guild & Communities > Add to Chat Window, its box ticked) is at times
 -- not joined as the game starts: its lines never come and it has no /number, though its box stays ticked (unticking
--- it and ticking it again brought it back). After the login (the clubs in: 15 seconds for the game to join them on
--- its own) and every 30 seconds after, the community chats the windows show are looked at: one not joined is joined
--- again, as the game does when its box is ticked (C_Club.AddClubStreamChatChannel), silently; the windows' own lists
--- are left alone (the game's).
+-- it and ticking it again brought it back). Looked at as early as the game allows: as the communities are loaded
+-- (before, the game knows none of them), as the world is entered (a reload: they are there already), again a few
+-- seconds later, 15 seconds after, and every 30 seconds after that: a community chat the windows show, not joined, is
+-- joined again, as the game does when its box is ticked (C_Club.AddClubStreamChatChannel), silently; the windows' own
+-- lists are left alone (the game's).
 -- Joined but its lines not coming to the window (the box ticked, the line seen in Guild & Communities, not in the
 -- chat; unticking and ticking it again brought them back): the window's link to the channel, kept by the game itself
 -- (AddChatWindowChannel), is lost, as after a chat joined late. So, as the game's own box does: at the first look of
 -- each login (the reloads too) and after each chat joined again, each window showing a joined community chat is
 -- linked to it again (RemoveChatWindowChannel, AddChatWindowChannel: the game's functions only, the windows' lists
--- untouched, nothing said). And a community line seen (CLUB_MESSAGE_ADDED) with no chat line for it 3 seconds later
+-- untouched, nothing said), as soon as it is joined (once each session, and after each time it is joined again). And a community line seen (CLUB_MESSAGE_ADDED) with no chat line for it 3 seconds later
 -- (CHAT_MSG_COMMUNITIES_CHANNEL) tells the link is lost: linked again at once, the line missed shown in those windows
 -- (as the game shows it; not when the game keeps it secret), and the bug counted as seen (Clara steps in again).
 -- Blizzard's fix seen: ten logins in a row from the game started (not reloads) with every community chat joined on its
--- own: Clara stands aside (nothing joined any more), a line in the chat says it once; seen broken again at a login:
+-- own (none joined by Clara before the look 15 seconds after the communities came): Clara stands aside (nothing joined any more), a line in the chat says it once; seen broken again at a login:
 -- Clara steps in again. A box on Clara's page, on by default.
 -- Who is online in a community: the game's Guild & Communities window asks for a community's members, never for their
 -- presence (its chat channels window does both): its list showed them all offline. The community it shows is subscribed
@@ -106,15 +107,19 @@ local function Link(c)
   return done
 end
 
--- The chats looked at; at a login's first look (from the game started), what it says of the bug counted; at the first
--- look of each login, every window linked again to the joined chats it shows
+-- The chats looked at; at the look 15 s after a login from the game started, what it says of the bug counted; each
+-- joined chat's windows linked to it once each session (and again after it is joined again)
 local Look
-local function LinkPending(shown, all)
+local linked = {} -- (the chats whose windows were linked this session)
+local function LinkPending(shown)
   for _, c in ipairs(shown) do
-    if (all or relink[c.name]) and Ours(c.club) and Link(c) then relink[c.name] = nil end
+    if (relink[c.name] or not linked[c.name]) and Ours(c.club) and Link(c) then
+      relink[c.name] = nil
+      linked[c.name] = true
+    end
   end
 end
-Look = function(verdict, first)
+Look = function(verdict, quick)
   if not ns.sv or not ns:CommunityChat() then return end
   if InCombatLockdown and InCombatLockdown() then return end -- (again at the next look)
   if not (C_Club and C_Club.AddClubStreamChatChannel and GetChannelName) then return end
@@ -126,7 +131,7 @@ Look = function(verdict, first)
   session.shown, session.missing = #shown, #missing
   local s = Store()
   if verdict and #shown > 0 then
-    if #missing > 0 then
+    if #missing > 0 or (session.early or 0) > 0 then -- (missing now, or joined by Clara at an early look)
       s.clean = 0
       if s.fixed then s.fixed = nil end -- (broken again: Clara steps in again)
     else
@@ -139,16 +144,18 @@ Look = function(verdict, first)
       end
     end
   end
+  if verdict ~= nil and not quick then session.early = 0 end -- (counted once, at this login's look)
   if s.fixed then return end -- (Blizzard's fix: Clara stands aside)
   for _, c in ipairs(missing) do
     if pcall(C_Club.AddClubStreamChatChannel, c.club, c.stream) then
       session.joined = session.joined + 1
+      if quick then session.early = (session.early or 0) + 1 end
       session.last = c.name
       session.at = GetTime()
       relink[c.name] = true
     end
   end
-  LinkPending(shown, first)
+  LinkPending(shown)
   -- (a chat joined again: linked as soon as it has its number)
   if next(relink) and C_Timer and C_Timer.After then C_Timer.After(WAIT, function() LinkPending((Shown())) end) end
 end
@@ -300,23 +307,46 @@ local cold, looked, ticker
 local function FirstLook()
   if looked then return end
   looked = true
-  Look(cold, true)
+  Look(cold)
   if not ticker and C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(EVERY, function() Look(false) end)
   end
 end
 
+-- The early looks: at once, and again a moment later (the game joining its chats one by one)
+local QUICK = { 0, 1, 3, 6 }
+local lastQuick -- (the last early look: several of the game's events at once make one)
+local function Quick()
+  if looked then return end -- (the 15 s look done: the ticker's)
+  local now = GetTime()
+  if lastQuick and now - lastQuick < 0.2 then return end
+  lastQuick = now
+  Look(false, true)
+end
+local function QuickSoon()
+  Quick()
+  if C_Timer and C_Timer.After then
+    for i = 2, #QUICK do C_Timer.After(QUICK[i], Quick) end
+  end
+end
+ns.CommunityChatQuick = Quick -- (for its test)
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 pcall(events.RegisterEvent, events, "INITIAL_CLUBS_LOADED")
+pcall(events.RegisterEvent, events, "CLUB_STREAMS_LOADED")
 events:SetScript("OnEvent", function(self, event, isInitialLogin)
   if not (C_Club and C_Club.AddClubStreamChatChannel) then self:UnregisterAllEvents() return end -- (no communities here)
   if event == "PLAYER_ENTERING_WORLD" then
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     cold = isInitialLogin == true
-    -- (the clubs' event missed, as after a reload: looked at a little later all the same)
+    QuickSoon() -- (a reload: the communities are there already)
+    -- (the clubs' event missed, as after a reload: the 15 s look a little later all the same)
     if C_Timer and C_Timer.After then C_Timer.After(FIRST_LOOK + 10, FirstLook) end
   elseif event == "INITIAL_CLUBS_LOADED" then
+    QuickSoon()
     if C_Timer and C_Timer.After then C_Timer.After(FIRST_LOOK, FirstLook) else FirstLook() end
+  elseif event == "CLUB_STREAMS_LOADED" then
+    Quick() -- (a community's chats known: looked at at once)
   end
 end)

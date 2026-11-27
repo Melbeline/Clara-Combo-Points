@@ -10,6 +10,9 @@
 -- frames of the loading itself, in case the game runs none of the addons' updates while it lasts); each addon's slowest
 -- frame in it, and its frames over 100 ms. Then in the chat: how long it lasted, the addons' time in all, the
 -- costliest addons first. Once, then forgotten.
+-- What it did is logged (kept through the reload: the events seen, the profiler's state, the start, the end, the
+-- result or an error) and shown in a window to copy as it ends, or 10 seconds after the world appears if it has not;
+-- /cl perf log shows the last one again.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -125,16 +128,49 @@ local function Snapshot()
 end
 local function Armed() return ns.sv and ns.sv.perfLoad == true end
 
+-- The log: kept with the settings (through the reload), the lines before they are there held a moment
+local early, LOG_MAX = {}, 300
+local function Log(fmt, ...)
+  local ok, text = pcall(string.format, fmt, ...)
+  local line = ("%s  %7.2f  %s"):format(date and date("%H:%M:%S") or "?", GetTime and GetTime() or 0, ok and text or fmt)
+  local sv = ns.sv
+  if not sv then early[#early + 1] = line return end
+  if type(sv.perfLoadLog) ~= "table" then sv.perfLoadLog = {} end
+  local log = sv.perfLoadLog
+  for _, l in ipairs(early) do log[#log + 1] = l end
+  early = {}
+  log[#log + 1] = line
+  while #log > LOG_MAX do table.remove(log, 1) end
+end
+local function Profiler()
+  local P = C_AddOnProfiler
+  local on = "?"
+  if P and P.IsEnabled then local ok, v = pcall(P.IsEnabled) on = ok and tostring(v) or "error" end
+  return ("profiler %s (IsEnabled %s, metrics %s)"):format(P and "there" or "missing", on,
+    tostring(Enum and Enum.AddOnProfilerMetric and Enum.AddOnProfilerMetric.LastTime ~= nil))
+end
+local function ShowLog(result)
+  local out = {}
+  for _, l in ipairs(result or {}) do out[#out + 1] = l end
+  if #out > 0 then out[#out + 1] = "" end
+  out[#out + 1] = "log:"
+  for _, l in ipairs(ns.sv and type(ns.sv.perfLoadLog) == "table" and ns.sv.perfLoadLog or early) do out[#out + 1] = "  " .. l end
+  if ns.ShowCopyText then ns:ShowCopyText(L.PERF_LOAD_TITLE, nil, table.concat(out, "\n")) end
+end
+
 local loading
 local loader = CreateFrame("Frame")
 loader:Hide()
 
-local function LoadReport()
+local function LoadReport(why)
   local l = loading
   loading = nil
   loader:Hide()
   if ns.sv then ns.sv.perfLoad, ns.sv.perfLoadBase = nil, nil end
-  if not l or not Available() then return end
+  Log("the end (%s): %d frames seen, %s", tostring(why), l and l.frames or 0, Profiler())
+  if not l then return end
+  local said = {}
+  local function Out(text) said[#said + 1] = text Say(text) end
   local ok, err = pcall(function()
     local recentM, peakM, overM = Met("RecentAverageTime", 1), Met("PeakTime", 4), Met("CountTimeOver100Ms", 9)
     local rows, all = {}, 0
@@ -150,14 +186,23 @@ local function LoadReport()
       if total >= 1 or peak >= 1 then rows[#rows + 1] = { name = name, total = total, peak = peak, over = over } end
     end
     table.sort(rows, function(a, b) return a.total > b.total end)
-    if l.ms then Say(L.PERF_LOAD_DONE:format(l.ms / 1000, all)) else Say(L.PERF_LOAD_LOGIN:format(all)) end
-    if #rows == 0 then Say(L.PERF_LOAD_QUIET) end
+    if l.ms then Out(L.PERF_LOAD_DONE:format(l.ms / 1000, all)) else Out(L.PERF_LOAD_LOGIN:format(all)) end
+    if #rows == 0 then Out(L.PERF_LOAD_QUIET) end
     for i = 1, math.min(SHOWN, #rows) do
       local r = rows[i]
-      Say(L.PERF_LOAD_ADDON:format(i, r.name, r.total, r.peak, r.over, BIG))
+      Out(L.PERF_LOAD_ADDON:format(i, r.name, r.total, r.peak, r.over, BIG))
+    end
+    -- (in the window: every addon that took any time, not only the first ten)
+    for i = SHOWN + 1, #rows do
+      local r = rows[i]
+      said[#said + 1] = L.PERF_LOAD_ADDON:format(i, r.name, r.total, r.peak, r.over, BIG)
     end
   end)
-  if not ok then Say("/cl perf: " .. tostring(err)) end
+  if not ok then
+    Log("error: %s", tostring(err))
+    Out("/cl perf: " .. tostring(err))
+  end
+  ShowLog(said)
 end
 
 loader:SetScript("OnUpdate", function()
@@ -172,25 +217,46 @@ loader:SetScript("OnUpdate", function()
     end
   end
   l.frames = l.frames + 1
+  if l.frames == 1 then Log("first frame watched") end
   local now = GetTime()
-  if (l.ended and now >= l.ended + AFTER) or now >= l.started + LONGEST then LoadReport() end
+  if l.ended and now >= l.ended + AFTER then LoadReport("a second after the screen's end")
+  elseif now >= l.started + LONGEST then LoadReport("a minute gone") end
 end)
 
-local function LoadStart(base, login)
-  if loading or not Available() then return end
+local function LoadStart(base, login, why)
+  if loading then return end
   loading = { base = base or Snapshot(), names = Loaded(), sum = {}, top = {}, frames = 0, started = GetTime(),
     t0 = not login and debugprofilestop and debugprofilestop() or nil }
   loader:Show()
+  Log("started (%s): %d addons loaded, where they stood %s, %s", tostring(why), #loading.names,
+    base and "kept from before the reload" or "taken now", Profiler())
   Say(login and L.PERF_LOAD_LOGIN_START or L.PERF_LOAD_START)
 end
 
 local loadEvents = CreateFrame("Frame")
-for _, e in ipairs({ "LOADING_SCREEN_ENABLED", "LOADING_SCREEN_DISABLED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT" }) do
+for _, e in ipairs({ "ADDON_LOADED", "LOADING_SCREEN_ENABLED", "LOADING_SCREEN_DISABLED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT" }) do
   pcall(loadEvents.RegisterEvent, loadEvents, e)
 end
-loadEvents:SetScript("OnEvent", function(_, event)
+-- (armed before a reload or a logout: this login is the loading measured, from where things stood as it began)
+local function LoginStart(why)
+  if loading or not Armed() then return end
+  LoadStart(type(ns.sv.perfLoadBase) == "table" and ns.sv.perfLoadBase or nil, true, why)
+end
+loadEvents:SetScript("OnEvent", function(self, event, a1, a2)
+  if event == "ADDON_LOADED" then
+    if a1 ~= ADDON then return end
+    self:UnregisterEvent("ADDON_LOADED")
+    if Armed() then
+      Log("Clara loaded: armed, %s", Profiler())
+      LoginStart("Clara loaded")
+    end
+    return
+  end
+  if not (Armed() or loading) then return end
+  Log("%s%s: %s", event, (a1 ~= nil or a2 ~= nil) and (" (" .. tostring(a1) .. ", " .. tostring(a2) .. ")") or "",
+    loading and ("measuring, " .. loading.frames .. " frames") or "not measuring")
   if event == "LOADING_SCREEN_ENABLED" then
-    if Armed() then LoadStart() end
+    if Armed() then LoadStart(nil, false, "loading screen shown") end
   elseif event == "LOADING_SCREEN_DISABLED" then
     local l = loading
     if l and not l.ended then
@@ -198,16 +264,32 @@ loadEvents:SetScript("OnEvent", function(_, event)
       if l.t0 then l.ms = debugprofilestop() - l.t0 end
     end
   elseif event == "PLAYER_LOGIN" then
-    -- (armed before a reload or a logout: this login is the loading measured, from what was seen as it began)
-    if Armed() then LoadStart(type(ns.sv.perfLoadBase) == "table" and ns.sv.perfLoadBase or nil, true) end
+    LoginStart("login")
   elseif event == "PLAYER_ENTERING_WORLD" then
     -- (no loading screen's end told, as when it went before Clara was there: the world is there, ended a moment later)
     local l = loading
-    if l and C_Timer and C_Timer.After then
-      C_Timer.After(WORLD, function() if loading == l and not l.ended then l.ended = GetTime() end end)
+    if C_Timer and C_Timer.After then
+      if l then
+        C_Timer.After(WORLD, function()
+          if loading == l and not l.ended then l.ended = GetTime() Log("taken as over: %d s after the world entered", WORLD) end
+        end)
+      end
+      -- (still armed 10 s after the world appears, no result: the log shown as it stands)
+      C_Timer.After(10, function()
+        if Armed() and not loading then
+          Log("still armed 10 s after the world appeared, nothing measured")
+          ShowLog({ L.PERF_LOAD_NONE })
+        elseif loading and loading == l and not l.ended then
+          Log("still measuring 10 s after the world appeared")
+          ShowLog({ L.PERF_LOAD_NONE })
+        end
+      end)
     end
   elseif event == "PLAYER_LOGOUT" then
-    if Armed() and Available() then ns.sv.perfLoadBase = Snapshot() end -- (a reload or a logout: where things stood)
+    if Armed() and Available() then
+      ns.sv.perfLoadBase = Snapshot() -- (a reload or a logout: where things stood)
+      Log("where things stood kept for the login after")
+    end
   end
 end)
 
@@ -218,10 +300,12 @@ function ns.PerfWatch(seconds)
     if word:find("^charg") or word:find("^load") or word:find("^lad") then
       if not Available() then Say(L.PERF_NONE) return end
       if not ns.sv then return end
-      ns.sv.perfLoad = true
+      ns.sv.perfLoad, ns.sv.perfLoadLog = true, {}
+      Log("armed (%s), %s", word, Profiler())
       Say(L.PERF_LOAD_ARMED)
       return
     end
+    if word:find("^log") or word:find("^journ") then ShowLog() return end
   end
   if watching then Say(L.PERF_BUSY) return end
   if not Available() then Say(L.PERF_NONE) return end
