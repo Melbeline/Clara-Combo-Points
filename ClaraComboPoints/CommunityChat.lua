@@ -5,6 +5,14 @@
 -- its own) and every 30 seconds after, the community chats the windows show are looked at: one not joined is joined
 -- again, as the game does when its box is ticked (C_Club.AddClubStreamChatChannel), silently; the windows' own lists
 -- are left alone (the game's).
+-- Joined but its lines not coming to the window (the box ticked, the line seen in Guild & Communities, not in the
+-- chat; unticking and ticking it again brought them back): the window's link to the channel, kept by the game itself
+-- (AddChatWindowChannel), is lost, as after a chat joined late. So, as the game's own box does: at the first look of
+-- each login (the reloads too) and after each chat joined again, each window showing a joined community chat is
+-- linked to it again (RemoveChatWindowChannel, AddChatWindowChannel: the game's functions only, the windows' lists
+-- untouched, nothing said). And a community line seen (CLUB_MESSAGE_ADDED) with no chat line for it 3 seconds later
+-- (CHAT_MSG_COMMUNITIES_CHANNEL) tells the link is lost: linked again at once, the line missed shown in those windows
+-- (as the game shows it; not when the game keeps it secret), and the bug counted as seen (Clara steps in again).
 -- Blizzard's fix seen: ten logins in a row from the game started (not reloads) with every community chat joined on its
 -- own: Clara stands aside (nothing joined any more), a line in the chat says it once; seen broken again at a login:
 -- Clara steps in again. A box on Clara's page, on by default.
@@ -23,6 +31,7 @@ ClaraCommunityFix = ADDON
 local FIXED_AFTER = 10 -- logins in a row without the bug: Blizzard's fix
 local FIRST_LOOK = 15  -- seconds after the clubs are in: the game should have joined them by then
 local EVERY = 30       -- seconds: the windows looked at again (a chat lost on the way)
+local WAIT = 3         -- seconds: a community line's chat line waited for
 
 local issecret = issecretvalue or function() return false end
 
@@ -40,9 +49,9 @@ local function Store()
   return sv.communityChatFix
 end
 
-local session = { looks = 0, joined = 0 }
+local session = { looks = 0, joined = 0, linked = 0, lost = 0, replayed = 0 }
 
--- The community chats the chat windows show (their names "Community:<club>:<stream>"), once each
+-- The community chats the chat windows show (their names "Community:<club>:<stream>"), once each, with the windows
 local function Shown()
   local out, seen = {}, {}
   for i = 1, (NUM_CHAT_WINDOWS or 10) do
@@ -50,16 +59,21 @@ local function Shown()
     local list = frame and frame.channelList
     if type(list) ~= "table" and GetChatWindowChannels then list = { GetChatWindowChannels(i) } end
     for _, name in pairs(type(list) == "table" and list or {}) do
-      if type(name) == "string" and not issecret(name) and not seen[name] then
+      if type(name) == "string" and not issecret(name) then
         local club, stream = name:match("^Community:(%d+):(%d+)$")
         if club then
-          seen[name] = true
-          out[#out + 1] = { name = name, club = tonumber(club), stream = tonumber(stream) }
+          local c = seen[name]
+          if not c then
+            c = { name = name, club = tonumber(club), stream = tonumber(stream), windows = {} }
+            seen[name] = c
+            out[#out + 1] = c
+          end
+          if c.windows[#c.windows] ~= i then c.windows[#c.windows + 1] = i end
         end
       end
     end
   end
-  return out
+  return out, seen
 end
 
 -- Joined: the game gives it a number (/1, /2...)
@@ -75,8 +89,32 @@ local function Ours(club)
   return ok and info ~= nil
 end
 
--- The chats looked at; at a login's first look (from the game started), what it says of the bug counted
-local function Look(verdict)
+-- Each window showing a joined community chat linked to it again, as the game's box does (its own functions)
+local relink = {} -- chats to link again once joined (just joined again: their number may come a moment later)
+local function Link(c)
+  if not (RemoveChatWindowChannel and AddChatWindowChannel) or not Joined(c.name) then return false end
+  local done = true
+  for _, i in ipairs(c.windows) do
+    pcall(RemoveChatWindowChannel, i, c.name)
+    local ok, zone = pcall(AddChatWindowChannel, i, c.name)
+    if not ok or zone == nil then done = false end -- (again at the next look)
+  end
+  if done then
+    session.linked = session.linked + 1
+    session.linkedLast, session.linkedAt = c.name, GetTime()
+  end
+  return done
+end
+
+-- The chats looked at; at a login's first look (from the game started), what it says of the bug counted; at the first
+-- look of each login, every window linked again to the joined chats it shows
+local Look
+local function LinkPending(shown, all)
+  for _, c in ipairs(shown) do
+    if (all or relink[c.name]) and Ours(c.club) and Link(c) then relink[c.name] = nil end
+  end
+end
+Look = function(verdict, first)
   if not ns.sv or not ns:CommunityChat() then return end
   if InCombatLockdown and InCombatLockdown() then return end -- (again at the next look)
   if not (C_Club and C_Club.AddClubStreamChatChannel and GetChannelName) then return end
@@ -107,16 +145,115 @@ local function Look(verdict)
       session.joined = session.joined + 1
       session.last = c.name
       session.at = GetTime()
+      relink[c.name] = true
     end
   end
+  LinkPending(shown, first)
+  -- (a chat joined again: linked as soon as it has its number)
+  if next(relink) and C_Timer and C_Timer.After then C_Timer.After(WAIT, function() LinkPending((Shown())) end) end
 end
 ns.CommunityChatLook = Look -- (for its test)
 
+---------------------------------------------------------------------------
+-- A community line with no chat line: the window's link lost
+---------------------------------------------------------------------------
+local lastLine, waiting = {}, {}
+
+-- The line missed shown in the windows, as the game shows a community chat's line (not when the game keeps it secret)
+local function Replay(c, ids)
+  if not (C_Club and C_Club.GetMessageInfo) then return end
+  local ok, number = pcall(GetChannelName, c.name)
+  if not ok or issecret(number) or type(number) ~= "number" or number <= 0 then return end
+  local label = c.name
+  if ChatFrameUtil and ChatFrameUtil.ResolveChannelName then
+    local okL, l = pcall(ChatFrameUtil.ResolveChannelName, c.name)
+    if okL and type(l) == "string" and not issecret(l) then label = l end
+  end
+  local color = ChatTypeInfo and ChatTypeInfo["CHANNEL" .. number]
+  local r, g, b = 1, 0.75, 0.75
+  if type(color) == "table" and type(color.r) == "number" then r, g, b = color.r, color.g, color.b end
+  for _, id in ipairs(ids) do
+    local okM, m = pcall(C_Club.GetMessageInfo, c.club, c.stream, id)
+    local text = okM and type(m) == "table" and m.content
+    local who = okM and type(m) == "table" and type(m.author) == "table" and m.author.name
+    if type(text) == "string" and not issecret(text) and (who == nil or (type(who) == "string" and not issecret(who))) then
+      local line = ("|Hchannel:channel:%d|h[%d. %s]|h %s%s"):format(number, number, label, who and ("[" .. who .. "]: ") or "", text)
+      local okF, fmt = pcall(function() return ChatFrameUtil.GetTimestampFormat() end)
+      if okF and type(fmt) == "string" and TimeUtil and TimeUtil.BetterDate then
+        local okT, stamp = pcall(TimeUtil.BetterDate, fmt, time())
+        if okT and type(stamp) == "string" then line = stamp .. line end
+      end
+      for _, i in ipairs(c.windows) do
+        local frame = _G["ChatFrame" .. i]
+        if frame and frame.AddMessage then frame:AddMessage(line, r, g, b) end
+      end
+      session.replayed = session.replayed + 1
+    end
+  end
+end
+
+local function Lost(name, ids)
+  if not ns.sv or not ns:CommunityChat() then return end
+  local _, byName = Shown()
+  local c = byName[name]
+  if not (c and Ours(c.club) and Joined(name)) then return end
+  session.lost = session.lost + 1
+  session.lostLast, session.lostAt = name, GetTime()
+  local s = Store()
+  s.clean = 0
+  if s.fixed then s.fixed = nil end -- (broken again: Clara steps in again)
+  Link(c)
+  Replay(c, ids)
+end
+ns.CommunityChatLost = Lost -- (for its test)
+
+local function ClubLine(club, stream, id)
+  if not ns.sv or not ns:CommunityChat() then return end
+  if club == nil or stream == nil or issecret(club) or issecret(stream) then return end
+  local name = ("Community:%s:%s"):format(tostring(club), tostring(stream))
+  local _, byName = Shown()
+  if not byName[name] or not Joined(name) then return end -- (no window shows it, or not joined: the looks see to it)
+  if lastLine[name] and GetTime() - lastLine[name] < WAIT then return end -- (its chat line came first)
+  local list = waiting[name]
+  if not list then
+    list = {}
+    waiting[name] = list
+    if C_Timer and C_Timer.After then
+      C_Timer.After(WAIT, function()
+        if waiting[name] ~= list then return end -- (its chat line came)
+        waiting[name] = nil
+        Lost(name, list)
+      end)
+    end
+  end
+  list[#list + 1] = id
+end
+
+local function ChatLine(...)
+  local name = select(9, ...)
+  if type(name) ~= "string" or issecret(name) then -- (cannot tell which: none lost)
+    for k in pairs(waiting) do waiting[k] = nil end
+    return
+  end
+  lastLine[name] = GetTime()
+  waiting[name] = nil
+end
+
+local relay = CreateFrame("Frame")
+pcall(relay.RegisterEvent, relay, "CLUB_MESSAGE_ADDED")
+pcall(relay.RegisterEvent, relay, "CHAT_MSG_COMMUNITIES_CHANNEL")
+relay:SetScript("OnEvent", function(_, event, ...)
+  if event == "CLUB_MESSAGE_ADDED" then ClubLine(...) else ChatLine(...) end
+end)
+
 function ns:CommunityChatReport()
   local s = Store()
-  return ("community chats: shown %s, not joined at the last look %s; joined again this session %d%s; logins in a row without the bug %d/%d; Blizzard's fix seen %s; box %s"):format(
+  local function Ago(at) return at and (", %.0f s ago"):format(GetTime() - at) or "" end
+  return ("community chats: shown %s, not joined at the last look %s; joined again this session %d%s; windows linked again %d%s; lines that did not come %d%s, shown again %d; logins in a row without the bug %d/%d; Blizzard's fix seen %s; box %s"):format(
     tostring(session.shown or "?"), tostring(session.missing or "?"), session.joined,
-    session.last and (" (the last: " .. session.last .. (session.at and (", %.0f s ago"):format(GetTime() - session.at) or "") .. ")") or "",
+    session.last and (" (the last: " .. session.last .. Ago(session.at) .. ")") or "",
+    session.linked, session.linkedLast and (" (the last: " .. session.linkedLast .. Ago(session.linkedAt) .. ")") or "",
+    session.lost, session.lostLast and (" (the last: " .. session.lostLast .. Ago(session.lostAt) .. ")") or "", session.replayed,
     s.clean or 0, FIXED_AFTER, s.fixed and ("yes (build " .. tostring(s.fixed) .. ")") or "no", tostring(ns:CommunityChat()))
     .. (ns.CommunityPresenceText and ns.CommunityPresenceText() or "")
 end
@@ -163,7 +300,7 @@ local cold, looked, ticker
 local function FirstLook()
   if looked then return end
   looked = true
-  Look(cold)
+  Look(cold, true)
   if not ticker and C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(EVERY, function() Look(false) end)
   end
