@@ -1,7 +1,10 @@
 -- Clara Combo Points - Chat look: in a player's chat line, the small head of their race in their sex after their name
 -- (a night elf woman's, a dwarf man's...), their level before it in its difficulty color ([40]), and the line's time
 -- and level clickable: a click (right or left) shows the whole line selected in the small copy box (time, channel,
--- level, name and what they wrote). Each part has its box on the module's card (Interface): all three on by default.
+-- level, name and what they wrote). Each part has its box on the module's card (Interface; in Clara's Improvements tab
+-- too): the level and the copy on by default; the head off by default, on by default on the owner's own accounts
+-- (ICKSTU, WANJ and the WoW1 linked to them on the same computer: the gold tracker knows them by their folders'
+-- names, brought by the Windows script; another player's WoW1 is not linked to them). Its box ticked or unticked: kept.
 -- As BetterForeverChat shows them, its code left aside: the line, once the game has put it in a window (a post-hook on
 -- the window's AddMessage, the game's own code untouched), has its text changed in place, the newest line only (the
 -- game's own TransformMessages goes through the whole history, thousands of lines, at each line: what made the game
@@ -21,9 +24,33 @@ local function Store()
   if type(sv.chatLook) ~= "table" then sv.chatLook = {} end
   return sv.chatLook
 end
-local function On(key) return Store()[key] ~= false end
+-- One of the owner's accounts: ICKSTU or WANJ, or an account the Windows script links to one of them (their WoW1)
+local OWNER = { ickstu = true, wanj = true }
+local function OwnersAccount()
+  local G, S = ns.Money, ns.Sync
+  local db = G and G.db
+  if type(db) ~= "table" or type(db.accounts) ~= "table" then return false end
+  for id, a in pairs(db.accounts) do
+    local name = type(a) == "table" and type(a.n) == "string" and a.n:lower() or nil
+    if name and OWNER[name] and (id == db.me or (S and S.OwnAccount and S.OwnAccount(id))) then return true end
+  end
+  return false
+end
+ns.ChatLookOwners = OwnersAccount -- (for the tests)
+
+-- (the head: its default by account, a choice kept as true or false; the others on by default, kept false unticked)
+local function On(key)
+  local v = Store()[key]
+  if key == "heads" then
+    if v == nil then return OwnersAccount() end
+    return v == true
+  end
+  return v ~= false
+end
 local function Set(key, on)
-  if on then Store()[key] = nil else Store()[key] = false end
+  if key == "heads" then Store()[key] = on and true or false
+  elseif on then Store()[key] = nil
+  else Store()[key] = false end
 end
 
 ns:SetQolSwitches("chatlook", {
