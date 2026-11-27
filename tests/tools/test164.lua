@@ -137,7 +137,7 @@ Rel("LeftButton"); Timers(); now = now + 0.2; Rel("MiddleButton"); now = now + 0
 check(attrs.type1 == "spell" and Body("ClaraTarget") == nil, "over both (where they would overlap): nothing at all")
 overName, overPortrait = true, false
 Rel("LeftButton"); Timers(); now = now + 0.2; Rel("LeftButton"); now = now + 2
-check(attrs.type1 == "spell" and Body("ClaraTarget") == "/tm 8\n/tar Event", "over the name only: ClaraTarget, the frame left alone: " .. tostring(Body("ClaraTarget")))
+check(attrs.type1 == "spell" and Body("ClaraTarget") == "/tm 8\n/tar Event Mob", "over the name only: ClaraTarget (the whole name), the frame left alone: " .. tostring(Body("ClaraTarget")))
 overName, overPortrait = false, true
 Rel("LeftButton"); M.RunTimer()
 check(attrs.type1 == "macro", "over the portrait only: armed")
