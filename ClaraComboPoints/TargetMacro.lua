@@ -1,8 +1,8 @@
 -- Clara Combo Points - the target's name into a macro, and following it, by a double click on the target frame.
 -- On its name: the macro "ClaraTarget" (made the first time, the account's: "/tm 8" then "/tar <name>"): its "/tar"
 -- (or "/target") line takes the name, every other line of the macro (a "/cast" added by the player...) left as it is.
--- A double left click writes its first word only ("Hatefury" for "Hatefury Felsworn"); a double middle click, the
--- whole name. On its portrait: a double left click follows the target (no macro: the target frame's own click runs
+-- A double left click writes the whole name ("Hatefury Felsworn"); a double middle click, its first word only
+-- ("Hatefury"). On its portrait: a double left click follows the target (no macro: the target frame's own click runs
 -- "/follow", as the game's menu Follow; out of a fight); Shift + double left click, its first word goes in the macro
 -- "ClaraFollow" (its "/follow" line, made the first time: "/follow <name>"); Shift + double right click, its whole
 -- name. The two spots never share a point: where the name's and the portrait's overlap, a double click does nothing.
@@ -206,7 +206,7 @@ local function Clicks()
   return c
 end
 
--- On the name: its first word (left), the whole name (middle)
+-- On the name: the whole name (left), its first word (middle)
 local nameClicks = Clicks()
 local NAME_BUTTONS = { LeftButton = true, MiddleButton = true }
 local function OnUp(_, button, from)
@@ -216,7 +216,7 @@ local function OnUp(_, button, from)
   if not double then return end
   local name = TargetName(TARGET)
   if not name then return end
-  if button == "LeftButton" then name = name:match("^(%S+)") or name end
+  if button == "MiddleButton" then name = name:match("^(%S+)") or name end
   Apply(TARGET, name)
 end
 ns.TargetMacroClick = OnUp -- (for its test)
