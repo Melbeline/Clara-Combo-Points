@@ -7499,13 +7499,14 @@
 				return list
 			end
 
-			-- A line back in its window, in its color
-			local function AddLine(chtfrm, line)
+			-- A line back in its window, in its color: at the bottom (AddMessage) or above all the others (BackFillMessage)
+			local function AddLine(chtfrm, line, back)
+				local put = back and chtfrm.BackFillMessage or chtfrm.AddMessage
 				local hex, rest = line:match("^|cff(%x%x%x%x%x%x)(.*)$")
 				if hex then
-					chtfrm:AddMessage(rest, tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255)
+					put(chtfrm, rest, tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255)
 				else
-					chtfrm:AddMessage(line)
+					put(chtfrm, line)
 				end
 			end
 
@@ -7524,14 +7525,40 @@
 				ClaraChatHistoryDB = saved
 			end)
 
-			-- Restored as the character logs in: the previous session's lines, then this one's
+			-- Restored as the character logs in: the previous session's lines, then this one's.
+			-- Put back above this session's lines (BackFillMessage), the newest first, a few hundred each frame: thousands of
+			-- lines at once made the game halt seconds after the loading screen, and every other addon's hook on the windows'
+			-- AddMessage ran again for each (the lines are those shown before, already made: nothing to make again).
+			local BATCH = 400
 			local saved = ClaraChatHistoryDB
+			local function Notice(count)
+				return restoredMark .. count .. " " .. (count == 1 and L["message from previous session"] or L["messages from previous session"]) .. ".|r"
+			end
+			local function BackFill(chtfrm, old)
+				local count = 0
+				for k = 1, #old do if type(old[k]) == "string" then count = count + 1 end end
+				chtfrm:BackFillMessage(Notice(count))
+				local k = #old
+				local function Batch()
+					local stop = math.max(1, k - BATCH + 1)
+					ClaraNS.ChatRestoring = true
+					for j = k, stop, -1 do
+						if type(old[j]) == "string" then AddLine(chtfrm, old[j], true) end
+					end
+					ClaraNS.ChatRestoring = nil
+					k = stop - 1
+					if k >= 1 then C_Timer.After(0, Batch) end
+				end
+				Batch()
+			end
 			if type(saved) == "table" then
 				ClaraNS.ChatRestoring = true
 				for i = 1, 50 do
 					local chtfrm = _G["ChatFrame" .. i]
 					local old = saved[i]
-					if i ~= 2 and chtfrm and type(old) == "table" and #old > 0 and FCF_IsChatWindowIndexActive(i) then
+					if i ~= 2 and chtfrm and type(old) == "table" and #old > 0 and FCF_IsChatWindowIndexActive(i) and chtfrm.BackFillMessage and C_Timer then
+						BackFill(chtfrm, old)
+					elseif i ~= 2 and chtfrm and type(old) == "table" and #old > 0 and FCF_IsChatWindowIndexActive(i) then
 						local now = WindowLines(chtfrm)
 						chtfrm:Clear()
 						local count = 0
