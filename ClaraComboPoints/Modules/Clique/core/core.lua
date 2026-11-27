@@ -93,7 +93,7 @@ end
 
 function addon:SetupDatabase()
     -- Create an AceDB, but it needs to be cleared first
-    self.db = LibStub("AceDB-3.0"):New("ClaraCliqueDB", self.databaseDefaults)
+    self.db = LibStub("AceDB-3.0-ClaraClique"):New("ClaraCliqueDB", self.databaseDefaults) -- (its private AceDB)
     self.db.RegisterCallback(self, "OnNewProfile", "OnNewProfile")
     self.db.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
 
