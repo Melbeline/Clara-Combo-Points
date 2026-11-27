@@ -29,6 +29,7 @@ Chaque fonction en une ligne ; le détail de chacune est plus bas.
 - **Échap > Options > AddOns > Clara** : la page de Clara (toutes ses cases) et une page par thème ; un module prend le relais de son addon d'origine si celui-ci est installé.
 - **`/cl souris`** : un rapport de diagnostic (ce qu'il y a sous la souris et l'état des modules), pour signaler un problème.
 - **`/cl perf 20`** : quel addon fait accrocher le jeu. Pendant 20 secondes (de 5 à 120), le temps de chaque addon à chaque image, tel que le mesure le profileur d'addons du jeu ; ensuite dans le chat : les pires images (quand, combien de millisecondes en tout, les trois addons qui en ont pris le plus) et la pire image de chaque addon avec le nombre de ses images au-dessus de 5 ms. Les modules de Clara comptent pour Clara (le jeu mesure par addon).
+- **`/cl perf chargement`** : quel addon allonge les **écrans de chargement**. Le prochain écran de chargement (changement de zone, portail, instance, `/reload` ou connexion ; gardé à travers un rechargement) est mesuré : le temps de chaque addon à chaque image, de l'apparition de l'écran à une seconde après sa fin, et le compte du jeu pour les 60 dernières images (au cas où le jeu ne fait tourner aucune mise à jour pendant le chargement). Ensuite dans le chat : la durée de l'écran, le temps des addons en tout, puis les 10 addons qui en ont pris le plus, chacun avec sa pire image et le nombre de ses images au-dessus de 100 ms. Une seule fois, puis oublié.
 
 ### Modules : combat
 
