@@ -8,6 +8,9 @@
 -- (placed again as the game moves it: the window maximized or minimized), made as tall as what it holds.
 -- With the addon ForeverRecipes (its code left as it is): its panels (Difficulty and its estimates,
 -- Source) lie under the reagents too; they are put in the same scroll frame, the panel under them.
+-- Another addon's lines just under the reagents (Auctionator's "To Craft" and "Profit", or any other's; their code left
+-- as it is): the panel goes under them, known by where they lie (a shown frame of the recipe form or its page that is
+-- not the game's, its top just under the reagents), placed again as they show or hide.
 
 local ADDON, ns = ...
 local C = ns.Craft
@@ -87,6 +90,40 @@ local function ForeverRecipesBottom()
   return nil
 end
 
+-- Another addon's frame just under the reagents (or under ForeverRecipes' panels): the lowest of them, if any
+local others = {} -- (those seen: their showing or hiding places the panel again)
+local function Games(f)
+  local ok, key = pcall(function() return f.GetParentKey and f:GetParentKey() end)
+  if ok and key ~= nil then return true end -- (a part of the game's form: Details, the Track Recipe box...)
+  local name = f.GetName and f:GetName()
+  return type(name) == "string" and (name:find("^Professions") or name:find("^TradeSkill")) ~= nil
+end
+local function Num(v) return type(v) == "number" and not issecret(v) and v or nil end
+local function OthersUnder(under)
+  local ub, ul, ur = Num(under:GetBottom()), Num(under:GetLeft()), Num(under:GetRight())
+  if not ub then return nil end
+  local low, lowB
+  for _, parent in ipairs({ form, page, holder }) do
+    for _, child in ipairs(parent and parent.GetChildren and { parent:GetChildren() } or {}) do
+      if child ~= pane and child ~= holder and child ~= form and child ~= frDifficulty and child ~= frSource
+        and child ~= (panel and panel.frame) and not Games(child) then
+        local top, bottom, left = Num(child:GetTop()), Num(child:GetBottom()), Num(child:GetLeft())
+        if top and bottom and left and top <= ub + 4 and top >= ub - 60 and bottom < ub
+          and (not ur or left < ur) and (not ul or left > ul - 40) then
+          if not others[child] and child.HookScript then
+            others[child] = true
+            local function Again() C_Timer.After(0, function() if Draw then Draw() end end) end
+            child:HookScript("OnShow", Again)
+            child:HookScript("OnHide", Again)
+          end
+          if child:IsShown() and (not lowB or bottom < lowB) then low, lowB = child, bottom end
+        end
+      end
+    end
+  end
+  return low, lowB, ub
+end
+
 ---------------------------------------------------------------------------
 -- The pane: the game's form in a scroll frame of its size and place
 ---------------------------------------------------------------------------
@@ -158,7 +195,11 @@ function Draw()
   local f = panel.frame
   f:ClearAllPoints()
   local under = ForeverRecipesBottom() or Lowest()
-  f:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -10)
+  -- (another addon's lines under it: the panel under them, still lined up with the reagents)
+  local gap = 10
+  local other, otherBottom, underBottom = OthersUnder(under)
+  if other and otherBottom and underBottom then gap = underBottom - otherBottom + 10 end
+  f:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -gap)
   local left = under:GetLeft()
   local right = form:GetRight()
   local width = (left and right and right - left - 30) or ((form:GetWidth() or 480) - 60)
@@ -375,6 +416,7 @@ local function Setup()
   hooksecurefunc(form, "Init", function()
     pane:SetVerticalScroll(0)
     C_Timer.After(0, Draw)
+    C_Timer.After(0.3, Draw) -- (again a moment later: another addon's lines under the reagents, shown after the game's)
   end)
   if form.Refresh then hooksecurefunc(form, "Refresh", Draw) end
   form:HookScript("OnShow", Draw)
