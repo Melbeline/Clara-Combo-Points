@@ -1,5 +1,5 @@
--- Chat look (Modules/ChatLook): in a player's chat line, the small head of their race in their sex after the name,
--- the level before it, the time and level clickable (the whole line in the copy box); each part with its box; the
+-- Chat look (Modules/ChatLook): in a player's chat line, the small head of their race in their sex after the name
+-- (its box off by default), the level before it, the time and level clickable (the whole line in the copy box); each part with its box; the
 -- line changed in place after the game's AddMessage, only the newest one and only if it is that event's; a line kept
 -- secret, another event's, or a monster's left as it is.
 local M, S = MOCK, MOCK.state
@@ -34,6 +34,27 @@ local LINE = "[19:46:37] |Hchannel:PARTY|h[Party]|h |Hplayer:Lia-Forever:12:PART
 local args = { "re", "Lia-Forever", "", "", "", "", 0, 0, "", 0, 12, "Player-1-0001" }
 local frame = { GetFont = function() return "font", 14 end }
 
+out("== by default: the level and the copy, no head")
+local sw0 = ns.qolSwitches.chatlook
+local d = ns.ChatLookBuild(LINE, args, frame)
+check(not sw0[1].get() and sw0[2].get() and sw0[3].get(), "the head's box off, the others on")
+check(not d:find("|A:", 1, true) and d:find("[40]", 1, true) and d:find("|Haddon:", 1, true), "no head; the level and the copy link: " .. d)
+out("== the owner's accounts (ICKSTU, WANJ and the WoW1 linked to them): the head shown by default")
+local money, sync = ns.Money, ns.Sync
+ns.Money = { db = { me = "THIS", accounts = { OTHER = { n = "WANJ" } } } }
+ns.Sync = { OwnAccount = function(id) return id == "OTHER" end }
+check(ns.ChatLookOwners() and sw0[1].get() and ns.ChatLookBuild(LINE, args, frame):find("|A:raceicon", 1, true), "WANJ linked to this one (its WoW1): the head shown")
+ns.Money.db.accounts = { THIS = { n = "ICKSTU" } }
+check(ns.ChatLookOwners() and sw0[1].get(), "ICKSTU itself: shown")
+ns.Money.db.accounts = { OTHER = { n = "WoW1" }, FRIEND = { n = "WANJ" } }
+check(not ns.ChatLookOwners() and not sw0[1].get(), "another player's WoW1 (a WANJ seen, not one of this computer's): not shown")
+ns.Money.db.accounts = { OTHER = { n = "Wanj" } }
+sw0[1].set(false)
+check(ClaraComboPointsDB.chatLook.heads == false and not sw0[1].get(), "on the owner's account, unticked: kept off")
+ClaraComboPointsDB.chatLook.heads = nil
+ns.Money, ns.Sync = money, sync
+sw0[1].set(true)
+check(ClaraComboPointsDB.chatLook.heads == true, "its box ticked: kept")
 out("== a night elf woman's line: her head after her name, her level before, the time and level clickable")
 local o = ns.ChatLookBuild(LINE, args, frame)
 check(o:find("|A:raceicon-nightelf-female:14:14:0:-4|a", 1, true) ~= nil, "her head, in her sex: " .. o)
@@ -68,9 +89,9 @@ check(not o4:find("[40]", 1, true), "the level unticked: none")
 sw[3].set(false)
 o4 = ns.ChatLookBuild(LINE, args, frame)
 check(not o4:find("|Haddon:", 1, true) and o4 == LINE, "the copy unticked: the line as the game made it")
-check(ClaraComboPointsDB.chatLook.heads == false, "kept with Clara's settings")
+check(ClaraComboPointsDB.chatLook.heads == false and ClaraComboPointsDB.chatLook.level == false, "kept with Clara's settings")
 for i = 1, 3 do sw[i].set(true) end
-check(ClaraComboPointsDB.chatLook.heads == nil, "ticked again: the default")
+check(ClaraComboPointsDB.chatLook.heads == true and ClaraComboPointsDB.chatLook.level == nil, "ticked again: the head kept on, the level at its default")
 
 out("== after the game's AddMessage: the newest line changed in place, if it is that event's")
 local entry

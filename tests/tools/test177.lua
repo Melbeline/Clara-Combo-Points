@@ -1,7 +1,7 @@
 -- Chat blacklist (Modules/ChatFilter): a word of its list hides the lines holding it, every variant by default (accents,
 -- case, symbols inside, letters one by one, digits for letters, look-alike letters), as a whole word unless "inside
 -- other words"; unticked, the word as written only. Raid symbols in any writing. Not your lines, your friends', the
--- game staff's; group, raid, guild with their box. Repeated messages, Cyrillic, Chinese with theirs. Each line decided
+-- game staff's; whispers (on), group, raid, guild, communities each with its own box. Repeated messages, Cyrillic, Chinese with theirs. Each line decided
 -- once (each window asks). Its window: add, change, turn off, remove; its button under the chat's channel button.
 local M, S = MOCK, MOCK.state
 local out = function(s) io.write(tostring(s), "\n") end
@@ -61,11 +61,26 @@ out("== who is never hidden")
 check(Say(nil, "rested", "Me", "Player-1-ME") == false, "your own lines")
 check(Say(nil, "rested", "Pal", "Player-1-FRIEND") == false, "a friend's")
 check(Say(nil, "rested", "GM", "Player-1-0099", "GM") == false, "the game staff's")
-check(Say("CHAT_MSG_PARTY", "rested") == false and Say("CHAT_MSG_GUILD", "rested") == false, "group and guild: not by default")
-ns.ChatFilterStore().group = true
-check(Say("CHAT_MSG_PARTY", "rested") == true and Say("CHAT_MSG_GUILD", "rested") == true, "their box ticked: hidden")
-ns.ChatFilterStore().group = nil
-check(Say("CHAT_MSG_WHISPER", "rested") == true and Say("CHAT_MSG_SAY", "rested") == true and Say("CHAT_MSG_YELL", "rested") == true, "whispers, say, yell: hidden")
+check(Say("CHAT_MSG_PARTY", "rested") == false and Say("CHAT_MSG_RAID", "rested") == false and Say("CHAT_MSG_GUILD", "rested") == false
+  and Say("CHAT_MSG_COMMUNITIES_CHANNEL", "rested") == false, "group, raid, guild, communities: not by default")
+check(Say("CHAT_MSG_WHISPER", "rested") == true and Say("CHAT_MSG_SAY", "rested") == true and Say("CHAT_MSG_YELL", "rested") == true, "whispers (by default), say, yell: hidden")
+local st = ns.ChatFilterStore()
+st.party = true
+check(Say("CHAT_MSG_PARTY", "rested") == true and Say("CHAT_MSG_INSTANCE_CHAT", "rested") == true and Say("CHAT_MSG_RAID", "rested") == false
+  and Say("CHAT_MSG_GUILD", "rested") == false, "the group's box alone: the group (and instance) only")
+st.party, st.raid = nil, true
+check(Say("CHAT_MSG_RAID", "rested") == true and Say("CHAT_MSG_RAID_WARNING", "rested") == true and Say("CHAT_MSG_PARTY", "rested") == false, "the raid's alone")
+st.raid, st.guild = nil, true
+check(Say("CHAT_MSG_GUILD", "rested") == true and Say("CHAT_MSG_OFFICER", "rested") == true and Say("CHAT_MSG_RAID", "rested") == false, "the guild's alone")
+st.guild, st.communities = nil, true
+check(Say("CHAT_MSG_COMMUNITIES_CHANNEL", "rested") == true and Say("CHAT_MSG_GUILD", "rested") == false, "the communities' alone")
+st.communities, st.whisper = nil, false
+check(Say("CHAT_MSG_WHISPER", "rested") == false and Say("CHAT_MSG_SAY", "rested") == true, "the whispers' box unticked: whispers shown, say still filtered")
+st.whisper = nil
+st.group = true -- (the first version's single box)
+st = ns.ChatFilterStore()
+check(st.group == nil and st.party and st.raid and st.guild and st.communities, "the first version's single box: each of them ticked")
+st.party, st.raid, st.guild, st.communities = nil, nil, nil, nil
 
 out("== each line decided once (every window asks)")
 local before = rested.hits
@@ -123,6 +138,17 @@ button:GetScript("OnClick")(button, "RightButton")
 check(ns.ChatFilterStore().off == true, "a right click on its button: the blacklist off")
 button:GetScript("OnClick")(button, "RightButton")
 check(ns.ChatFilterStore().off == nil, "again: on")
+win.optWhisper:SetChecked(false)
+win.optWhisper:GetScript("OnClick")(win.optWhisper)
+check(ns.ChatFilterStore().whisper == false, "the window's whispers box unticked: kept")
+win.optWhisper:SetChecked(true)
+win.optWhisper:GetScript("OnClick")(win.optWhisper)
+check(ns.ChatFilterStore().whisper == nil, "ticked again: the default")
+win.optGuild:SetChecked(true)
+win.optGuild:GetScript("OnClick")(win.optGuild)
+check(ns.ChatFilterStore().guild == true and Say("CHAT_MSG_GUILD", "rested") == true, "the guild's box in the window: the guild filtered")
+win.optGuild:SetChecked(false)
+win.optGuild:GetScript("OnClick")(win.optGuild)
 local sw = ns.qolSwitches.chatfilter
 sw[1].set(false)
 check(not button:IsShown() and ns.ChatFilterStore().noButton == true, "its card's box: the button hidden")
