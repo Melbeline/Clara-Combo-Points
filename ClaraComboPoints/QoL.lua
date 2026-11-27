@@ -36,6 +36,8 @@ ns.QOL_MODULES = {
   { key = "idtip", name = "idTip", standalone = "idTip", theme = "interface" },
   { key = "petfeed", name = "Pet feeding", theme = "combat" }, -- (Clara's own: a hunter's Feed Pet time left on the pet frame)
   { key = "reportmute", name = "Permanent Report Mute", theme = "interface" }, -- (Clara's own: a reported player muted for good)
+  { key = "chatlook", name = "Chat look", theme = "interface" }, -- (Clara's own: the race's head and the level by the names, a line copied)
+  { key = "chatfilter", name = "Chat blacklist", theme = "interface" }, -- (Clara's own: the lines with a word of its list hidden)
   -- (Clara's own, as TipTac shows them; TipTac enabled: it shows its own, this one steps aside, TipTac never turned off)
   { key = "tooltiptarget", name = "Tooltip target", standalone = "TipTac", title = "TipTac", keep = true, theme = "interface" },
   -- (Melbeline's WaterShieldTracker: Water Shield's charges on its icon, for shamans)
