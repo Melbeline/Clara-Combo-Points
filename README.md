@@ -140,7 +140,7 @@ Chaque fonction en une ligne ; le détail de chacune est plus bas.
 ### Divers
 
 - **Les boutons Shop** du jeu ouvrent Clara.
-- **Options du jeu réglées une fois** par Clara (Auto Loot, Sticky Targeting coupé, sacs séparés…), puis laissées à ton choix.
+- **Options du jeu réglées une fois** par Clara (Auto Loot, Sticky Targeting coupé, sacs séparés, fenêtre du personnage dépliée…), puis laissées à ton choix.
 - **`/rl`** recharge l'interface.
 - **Synchro entre tes comptes WoW** : les listes du courrier, le stock, l'or et les prix partagés en direct entre tes personnages connectés, et entre deux sessions par un petit script Windows.
 
@@ -369,7 +369,7 @@ La page **Clara** elle-même défile d'un bloc quand elle est plus haute que la 
 
 **Chronomètre gardé** : le chronomètre du jeu (`/stopwatch`, le menu de l'horloge) se fermait et repartait de zéro à chaque rechargement ou déconnexion. Il est gardé **pour chaque personnage** : affiché, lancé ou en pause, son temps, et l'heure où tu l'as quitté. À la prochaine connexion de ce personnage (ou après le `/reload`), il revient **avec le temps passé ailleurs** s'il tournait : rechargement (au millième), déconnexion, autre personnage joué entre-temps, jeu fermé (à la seconde, d'après l'horloge de l'ordinateur), comme s'il ne s'était jamais arrêté. En pause, il revient tel quel ; un compte à rebours fini pendant ton absence ne revient pas. Un autre personnage a le sien (aucun s'il ne s'en est pas servi). Un plantage du jeu n'enregistre rien (le jeu n'écrit les sauvegardes qu'à la déconnexion) : le chronomètre reprend alors là où il était à la dernière déconnexion.
 
-**Options du jeu réglées une fois par Clara** (ses réglages par défaut, puis les tiens : l'addon n'y retouche plus) : **Sticky Targeting** désactivé (Échap > Options > Jeu > Contrôles), **Auto Loot** activé, **NPC Names** sur **None** (Plaques de nom), les **sacs séparés** (pas le sac combiné). Celles que le jeu garde pour chaque personnage sont réglées une fois sur chacun ; celles du compte, une fois.
+**Options du jeu réglées une fois par Clara** (ses réglages par défaut, puis les tiens : l'addon n'y retouche plus) : **Sticky Targeting** désactivé (Échap > Options > Jeu > Contrôles), **Auto Loot** activé, **NPC Names** sur **None** (Plaques de nom), les **sacs séparés** (pas le sac combiné), la **fenêtre du personnage dépliée** (sa partie droite, les statistiques, affichée à l'ouverture, pas repliée : le jeu lit ce réglage au chargement de l'interface, avant les addons, et ne l'enregistre jamais, sa flèche ne valant que pour la session ; réglé par Clara, il compte **à partir du chargement suivant** (un `/reload` ou une connexion) ; la fenêtre elle-même n'est pas touchée : changée par un addon, elle ne s'ouvrirait plus en combat). Celles que le jeu garde pour chaque personnage sont réglées une fois sur chacun ; celles du compte, une fois. Une option ajoutée plus tard est réglée une fois à son tour, sans toucher aux précédentes.
 
 `/rl` recharge l'interface (comme `/reload`).
 
