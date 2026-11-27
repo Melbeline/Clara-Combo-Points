@@ -149,6 +149,33 @@ win.optGuild:GetScript("OnClick")(win.optGuild)
 check(ns.ChatFilterStore().guild == true and Say("CHAT_MSG_GUILD", "rested") == true, "the guild's box in the window: the guild filtered")
 win.optGuild:SetChecked(false)
 win.optGuild:GetScript("OnClick")(win.optGuild)
+out("== the repeats' time: its slider, its box (30, 30s, 5m), its unit's button")
+local D = ns.ChatFilterDuration
+check(D("30", "s") == 30 and D("30s", "m") == 30 and D("5m", "s") == 300 and D("1,5 min", "s") == 90 and D("2", "m") == 120,
+  "typed: 30, 30s, 5m, 1,5 min, 2 (in minutes)")
+check(D("0", "s") == 5 and D("300m", "s") == 3600 and D("abc", "s") == nil and select(2, D("5m", "s")) == "m", "5 s to 1 h; nonsense: nothing")
+win.slider:GetScript("OnValueChanged")(win.slider, 120)
+check(ns.ChatFilterStore().repeatSeconds == 120 and win.timeBox:GetText() == "120", "the slider: 120 s, the box says it")
+win.timeBox:SetText("3m")
+win.timeBox:GetScript("OnEnterPressed")(win.timeBox)
+check(ns.ChatFilterStore().repeatSeconds == 180 and ns.ChatFilterStore().repeatUnit == "m" and win.timeBox:GetText() == "3"
+  and win.unit:GetText() == ns.L.CF_MINUTES, "3m typed: 180 s, shown in minutes")
+win.unit:GetScript("OnClick")(win.unit)
+check(ns.ChatFilterStore().repeatUnit == nil and win.timeBox:GetText() == "180" and win.unit:GetText() == ns.L.CF_SECONDS, "its button: in seconds")
+ns.ChatFilterStore().repeats = true
+ns.ChatFilterStore().repeatSeconds = 10
+check(Say(nil, "WTB mats", "Kim") == false and Say(nil, "WTB mats", "Kim") == true, "10 s: the copy at once hidden")
+M.now = (M.now or 0) + 11
+check(Say(nil, "WTB mats", "Kim") == false, "11 s later: shown")
+ns.ChatFilterStore().repeats, ns.ChatFilterStore().repeatSeconds = nil, nil
+
+out("== its corner: the size; kept")
+check(win.grip and win.grip:GetPoint(1) == "BOTTOMRIGHT", "its grip at the bottom right")
+win:SetSize(700, 640)
+win.grip:GetScript("OnMouseUp")(win.grip, "LeftButton")
+check(ns.ChatFilterStore().size[1] == 700 and ns.ChatFilterStore().size[2] == 640, "dragged: its size kept")
+win.grip:GetScript("OnClick")(win.grip, "RightButton")
+check(ns.ChatFilterStore().size[1] == 500, "a right click: its first size again")
 local sw = ns.qolSwitches.chatfilter
 sw[1].set(false)
 check(not button:IsShown() and ns.ChatFilterStore().noButton == true, "its card's box: the button hidden")
