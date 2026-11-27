@@ -660,6 +660,19 @@ local function ReportBox()
   return f
 end
 
+-- Any text in the same window, to copy (the /cl perf chargement log)
+function ns:ShowCopyText(title, hint, text)
+  local box = ReportBox()
+  box.text = text
+  box.title:SetText(title or "Clara")
+  box.hint:SetText(hint or L.MOUSE_REPORT_HINT)
+  box.edit:SetText(text)
+  box:Show()
+  box.edit:SetFocus()
+  box.edit:HighlightText()
+  return box
+end
+
 function ns:MouseReport()
   local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
   local isFocus = {}
