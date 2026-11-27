@@ -13928,6 +13928,15 @@
 						Lock("RecentChatWindow", reason) -- Recent chat window
 					end
 
+					-- Prat's chat history put back as it logs in (its History, Scrollback on): the chat restored once, by Prat
+					-- (Clara Combo Points)
+					if ClaraNS.PratModule then
+						local _, pratHistory = ClaraNS.PratModule("History")
+						if pratHistory and pratHistory.scrollback then
+							Lock("RestoreChatMessages", L["Cannot be used with Prat"], "History")
+						end
+					end
+
 					-- Disable items that conflict with ElvUI
 					if LeaPlusLC.ElvUI then
 						local E = LeaPlusLC.ElvUI
