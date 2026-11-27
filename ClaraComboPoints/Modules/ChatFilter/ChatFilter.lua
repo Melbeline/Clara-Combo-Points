@@ -5,7 +5,8 @@
 -- "r e s t e d", "r3$ted"); unticked, the word as written only. As a whole word by default ("rested" leaves
 -- "interested" alone); "inside other words" ticked, anywhere. The raid symbols ({rt8}, {skull}, {crâne}...) count as
 -- one: added with its buttons, a symbol matches every way of writing it.
--- Also, each with its box: the same message from the same player again within a minute (the copies hidden), the
+-- Also, each with its box: the same message from the same player again within a time (a minute by default; its slider,
+-- or its box: 30, 30s, 5m; seconds or minutes with its button), the copies hidden, the
 -- lines in Cyrillic, the lines in Chinese. Public channels, say, yell and emotes always; whispers (on by default),
 -- group, raid, guild and communities each with its own box.
 -- Its window, from the button under the chat's channel button (right-click: the blacklist turned off or on): a box to
@@ -203,7 +204,27 @@ local function Covered(s, event)
   if scope == "whisper" then return s.whisper ~= false end
   return scope ~= nil and s[scope] == true
 end
-local REPEAT = 60 -- seconds: the same message from the same player again, hidden
+-- The same message from the same player again within this time (seconds; 1 min by default, 5 s to 1 h): hidden
+local REPEAT_MIN, REPEAT_MAX = 5, 3600
+local function RepeatSeconds()
+  local v = tonumber(Store().repeatSeconds) or 60
+  return math.max(REPEAT_MIN, math.min(REPEAT_MAX, math.floor(v + .5)))
+end
+-- A time typed: 30, 30s, 5m, 1.5 min ("," too); no unit: the one shown
+local MINUTES = { m = true, mn = true, min = true, mins = true, minute = true, minutes = true }
+local SECONDS = { s = true, sec = true, secs = true, seconde = true, secondes = true, second = true, seconds = true }
+local function ParseDuration(text, unit)
+  if type(text) ~= "string" then return nil end
+  local t = strtrim(text):lower():gsub(",", ".")
+  local n, suffix = t:match("^(%d*%.?%d+)%s*(%a*)$")
+  n = tonumber(n)
+  if not n then return nil end
+  if suffix == "" then suffix = unit == "m" and "m" or "s" end
+  local u
+  if MINUTES[suffix] then u = "m" n = n * 60 elseif SECONDS[suffix] then u = "s" else return nil end
+  return math.max(REPEAT_MIN, math.min(REPEAT_MAX, math.floor(n + .5))), u
+end
+ns.ChatFilterDuration = ParseDuration -- (for the tests)
 local seen = {}   -- player .. message -> when last seen
 local hidden = {} -- the lines hidden lately (newest last): { at, who, text, why, where }
 local HIDDEN_MAX = 60
@@ -248,7 +269,7 @@ local function Decide(event, message, author, flags, guid)
     local now = GetTime()
     local at = seen[key]
     seen[key] = now
-    if at and now - at < REPEAT then return "repeat" end
+    if at and now - at < RepeatSeconds() then return "repeat" end
   end
   return nil
 end
@@ -272,7 +293,8 @@ ns.ChatFilterFilter = Filter -- (for the tests)
 -- (an old entry of the repeats forgotten now and then)
 local function Forget()
   local now = GetTime()
-  for k, at in pairs(seen) do if now - at > REPEAT then seen[k] = nil end end
+  local keep = RepeatSeconds()
+  for k, at in pairs(seen) do if now - at > keep then seen[k] = nil end end
 end
 
 ---------------------------------------------------------------------------
@@ -312,7 +334,7 @@ end
 ns.ChatFilterRemove = Remove -- (for the tests)
 
 ---------------------------------------------------------------------------
--- Its window
+-- Its window: the game's grey stone ground, moved by its top, sized by its corner (both kept)
 ---------------------------------------------------------------------------
 local ICON = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_%d"
 local function Shown(text) -- (the raid symbols drawn)
@@ -321,11 +343,12 @@ end
 
 local win, Refresh
 local editing -- the word being changed
+local W, H, MIN_W, MIN_H = 500, 560, 470, 470
 
-local function Check(parent, label, x, y, get, set)
+local function Check(parent, label, point, x, y, get, set)
   local c = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
   c:SetSize(22, 22)
-  c:SetPoint("TOPLEFT", x, y)
+  c:SetPoint(point, x, y)
   local fs = c.Text or c.text or c:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   if fs.SetFontObject then fs:SetFontObject("GameFontHighlightSmall") end
   fs:ClearAllPoints()
@@ -337,56 +360,76 @@ local function Check(parent, label, x, y, get, set)
   return c
 end
 
-local ROW_H, ROWS = 22, 11
+-- The repeats' time as shown in its unit (90 s in minutes: 1.5)
+local function DurationText(seconds, unit)
+  if unit == "m" then return ("%g"):format(math.floor(seconds / 6 + .5) / 10) end
+  return tostring(seconds)
+end
+
+local ROW_H = 22
 local function Build()
   if win then return win end
-  win = CreateFrame("Frame", "ClaraChatFilter", UIParent, "BackdropTemplate")
-  win:SetSize(500, 530)
-  win:SetPoint("CENTER")
+  local s = Store
+  win = CreateFrame("Frame", "ClaraChatFilter", UIParent)
+  local size = type(s().size) == "table" and s().size or {}
+  win:SetSize(math.max(MIN_W, tonumber(size[1]) or W), math.max(MIN_H, tonumber(size[2]) or H))
+  local pos = type(s().pos) == "table" and s().pos or nil
+  if pos and type(pos[2]) == "number" and type(pos[3]) == "number" then
+    win:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos[2], pos[3])
+  else
+    win:SetPoint("CENTER")
+  end
   win:SetFrameStrata("DIALOG")
   win:SetToplevel(true)
   win:EnableMouse(true)
   win:SetMovable(true)
+  if win.SetResizable then win:SetResizable(true) end
+  if win.SetResizeBounds then win:SetResizeBounds(MIN_W, MIN_H, 1000, 1200)
+  elseif win.SetMinResize then win:SetMinResize(MIN_W, MIN_H) end
   win:SetClampedToScreen(true)
   win:RegisterForDrag("LeftButton")
-  win:SetScript("OnDragStart", win.StartMoving)
-  win:SetScript("OnDragStop", win.StopMovingOrSizing)
-  if win.SetBackdrop then
-    win:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-      tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    win:SetBackdropColor(0, 0, 0, .92)
-    win:SetBackdropBorderColor(.72, .58, .34, 1)
+  local function Keep()
+    local left, top = win:GetLeft(), win:GetTop()
+    if left and top then s().pos = { "TOPLEFT", math.floor(left + .5), math.floor(top + .5) } end
+    s().size = { math.floor(win:GetWidth() + .5), math.floor(win:GetHeight() + .5) }
   end
+  win:SetScript("OnDragStart", win.StartMoving)
+  win:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    Keep()
+  end)
   if UISpecialFrames then table.insert(UISpecialFrames, "ClaraChatFilter") end
+  -- (the game's grey stone, as its windows have it, under the dialog's border)
+  local ground = win:CreateTexture(nil, "BACKGROUND", nil, -7)
+  ground:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock", "REPEAT", "REPEAT")
+  if ground.SetHorizTile then ground:SetHorizTile(true) ground:SetVertTile(true) end
+  ground:SetPoint("TOPLEFT", 5, -5)
+  ground:SetPoint("BOTTOMRIGHT", -5, 5)
   local title = win:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   title:SetPoint("TOPLEFT", 14, -12)
   title:SetText(L.CF_TITLE)
   local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -2, -2)
-  -- (an opaque ground under the dialog's own fill: the world not seen through it)
-  local ground = win:CreateTexture(nil, "BACKGROUND", nil, -7)
-  ground:SetColorTexture(0.03, 0.03, 0.04, 0.93)
-  ground:SetPoint("TOPLEFT", 6, -6)
-  ground:SetPoint("BOTTOMRIGHT", -6, 6)
-  if ns.DressDialog then ns:DressDialog(win, { close = close, fill = true, dark = true }) end
+  if ns.DressDialog then ns:DressDialog(win, { close = close }) end
 
   -- the box to write in, Add (Save while a word is changed), Cancel
-  local box = CreateFrame("EditBox", nil, win, "InputBoxTemplate")
-  box:SetSize(360, 22)
-  box:SetPoint("TOPLEFT", 20, -40)
-  box:SetAutoFocus(false)
-  box:SetMaxLetters(120)
-  win.box = box
-  local add = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
-  add:SetSize(90, 22)
-  add:SetPoint("LEFT", box, "RIGHT", 8, 0)
-  win.add = add
   local cancel = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
   cancel:SetSize(22, 22)
-  cancel:SetPoint("LEFT", add, "RIGHT", 2, 0)
+  cancel:SetPoint("TOPRIGHT", -14, -40)
   cancel:SetText("x")
   cancel:Hide()
   win.cancel = cancel
+  local add = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
+  add:SetSize(90, 22)
+  add:SetPoint("TOPRIGHT", -40, -40)
+  win.add = add
+  local box = CreateFrame("EditBox", nil, win, "InputBoxTemplate")
+  box:SetHeight(22)
+  box:SetPoint("TOPLEFT", 20, -40)
+  box:SetPoint("RIGHT", add, "LEFT", -10, 0)
+  box:SetAutoFocus(false)
+  box:SetMaxLetters(120)
+  win.box = box
 
   -- the eight raid symbols, put in the box at its cursor
   for i = 1, 8 do
@@ -410,8 +453,8 @@ local function Build()
   -- the new word's boxes
   local opts = { variants = true, inword = false }
   win.opts = opts
-  win.variants = Check(win, L.CF_VARIANTS, 16, -92, function() return opts.variants end, function(on) opts.variants = on end)
-  win.inword = Check(win, L.CF_INWORD, 16, -114, function() return opts.inword end, function(on) opts.inword = on end)
+  win.variants = Check(win, L.CF_VARIANTS, "TOPLEFT", 16, -92, function() return opts.variants end, function(on) opts.variants = on end)
+  win.inword = Check(win, L.CF_INWORD, "TOPLEFT", 16, -114, function() return opts.inword end, function(on) opts.inword = on end)
 
   local function Commit()
     local text = box:GetText()
@@ -430,16 +473,15 @@ local function Build()
     Refresh()
   end)
 
-  -- the list: on/off, the word, its count, its cross; a click on the word: changed in the box above
-  local listTop = -142
+  -- the list (as tall as the window lets it): on/off, the word, its count, its cross; a click on the word: in the box
   local header = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  header:SetPoint("TOPLEFT", 18, listTop)
+  header:SetPoint("TOPLEFT", 18, -142)
   win.header = header
   local scroll = CreateFrame("ScrollFrame", nil, win, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", 12, listTop - 14)
-  scroll:SetSize(440, ROW_H * ROWS)
+  scroll:SetPoint("TOPLEFT", 12, -156)
+  scroll:SetPoint("BOTTOMRIGHT", -34, 158)
   local content = CreateFrame("Frame", nil, scroll)
-  content:SetSize(440, ROW_H)
+  content:SetSize(W - 46, ROW_H)
   scroll:SetScrollChild(content)
   win.scroll, win.content = scroll, content
   win.rows = {}
@@ -447,8 +489,9 @@ local function Build()
     local row = win.rows[i]
     if row then return row end
     row = CreateFrame("Button", nil, content)
-    row:SetSize(440, ROW_H)
+    row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(i - 1) * ROW_H)
+    row:SetPoint("RIGHT", content, "RIGHT", 0, 0)
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     row.on = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     row.on:SetSize(20, 20)
@@ -487,19 +530,72 @@ local function Build()
     return row
   end
   win.Row = Row
+  scroll:SetScript("OnSizeChanged", function(self, w) if w and w > 0 then content:SetWidth(w) end end)
 
-  -- the options
-  local y = listTop - 18 - ROW_H * ROWS - 6
-  local s = Store
-  win.optRepeats = Check(win, L.CF_REPEATS, 16, y, function() return s().repeats end, function(on) s().repeats = on or nil end)
-  win.optCyrillic = Check(win, L.CF_CYRILLIC, 186, y, function() return s().cyrillic end, function(on) s().cyrillic = on or nil end)
-  win.optChinese = Check(win, L.CF_CHINESE, 336, y, function() return s().chinese end, function(on) s().chinese = on or nil end)
+  -- the repeats: their box, the time (a slider, a box taking 30, 30s or 5m, a button for seconds or minutes)
+  win.optRepeats = Check(win, L.CF_REPEATS, "BOTTOMLEFT", 16, 122, function() return s().repeats end, function(on) s().repeats = on or nil end)
+  local slider = CreateFrame("Slider", nil, win, "UISliderTemplate")
+  slider:SetSize(150, 17)
+  slider:SetPoint("BOTTOMLEFT", 200, 125)
+  slider:SetOrientation("HORIZONTAL")
+  slider:SetMinMaxValues(REPEAT_MIN, REPEAT_MAX)
+  slider:SetValueStep(5)
+  if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+  win.slider = slider
+  local timeBox = CreateFrame("EditBox", nil, win, "InputBoxTemplate")
+  timeBox:SetSize(46, 20)
+  timeBox:SetPoint("LEFT", slider, "RIGHT", 12, 0)
+  timeBox:SetAutoFocus(false)
+  timeBox:SetMaxLetters(8)
+  timeBox:SetJustifyH("CENTER")
+  win.timeBox = timeBox
+  local unit = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
+  unit:SetSize(40, 20)
+  unit:SetPoint("LEFT", timeBox, "RIGHT", 4, 0)
+  win.unit = unit
+  local function Unit() return s().repeatUnit == "m" and "m" or "s" end
+  local function ShowTime(from)
+    local seconds = RepeatSeconds()
+    if from ~= "slider" then slider.silent = true slider:SetValue(seconds) slider.silent = nil end
+    if from ~= "box" or not timeBox:HasFocus() then timeBox:SetText(DurationText(seconds, Unit())) end
+    unit:SetText(Unit() == "m" and L.CF_MINUTES or L.CF_SECONDS)
+  end
+  win.ShowTime = ShowTime
+  slider:SetScript("OnValueChanged", function(self, v)
+    if self.silent then return end
+    s().repeatSeconds = math.floor(v / 5 + .5) * 5
+    ShowTime("slider")
+  end)
+  local function TakeBox()
+    local seconds, u = ParseDuration(timeBox:GetText(), Unit())
+    if seconds then
+      s().repeatSeconds = seconds
+      s().repeatUnit = u ~= "s" and u or nil
+    end
+    timeBox:ClearFocus()
+    ShowTime()
+  end
+  timeBox:SetScript("OnEnterPressed", TakeBox)
+  timeBox:SetScript("OnEditFocusLost", function() ShowTime() end)
+  timeBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  timeBox:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText(L.CF_TIME_TIP, 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  timeBox:SetScript("OnLeave", GameTooltip_Hide)
+  unit:SetScript("OnClick", function()
+    s().repeatUnit = Unit() == "s" and "m" or nil
+    ShowTime()
+  end)
+  win.optCyrillic = Check(win, L.CF_CYRILLIC, "BOTTOMLEFT", 16, 96, function() return s().cyrillic end, function(on) s().cyrillic = on or nil end)
+  win.optChinese = Check(win, L.CF_CHINESE, "BOTTOMLEFT", 200, 96, function() return s().chinese end, function(on) s().chinese = on or nil end)
   -- (the chats filtered besides the public ones, each on its own)
   local also = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  also:SetPoint("TOPLEFT", 18, y - 30)
+  also:SetPoint("BOTTOMLEFT", 18, 76)
   also:SetText(L.CF_ALSO)
   local function Scope(key, label, x)
-    return Check(win, label, x, y - 44, function()
+    return Check(win, label, "BOTTOMLEFT", x, 48, function()
       if key == "whisper" then return s().whisper ~= false end
       return s()[key] == true
     end, function(on)
@@ -517,7 +613,7 @@ local function Build()
   -- the lines hidden lately: a click, the line to copy
   local recent = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
   recent:SetSize(200, 22)
-  recent:SetPoint("BOTTOMLEFT", 16, 12)
+  recent:SetPoint("BOTTOMLEFT", 16, 14)
   recent:SetScript("OnClick", function()
     local out = {}
     for i = #hidden, 1, -1 do
@@ -527,10 +623,39 @@ local function Build()
     if ns.ShowCopyText then ns:ShowCopyText(L.CF_RECENT_TITLE, nil, #out > 0 and table.concat(out, "\n") or L.CF_RECENT_NONE) end
   end)
   win.recent = recent
-  local onoff = Check(win, L.CF_ON, 240, -0, function() return not s().off end, function(on) s().off = (not on) or nil Refresh() end)
-  onoff:ClearAllPoints()
-  onoff:SetPoint("BOTTOMLEFT", 240, 12)
-  win.onoff = onoff
+  win.onoff = Check(win, L.CF_ON, "BOTTOMLEFT", 240, 14, function() return not s().off end, function(on) s().off = (not on) or nil Refresh() end)
+
+  -- the corner: dragged, the window sized (kept); a right click, its first size again
+  local GRIP = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-"
+  local grip = CreateFrame("Button", nil, win)
+  grip:SetSize(16, 16)
+  grip:SetPoint("BOTTOMRIGHT", -6, 6)
+  grip:SetFrameLevel(win:GetFrameLevel() + 20)
+  grip:SetNormalTexture(GRIP .. "Up")
+  grip:SetPushedTexture(GRIP .. "Down")
+  grip:SetHighlightTexture(GRIP .. "Highlight")
+  grip:RegisterForClicks("RightButtonUp")
+  grip:SetScript("OnMouseDown", function(_, mouse)
+    if mouse == "LeftButton" and win.StartSizing then win:StartSizing("BOTTOMRIGHT") end
+  end)
+  grip:SetScript("OnMouseUp", function(_, mouse)
+    if mouse ~= "LeftButton" then return end
+    win:StopMovingOrSizing()
+    Keep()
+  end)
+  grip:SetScript("OnClick", function(_, mouse)
+    if mouse ~= "RightButton" then return end
+    win:SetSize(W, H)
+    Keep()
+  end)
+  grip:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(L.CF_GRIP, 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  grip:SetScript("OnLeave", GameTooltip_Hide)
+  win.grip = grip
+
   win:SetScript("OnShow", function() Refresh() end)
   win:Hide()
   return win
@@ -547,6 +672,7 @@ Refresh = function()
   win.inword:SetChecked(win.opts.inword)
   win.recent:SetText(L.CF_RECENT:format(#hidden))
   win.onoff:SetChecked(not Store().off)
+  win.ShowTime()
   win.content:SetHeight(math.max(ROW_H, #words * ROW_H))
   for i = 1, math.max(#words, #win.rows) do
     local row = win.Row(i)
