@@ -106,6 +106,8 @@ end)
 -- /cl perf chargement: the next loading screen
 ---------------------------------------------------------------------------
 local AFTER = 1    -- second: watched after the loading screen goes (the addons' work as the world comes)
+local WORLD = 3    -- seconds after the world entered: the loading taken as over if its screen's end was not seen
+local LONGEST = 60 -- seconds: a measure never runs longer
 local SHOWN = 10   -- the addons listed
 local BIG = 100    -- ms: a frame that halts
 local function Met(key, fallback)
@@ -133,26 +135,29 @@ local function LoadReport()
   loader:Hide()
   if ns.sv then ns.sv.perfLoad, ns.sv.perfLoadBase = nil, nil end
   if not l or not Available() then return end
-  local recentM, peakM, overM = Met("RecentAverageTime", 1), Met("PeakTime", 4), Met("CountTimeOver100Ms", 9)
-  local rows, all = {}, 0
-  for _, name in ipairs(Loaded()) do
-    local total = math.max(l.sum[name] or 0, Metric(name, recentM) * 60)
-    local b = l.base and l.base[name]
-    local peakNow, overNow = Metric(name, peakM), Metric(name, overM)
-    if b and peakNow + 0.001 < (b.peak or 0) then b = nil end -- (the game started again since: counted from its start)
-    local peak = l.top[name] or 0
-    if not b or peakNow > (b.peak or 0) + 0.001 then peak = math.max(peak, peakNow) end -- (a new slowest frame: this loading's)
-    local over = math.max(0, overNow - (b and b.over or 0))
-    all = all + total
-    if total >= 1 or peak >= 1 then rows[#rows + 1] = { name = name, total = total, peak = peak, over = over } end
-  end
-  table.sort(rows, function(a, b) return a.total > b.total end)
-  if l.ms then Say(L.PERF_LOAD_DONE:format(l.ms / 1000, all)) else Say(L.PERF_LOAD_LOGIN:format(all)) end
-  if #rows == 0 then Say(L.PERF_LOAD_QUIET) end
-  for i = 1, math.min(SHOWN, #rows) do
-    local r = rows[i]
-    Say(L.PERF_LOAD_ADDON:format(i, r.name, r.total, r.peak, r.over, BIG))
-  end
+  local ok, err = pcall(function()
+    local recentM, peakM, overM = Met("RecentAverageTime", 1), Met("PeakTime", 4), Met("CountTimeOver100Ms", 9)
+    local rows, all = {}, 0
+    for _, name in ipairs(Loaded()) do
+      local total = math.max(l.sum[name] or 0, Metric(name, recentM) * 60)
+      local b = l.base and l.base[name]
+      local peakNow, overNow = Metric(name, peakM), Metric(name, overM)
+      if b and peakNow + 0.001 < (b.peak or 0) then b = nil end -- (the game started again since: counted from its start)
+      local peak = l.top[name] or 0
+      if not b or peakNow > (b.peak or 0) + 0.001 then peak = math.max(peak, peakNow) end -- (a new slowest frame: this loading's)
+      local over = math.max(0, overNow - (b and b.over or 0))
+      all = all + total
+      if total >= 1 or peak >= 1 then rows[#rows + 1] = { name = name, total = total, peak = peak, over = over } end
+    end
+    table.sort(rows, function(a, b) return a.total > b.total end)
+    if l.ms then Say(L.PERF_LOAD_DONE:format(l.ms / 1000, all)) else Say(L.PERF_LOAD_LOGIN:format(all)) end
+    if #rows == 0 then Say(L.PERF_LOAD_QUIET) end
+    for i = 1, math.min(SHOWN, #rows) do
+      local r = rows[i]
+      Say(L.PERF_LOAD_ADDON:format(i, r.name, r.total, r.peak, r.over, BIG))
+    end
+  end)
+  if not ok then Say("/cl perf: " .. tostring(err)) end
 end
 
 loader:SetScript("OnUpdate", function()
@@ -167,14 +172,16 @@ loader:SetScript("OnUpdate", function()
     end
   end
   l.frames = l.frames + 1
-  if l.ended and GetTime() >= l.ended + AFTER then LoadReport() end
+  local now = GetTime()
+  if (l.ended and now >= l.ended + AFTER) or now >= l.started + LONGEST then LoadReport() end
 end)
 
 local function LoadStart(base, login)
   if loading or not Available() then return end
-  loading = { base = base or Snapshot(), names = Loaded(), sum = {}, top = {}, frames = 0,
+  loading = { base = base or Snapshot(), names = Loaded(), sum = {}, top = {}, frames = 0, started = GetTime(),
     t0 = not login and debugprofilestop and debugprofilestop() or nil }
   loader:Show()
+  Say(login and L.PERF_LOAD_LOGIN_START or L.PERF_LOAD_START)
 end
 
 local loadEvents = CreateFrame("Frame")
@@ -194,10 +201,10 @@ loadEvents:SetScript("OnEvent", function(_, event)
     -- (armed before a reload or a logout: this login is the loading measured, from what was seen as it began)
     if Armed() then LoadStart(type(ns.sv.perfLoadBase) == "table" and ns.sv.perfLoadBase or nil, true) end
   elseif event == "PLAYER_ENTERING_WORLD" then
-    -- (no loading screen's end told: the world is there, ended a little later all the same)
+    -- (no loading screen's end told, as when it went before Clara was there: the world is there, ended a moment later)
     local l = loading
     if l and C_Timer and C_Timer.After then
-      C_Timer.After(10, function() if loading == l and not l.ended then l.ended = GetTime() end end)
+      C_Timer.After(WORLD, function() if loading == l and not l.ended then l.ended = GetTime() end end)
     end
   elseif event == "PLAYER_LOGOUT" then
     if Armed() and Available() then ns.sv.perfLoadBase = Snapshot() end -- (a reload or a logout: where things stood)
