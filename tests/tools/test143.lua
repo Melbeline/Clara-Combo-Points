@@ -33,7 +33,7 @@ end
 check(#sends == 0, "no send of any kind: " .. table.concat(sends, " | "))
 
 out("== the two options gone, with all that served them")
-check(not readfile(DIR .. "talents.lua") and not toc:find("talents.lua", 1, true), "the talent read (only for %talents%): gone")
+check(not readfile(DIR .. "talents.lua") and not toc:find("LFGForever\\talents.lua", 1, true), "the talent read (only for %talents%): gone")
 check(not readfile(DIR .. "settings.xml") and not toc:find("LFGForever\\settings.xml", 1, true), "the message rows' template: gone")
 local all = ""
 for _, file in ipairs(FILES) do all = all .. (readfile(DIR .. file) or "") end

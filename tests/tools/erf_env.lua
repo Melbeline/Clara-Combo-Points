@@ -15,8 +15,14 @@ local function xml(path, ns)
   end
 end
 function E.Load(dir, ns)
+  -- (the built-in Clique off and its files left out, as in the mock's own loader)
+  local db = rawget(_G, "ClaraComboPointsDB")
+  if type(db) ~= "table" then db = {}; ClaraComboPointsDB = db end
+  db.qol = type(db.qol) == "table" and db.qol or {}
+  if db.qol.clique == nil then db.qol.clique = false end
   for file in readfile(dir .. "/ClaraComboPoints.toc"):gmatch("[^\r\n]+") do
-    if not file:match("^##") and file:match("%.lua$") then run(dir .. "/" .. file:gsub("\\", "/"), file, ns)
+    if file:find("Modules\\Clique\\", 1, true) then -- (left out)
+    elseif not file:match("^##") and file:match("%.lua$") then run(dir .. "/" .. file:gsub("\\", "/"), file, ns)
     elseif not file:match("^##") and file:match("%.xml$") then xml(dir .. "/" .. file:gsub("\\", "/"), ns) end
   end
 end

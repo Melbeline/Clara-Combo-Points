@@ -89,7 +89,14 @@ shown = 0
 for i = 1, 88 do if b[i]:IsShown() then shown = shown + 1 end end
 check(shown == 0, "no slot shown")
 local chars = ns.BankViewCharacters()
-check(chars[1] == "Elle-Forever" and chars[2] == "Lia-Forever", "the characters: this one first")
+check(chars[1] == "Elle-Forever" and chars[2] == nil, "the list: only the characters whose bank was seen (Lia's never was)")
+ClaraCraftDB.chars["Zoe-Forever"] = { bags = {}, bank = {}, mail = {}, at = 1, class = "MAGE",
+  view = { at = now - 60, t = { 28 }, b = {}, s = {}, f = "Zoe Starfall" } }
+chars = ns.BankViewCharacters()
+check(chars[1] == "Elle-Forever" and chars[2] == "Zoe-Forever", "another seen: listed after this one")
+check(ns.BankViewNameOf("Zoe-Forever") == "Zoe Starfall", "the whole name kept with the bank: " .. tostring(ns.BankViewNameOf("Zoe-Forever")))
+ClaraCraftDB.chars["Zoe-Forever"] = nil
+ns.BankViewToggle("Lia-Forever")
 out("== the bank read slot by slot as it is open")
 C_Container = C_Container or {}
 local items = { [-1] = { [1] = { hyperlink = "|cffffffff|Hitem:2589::::::::40:::::::::|h[Linen Cloth]|h|r", stackCount = 7 } } }
@@ -97,6 +104,8 @@ C_Container.GetContainerNumSlots = function(bag) if bag == -1 then return 24 end
 C_Container.GetContainerItemInfo = function(bag, slot) return items[bag] and items[bag][slot] end
 local v = ns.Craft.ViewOf({ -1, 5 })
 check(v and v.t[1] == 24 and v.t[2] == 0 and v.s[1] == "item:2589::::::::40;7", "tabs and items (the item string, its count): " .. tostring(v and v.s[1]))
+local cv = ns.Craft.CleanView({ at = 1, t = { 2 }, b = {}, s = { [1] = "item:2589;1" }, f = "Elle Woods" })
+check(cv and cv.f == "Elle Woods" and ns.Craft.CleanView({ at = 1, t = {}, b = {}, s = {}, f = 7 }).f == nil, "the whole name kept by the cleaning, a bad one dropped")
 out("== an item's tooltip: each character's counts, the account bank, the total")
 local tip = { lines = {} }
 function tip:AddLine(l) self.lines[#self.lines + 1] = tostring(l) end

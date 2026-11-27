@@ -1525,10 +1525,20 @@ function M.LoadAddonAs(dir, tocName, addonName, ns)
     end
   end
 end
+-- (the built-in Clique needs its libraries, loaded by XML, which this mock does not read: its files are left out unless
+-- a test asks for them, M.withClique, and loads those libraries itself)
 function M.LoadAddon(dir, ns)
+  -- (and the module off, unless asked: its newer AceDB is not loaded for the other modules' tests either)
+  local db = rawget(_G, "ClaraComboPointsDB")
+  local cliqueOff = not M.withClique and not (type(db) == "table" and type(db.qol) == "table" and db.qol.clique ~= nil)
+  if cliqueOff then
+    if type(db) ~= "table" then db = {}; ClaraComboPointsDB = db end
+    db.qol = type(db.qol) == "table" and db.qol or {}
+    db.qol.clique = false
+  end
   local toc = assert(io.open(dir .. "/ClaraComboPoints.toc", "rb")):read("*a")
   for file in toc:gmatch("[^\r\n]+") do
-    if not file:match("^##") and file:match("%.lua$") then
+    if not file:match("^##") and file:match("%.lua$") and (M.withClique or not file:find("Modules\\Clique\\", 1, true)) then
       local f = assert(io.open(dir .. "/" .. file:gsub("\\", "/"), "rb"))
       local chunk = assert(loadstring(f:read("*a"), "@" .. file)); f:close()
       chunk("ClaraComboPoints", ns)
