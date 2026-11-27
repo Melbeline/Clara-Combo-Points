@@ -122,5 +122,46 @@ copied = nil
 ns.ChatLookClicked(nil, "addon:Other:x", "x", "LeftButton", cf)
 check(copied == nil, "another addon's link: nothing")
 
+
+out("== with Prat: what it shows by the name left to it, the time of its own clickable")
+local pratMods = {}
+local function PratMod(profile) return { db = { profile = profile }, IsEnabled = function() return true end } end
+Prat = { Addon = { GetModule = function(_, name) return pratMods[name] end } }
+pratMods.PlayerNames = PratMod({ on = true, level = true })
+local PRAT = "|cff999999[20:55:24]|r |Hchannel:channel:8|h[8. L2P]|h |cffaaaaaa[|r|Hplayer:Lia-Forever:20:CHANNEL:8|h|cffffff0040|r:|cff0070ddLia Moon|r|h|cffaaaaaa]|r: ouf"
+local p1 = ns.ChatLookBuild(PRAT, args, frame)
+check(not p1:find("[40]", 1, true), "Prat's level shown: Clara's not added: " .. p1)
+check(p1:find("|cffaaaaaa]|r |A:raceicon-nightelf-female", 1, true) ~= nil, "the head after Prat's closing bracket, not inside it")
+check(p1:find("^|Haddon:ClaraComboPoints:line:[%x]+%-%d+|h|cff999999%[20:55:24%]|r|h |Hchannel:") ~= nil, "Prat's time (in its color): the link to copy")
+check(ns.ChatLookPlain(p1) == "[20:55:24] [8. L2P] [40:Lia Moon]: ouf", "copied as shown: " .. ns.ChatLookPlain(p1))
+out("== Prat's level off: Clara's, before Prat's brackets")
+pratMods.PlayerNames = PratMod({ on = true, level = false })
+local PRAT2 = "|cff999999[20:55:24]|r |cffaaaaaa[|r|Hplayer:Lia-Forever:21:SAY|h|cff0070ddLia Moon|r|h|cffaaaaaa]|r says: ouf"
+local p2 = ns.ChatLookBuild(PRAT2, args, frame)
+check(p2:find("[40]|r|h |cffaaaaaa[|r|Hplayer:", 1, true) ~= nil, "[40] before the bracket: " .. p2)
+out("== a level another addon put in the name: not twice, Prat or not")
+Prat = nil
+local p3 = ns.ChatLookBuild("[19:46:37] |Hplayer:Lia-Forever:22:SAY|h[40:Lia Moon]|h says: x", args, frame)
+check(not p3:find("[40]", 1, true), "no second level: " .. p3)
+local p4 = ns.ChatLookBuild("[19:46:37] |Hplayer:Lia-Forever:23:SAY|h[Lia Moon]|h |A:raceicon128-nightelf-female:14:14|a says: x", args, frame)
+check(select(2, p4:gsub("raceicon", "")) == 1, "a race's head already there: not twice")
+out("== Prat's time put after Clara's hook: Clara's change made next, Prat's time kept")
+Prat = { Addon = { GetModule = function(_, name) return pratMods[name] end } }
+pratMods.Timestamps = PratMod({ on = true })
+pratMods.PlayerNames = PratMod({ on = true, level = true })
+local RAWP = "|Hchannel:channel:8|h[8. L2P]|h |cffaaaaaa[|r|Hplayer:Lia-Forever:24:CHANNEL:8|h|cffffff0040|r:Lia Moon|h|cffaaaaaa]|r: ouf"
+entry = { message = RAWP, extraData = { 1, 2, 3, "CHAT_MSG_CHANNEL", args } }
+ns.ChatLookAfter(win, RAWP, 1, 1, 1, 1, 2, 3, "CHAT_MSG_CHANNEL", args)
+check(entry.message == RAWP, "not changed yet: Prat's hook sees the line as made")
+entry.message = "|cff999999[20:55:30]|r " .. entry.message -- (Prat's Timestamps)
+ns.ChatLookFlush()
+check(entry.message:find("^|Haddon:ClaraComboPoints:line:[^|]+|h|cff999999%[20:55:30%]|r|h") and entry.message:find("|A:raceicon", 1, true)
+  and not entry.message:find("[40]", 1, true), "then changed: Prat's time clickable, the head, no second level: " .. entry.message)
+pratMods.Timestamps = PratMod({ on = false })
+entry = { message = LINE, extraData = { 1, 2, 3, "CHAT_MSG_PARTY", args } }
+ns.ChatLookAfter(win, LINE, 1, 1, 1, 1, 2, 3, "CHAT_MSG_PARTY", args)
+check(entry.message ~= LINE, "Prat's Timestamps off: changed at once")
+Prat = nil
+
 out("")
 out(fails .. " failure(s)")

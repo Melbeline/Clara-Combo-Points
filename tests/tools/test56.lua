@@ -280,5 +280,14 @@ local _, kept = filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "|cffffffff|Hi
 check(kept == nil, "no address outside the links: the message left as it is")
 itemRefs.SetItemRef(nil, "addon:ClaraComboPoints:url:https://discord.gg/pABDHHaMQr")
 check(box:IsShown() and box.edit:GetText() == "https://discord.gg/pABDHHaMQr", "a click on one: the address in the box")
+check(box.edit._multi == true and math.abs((box.edit:GetWidth() or 0) - 380) < 1, "the box's text: a width of its own (380), on several lines")
+local long = ("word "):rep(80)
+ns.ShowCopyBox(long)
+check(box.edit:GetText() == long and box:GetHeight() > 60, "a long line: whole, the box taller (" .. tostring(box:GetHeight()) .. ")")
+box:Hide()
+Prat = { Addon = { GetModule = function(_, name) return name == "UrlCopy" and { db = { profile = { on = true } } } or nil end } }
+local d2, t2 = filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "see https://example.com", "Goldo")
+check(d2 == false and t2 == nil, "Prat's UrlCopy on: the address left to Prat")
+Prat = nil
 out("")
 out(fails .. " failure(s)")

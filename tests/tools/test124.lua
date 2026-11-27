@@ -113,5 +113,32 @@ for _, line in ipairs(db[1]) do if line:find("Restored", 1, true) then check(fal
 out("== Restore chat messages off: its saved chat cleared")
 env = Run({ MaxChatHstory = "On", RestoreChatMessages = "Off" }, saved)
 check(env.ClaraChatHistoryDB == nil, "cleared")
+
+out("== with Prat putting its own history back (its History, Scrollback on): Clara's restore locked, the chat put back once")
+local pa = src:find("-- Prat's chat history put back", 1, true)
+local pb = pa and src:find("\n\t\t\t\t\tend\n", pa, true)
+check(pa and pb, "its lock found")
+if pa and pb then
+  local lockSrc = src:sub(pa, pb + 8)
+  local function Locks(history)
+    local locked = {}
+    local lenv = setmetatable({ L = setmetatable({}, { __index = function(_, k) return k end }),
+      ClaraNS = { PratModule = function(name) if name == "History" and history then return {}, history end end },
+      Lock = function(opt, reason, mod) locked[opt] = reason .. " / " .. tostring(mod) end }, { __index = _G })
+    local lf = assert(loadstring("return function() " .. lockSrc .. " end", "@lock"))()
+    setfenv(lf, lenv)
+    lf()
+    return locked
+  end
+  check(Locks({ on = true, scrollback = true }).RestoreChatMessages == "Cannot be used with Prat / History", "Prat's Scrollback on: Restore chat messages locked")
+  check(Locks({ on = true, scrollback = false }).RestoreChatMessages == nil, "its Scrollback off: Clara's restore as before")
+  check(Locks(nil).RestoreChatMessages == nil, "no Prat: as before")
+  env = Run({ MaxChatHstory = "On", RestoreChatMessages = "On" }, saved, function(e)
+    e.LeaLockList.RestoreChatMessages = "On"
+    e.ChatFrame1:AddMessage("Prat's line put back", 1, 1, 1)
+  end)
+  t = Texts(env.ChatFrame1)
+  check(#t == 1 and t[1] == "Prat's line put back", "locked: only what Prat put back, nothing twice")
+end
 out(string.format("\n%d failure(s)", fails))
 return fails
