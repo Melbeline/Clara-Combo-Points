@@ -61,10 +61,11 @@ check(o:find("|A:raceicon-nightelf-female:14:14:0:-4|a", 1, true) ~= nil, "her h
 local level = o:find("[40]", 1, true)
 local name = o:find("|Hplayer:", 1, true)
 local head = o:find("|A:raceicon", 1, true)
-check(level and name and head and level < name and name < head and o:find("[Lia Moon]|h |A:", 1, true), "the level before the name, the head after it")
+check(level and name and head and level < name and name < head and o:find("[Lia Moon]|h |Haddon:", 1, true), "the level before the name, the head after it")
 check(o:find("^|Haddon:ClaraComboPoints:line:[%x]+%-%d+|h%[19:46:37%]|h |Hchannel:") ~= nil, "the time a link, its space outside")
 local key = o:match("^|H(addon:ClaraComboPoints:line:[^|]+)|h")
 check(key and o:find("|H" .. key .. "|h|cffb8b8b8[40]|r|h", 1, true), "the level the same link")
+check(key and o:find("|H" .. key .. "|h|A:raceicon-nightelf-female:14:14:0:-4|a|h", 1, true), "the head the same link")
 check(ns.ChatLookPlain(o) == "[19:46:37] [Party] [40] [Lia Moon]: re", "the line as copied: " .. ns.ChatLookPlain(o))
 
 out("== a dwarf man's: his head, in his sex; no level known: none")
@@ -119,6 +120,9 @@ local cf = { GetNumMessages = function() return #shown end, GetMessageInfo = fun
 ns.ChatLookClicked(nil, k2, "[19:46:37]", "RightButton", cf)
 check(copied == "[19:46:37] [Party] [40] [Lia Moon]: re", "the right click: " .. tostring(copied))
 copied = nil
+ns.ChatLookClicked(nil, k2, "", "LeftButton", cf)
+check(copied == "[19:46:37] [Party] [40] [Lia Moon]: re", "a click on the head (the same link): the same line")
+copied = nil
 ns.ChatLookClicked(nil, "addon:Other:x", "x", "LeftButton", cf)
 check(copied == nil, "another addon's link: nothing")
 
@@ -131,7 +135,7 @@ pratMods.PlayerNames = PratMod({ on = true, level = true })
 local PRAT = "|cff999999[20:55:24]|r |Hchannel:channel:8|h[8. L2P]|h |cffaaaaaa[|r|Hplayer:Lia-Forever:20:CHANNEL:8|h|cffffff0040|r:|cff0070ddLia Moon|r|h|cffaaaaaa]|r: ouf"
 local p1 = ns.ChatLookBuild(PRAT, args, frame)
 check(not p1:find("[40]", 1, true), "Prat's level shown: Clara's not added: " .. p1)
-check(p1:find("|cffaaaaaa]|r |A:raceicon-nightelf-female", 1, true) ~= nil, "the head after Prat's closing bracket, not inside it")
+check(p1:find("|cffaaaaaa]|r |Haddon:ClaraComboPoints:line:[%x]+%-%d+|h|A:raceicon%-nightelf%-female") ~= nil, "the head after Prat's closing bracket, not inside it")
 check(p1:find("^|Haddon:ClaraComboPoints:line:[%x]+%-%d+|h|cff999999%[20:55:24%]|r|h |Hchannel:") ~= nil, "Prat's time (in its color): the link to copy")
 check(ns.ChatLookPlain(p1) == "[20:55:24] [8. L2P] [40:Lia Moon]: ouf", "copied as shown: " .. ns.ChatLookPlain(p1))
 out("== Prat's level off: Clara's, before Prat's brackets")
