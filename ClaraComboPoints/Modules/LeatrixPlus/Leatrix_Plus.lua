@@ -7499,9 +7499,11 @@
 				return list
 			end
 
-			-- A line back in its window, in its color: at the bottom (AddMessage) or above all the others (BackFillMessage)
-			local function AddLine(chtfrm, line, back)
-				local put = back and chtfrm.BackFillMessage or chtfrm.AddMessage
+			-- A line back in its window, in its color: through the window's AddMessage, or the game's own (raw: no other
+			-- addon's hook on the window run again for a line already made)
+			local RAW = ScrollingMessageFrameMixin and ScrollingMessageFrameMixin.AddMessage
+			local function AddLine(chtfrm, line, raw)
+				local put = raw and RAW or chtfrm.AddMessage
 				local hex, rest = line:match("^|cff(%x%x%x%x%x%x)(.*)$")
 				if hex then
 					put(chtfrm, rest, tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255)
@@ -7525,52 +7527,27 @@
 				ClaraChatHistoryDB = saved
 			end)
 
-			-- Restored as the character logs in: the previous session's lines, then this one's.
-			-- Put back above this session's lines (BackFillMessage), the newest first, a few hundred each frame: thousands of
-			-- lines at once made the game halt seconds after the loading screen, and every other addon's hook on the windows'
-			-- AddMessage ran again for each (the lines are those shown before, already made: nothing to make again).
-			local BATCH = 400
+			-- Restored as the character logs in: the previous session's lines, then this one's. Put back through the game's own
+			-- AddMessage (ScrollingMessageFrameMixin's), not the window's: every other addon's hook on the windows' AddMessage
+			-- ran again for each of thousands of lines already made, and the game halted seconds after the loading screen.
 			local saved = ClaraChatHistoryDB
-			local function Notice(count)
-				return restoredMark .. count .. " " .. (count == 1 and L["message from previous session"] or L["messages from previous session"]) .. ".|r"
-			end
-			local function BackFill(chtfrm, old)
-				local count = 0
-				for k = 1, #old do if type(old[k]) == "string" then count = count + 1 end end
-				chtfrm:BackFillMessage(Notice(count))
-				local k = #old
-				local function Batch()
-					local stop = math.max(1, k - BATCH + 1)
-					ClaraNS.ChatRestoring = true
-					for j = k, stop, -1 do
-						if type(old[j]) == "string" then AddLine(chtfrm, old[j], true) end
-					end
-					ClaraNS.ChatRestoring = nil
-					k = stop - 1
-					if k >= 1 then C_Timer.After(0, Batch) end
-				end
-				Batch()
-			end
 			if type(saved) == "table" then
 				ClaraNS.ChatRestoring = true
 				for i = 1, 50 do
 					local chtfrm = _G["ChatFrame" .. i]
 					local old = saved[i]
-					if i ~= 2 and chtfrm and type(old) == "table" and #old > 0 and FCF_IsChatWindowIndexActive(i) and chtfrm.BackFillMessage and C_Timer then
-						BackFill(chtfrm, old)
-					elseif i ~= 2 and chtfrm and type(old) == "table" and #old > 0 and FCF_IsChatWindowIndexActive(i) then
+					if i ~= 2 and chtfrm and type(old) == "table" and #old > 0 and FCF_IsChatWindowIndexActive(i) then
+						local raw = RAW ~= nil
 						local now = WindowLines(chtfrm)
 						chtfrm:Clear()
 						local count = 0
 						for k = 1, #old do
-							if type(old[k]) == "string" then AddLine(chtfrm, old[k]); count = count + 1 end
+							if type(old[k]) == "string" then AddLine(chtfrm, old[k], raw); count = count + 1 end
 						end
-						if count == 1 then
-							chtfrm:AddMessage(restoredMark .. count .. " " .. L["message from previous session"] .. ".|r")
-						else
-							chtfrm:AddMessage(restoredMark .. count .. " " .. L["messages from previous session"] .. ".|r")
-						end
-						for k = 1, #now do AddLine(chtfrm, now[k]) end
+						-- (the notice as it is, its color in its text: left out when the window is saved)
+						local put = raw and RAW or chtfrm.AddMessage
+						put(chtfrm, restoredMark .. count .. " " .. (count == 1 and L["message from previous session"] or L["messages from previous session"]) .. ".|r")
+						for k = 1, #now do AddLine(chtfrm, now[k], raw) end
 					end
 				end
 				ClaraNS.ChatRestoring = nil
