@@ -117,7 +117,8 @@ function config:InitializeLayout()
     ui:SetScript("OnDragStart", ui.StartMoving)
     ui:SetScript("OnDragStop", ui.StopMovingOrSizing)
 
-    local version = L["Clique-%s"]:format(tostring(addon.version))
+    -- (Clara Combo Points: "Clique-Clara", told apart from the standalone Clique's "Clique-SCM")
+    local version = L["Clique-%s"]:format("Clara")
 
     -- Classic doesn't have these containers
     if ui.PortraitContainer and ui.TitleContainer then
