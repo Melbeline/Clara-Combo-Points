@@ -41,8 +41,6 @@ ns.QOL_MODULES = {
   -- (Melbeline's WaterShieldTracker: Water Shield's charges on its icon, for shamans)
   { key = "watershield", name = "Water Shield Tracker", standalone = "WaterShieldTracker", theme = "combat" },
   { key = "soloraidframe", name = "Solo Raid Frame", standalone = "SoloRaidFrameNV", theme = "combat" },
-  -- (Cladhaire's click-casting; its bindings carried over from the standalone; a binding can be kept off the target frame)
-  { key = "clique", name = "Clique", standalone = "Clique", theme = "combat" },
   { key = "lfgforever", name = "LFG Forever", standalone = "LFGForever", theme = "quests" },
   { key = "enemycasts", name = "Enemy Casts", theme = "combat" }, -- (Clara's own)
   -- its own addon running: the text list is that one's, the rest (icons, search, filter) still ours
