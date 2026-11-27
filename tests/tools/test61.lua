@@ -100,65 +100,73 @@ check(SlashCmdList.CLARAIDTIP and SLASH_CLARAIDTIP1 == "/idtip", "/idtip opens i
 
 out("== Solo Raid Frame")
 check(ns:QolRuns("soloraidframe"), "runs")
--- Never shown by the addon's own code (its frames' updates would run in its name, failing on secret health): the
--- addon arms a secure handler; the game's driver manager sets its state at its next look (secure), and the handler's
--- restricted code registers the frame's own visibility driver, which the game applies (shown solo, its rule in a group)
-local addonShows = 0
-local realShow = CompactPartyFrame.Show
+-- Never shown nor placed by the addon's own code (its frames' updates would run in its name, failing on secret
+-- health): the addon arms a secure handler; the game's driver manager sets its state at each of its passes (secure),
+-- and the handler's restricted code, solo, shows the frame if hidden and places it if it has no point (the game
+-- places it only while it is shown: hidden through every layout since the login, it had none, not drawn though shown)
+local addonShows, addonPoints = 0, 0
+local realShow, realSetPoint = CompactPartyFrame.Show, CompactPartyFrame.SetPoint
 CompactPartyFrame.Show = function(self, ...) addonShows = addonShows + 1 return realShow(self, ...) end
+CompactPartyFrame.SetPoint = function(self, ...) addonPoints = addonPoints + 1 return realSetPoint(self, ...) end
 local D = ns.SoloRaidFrameDriver
 local arm = D and M.stateDrivers[D]
 check(D ~= nil and arm and arm[1] == "arm" and arm[2] == "go", "a secure handler of its own, its state driven by the game (" .. tostring(arm and arm[2]) .. ")")
 check(D and D:GetAttribute("armed") == true and D:GetAttribute("state-arm") == "wait", "armed, its state set back by hand")
-check(M.stateDrivers[CompactPartyFrame] == nil, "no driver put on the frame from the addon's code")
--- the restricted environment: the handler's snippet as the game runs it; its RegisterStateDriver applied at once
--- (the manager applies a driver's value only when it changes: solo, "show" once; a frame hidden after that stays so)
-local secureRuns, lastValue = 0, nil
-local function Visibility()
-  local d = M.stateDrivers[CompactPartyFrame]
-  if not (d and d[1] == "visibility") then return end
-  local value = IsInGroup() and "game" or "show"
-  if value == lastValue then return end
-  lastValue = value
-  if value == "show" then CompactPartyFrame._shown = true elseif value == "hide" then CompactPartyFrame._shown = false end
-end
+check(M.stateDrivers[CompactPartyFrame] == nil, "no driver put on the frame")
+check(D and D:GetAttribute("x") == 2, "the game's left margin for it: 2 (" .. tostring(D and D:GetAttribute("x")) .. ")")
+-- the restricted environment: only what the game gives a snippet (anything else an error)
+local function Points(f) return #(rawget(f, "_points") or {}) end
+local RESTRICTED = { PlayerInCombat = function() return S.inCombat == true end,
+  SecureCmdOptionParse = function(rule)
+    local a, b = rule:match("^%[group%] (%S+); (%S+)$")
+    return IsInGroup() and a or b
+  end }
 local function Snippet(newstate)
-  local handle = { GetAttribute = function(_, k) return D:GetAttribute(k) end, SetAttribute = function(_, k, v) rawset(D, "_attr_" .. k, v) D:SetAttribute(k, v) end,
+  local handle = { GetAttribute = function(_, k) return D:GetAttribute(k) end, SetAttribute = function(_, k, v) D:SetAttribute(k, v) end,
     GetFrameRef = function(_, name)
       local f = D:GetAttribute("frameref-" .. name)
-      -- the restricted code's handle on the protected frame: shown from secure code (not the addon's)
-      return f and { _frame = f, IsShown = function() return f._shown == true end, Show = function() f._shown = true end }
+      -- the handle on the frame: reaches an unprotected frame only out of combat; shows and places it from secure code
+      local function Reach() if S.inCombat and not f._protected then error("Invalid frame handle") end return f end
+      return f and { IsProtected = function() return f._protected == true end,
+        IsShown = function() return Reach()._shown ~= false end, Show = function() Reach()._shown = true end,
+        GetNumPoints = function() return Points(Reach()) end,
+        SetPoint = function(_, p, rel, rp, x, y) assert(rel == "$parent") Reach()._points = { { p, f._parent, rp, x, y } } end }
     end }
-  local env = setmetatable({ self = handle, newstate = newstate,
-    SecureCmdOptionParse = function(rule) return (rule:match("^%[group%] (%S+);") and IsInGroup()) and rule:match("^%[group%] (%S+);") or rule:match("; (%S+)$") end,
-    RegisterStateDriver = function(frame, state, values) M.stateDrivers[frame._frame or frame] = { state, values } lastValue = nil Visibility() end }, { __index = _G })
+  local env = setmetatable({ self = handle, newstate = newstate }, { __index = function(_, k)
+    if RESTRICTED[k] then return RESTRICTED[k] end
+    error("not in the restricted environment: " .. tostring(k))
+  end })
   local fn = assert(loadstring(D:GetAttribute("_onstate-arm")))
   setfenv(fn, env)
   fn()
 end
--- the game's manager at its next look: "go" again, not "wait": set, by the game
+-- the game's manager at each pass: "go", not the value it holds: set, by the game
 local function Tick()
-  secureRuns = secureRuns + 1
   if D:GetAttribute("state-arm") ~= arm[2] then D:SetAttribute("state-arm", arm[2]) Snippet(arm[2]) end
-  Visibility()
 end
 local function Run() local n = 0 while M.timers and #M.timers > 0 and n < 100 do M.RunTimer() n = n + 1 end end
 S.group = nil
+CompactPartyFrame._points = {} -- (just made by the game: no point)
 CompactPartyFrame:UpdateVisibility(); Run()
-check(not CompactPartyFrame:IsShown(), "before the game's look: hidden still (nothing shown by the addon)")
+check(not CompactPartyFrame:IsShown(), "before the game's pass: hidden still (nothing done by the addon's code)")
 Tick()
-local drive = M.stateDrivers[CompactPartyFrame]
-check(drive and drive[1] == "visibility" and drive[2] == "[group] game; show", "the frame's driver registered by the handler's secure code (" .. tostring(drive and drive[2]) .. ")")
 check(CompactPartyFrame:IsShown(), "solo: the raid-style party frame shown (the game had hidden it)")
-check(D:GetAttribute("state-arm") == "wait", "the handler's state set back by its secure code: looked at again at the manager's next look")
-CompactPartyFrame._shown = false -- (hidden again by the game after the driver showed it, as at a login: the driver's value unchanged)
+local p = CompactPartyFrame._points[1]
+check(Points(CompactPartyFrame) == 1 and p[1] == "TOPLEFT" and p[2] == UIParent and p[3] == "TOPLEFT" and p[4] == 2 and p[5] == 0,
+  "never placed by the game: put at its parent's top left, where the game's layout puts it (" .. tostring(p and p[1]) .. " " .. tostring(p and p[4]) .. ")")
+check(D:GetAttribute("reshown") == 1 and D:GetAttribute("placed") == 1, "counted: shown again 1, placed 1")
+check(D:GetAttribute("state-arm") == "wait", "its state set back by its secure code: looked at again at the manager's next pass")
 Tick()
-check(CompactPartyFrame:IsShown() and (D:GetAttribute("reshown") or 0) >= 1, "solo, hidden again by the game: shown again by the handler's secure code ("
-  .. tostring(D:GetAttribute("reshown")) .. ")")
+check(D:GetAttribute("reshown") == 1 and D:GetAttribute("placed") == 1, "shown and placed already: left alone")
+-- the game lays it out itself while it is shown, then hides it (its visibility update, a login, an option changed)
+CompactPartyFrame._points = { { "TOPLEFT", UIParent, "TOPLEFT", 6, 0 } }
+CompactPartyFrame:UpdateVisibility(); Run()
+check(not CompactPartyFrame:IsShown(), "hidden by the game's visibility update")
 Tick()
-check(D:GetAttribute("reshown") == 1, "shown already: left alone (" .. tostring(D:GetAttribute("reshown")) .. ")")
+check(CompactPartyFrame:IsShown() and D:GetAttribute("reshown") == 2, "shown again at the next pass")
+check(CompactPartyFrame._points[1][4] == 6 and D:GetAttribute("placed") == 1, "the game's own place kept")
 local report = ns.SoloRaidFrameReport and ns:SoloRaidFrameReport()
-check(report and report:find("shown again 1 times", 1, true) and report:find("handler made", 1, true), "/cl souris's line: " .. tostring(report))
+check(report and report:find("handler made", 1, true) and report:find("shown again 2 times, placed 1 times", 1, true), "/cl souris's line: " .. tostring(report))
 S.group = "party"
 CompactPartyFrame:UpdateVisibility(); Run(); Tick()
 check(CompactPartyFrame:IsShown(), "in a group: the game's rule")
@@ -167,19 +175,25 @@ check(not CompactPartyFrame:IsShown(), "in a group, the game hiding it (its own 
 S.group = nil; S.inCombat = true
 local blockedBefore = #M.blocked
 CompactPartyFrame._shown = false -- (hidden by the game's own secure code, as the group ends in the fight)
-CompactPartyFrame:UpdateVisibility(); Run(); Tick()
-check(CompactPartyFrame:IsShown(), "left the group in combat: shown again by the game's driver")
+CompactPartyFrame:UpdateVisibility(); Run()
+local ok, e = pcall(Tick)
+check(ok and CompactPartyFrame:IsShown(), "left the group in combat: shown again at the next pass (" .. tostring(e) .. ")")
 local mine = 0
 for i = blockedBefore + 1, #M.blocked do if M.blocked[i]:find("CompactPartyFrame") then mine = mine + 1 end end
 check(mine == 0, "nothing of the addon's refused by the game in the fight")
+CompactPartyFrame._protected = false; CompactPartyFrame._shown = false
+ok, e = pcall(Tick)
+check(ok and not CompactPartyFrame:IsShown(), "in combat, a frame not protected (out of reach then): left alone, no error (" .. tostring(e) .. ")")
+CompactPartyFrame._protected = true
 S.inCombat = false
-M.Fire("PLAYER_REGEN_ENABLED"); Run()
+M.Fire("PLAYER_REGEN_ENABLED"); Run(); Tick()
+check(CompactPartyFrame:IsShown(), "the fight over: shown")
 S.group = "party"; CompactPartyFrame:UpdateVisibility(); Run()
 CompactPartyFrame._shown = false -- (the container's unused group frame hidden: Hide, not UpdateVisibility)
 S.group = nil
 M.Fire("GROUP_ROSTER_UPDATE"); Run(); Tick()
 check(CompactPartyFrame:IsShown(), "hidden directly, the group gone a moment later: shown again")
-check(addonShows == 0, "never shown by the addon's own code (" .. addonShows .. ")")
+check(addonShows == 0 and addonPoints == 0, "never shown nor placed by the addon's own code (" .. addonShows .. ", " .. addonPoints .. ")")
 
 out("")
 out(fails .. " failure(s)")
