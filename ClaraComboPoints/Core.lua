@@ -2526,7 +2526,7 @@ SlashCmdList.CLARARELOAD = function()
 end
 
 -- /cl lock, unlock, hide, show, scale and reset pos act without a word in the chat (what they do
--- shows); only help and debug write there, asked for, and scan and hunt (a name added or set), and perf (its result).
+-- shows); only help and debug write there, asked for, and scan and hunt (a name added or set).
 SLASH_CLARACOMBOPOINTS1 = "/clara"
 SLASH_CLARACOMBOPOINTS2 = "/cl"
 SLASH_CLARACOMBOPOINTS3 = "/ccp"
@@ -2564,8 +2564,6 @@ SlashCmdList.CLARACOMBOPOINTS = function(msg)
     Print(L.HELP)
   elseif cmd == "souris" or cmd == "mouse" or cmd == "maus" then
     ns:MouseReportSoon()
-  elseif (cmd == "perf" or cmd == "lag") and ns.PerfWatch then
-    ns.PerfWatch(arg)
   elseif cmd == "chat" then
     local ok, err = xpcall(function() ns:ChatReport() end, function(e) return tostring(e) end)
     if not ok then Print("/cl chat: " .. tostring(err)) end
