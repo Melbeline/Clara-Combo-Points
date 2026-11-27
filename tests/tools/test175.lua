@@ -60,8 +60,10 @@ for k in pairs(said) do said[k] = nil end
 SlashCmdList.CLARACOMBOPOINTS("perf chargement")
 check(said[#said] == "|cffffd200Clara|r: " .. ns.L.PERF_LOAD_ARMED and ClaraComboPointsDB.perfLoad == true, "armed, kept: " .. tostring(said[#said]))
 check(not ns.PerfLoader:IsShown(), "nothing watched before the loading screen")
+now = 200
 M.Fire("LOADING_SCREEN_ENABLED")
 check(ns.PerfLoader:IsShown(), "the loading screen shown: watched")
+check(said[#said] == "|cffffd200Clara|r: " .. ns.L.PERF_LOAD_START, "said as it starts: " .. tostring(said[#said]))
 local load = ns.PerfLoader:GetScript("OnUpdate")
 -- frames during and after the loading: each addon's time in each
 local seen = { { Questie = 180, Details = 3 }, { Questie = 420, ClaraComboPoints = 12 }, { ClaraComboPoints = 2 } }
@@ -75,7 +77,7 @@ now = 203.5; load(ns.PerfLoader)
 check(ns.PerfLoader:IsShown(), "a second after it still watched")
 now = 206; load(ns.PerfLoader)
 local all2 = table.concat(said, "\n")
-check(all2:find("loading screen measured: 4.2 s; the addons took 7", 1, true) ~= nil, "its length and the addons' time in all: " .. tostring(said[2]))
+check(all2:find("loading screen measured: 4.2 s; the addons took 7", 1, true) ~= nil, "its length and the addons' time in all: " .. tostring(said[3]))
 local q2 = all2:find("1. Questie: 720 ms, its slowest frame 420 ms, 2 frames over 100 ms", 1, true)
 local c2 = all2:find("2. ClaraComboPoints: 14 ms, its slowest frame 12 ms, 0 frames over 100 ms", 1, true)
 check(q2 and c2 and q2 < c2, "the costliest first: the game's count when bigger (Questie), the frames summed when bigger (Clara)")
@@ -89,13 +91,31 @@ SlashCmdList.CLARACOMBOPOINTS("perf load")
 metric[4].Questie = 420; metric[9].Questie = 4
 M.Fire("PLAYER_LOGOUT")
 check(type(ClaraComboPointsDB.perfLoadBase) == "table" and ClaraComboPointsDB.perfLoadBase.Questie.peak == 420, "where things stood kept for the reload")
+now = 299
 M.Fire("PLAYER_LOGIN")
 check(ns.PerfLoader:IsShown(), "the login watched")
+check(said[#said] == "|cffffd200Clara|r: " .. ns.L.PERF_LOAD_LOGIN_START, "said as it starts: " .. tostring(said[#said]))
 metric[3] = { Questie = 30 }; now = 300; load(ns.PerfLoader)
 metric[1] = { Questie = 0.5 }
 M.Fire("LOADING_SCREEN_DISABLED")
 metric[3] = {}; now = 302; load(ns.PerfLoader)
 all2 = table.concat(said, "\n")
+out("== the loading screen's end not seen (gone before Clara was there): over a few seconds after the world entered")
+SlashCmdList.CLARACOMBOPOINTS("perf load")
+now = 400
+M.Fire("PLAYER_LOGIN")
+M.Fire("PLAYER_ENTERING_WORLD", false, true)
+now = 401; load(ns.PerfLoader)
+check(ns.PerfLoader:IsShown(), "still watched just after")
+for _ = 1, #(M.timers or {}) do M.RunTimer() end -- (the world's few seconds)
+now = 404.5; load(ns.PerfLoader)
+check(not ns.PerfLoader:IsShown() and said[#said - 1]:find("login measured", 1, true) ~= nil, "measured a few seconds after the world entered: " .. tostring(said[#said - 1]))
+out("== a measure never runs past a minute")
+SlashCmdList.CLARACOMBOPOINTS("perf load")
+now = 500
+M.Fire("LOADING_SCREEN_ENABLED")
+now = 561; load(ns.PerfLoader)
+check(not ns.PerfLoader:IsShown(), "stopped after a minute, said all the same")
 check(all2:find("login measured: the addons took 30 ms", 1, true) ~= nil and all2:find("1. Questie: 30 ms, its slowest frame 30 ms, 0 frames over 100 ms", 1, true) ~= nil,
   "the login's own: its slowest frame not the older one: " .. all2)
 print = oldPrint
