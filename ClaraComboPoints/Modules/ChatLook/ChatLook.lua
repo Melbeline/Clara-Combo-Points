@@ -1,6 +1,6 @@
 -- Clara Combo Points - Chat look: in a player's chat line, the small head of their race in their sex after their name
--- (a night elf woman's, a dwarf man's...), their level before it in its difficulty color ([40]), and the line's time
--- and level clickable: a click (right or left) shows the whole line selected in the small copy box (time, channel,
+-- (a night elf woman's, a dwarf man's...), their level before it in its difficulty color ([40]), and the line's time,
+-- level and head clickable: a click (right or left) shows the whole line selected in the small copy box (time, channel,
 -- level, name and what they wrote). Each part has its box on the module's card (Interface; in Clara's Improvements tab
 -- too): the level and the copy on by default; the head off by default, on by default on the owner's own accounts
 -- (ICKSTU, WANJ and the WoW1 linked to them on the same computer: the gold tracker knows them by their folders'
@@ -167,7 +167,7 @@ local function Head(race, sex, frame)
 end
 
 ---------------------------------------------------------------------------
--- The line changed in place: its head, its level, its time and level clickable
+-- The line changed in place: its head, its level, its time, level and head clickable
 ---------------------------------------------------------------------------
 -- A line as it reads, without the game's markup
 local function PlainLine(text)
@@ -238,6 +238,7 @@ local function Build(text, eventArgs, frame)
   local levelText = level and LevelText(level) or nil
   if levelText and key then levelText = "|H" .. key .. "|h" .. levelText .. "|h" end
   local head = On("heads") and not shownHead and Head(race, sex, frame) or nil
+  if head and key then head = "|H" .. key .. "|h" .. head .. "|h" end
   local out = before .. (levelText and (levelText .. " ") or "") .. link .. (head and (" " .. head) or "") .. after
   if key then
     local n = Stamp(out) or LeadStamp(out)
@@ -310,7 +311,7 @@ if FCF_OpenTemporaryWindow then hooksecurefunc("FCF_OpenTemporaryWindow", HookAl
 if FCF_OpenNewWindow then hooksecurefunc("FCF_OpenNewWindow", HookAll) end
 
 ---------------------------------------------------------------------------
--- A click on the time or the level: the whole line, selected to copy
+-- A click on the time, the level or the head: the whole line, selected to copy
 ---------------------------------------------------------------------------
 local function Find(link, frame)
   local needle = "|H" .. link .. "|h"
