@@ -1075,6 +1075,10 @@ end
 M.TEMPLATES.InputBoxTemplate = function(e)
   e.Left, e.Middle, e.Right = tex(e), tex(e), tex(e)
 end
+M.TEMPLATES.InputBoxInstructionsTemplate = function(e) -- (the game's input box with its grey hint while empty)
+  e.Left, e.Middle, e.Right = tex(e), tex(e), tex(e)
+  e.Instructions = e:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+end
 M.TEMPLATES.CooldownFrameTemplate = function(c) c:SetAllPoints(c._parent) end
 -- the game's secure action button: a click casts what its attributes say (M.casts)
 M.TEMPLATES.SecureHandlerStateTemplate = function(f) f._protected = true end -- (its _onstate-<name> snippets: test61)

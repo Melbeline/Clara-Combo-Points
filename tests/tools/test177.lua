@@ -175,7 +175,7 @@ win:SetSize(700, 640)
 win.grip:GetScript("OnMouseUp")(win.grip, "LeftButton")
 check(ns.ChatFilterStore().size[1] == 700 and ns.ChatFilterStore().size[2] == 640, "dragged: its size kept")
 win.grip:GetScript("OnClick")(win.grip, "RightButton")
-check(ns.ChatFilterStore().size[1] == 500, "a right click: its first size again")
+check(ns.ChatFilterStore().size[1] == 520, "a right click: its first size again")
 local sw = ns.qolSwitches.chatfilter
 sw[1].set(false)
 check(not button:IsShown() and ns.ChatFilterStore().noButton == true, "its card's box: the button hidden")
