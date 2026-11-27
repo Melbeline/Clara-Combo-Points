@@ -6,8 +6,8 @@
 -- "interested" alone); "inside other words" ticked, anywhere. The raid symbols ({rt8}, {skull}, {crâne}...) count as
 -- one: added with its buttons, a symbol matches every way of writing it.
 -- Also, each with its box: the same message from the same player again within a minute (the copies hidden), the
--- lines in Cyrillic, the lines in Chinese. Public channels, say, yell, emotes and whispers by default; group, raid,
--- guild and communities with their box.
+-- lines in Cyrillic, the lines in Chinese. Public channels, say, yell and emotes always; whispers (on by default),
+-- group, raid, guild and communities each with its own box.
 -- Its window, from the button under the chat's channel button (right-click: the blacklist turned off or on): a box to
 -- write in, the eight raid symbols to put in it, the list (each word with its box, its count of lines hidden, a click
 -- to change it, its cross to take it out), the options, and the lines hidden lately (a click: the line to copy).
@@ -61,7 +61,8 @@ local FOLD = {
 local LEET = { ["0"] = "o", ["1"] = "i", ["3"] = "e", ["4"] = "a", ["5"] = "s", ["7"] = "t", ["@"] = "a", ["$"] = "s" }
 
 ---------------------------------------------------------------------------
--- The settings: { words = { { text, variants, inword, off, hits } }, repeats, cyrillic, chinese, group, off }
+-- The settings: { words = { { text, variants, inword, off, hits } }, repeats, cyrillic, chinese, whisper (false: not
+-- filtered), party, raid, guild, communities, off }
 ---------------------------------------------------------------------------
 local function Store()
   local sv = ns.sv
@@ -69,6 +70,9 @@ local function Store()
   if type(sv.chatFilter) ~= "table" then sv.chatFilter = {} end
   local s = sv.chatFilter
   if type(s.words) ~= "table" then s.words = {} end
+  if s.group then -- (the first version's one box for all of them)
+    s.party, s.raid, s.guild, s.communities, s.group = true, true, true, true, nil
+  end
   return s
 end
 ns.ChatFilterStore = Store -- (for the tests)
@@ -187,11 +191,18 @@ end
 ---------------------------------------------------------------------------
 -- The filter
 ---------------------------------------------------------------------------
-local PUBLIC = { CHAT_MSG_CHANNEL = true, CHAT_MSG_SAY = true, CHAT_MSG_YELL = true, CHAT_MSG_EMOTE = true,
-  CHAT_MSG_TEXT_EMOTE = true, CHAT_MSG_WHISPER = true }
-local GROUP = { CHAT_MSG_PARTY = true, CHAT_MSG_PARTY_LEADER = true, CHAT_MSG_RAID = true, CHAT_MSG_RAID_LEADER = true,
-  CHAT_MSG_RAID_WARNING = true, CHAT_MSG_INSTANCE_CHAT = true, CHAT_MSG_INSTANCE_CHAT_LEADER = true,
-  CHAT_MSG_GUILD = true, CHAT_MSG_OFFICER = true, CHAT_MSG_COMMUNITIES_CHANNEL = true }
+-- Each chat and the box it goes by (public: always)
+local SCOPE = { CHAT_MSG_CHANNEL = "public", CHAT_MSG_SAY = "public", CHAT_MSG_YELL = "public", CHAT_MSG_EMOTE = "public",
+  CHAT_MSG_TEXT_EMOTE = "public", CHAT_MSG_WHISPER = "whisper",
+  CHAT_MSG_PARTY = "party", CHAT_MSG_PARTY_LEADER = "party", CHAT_MSG_INSTANCE_CHAT = "party", CHAT_MSG_INSTANCE_CHAT_LEADER = "party",
+  CHAT_MSG_RAID = "raid", CHAT_MSG_RAID_LEADER = "raid", CHAT_MSG_RAID_WARNING = "raid",
+  CHAT_MSG_GUILD = "guild", CHAT_MSG_OFFICER = "guild", CHAT_MSG_COMMUNITIES_CHANNEL = "communities" }
+local function Covered(s, event)
+  local scope = SCOPE[event]
+  if scope == "public" then return true end
+  if scope == "whisper" then return s.whisper ~= false end
+  return scope ~= nil and s[scope] == true
+end
 local REPEAT = 60 -- seconds: the same message from the same player again, hidden
 local seen = {}   -- player .. message -> when last seen
 local hidden = {} -- the lines hidden lately (newest last): { at, who, text, why, where }
@@ -216,7 +227,7 @@ end
 local function Decide(event, message, author, flags, guid)
   local s = Store()
   if s.off then return nil end
-  if not (PUBLIC[event] or (s.group and GROUP[event])) then return nil end
+  if not Covered(s, event) then return nil end
   if flags == "GM" or flags == "DEV" or Friend(guid) then return nil end
   local raw = Clean(message)
   if s.cyrillic and Cyrillic(raw) then return "cyrillic" end
@@ -330,7 +341,7 @@ local ROW_H, ROWS = 22, 11
 local function Build()
   if win then return win end
   win = CreateFrame("Frame", "ClaraChatFilter", UIParent, "BackdropTemplate")
-  win:SetSize(440, 520)
+  win:SetSize(500, 530)
   win:SetPoint("CENTER")
   win:SetFrameStrata("DIALOG")
   win:SetToplevel(true)
@@ -352,11 +363,16 @@ local function Build()
   title:SetText(L.CF_TITLE)
   local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -2, -2)
-  if ns.DressDialog then ns:DressDialog(win, { close = close }) end
+  -- (an opaque ground under the dialog's own fill: the world not seen through it)
+  local ground = win:CreateTexture(nil, "BACKGROUND", nil, -7)
+  ground:SetColorTexture(0.03, 0.03, 0.04, 0.93)
+  ground:SetPoint("TOPLEFT", 6, -6)
+  ground:SetPoint("BOTTOMRIGHT", -6, 6)
+  if ns.DressDialog then ns:DressDialog(win, { close = close, fill = true, dark = true }) end
 
   -- the box to write in, Add (Save while a word is changed), Cancel
   local box = CreateFrame("EditBox", nil, win, "InputBoxTemplate")
-  box:SetSize(300, 22)
+  box:SetSize(360, 22)
   box:SetPoint("TOPLEFT", 20, -40)
   box:SetAutoFocus(false)
   box:SetMaxLetters(120)
@@ -421,9 +437,9 @@ local function Build()
   win.header = header
   local scroll = CreateFrame("ScrollFrame", nil, win, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 12, listTop - 14)
-  scroll:SetSize(380, ROW_H * ROWS)
+  scroll:SetSize(440, ROW_H * ROWS)
   local content = CreateFrame("Frame", nil, scroll)
-  content:SetSize(380, ROW_H)
+  content:SetSize(440, ROW_H)
   scroll:SetScrollChild(content)
   win.scroll, win.content = scroll, content
   win.rows = {}
@@ -431,7 +447,7 @@ local function Build()
     local row = win.rows[i]
     if row then return row end
     row = CreateFrame("Button", nil, content)
-    row:SetSize(380, ROW_H)
+    row:SetSize(440, ROW_H)
     row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(i - 1) * ROW_H)
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     row.on = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
@@ -476,9 +492,27 @@ local function Build()
   local y = listTop - 18 - ROW_H * ROWS - 6
   local s = Store
   win.optRepeats = Check(win, L.CF_REPEATS, 16, y, function() return s().repeats end, function(on) s().repeats = on or nil end)
-  win.optGroup = Check(win, L.CF_GROUP, 220, y, function() return s().group end, function(on) s().group = on or nil end)
-  win.optCyrillic = Check(win, L.CF_CYRILLIC, 16, y - 22, function() return s().cyrillic end, function(on) s().cyrillic = on or nil end)
-  win.optChinese = Check(win, L.CF_CHINESE, 220, y - 22, function() return s().chinese end, function(on) s().chinese = on or nil end)
+  win.optCyrillic = Check(win, L.CF_CYRILLIC, 186, y, function() return s().cyrillic end, function(on) s().cyrillic = on or nil end)
+  win.optChinese = Check(win, L.CF_CHINESE, 336, y, function() return s().chinese end, function(on) s().chinese = on or nil end)
+  -- (the chats filtered besides the public ones, each on its own)
+  local also = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  also:SetPoint("TOPLEFT", 18, y - 30)
+  also:SetText(L.CF_ALSO)
+  local function Scope(key, label, x)
+    return Check(win, label, x, y - 44, function()
+      if key == "whisper" then return s().whisper ~= false end
+      return s()[key] == true
+    end, function(on)
+      if key ~= "whisper" then s()[key] = on or nil
+      elseif on then s().whisper = nil
+      else s().whisper = false end
+    end)
+  end
+  win.optWhisper = Scope("whisper", L.CF_WHISPER, 16)
+  win.optParty = Scope("party", L.CF_PARTY, 136)
+  win.optRaid = Scope("raid", L.CF_RAID, 226)
+  win.optGuild = Scope("guild", L.CF_GUILD, 306)
+  win.optCommunities = Scope("communities", L.CF_COMMUNITIES, 386)
 
   -- the lines hidden lately: a click, the line to copy
   local recent = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
@@ -557,8 +591,7 @@ if not ns:QolRuns("chatfilter") then return end
 
 local AddFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
 if AddFilter then
-  for event in pairs(PUBLIC) do pcall(AddFilter, event, Filter) end
-  for event in pairs(GROUP) do pcall(AddFilter, event, Filter) end
+  for event in pairs(SCOPE) do pcall(AddFilter, event, Filter) end
 end
 if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(300, Forget) end
 
