@@ -112,18 +112,26 @@ check(D ~= nil and arm and arm[1] == "arm" and arm[2] == "go", "a secure handler
 check(D and D:GetAttribute("armed") == true and D:GetAttribute("state-arm") == "wait", "armed, its state set back by hand")
 check(M.stateDrivers[CompactPartyFrame] == nil, "no driver put on the frame from the addon's code")
 -- the restricted environment: the handler's snippet as the game runs it; its RegisterStateDriver applied at once
-local secureRuns = 0
+-- (the manager applies a driver's value only when it changes: solo, "show" once; a frame hidden after that stays so)
+local secureRuns, lastValue = 0, nil
 local function Visibility()
   local d = M.stateDrivers[CompactPartyFrame]
   if not (d and d[1] == "visibility") then return end
   local value = IsInGroup() and "game" or "show"
+  if value == lastValue then return end
+  lastValue = value
   if value == "show" then CompactPartyFrame._shown = true elseif value == "hide" then CompactPartyFrame._shown = false end
 end
 local function Snippet(newstate)
   local handle = { GetAttribute = function(_, k) return D:GetAttribute(k) end, SetAttribute = function(_, k, v) rawset(D, "_attr_" .. k, v) D:SetAttribute(k, v) end,
-    GetFrameRef = function(_, name) return D:GetAttribute("frameref-" .. name) end }
+    GetFrameRef = function(_, name)
+      local f = D:GetAttribute("frameref-" .. name)
+      -- the restricted code's handle on the protected frame: shown from secure code (not the addon's)
+      return f and { _frame = f, IsShown = function() return f._shown == true end, Show = function() f._shown = true end }
+    end }
   local env = setmetatable({ self = handle, newstate = newstate,
-    RegisterStateDriver = function(frame, state, values) M.stateDrivers[frame] = { state, values } Visibility() end }, { __index = _G })
+    SecureCmdOptionParse = function(rule) return (rule:match("^%[group%] (%S+);") and IsInGroup()) and rule:match("^%[group%] (%S+);") or rule:match("; (%S+)$") end,
+    RegisterStateDriver = function(frame, state, values) M.stateDrivers[frame._frame or frame] = { state, values } lastValue = nil Visibility() end }, { __index = _G })
   local fn = assert(loadstring(D:GetAttribute("_onstate-arm")))
   setfenv(fn, env)
   fn()
@@ -142,6 +150,15 @@ Tick()
 local drive = M.stateDrivers[CompactPartyFrame]
 check(drive and drive[1] == "visibility" and drive[2] == "[group] game; show", "the frame's driver registered by the handler's secure code (" .. tostring(drive and drive[2]) .. ")")
 check(CompactPartyFrame:IsShown(), "solo: the raid-style party frame shown (the game had hidden it)")
+check(D:GetAttribute("state-arm") == "wait", "the handler's state set back by its secure code: looked at again at the manager's next look")
+CompactPartyFrame._shown = false -- (hidden again by the game after the driver showed it, as at a login: the driver's value unchanged)
+Tick()
+check(CompactPartyFrame:IsShown() and (D:GetAttribute("reshown") or 0) >= 1, "solo, hidden again by the game: shown again by the handler's secure code ("
+  .. tostring(D:GetAttribute("reshown")) .. ")")
+Tick()
+check(D:GetAttribute("reshown") == 1, "shown already: left alone (" .. tostring(D:GetAttribute("reshown")) .. ")")
+local report = ns.SoloRaidFrameReport and ns:SoloRaidFrameReport()
+check(report and report:find("shown again 1 times", 1, true) and report:find("handler made", 1, true), "/cl souris's line: " .. tostring(report))
 S.group = "party"
 CompactPartyFrame:UpdateVisibility(); Run(); Tick()
 check(CompactPartyFrame:IsShown(), "in a group: the game's rule")
