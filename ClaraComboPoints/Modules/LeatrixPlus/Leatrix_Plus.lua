@@ -9132,6 +9132,147 @@
 				return strmatch(TaxiNodeName(i), "[^,]+")
 			end
 
+			local RememberFlight
+			-- The flight in progress, kept for a reload or a relog during it (Clara Combo Points): each character its own, in
+			-- Clara's saved settings (flightBars, by the character's GUID): where to, how long, when it began (the game's clock
+			-- since the computer started, to the hundredth, and the server's, to the second: the first when still the same, the
+			-- second after the game was restarted)
+			local function FlightStore()
+				local sv, me = ClaraNS.sv, UnitGUID("player")
+				if type(sv) ~= "table" or not me then return nil end
+				sv.flightBars = type(sv.flightBars) == "table" and sv.flightBars or {}
+				return sv.flightBars, me
+			end
+			RememberFlight = function(barName, duration, since)
+				local store, me = FlightStore()
+				if not store then return end
+				since = since or { up = GetTime(), wall = GetServerTime() }
+				store[me] = { dest = barName, total = duration, up = since.up, wall = since.wall }
+			end
+			local function ForgetFlight()
+				local store, me = FlightStore()
+				if store then store[me] = nil end
+			end
+			-- Seconds since the flight began: the game's clock when it still runs from the same start (a reload, a relog), else the
+			-- server's (the game restarted)
+			local function FlightElapsed(saved)
+				local up = type(saved.up) == "number" and GetTime() - saved.up or nil
+				local wall = type(saved.wall) == "number" and GetServerTime() - saved.wall or nil
+				if up and up >= 0 and (not wall or math.abs(up - wall) <= 3) then return up end
+				return wall
+			end
+
+			-- The flight's progress bar (Clara Combo Points: made here, for a new flight and for one put back after a reload or
+			-- a relog during the flight; remaining and since given for that one: the time left, when the flight began)
+			local function StartFlightBar(duration, barName, remaining, since)
+				-- Delete an existing progress bar if one exists
+				if LeaPlusLC.FlightProgressBar then
+					LeaPlusLC.FlightProgressBar:Stop()
+					LeaPlusLC.FlightProgressBar = nil
+				end
+
+				-- Create progress bar
+				local mybar = candy:New(texture, 230, 16)
+				mybar:SetPoint(LeaPlusLC["FlightBarA"], UIParent, LeaPlusLC["FlightBarR"], LeaPlusLC["FlightBarX"], LeaPlusLC["FlightBarY"])
+				mybar:SetScale(LeaPlusLC["FlightBarScale"])
+				mybar:SetWidth(LeaPlusLC["FlightBarWidth"])
+
+				-- Setup sound files
+				local mt
+				local Seconds600, Seconds540, Seconds480, Seconds420, Seconds360
+				local Seconds300, Seconds240, Seconds180, Seconds120, Seconds060
+				local Seconds030, Seconds020, Seconds010
+				local speed = -2
+
+				if LeaPlusLC["FlightBarSpeech"] == "On" then
+					if not remaining then C_Timer.After(1, function()
+						C_VoiceChat.SpeakText(0, L["Flight commenced."], speed, GetCVar("Sound_MasterVolume") * 100)
+					end) end
+					mybar:AddUpdateFunction(function(bar)
+						mt = bar.remaining
+							if mt > 600 and mt < 601 and not Seconds600 then Seconds600 = true; C_VoiceChat.SpeakText(0, L["Ten minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 540 and mt < 541 and not Seconds540 then Seconds540 = true; C_VoiceChat.SpeakText(0, L["Nine minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 480 and mt < 481 and not Seconds480 then Seconds480 = true; C_VoiceChat.SpeakText(0, L["Eight minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 420 and mt < 421 and not Seconds420 then Seconds420 = true; C_VoiceChat.SpeakText(0, L["Seven minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 360 and mt < 361 and not Seconds360 then Seconds360 = true; C_VoiceChat.SpeakText(0, L["Six minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 300 and mt < 301 and not Seconds300 then Seconds300 = true; C_VoiceChat.SpeakText(0, L["Five minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 240 and mt < 241 and not Seconds240 then Seconds240 = true; C_VoiceChat.SpeakText(0, L["Four minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 180 and mt < 181 and not Seconds180 then Seconds180 = true; C_VoiceChat.SpeakText(0, L["Three minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 120 and mt < 121 and not Seconds120 then Seconds120 = true; C_VoiceChat.SpeakText(0, L["Two minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 060 and mt < 061 and not Seconds060 then Seconds060 = true; C_VoiceChat.SpeakText(0, L["One minute"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 030 and mt < 031 and not Seconds030 then Seconds030 = true; C_VoiceChat.SpeakText(0, L["Thirty seconds"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 020 and mt < 021 and not Seconds020 then Seconds020 = true; C_VoiceChat.SpeakText(0, L["Twenty seconds"], speed, GetCVar("Sound_MasterVolume") * 100)
+						elseif mt > 010 and mt < 011 and not Seconds010 then Seconds010 = true; C_VoiceChat.SpeakText(0, L["Ten seconds"], speed, GetCVar("Sound_MasterVolume") * 100)
+						end
+					end)
+				end
+
+				if faction == "Alliance" then
+					mybar:SetColor(0, 0.5, 1, 0.5)
+				else
+					mybar:SetColor(1, 0.0, 0, 0.5)
+				end
+				mybar:SetShadowColor(0, 0, 0, 0.5)
+
+				mybar:SetScript("OnMouseDown", function(self, btn)
+					if btn == "RightButton" then
+						mybar:Stop()
+						LeaPlusLC.FlightProgressBar = nil
+					end
+				end)
+
+				-- Set bar label width
+				-- barName = "SupercalifragilisticexpialidociousDociousaliexpisticfragicalirupus" -- Debug
+				mybar.candyBarLabel:ClearAllPoints()
+				mybar.candyBarLabel:SetPoint("TOPLEFT", mybar.candyBarBackground, "TOPLEFT", 2, 0)
+				mybar.candyBarLabel:SetPoint("BOTTOMRIGHT", mybar.candyBarBackground, "BOTTOMRIGHT", -40, 0)
+
+				-- Set flight bar background
+				if LeaPlusLC["FlightBarBackground"] == "On" then
+					if LeaPlusLC.ElvUI then
+						_G.LeaPlusGlobalFlightBar = mybar.candyBarBar
+						if faction == "Alliance" then
+							LeaPlusLC.ElvUI:GetModule("Skins"):HandleStatusBar(_G.LeaPlusGlobalFlightBar, {0, 0.5, 1, 0.5})
+						else
+							LeaPlusLC.ElvUI:GetModule("Skins"):HandleStatusBar(_G.LeaPlusGlobalFlightBar, {1, 0.0, 0, 0.5})
+						end
+					else
+						mybar:SetTexture(texture)
+					end
+				else
+					mybar:SetTexture("")
+				end
+
+				-- Set flight bar destination
+				if LeaPlusLC["FlightBarDestination"] == "On" then
+					mybar:SetLabel(barName)
+				end
+
+				-- Set flight bar fill mode
+				if LeaPlusLC["FlightBarFillBar"] == "On" then
+					mybar:SetFill(true)
+				else
+					mybar:SetFill(false)
+				end
+
+				mybar:EnableMouse(false)
+				-- (a flight taken before a reload or a relog: the time left, the bar as far along as the flight)
+				mybar:SetDuration(remaining or duration)
+				mybar:Start(remaining and duration or nil)
+
+				-- Unlock close bar button
+				if LeaPlusCB["CloseFlightBarButton"] then
+					LeaPlusLC:LockItem(LeaPlusCB["CloseFlightBarButton"], false)
+				end
+
+				-- Assign file level scope to the bar so it can be cancelled later
+				LeaPlusLC.FlightProgressBar = mybar
+
+				-- Kept for a reload or a relog during the flight (Clara Combo Points)
+				mybar.claraFlight = true
+				RememberFlight(barName, duration, since)
+			end
+
 			-- Show progress bar when flight is taken
 			hooksecurefunc("TakeTaxiNode", function(node)
 				if UnitAffectingCombat("player") then return end
@@ -9255,107 +9396,7 @@
 								-- Frequent Flier flights are faster
 								if frequentFlier then duration = duration / frequentFlierSpeed end
 
-								-- Delete an existing progress bar if one exists
-								if LeaPlusLC.FlightProgressBar then
-									LeaPlusLC.FlightProgressBar:Stop()
-									LeaPlusLC.FlightProgressBar = nil
-								end
-
-								-- Create progress bar
-								local mybar = candy:New(texture, 230, 16)
-								mybar:SetPoint(LeaPlusLC["FlightBarA"], UIParent, LeaPlusLC["FlightBarR"], LeaPlusLC["FlightBarX"], LeaPlusLC["FlightBarY"])
-								mybar:SetScale(LeaPlusLC["FlightBarScale"])
-								mybar:SetWidth(LeaPlusLC["FlightBarWidth"])
-
-								-- Setup sound files
-								local mt
-								local Seconds600, Seconds540, Seconds480, Seconds420, Seconds360
-								local Seconds300, Seconds240, Seconds180, Seconds120, Seconds060
-								local Seconds030, Seconds020, Seconds010
-								local speed = -2
-
-								if LeaPlusLC["FlightBarSpeech"] == "On" then
-									C_Timer.After(1, function()
-										C_VoiceChat.SpeakText(0, L["Flight commenced."], speed, GetCVar("Sound_MasterVolume") * 100)
-									end)
-									mybar:AddUpdateFunction(function(bar)
-										mt = bar.remaining
-											if mt > 600 and mt < 601 and not Seconds600 then Seconds600 = true; C_VoiceChat.SpeakText(0, L["Ten minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 540 and mt < 541 and not Seconds540 then Seconds540 = true; C_VoiceChat.SpeakText(0, L["Nine minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 480 and mt < 481 and not Seconds480 then Seconds480 = true; C_VoiceChat.SpeakText(0, L["Eight minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 420 and mt < 421 and not Seconds420 then Seconds420 = true; C_VoiceChat.SpeakText(0, L["Seven minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 360 and mt < 361 and not Seconds360 then Seconds360 = true; C_VoiceChat.SpeakText(0, L["Six minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 300 and mt < 301 and not Seconds300 then Seconds300 = true; C_VoiceChat.SpeakText(0, L["Five minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 240 and mt < 241 and not Seconds240 then Seconds240 = true; C_VoiceChat.SpeakText(0, L["Four minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 180 and mt < 181 and not Seconds180 then Seconds180 = true; C_VoiceChat.SpeakText(0, L["Three minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 120 and mt < 121 and not Seconds120 then Seconds120 = true; C_VoiceChat.SpeakText(0, L["Two minutes"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 060 and mt < 061 and not Seconds060 then Seconds060 = true; C_VoiceChat.SpeakText(0, L["One minute"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 030 and mt < 031 and not Seconds030 then Seconds030 = true; C_VoiceChat.SpeakText(0, L["Thirty seconds"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 020 and mt < 021 and not Seconds020 then Seconds020 = true; C_VoiceChat.SpeakText(0, L["Twenty seconds"], speed, GetCVar("Sound_MasterVolume") * 100)
-										elseif mt > 010 and mt < 011 and not Seconds010 then Seconds010 = true; C_VoiceChat.SpeakText(0, L["Ten seconds"], speed, GetCVar("Sound_MasterVolume") * 100)
-										end
-									end)
-								end
-
-								if faction == "Alliance" then
-									mybar:SetColor(0, 0.5, 1, 0.5)
-								else
-									mybar:SetColor(1, 0.0, 0, 0.5)
-								end
-								mybar:SetShadowColor(0, 0, 0, 0.5)
-
-								mybar:SetScript("OnMouseDown", function(self, btn)
-									if btn == "RightButton" then
-										mybar:Stop()
-										LeaPlusLC.FlightProgressBar = nil
-									end
-								end)
-
-								-- Set bar label width
-								-- barName = "SupercalifragilisticexpialidociousDociousaliexpisticfragicalirupus" -- Debug
-								mybar.candyBarLabel:ClearAllPoints()
-								mybar.candyBarLabel:SetPoint("TOPLEFT", mybar.candyBarBackground, "TOPLEFT", 2, 0)
-								mybar.candyBarLabel:SetPoint("BOTTOMRIGHT", mybar.candyBarBackground, "BOTTOMRIGHT", -40, 0)
-
-								-- Set flight bar background
-								if LeaPlusLC["FlightBarBackground"] == "On" then
-									if LeaPlusLC.ElvUI then
-										_G.LeaPlusGlobalFlightBar = mybar.candyBarBar
-										if faction == "Alliance" then
-											LeaPlusLC.ElvUI:GetModule("Skins"):HandleStatusBar(_G.LeaPlusGlobalFlightBar, {0, 0.5, 1, 0.5})
-										else
-											LeaPlusLC.ElvUI:GetModule("Skins"):HandleStatusBar(_G.LeaPlusGlobalFlightBar, {1, 0.0, 0, 0.5})
-										end
-									else
-										mybar:SetTexture(texture)
-									end
-								else
-									mybar:SetTexture("")
-								end
-
-								-- Set flight bar destination
-								if LeaPlusLC["FlightBarDestination"] == "On" then
-									mybar:SetLabel(barName)
-								end
-
-								-- Set flight bar fill mode
-								if LeaPlusLC["FlightBarFillBar"] == "On" then
-									mybar:SetFill(true)
-								else
-									mybar:SetFill(false)
-								end
-
-								mybar:EnableMouse(false)
-								mybar:SetDuration(duration)
-								mybar:Start()
-
-								-- Unlock close bar button
-								if LeaPlusCB["CloseFlightBarButton"] then
-									LeaPlusLC:LockItem(LeaPlusCB["CloseFlightBarButton"], false)
-								end
-
-								-- Assign file level scope to the bar so it can be cancelled later
-								LeaPlusLC.FlightProgressBar = mybar
+								StartFlightBar(duration, barName)
 
 							end
 
@@ -9377,6 +9418,32 @@
 			hooksecurefunc("TaxiRequestEarlyLanding", CeaseProgress)
 			hooksecurefunc("AcceptBattlefieldPort", CeaseProgress)
 			hooksecurefunc(C_SummonInfo, "ConfirmSummon", CeaseProgress)
+
+			-- A flight in progress at the login (a reload or a relog during it): its bar put back, the time left as the flight
+			-- goes on, gone at the landing (Clara Combo Points)
+			local function RestoreFlight(retry)
+				local store, me = FlightStore()
+				local saved = store and store[me]
+				if type(saved) ~= "table" or type(saved.total) ~= "number" then return end
+				if not UnitOnTaxi("player") then
+					-- (the world maybe not there yet: once more, a little later)
+					if retry then C_Timer.After(3, function() RestoreFlight(false) end) else ForgetFlight() end
+					return
+				end
+				if LeaPlusLC.FlightProgressBar then return end
+				local elapsed = FlightElapsed(saved)
+				local remaining = elapsed and saved.total - elapsed
+				if not remaining or remaining <= 0 then ForgetFlight() return end
+				StartFlightBar(saved.total, saved.dest, remaining, { up = saved.up, wall = saved.wall })
+				flightFrame:SetScript("OnEvent", function()
+					flightFrame:UnregisterEvent("PLAYER_CONTROL_GAINED")
+					CeaseProgress()
+					ForgetFlight()
+				end)
+				flightFrame:RegisterEvent("PLAYER_CONTROL_GAINED")
+			end
+			LeaPlusLC.RestoreFlight = RestoreFlight -- (for the tests)
+			C_Timer.After(1, function() RestoreFlight(true) end)
 
 			-- Show flight time in node tooltips
 			hooksecurefunc("TaxiNodeOnButtonEnter", function(button)
@@ -9543,7 +9610,12 @@
 
 			-- Lock close bar button at startup and when flight progress bar stops
 			LeaPlusLC:LockItem(LeaPlusCB["CloseFlightBarButton"], true)
-			candy.RegisterCallback(LeaPlusLC, "LibCandyBar_Stop", function()
+			candy.RegisterCallback(LeaPlusLC, "LibCandyBar_Stop", function(_, bar)
+				-- (the flight's bar stopped: landed, closed, run out, another flight: not put back after a reload)
+				if type(bar) == "table" and bar.claraFlight then
+					bar.claraFlight = nil
+					ForgetFlight()
+				end
 				if LeaPlusCB["CloseFlightBarButton"] then
 					LeaPlusLC:LockItem(LeaPlusCB["CloseFlightBarButton"], true)
 				end
