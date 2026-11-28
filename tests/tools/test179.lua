@@ -1,7 +1,9 @@
 -- Leatrix Plus's flight bar (Show flight times) kept through a reload or a relog during the flight: the flight saved as it
 -- begins (where to, how long, when: the game's clock and the server's), its bar put back at the login with the time left
 -- (the game's clock while it runs from the same start, the server's after a restart), as far along as the flight;
--- forgotten at the landing, when the bar is stopped, or when the player is no longer on a taxi.
+-- forgotten at the landing, when the bar is stopped, or when the player is no longer on a taxi. Looked for every half
+-- second for 15 s once the world is there (the game shows the player on the taxi only after the loading screen); the
+-- control given back while still on the taxi (a loading) is not a landing.
 local out = function(s) io.write(tostring(s), "\n") end
 local fails = 0
 local function check(c, m) out((c and "  ok   " or "  FAIL ") .. m); if not c then fails = fails + 1 end end
@@ -53,6 +55,14 @@ local fn = assert(loadstring(chunk, "@flight"))()
 setfenv(fn, env)
 local Start, Restore, Forget = fn()
 env.Forget = Forget
+local function RunTimers(max)
+  local n = 0
+  while #timers > 0 and n < (max or 100) do
+    local fn = table.remove(timers, 1)
+    fn(); n = n + 1
+  end
+  return n
+end
 local store = function() return env.ClaraNS.sv.flightBars and env.ClaraNS.sv.flightBars["Player-1-0042"] end
 
 out("== a flight taken: its bar, the flight saved")
@@ -64,7 +74,7 @@ check(s and s.dest == "Ironforge" and s.total == 120 and s.up == 1000 and s.wall
 out("== a /reload 30 s later: the bar put back, 90 s left, as far along as the flight")
 env.LeaPlusLC.FlightProgressBar = nil
 now, server = 1030.4, 50030
-Restore(true)
+Restore(0)
 local b2 = bars[#bars]
 check(#bars == 2 and math.abs(b2.duration - 89.6) < 0.01 and b2.max == 120, "90 s left of 120 (" .. tostring(b2.duration) .. "), the bar a quarter along")
 check(store() and store().up == 1000 and store().wall == 50000, "the flight's start kept as it was")
@@ -73,22 +83,38 @@ check(events.PLAYER_CONTROL_GAINED, "the landing watched")
 out("== the game restarted (its clock from another start): the server's clock")
 env.LeaPlusLC.FlightProgressBar = nil
 now, server = 12, 50060
-Restore(true)
+Restore(0)
 check(math.abs(bars[#bars].duration - 60) < 0.01, "60 s left (" .. tostring(bars[#bars].duration) .. ")")
 
+out("== the control given back while still on the taxi (a loading): not a landing")
+env.flightFrame.fn()
+RunTimers()
+check(not bars[#bars].stopped and store() ~= nil and events.PLAYER_CONTROL_GAINED, "the bar kept")
 out("== landed: the bar gone, the flight forgotten")
 env.flightFrame.fn()
+onTaxi = false
+RunTimers()
 check(bars[#bars].stopped and store() == nil and not events.PLAYER_CONTROL_GAINED, "stopped, forgotten")
+onTaxi = true
 
-out("== not on a taxi at the login: looked at once more, then forgotten")
+out("== the loading screen long: on the taxi only some seconds after the login")
 Start(200, "Stormwind")
 env.LeaPlusLC.FlightProgressBar = nil
 onTaxi = false
 local count = #bars
-Restore(true)
-check(#bars == count and store() ~= nil and #timers >= 1, "not yet: once more a little later")
-timers[#timers]()
-check(#bars == count and store() == nil, "still not on a taxi: forgotten, no bar")
+Restore(0)
+RunTimers(12) -- (6 s)
+check(#bars == count and store() ~= nil, "not on it yet: still looked for")
+onTaxi = true
+RunTimers(1)
+check(#bars == count + 1 and store() ~= nil, "on the taxi: the bar put back")
+out("== not on a taxi in the 15 s after the login: forgotten")
+env.LeaPlusLC.FlightProgressBar = nil
+onTaxi = false
+count = #bars
+Restore(0)
+RunTimers()
+check(#bars == count and store() == nil, "forgotten, no bar")
 
 out("== the flight's time already past: no bar")
 onTaxi = true
@@ -97,7 +123,7 @@ Start(100, "Darnassus")
 env.LeaPlusLC.FlightProgressBar = nil
 count = #bars
 now, server = 2150, 60150
-Restore(true)
+Restore(0)
 check(#bars == count and store() == nil, "nothing put back")
 
 out("== the bar stopped by hand (right click, Close Bar): forgotten")
