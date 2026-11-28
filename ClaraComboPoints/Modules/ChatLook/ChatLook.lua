@@ -330,7 +330,7 @@ end
 local function Clicked(_, link, _, _, frame)
   if type(link) ~= "string" or link:sub(1, #LINK) ~= LINK then return end
   local msg = Find(link, frame)
-  if msg and ns.ShowCopyBox then ns.ShowCopyBox(PlainLine(msg)) end
+  if msg and ns.ShowCopyBox then ns.ShowCopyBox(PlainLine(msg), msg) end
 end
 ns.ChatLookClicked = Clicked -- (for the tests)
 if EventRegistry and EventRegistry.RegisterCallback then

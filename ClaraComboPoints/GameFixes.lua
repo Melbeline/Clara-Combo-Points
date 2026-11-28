@@ -858,6 +858,20 @@ function ns:ChatReport()
   dc = dc and dc:GetAddon("DynamicCam", true)
   out[#out + 1] = ("DynamicCam: %s, situation %s"):format(dc and (dc.IsEnabled and tostring(dc:IsEnabled()) or "yes") or "none",
     tostring(dc and dc.currentSituationID))
+  -- the last line put in the copy box: the chat's line, what the box was given, what it shows, what it holds (the bars
+  -- doubled, the other characters past plain ASCII written as their bytes: every code seen)
+  local lc = ns.lastCopy
+  if type(lc) == "table" then
+    local function Raw(v)
+      if v == nil then return "none" end
+      if issecretvalue and issecretvalue(v) then return "secret" end
+      return (tostring(v):gsub("|", "||"):gsub("[^\32-\126]", function(c) return ("<%02X>"):format(c:byte()) end))
+    end
+    out[#out + 1] = "last copy: line " .. Raw(lc.line)
+    out[#out + 1] = "  given " .. Raw(lc.given)
+    out[#out + 1] = ("  shown %s (%d bytes); the box holds %s, %s high"):format(Raw(lc.shown), #(lc.shown or ""),
+      lc.boxText == lc.shown and "the same" or Raw(lc.boxText), tostring(lc.boxHeight and math.floor(lc.boxHeight + .5) or "?"))
+  end
   local text = table.concat(out, "\n")
   if ns.sv then ns.sv.chatReport = text end
   local box = ReportBox()
