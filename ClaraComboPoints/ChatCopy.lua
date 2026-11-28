@@ -110,8 +110,48 @@ local function Fit(b, text)
 end
 ns.CopyBoxFit = Fit -- (for the tests)
 
-function ns.ShowCopyBox(text)
+-- Only whole UTF-8 characters (a name cut in the middle of one: a text box shows nothing of a text holding it)
+local function WholeCharacters(s)
+  if not s:find("[\128-\255]") then return s end
+  local out, i, n = {}, 1, #s
+  while i <= n do
+    local c = s:byte(i)
+    local len = c < 0x80 and 1 or (c >= 0xC2 and c <= 0xDF) and 2 or (c >= 0xE0 and c <= 0xEF) and 3
+      or (c >= 0xF0 and c <= 0xF4) and 4 or 0
+    local whole = len > 0 and i + len - 1 <= n
+    if whole then
+      for k = i + 1, i + len - 1 do
+        local b = s:byte(k)
+        if b < 0x80 or b > 0xBF then whole = false break end
+      end
+    end
+    if whole then out[#out + 1] = s:sub(i, i + len - 1) i = i + len else i = i + 1 end
+  end
+  return table.concat(out)
+end
+
+-- A text the box can show, as it reads: the game's markup left out (colors, the newer named colors, links, icons, a
+-- protected Battle.net name: the game's text boxes show nothing at all of a text holding one), control characters as
+-- spaces, a bar kept as the text box writes it
+local function Readable(text)
+  text = text:gsub("||", "\001")
+  text = text:gsub("|K.-|k", "?")
+  text = text:gsub("|c[nN][^:|]*:", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+  text = text:gsub("|H.-|h(.-)|h", "%1"):gsub(" ?|T.-|t", ""):gsub(" ?|A.-|a", "")
+  text = text:gsub("|n", " "):gsub("|.", ""):gsub("|", "")
+  text = text:gsub("[%z\002-\031\127]", " ")
+  text = WholeCharacters(text):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+  return (text:gsub("\001", "||"))
+end
+ns.CopyReadable = Readable -- (for the tests)
+
+function ns.ShowCopyBox(text, line)
   if type(text) ~= "string" or text == "" or issecret(text) then return end
+  local given = text
+  text = Readable(text)
+  if text == "" then return end
+  -- (kept for /cl chat: what was asked, what the box was given, what it holds)
+  ns.lastCopy = { line = type(line) == "string" and not issecret(line) and line or nil, given = given, shown = text }
   local b = Box()
   b.text = text
   b.hint:SetText(L.COPY_HINT)
@@ -133,6 +173,11 @@ function ns.ShowCopyBox(text)
       b.edit:SetCursorPosition(0)
       b.edit:SetFocus()
       b.edit:HighlightText()
+      if ns.lastCopy and ns.lastCopy.shown == text then
+        local ok, now = pcall(b.edit.GetText, b.edit)
+        ns.lastCopy.boxText = ok and now or nil
+        ns.lastCopy.boxHeight = b.edit:GetHeight()
+      end
     end
   end)
 end
