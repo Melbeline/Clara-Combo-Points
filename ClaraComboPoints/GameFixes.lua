@@ -863,7 +863,7 @@ function ns:ChatReport()
       return (tostring(v):gsub("|", "||"):gsub("[^\32-\126]", function(c) return ("<%02X>"):format(c:byte()) end))
     end
     out[#out + 1] = "last copy: line " .. Raw(lc.line)
-    out[#out + 1] = "  given " .. Raw(lc.given)
+    out[#out + 1] = "  given " .. Raw(lc.given) .. (lc.message and ("  (the message: " .. lc.message .. ")") or "")
     out[#out + 1] = ("  shown %s (%d bytes); the box holds %s, %s high"):format(Raw(lc.shown), #(lc.shown or ""),
       lc.boxText == lc.shown and "the same" or Raw(lc.boxText), tostring(lc.boxHeight and math.floor(lc.boxHeight + .5) or "?"))
   end
