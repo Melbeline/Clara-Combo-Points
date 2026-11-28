@@ -8,6 +8,8 @@
 -- Should the game be seen naming a mail itself while C.O.D. is off (Blizzard's fix), a window says so, once, and Clara
 -- stands aside (the subject is never empty nor Clara's any more when it looks); should the game leave it empty again
 -- one day, Clara names it again, by itself, as long as the game fails to (and a later fix is told again).
+-- A mail with no item and money sent (Send Money, not C.O.D.) is named after the money: "15 gold", "15 gold, 13 silver",
+-- following the amount as it is typed (the game's own check of the mail at each change of it), gone when the money is.
 -- On by default; its box on Clara's page. (Unticked when the fix was told, before Clara stood aside by itself: ticked
 -- again once, the player having asked for it to come back on its own.)
 
@@ -50,6 +52,28 @@ local function Items()
   return any, title
 end
 
+-- The money the mail sends (none for a C.O.D.: asked for, not sent)
+local function Money()
+  if not (SendMailMoney and MoneyInputFrame_GetCopper) then return 0 end
+  local send = SendMailSendMoneyButton
+  if send and send.GetChecked and not send:GetChecked() then return 0 end
+  local ok, copper = pcall(MoneyInputFrame_GetCopper, SendMailMoney)
+  if not ok or Secret(copper) then return 0 end
+  return math.max(0, math.floor(tonumber(copper) or 0))
+end
+
+-- The money as a mail's name: "15 gold", "15 gold, 13 silver", "2 silver, 50 copper"; none for none
+local function MoneyTitle(copper)
+  if not copper or copper <= 0 then return nil end
+  local parts = {}
+  local gold, silver, rest = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+  if gold > 0 then parts[#parts + 1] = L.MAIL_GOLD:format(gold) end
+  if silver > 0 then parts[#parts + 1] = L.MAIL_SILVER:format(silver) end
+  if rest > 0 then parts[#parts + 1] = L.MAIL_COPPER:format(rest) end
+  return table.concat(parts, ", ")
+end
+ns.MailMoneyTitle = MoneyTitle -- (for the tests)
+
 local function CodOn() return (C_Mail and C_Mail.IsCODEnabled and C_Mail.IsCODEnabled()) and true or false end
 local function Build() return GetBuildInfo and tostring((select(2, GetBuildInfo()))) or "?" end
 
@@ -86,7 +110,9 @@ local function Update()
   -- the game failing: an item's name to give, the subject left empty
   if any and title and subject == "" then Failing() end
   if not ns:MailSubject() then return end
-  if any then
+  -- no item: the money sent, if any, names it
+  if not any then title = MoneyTitle(Money()) end
+  if any or title then
     if subject == "" or (given and subject == given) then
       if subject ~= (title or "") then box:SetText(title or "") end
       given = box:GetText()
@@ -103,6 +129,8 @@ local function Hook()
   if hooked or not (SendMailFrame_Update and SendMailSubjectEditBox) then return end
   hooked = true
   hooksecurefunc("SendMailFrame_Update", Update)
+  -- (the game's check of the mail: at each change of the money, of the subject and of the name)
+  if SendMailFrame_CanSend then hooksecurefunc("SendMailFrame_CanSend", Update) end
 end
 
 if EventUtil and EventUtil.ContinueOnAddOnLoaded then
