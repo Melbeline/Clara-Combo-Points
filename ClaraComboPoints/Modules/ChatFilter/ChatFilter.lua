@@ -275,9 +275,20 @@ local function Decide(event, message, author, flags, guid)
 end
 ns.ChatFilterDecide = Decide -- (for the tests)
 
+-- A community's message can come protected (a Battle.net string no addon can read): its text from the community's own
+-- record of the line being shown (the game's, for this very event)
+local function CommunityText(message)
+  if not (C_Club and C_Club.GetInfoFromLastCommunityChatLine) then return message end
+  local ok, info = pcall(C_Club.GetInfoFromLastCommunityChatLine)
+  local text = ok and type(info) == "table" and info.content or nil
+  if type(text) == "string" and Plain(text) and text ~= "" and not text:find("|K", 1, true) then return text end
+  return message
+end
+
 local function Filter(_, event, message, author, _, channel, _, flags, _, _, _, _, lineID, guid)
   if not (Plain(message) and Plain(author) and Plain(lineID)) or type(message) ~= "string" then return false end
   if lineID ~= 0 and lineID == last.id and event == last.event then return last.result end
+  if event == "CHAT_MSG_COMMUNITIES_CHANNEL" and message:find("|K", 1, true) then message = CommunityText(message) end
   local why = Decide(event, message, author, Plain(flags) and flags or nil, Plain(guid) and guid or nil)
   last.id, last.event, last.result = lineID, event, why ~= nil
   if why then
