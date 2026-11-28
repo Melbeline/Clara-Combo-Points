@@ -44,6 +44,7 @@ Rares.lua
 RareSpots.lua
 UnitScan.lua
 RareMap.lua
+MapGroup.lua
 Screenshots.lua
 ChatPlace.lua
 ChatFocus.lua

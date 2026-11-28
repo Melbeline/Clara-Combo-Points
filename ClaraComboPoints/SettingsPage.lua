@@ -245,6 +245,7 @@ local function Build()
   Box("SP_PROF_CD", ns.ProfCooldowns, ns.SetProfCooldowns, "profCooldowns") -- (ProfCooldowns.lua)
   if ns.SetBankView then Box("SP_BANK_VIEW", ns.BankView, ns.SetBankView, "bankView") end -- (Modules/BankView: not in Light)
   Box("SP_LEGACY_TREE", ns.LegacyTree, ns.SetLegacyTree, "legacyTree") -- (LegacyTree.lua)
+  Box("SP_MAP_GROUP_TOP", ns.MapGroupOnTop, ns.SetMapGroupOnTop, "mapGroupOnTop") -- (MapGroup.lua)
   if not ns:QolRuns("leatrix") then
     Box("QUEST_PLATES", ns.QuestPlates, ns.SetQuestPlates, "questPlates")
     Box("LFG_ZONE", ns.GroupFinderZone, ns.SetGroupFinderZone, "groupFinderZone")
