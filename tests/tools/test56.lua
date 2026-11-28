@@ -285,6 +285,13 @@ local long = ("word "):rep(80)
 ns.ShowCopyBox(long)
 check(box.edit:GetText() == long and box:GetHeight() > 60, "a long line: whole, the box taller (" .. tostring(box:GetHeight()) .. ")")
 box:Hide()
+local realHeight = box.measure.GetStringHeight
+box.measure.GetStringHeight = function() return 0 end -- (the game's answer for a text not drawn yet)
+ns.ShowCopyBox("ok")
+check(box.edit:GetText() == "ok" and box.edit:GetHeight() >= 24, "a short line, its measure 0: room for a whole line all the same (" .. tostring(box.edit:GetHeight()) .. ")")
+box.measure.GetStringHeight = realHeight
+check(box.measure:IsShown() and box.measure:GetAlpha() == 0, "the measure drawn unseen (a hidden one is not measured)")
+box:Hide()
 Prat = { Addon = { GetModule = function(_, name) return name == "UrlCopy" and { db = { profile = { on = true } } } or nil end } }
 local d2, t2 = filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "see https://example.com", "Goldo")
 check(d2 == false and t2 == nil, "Prat's UrlCopy on: the address left to Prat")
