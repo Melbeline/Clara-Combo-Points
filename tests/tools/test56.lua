@@ -283,7 +283,7 @@ check(box:IsShown() and box.edit:GetText() == "https://discord.gg/pABDHHaMQr", "
 check(box.edit._multi == true and math.abs((box.edit:GetWidth() or 0) - 380) < 1, "the box's text: a width of its own (380), on several lines")
 local long = ("word "):rep(80)
 ns.ShowCopyBox(long)
-check(box.edit:GetText() == long and box:GetHeight() > 60, "a long line: whole, the box taller (" .. tostring(box:GetHeight()) .. ")")
+check(box.edit:GetText() == long:gsub(" $", "") and box:GetHeight() > 60, "a long line: whole, the box taller (" .. tostring(box:GetHeight()) .. ")")
 box:Hide()
 local realHeight = box.measure.GetStringHeight
 box.measure.GetStringHeight = function() return 0 end -- (the game's answer for a text not drawn yet)
@@ -291,6 +291,18 @@ ns.ShowCopyBox("ok")
 check(box.edit:GetText() == "ok" and box.edit:GetHeight() >= 24, "a short line, its measure 0: room for a whole line all the same (" .. tostring(box.edit:GetHeight()) .. ")")
 box.measure.GetStringHeight = realHeight
 check(box.measure:IsShown() and box.measure:GetAlpha() == 0, "the measure drawn unseen (a hidden one is not measured)")
+box:Hide()
+out("== what the box is given: only what reads (a text box shows nothing of a text holding some codes)")
+local R = ns.CopyReadable
+check(R("[1. |Kq12|k] [Lia]: hi") == "[1. ?] [Lia]: hi", "a protected Battle.net name: left out (" .. R("[1. |Kq12|k] [Lia]: hi") .. ")")
+check(R("|cnGREEN_FONT_COLOR:[40]|r [Lia]") == "[40] [Lia]", "a named color: left out")
+check(R("a\tb\rc") == "a b c" and R("x||y") == "x||y", "control characters as spaces, a bar kept as the box writes it")
+check(R("Rou" .. string.char(0xC3)) == "Rou" and R("Ren\195\169e") == "Ren\195\169e", "half a character left out, whole ones kept")
+check(R("|Tpath:14|t [Lia]|n hi") == "[Lia] hi", "icons and line breaks")
+ns.ShowCopyBox("|Tpath:14|t")
+check(not box:IsShown(), "nothing readable (an icon alone): no box")
+ns.ShowCopyBox("[1. L2P] [Lia]: test", "|Hchannel:1|h[1. L2P]|h ...")
+check(ns.lastCopy and ns.lastCopy.shown == "[1. L2P] [Lia]: test" and ns.lastCopy.line ~= nil, "the last copy kept for /cl chat")
 box:Hide()
 Prat = { Addon = { GetModule = function(_, name) return name == "UrlCopy" and { db = { profile = { on = true } } } or nil end } }
 local d2, t2 = filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "see https://example.com", "Goldo")

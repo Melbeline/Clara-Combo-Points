@@ -52,6 +52,14 @@ local function Empty() for i in pairs(mail) do mail[i] = nil end; SendMailFrame_
 local function Subject() return box:GetText() end
 local function Close() M.Fire("MAIL_CLOSED"); box:SetText(""); Empty() end -- (MailMixin:OnHide clears it)
 
+-- the money to send (MoneyInputFrame) and the game's check of the mail at each change of it
+local money, sendMoney = 0, true
+SendMailMoney = CreateFrame("Frame", "SendMailMoney", SendMailFrame)
+function MoneyInputFrame_GetCopper() return money end
+SendMailSendMoneyButton = { GetChecked = function() return sendMoney end }
+function SendMailFrame_CanSend() end
+local function Gold(c) money = c; SendMailFrame_CanSend() end
+
 local ns = {}
 S.class = "ROGUE"; S.locale = "enUS"
 M.LoadAddon(ADDON_DIR, ns)
@@ -164,6 +172,30 @@ Put(1, "Silk Cloth")
 check(M.popup and M.popup.which == ns.MailSubjectFixedPopup, "fixed again: told again")
 if M.popup then M.PopupClick(1) end
 Empty()
+
+out("== money and no item: the mail named after the money, following it")
+box:SetText(""); Empty()
+Gold(150000)
+check(Subject() == "15 gold", "15 gold: " .. Subject())
+Gold(151300)
+check(Subject() == "15 gold, 13 silver", "15 gold 13 silver: " .. Subject())
+Gold(1350)
+check(Subject() == "13 silver, 50 copper", "13 silver 50 copper: " .. Subject())
+Gold(0)
+check(Subject() == "", "no money: gone")
+box:SetText("Rent")
+Gold(50000)
+check(Subject() == "Rent", "a subject typed: kept")
+box:SetText(""); Gold(0)
+Gold(20000)
+Put(1, "Linen Cloth")
+check(Subject() == "Linen Cloth", "an item put in: its name, as before")
+Empty(); Gold(0)
+sendMoney = false
+Gold(30000)
+check(Subject() == "", "C.O.D.: money asked for, not sent: no name")
+sendMoney = true; Gold(0); box:SetText("")
+check(ns.MailMoneyTitle(10000) == "1 gold" and ns.MailMoneyTitle(0) == nil, "1 gold; none for none")
 
 out("== unticked on the fix's advice (before Clara stood aside by itself): ticked again, once")
 ns.sv.mailSubject = false; ns.sv.mailSubjectAuto = nil
