@@ -74,6 +74,11 @@ st.raid, st.guild = nil, true
 check(Say("CHAT_MSG_GUILD", "rested") == true and Say("CHAT_MSG_OFFICER", "rested") == true and Say("CHAT_MSG_RAID", "rested") == false, "the guild's alone")
 st.guild, st.communities = nil, true
 check(Say("CHAT_MSG_COMMUNITIES_CHANNEL", "rested") == true and Say("CHAT_MSG_GUILD", "rested") == false, "the communities' alone")
+C_Club = C_Club or {}
+C_Club.GetInfoFromLastCommunityChatLine = function() return { content = "buy rested now" } end
+check(Say("CHAT_MSG_COMMUNITIES_CHANNEL", "|Km7|k") == true, "a community's message protected in the chat: read from the community")
+C_Club.GetInfoFromLastCommunityChatLine = function() return nil end
+check(Say("CHAT_MSG_COMMUNITIES_CHANNEL", "|Km8|k") == false, "not readable at all: left shown")
 st.communities, st.whisper = nil, false
 check(Say("CHAT_MSG_WHISPER", "rested") == false and Say("CHAT_MSG_SAY", "rested") == true, "the whispers' box unticked: whispers shown, say still filtered")
 st.whisper = nil

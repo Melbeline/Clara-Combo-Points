@@ -122,6 +122,21 @@ check(copied == "[19:46:37] [Party] [40] [Lia Moon]: re", "the right click: " ..
 copied = nil
 ns.ChatLookClicked(nil, k2, "", "LeftButton", cf)
 check(copied == "[19:46:37] [Party] [40] [Lia Moon]: re", "a click on the head (the same link): the same line")
+out("== a community's line, its message protected in the chat: read from the community")
+local COMM = "|Haddon:ClaraComboPoints:line:zz-1|h[12:39:07]|h |Hchannel:channel:1|h[1. L2P]|h |cffb8b8b8[40]|r |HplayerCommunity:Charlotte Moon-Forever:42:1:1700:55|h[Charlotte Moon]|h: |Km12|k"
+shown = { COMM }
+local asked
+C_Club = C_Club or {}
+C_Club.GetMessageInfo = function(club, stream, id) asked = { club, stream, id.epoch, id.position } return { content = "test" } end
+copied = nil
+ns.ChatLookClicked(nil, "addon:ClaraComboPoints:line:zz-1", "", "RightButton", cf)
+check(copied == "[12:39:07] [1. L2P] [40] [Charlotte Moon]: test", "the message from the community: " .. tostring(copied))
+check(asked and asked[1] == "42" and asked[2] == "1" and asked[3] == 1700 and asked[4] == 55, "asked by the line's link (club, stream, message)")
+C_Club.GetMessageInfo = function() return nil end
+copied = nil
+ns.ChatLookClicked(nil, "addon:ClaraComboPoints:line:zz-1", "", "RightButton", cf)
+check(copied and copied:find("|Km12|k", 1, true), "not found: the line as it is (the box shows the protected part as ?)")
+shown = { ns.ChatLookBuild(LINE, args, frame) }
 copied = nil
 ns.ChatLookClicked(nil, "addon:Other:x", "x", "LeftButton", cf)
 check(copied == nil, "another addon's link: nothing")
