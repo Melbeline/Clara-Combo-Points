@@ -52,13 +52,21 @@ local function Empty() for i in pairs(mail) do mail[i] = nil end; SendMailFrame_
 local function Subject() return box:GetText() end
 local function Close() M.Fire("MAIL_CLOSED"); box:SetText(""); Empty() end -- (MailMixin:OnHide clears it)
 
--- the money to send (MoneyInputFrame) and the game's check of the mail at each change of it
+-- the money to send (MoneyInputFrame): as the game, its three boxes call the check of the mail the money box was given
+-- as it loaded (the function itself, kept: a hook put later on the name SendMailFrame_CanSend is not called by them)
 local money, sendMoney = 0, true
-SendMailMoney = CreateFrame("Frame", "SendMailMoney", SendMailFrame)
-function MoneyInputFrame_GetCopper() return money end
-SendMailSendMoneyButton = { GetChecked = function() return sendMoney end }
 function SendMailFrame_CanSend() end
-local function Gold(c) money = c; SendMailFrame_CanSend() end
+SendMailMoney = CreateFrame("Frame", "SendMailMoney", SendMailFrame)
+SendMailMoney.onValueChangedFunc = SendMailFrame_CanSend
+for _, key in ipairs({ "gold", "silver", "copper" }) do
+  local edit = CreateFrame("EditBox", "SendMailMoney" .. key:sub(1, 1):upper() .. key:sub(2), SendMailMoney)
+  edit:SetScript("OnTextChanged", function() SendMailMoney.onValueChangedFunc() end)
+  SendMailMoney[key] = edit
+end
+function MoneyInputFrame_GetCopper() return money end
+SendMailSendMoneyButton = CreateFrame("CheckButton", "SendMailSendMoneyButton", SendMailFrame)
+SendMailSendMoneyButton.GetChecked = function() return sendMoney end
+local function Gold(c) money = c; SendMailMoney.gold:GetScript("OnTextChanged")(SendMailMoney.gold, true) end
 
 local ns = {}
 S.class = "ROGUE"; S.locale = "enUS"
