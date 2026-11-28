@@ -9,7 +9,7 @@
 -- stands aside (the subject is never empty nor Clara's any more when it looks); should the game leave it empty again
 -- one day, Clara names it again, by itself, as long as the game fails to (and a later fix is told again).
 -- A mail with no item and money sent (Send Money, not C.O.D.) is named after the money: "15 gold", "15 gold, 13 silver",
--- following the amount as it is typed (the game's own check of the mail at each change of it), gone when the money is.
+-- following the amount as it is typed (its gold, silver and copper boxes, Send Money / C.O.D.), gone with the money.
 -- On by default; its box on Clara's page. (Unticked when the fix was told, before Clara stood aside by itself: ticked
 -- again once, the player having asked for it to come back on its own.)
 
@@ -129,7 +129,17 @@ local function Hook()
   if hooked or not (SendMailFrame_Update and SendMailSubjectEditBox) then return end
   hooked = true
   hooksecurefunc("SendMailFrame_Update", Update)
-  -- (the game's check of the mail: at each change of the money, of the subject and of the name)
+  -- The money typed: its three boxes themselves (the game's money box calls the check of the mail it was given as it
+  -- loaded, SendMailFrame_CanSend as it was then: a hook on that name is never called by them), and Send Money / C.O.D.
+  local money = SendMailMoney
+  for _, key in ipairs({ "gold", "silver", "copper" }) do
+    local box = money and (money[key] or _G["SendMailMoney" .. key:gsub("^%l", string.upper)])
+    if box and box.HookScript then box:HookScript("OnTextChanged", Update) end
+  end
+  for _, button in ipairs({ SendMailSendMoneyButton, SendMailCODButton }) do
+    if button and button.HookScript then button:HookScript("OnClick", Update) end
+  end
+  -- (the game's check of the mail where it is called by its name: after its update of the mail)
   if SendMailFrame_CanSend then hooksecurefunc("SendMailFrame_CanSend", Update) end
 end
 
