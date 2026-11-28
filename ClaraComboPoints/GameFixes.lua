@@ -760,6 +760,10 @@ function ns:MouseReport()
     local ok, line = pcall(ns.TargetMacroReport, ns)
     out[#out + 1] = ok and line or ("target macro: " .. tostring(line))
   end
+  if ns.FlightBarReport then
+    local ok, line = pcall(ns.FlightBarReport)
+    out[#out + 1] = ok and line or ("flight bar: " .. tostring(line))
+  end
   if ns.SoloRaidFrameReport then
     local ok, line = pcall(ns.SoloRaidFrameReport, ns)
     out[#out + 1] = ok and line or ("solo raid frame: " .. tostring(line))

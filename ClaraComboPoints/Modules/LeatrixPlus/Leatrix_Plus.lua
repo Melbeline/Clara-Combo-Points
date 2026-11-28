@@ -9418,30 +9418,72 @@
 			hooksecurefunc(C_SummonInfo, "ConfirmSummon", CeaseProgress)
 
 			-- A flight in progress at the login (a reload or a relog during it): its bar put back, the time left as the flight
-			-- goes on, gone at the landing (Clara Combo Points)
-			local function RestoreFlight(retry)
+			-- goes on, gone at the landing (Clara Combo Points). Looked for once the world is there (each PLAYER_ENTERING_WORLD,
+			-- and a second after the login), every half second for 15 s: the game shows the player on the taxi only once the
+			-- loading screen is over, which can take a while. The control given back at a loading is not a landing: landed
+			-- only off the taxi.
+			local restoring, restoreNote = false, "none"
+			local function RestoreFlight(tries)
 				local store, me = FlightStore()
 				local saved = store and store[me]
-				if type(saved) ~= "table" or type(saved.total) ~= "number" then return end
+				if type(saved) ~= "table" or type(saved.total) ~= "number" then restoring = false return end
+				if LeaPlusLC.FlightProgressBar then restoring = false return end
 				if not UnitOnTaxi("player") then
-					-- (the world maybe not there yet: once more, a little later)
-					if retry then C_Timer.After(3, function() RestoreFlight(false) end) else ForgetFlight() end
+					tries = (tries or 0) + 1
+					if tries < 30 then
+						C_Timer.After(0.5, function() RestoreFlight(tries) end)
+					else
+						restoring = false
+						restoreNote = "not on a taxi in the 15 s after the login: forgotten"
+						ForgetFlight()
+					end
 					return
 				end
-				if LeaPlusLC.FlightProgressBar then return end
+				restoring = false
 				local elapsed = FlightElapsed(saved)
 				local remaining = elapsed and saved.total - elapsed
-				if not remaining or remaining <= 0 then ForgetFlight() return end
-				StartFlightBar(saved.total, saved.dest, remaining, { up = saved.up, wall = saved.wall })
-				flightFrame:SetScript("OnEvent", function()
-					flightFrame:UnregisterEvent("PLAYER_CONTROL_GAINED")
-					CeaseProgress()
+				if not remaining or remaining <= 0 then
+					restoreNote = "the flight's time already past: forgotten"
 					ForgetFlight()
+					return
+				end
+				StartFlightBar(saved.total, saved.dest, remaining, { up = saved.up, wall = saved.wall })
+				restoreNote = ("put back: %s, %.0f s left of %.0f"):format(tostring(saved.dest), remaining, saved.total)
+				flightFrame:SetScript("OnEvent", function()
+					C_Timer.After(0.5, function()
+						if UnitOnTaxi("player") then return end
+						flightFrame:UnregisterEvent("PLAYER_CONTROL_GAINED")
+						CeaseProgress()
+						ForgetFlight()
+					end)
 				end)
 				flightFrame:RegisterEvent("PLAYER_CONTROL_GAINED")
 			end
+			local function LookForFlight()
+				if restoring then return end
+				restoring = true
+				RestoreFlight(0)
+			end
 			LeaPlusLC.RestoreFlight = RestoreFlight -- (for the tests)
-			C_Timer.After(1, function() RestoreFlight(true) end)
+			LeaPlusLC.LookForFlight = LookForFlight
+			local flightWorld = CreateFrame("Frame")
+			flightWorld:RegisterEvent("PLAYER_ENTERING_WORLD")
+			flightWorld:SetScript("OnEvent", LookForFlight)
+			C_Timer.After(1, LookForFlight)
+
+			-- For /cl souris: the flight kept, the taxi, the bar, what the login made of it
+			ClaraNS.FlightBarReport = function()
+				local store, me = FlightStore()
+				local saved = store and store[me]
+				local kept = "none"
+				if type(saved) == "table" then
+					local elapsed = FlightElapsed(saved)
+					kept = ("%s, %s s, begun %s s ago"):format(tostring(saved.dest), tostring(saved.total), elapsed and ("%.0f"):format(elapsed) or "?")
+				end
+				local bar = LeaPlusLC.FlightProgressBar
+				return ("flight bar: kept %s; on a taxi %s; bar %s; at the login: %s"):format(kept, tostring(UnitOnTaxi("player")),
+					bar and (bar.remaining and ("%.0f s left"):format(bar.remaining) or "shown") or "none", restoreNote)
+			end
 
 			-- Show flight time in node tooltips
 			hooksecurefunc("TaxiNodeOnButtonEnter", function(button)
