@@ -51,11 +51,13 @@ local function Box()
   box.hint:SetPoint("BOTTOMLEFT", PAD, 7)
   box.hint:SetPoint("BOTTOMRIGHT", -PAD, 7)
   box.hint:SetJustifyH("LEFT")
-  -- (to measure the text's height on as many lines as it takes, the box's width)
+  -- (to measure the text's height on as many lines as it takes, the box's width: drawn unseen, a hidden one is not
+  -- measured by the game, its height 0)
   box.measure = box:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
   box.measure:SetWidth(WIDTH - 2 * PAD)
   box.measure:SetJustifyH("LEFT")
-  box.measure:Hide()
+  box.measure:SetPoint("TOPLEFT", PAD, -8)
+  box.measure:SetAlpha(0)
   -- The text: a width of its own, given (one taken from its anchors only was not known yet as the text was put in, and the
   -- game showed it scrolled out of sight: the box empty), on several lines (a long line whole, not one end of it)
   local edit = CreateFrame("EditBox", nil, box)
@@ -85,28 +87,49 @@ local function Box()
   return box
 end
 
+-- One line's height in the box's font, with room to spare
+local function LineHeight()
+  local font = ChatFontNormal
+  local size = 14
+  if font and font.GetFont then
+    local _, s = font:GetFont()
+    if type(s) == "number" and s > 0 then size = s end
+  end
+  return math.ceil(size * 1.3) + 2
+end
+
+-- The text's room: never less than a whole line with room to spare (a line that doesn't fit whole in its box is not
+-- drawn at all: the box looked empty, a measure of 0 leaving it 16 high for a font of about that)
+local function Fit(b, text)
+  local line = LineHeight()
+  b.measure:SetText(text)
+  local measured = tonumber(b.measure:GetStringHeight()) or 0
+  local h = math.min(MAX_H, math.max(line + 6, math.ceil(measured) + 10))
+  b.edit:SetHeight(h)
+  b:SetHeight(h + 34)
+end
+ns.CopyBoxFit = Fit -- (for the tests)
+
 function ns.ShowCopyBox(text)
   if type(text) ~= "string" or text == "" or issecret(text) then return end
   local b = Box()
   b.text = text
   b.hint:SetText(L.COPY_HINT)
-  b.measure:SetText(text)
-  local h = math.min(MAX_H, math.max(16, math.ceil(b.measure:GetStringHeight() or 16) + 4))
-  b.edit:SetHeight(h)
-  b:SetHeight(h + 34)
   local x, y = GetCursorPosition()
   local scale = UIParent:GetEffectiveScale()
   b:ClearAllPoints()
   b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x / scale - 20, y / scale + 8)
   b:Show()
+  Fit(b, text)
   b.edit:SetText(text)
   b.edit:SetCursorPosition(0)
   b.edit:SetFocus()
   b.edit:HighlightText()
-  -- once more as the box is drawn: its place and size known
+  -- once more as the box is drawn: its place, its size and the text's measure known
   C_Timer.After(0, function()
     if b:IsShown() and b.text == text then
-      if b.edit:GetText() ~= text then b.edit:SetText(text) end
+      Fit(b, text)
+      b.edit:SetText(text)
       b.edit:SetCursorPosition(0)
       b.edit:SetFocus()
       b.edit:HighlightText()
