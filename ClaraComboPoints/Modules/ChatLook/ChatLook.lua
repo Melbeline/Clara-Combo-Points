@@ -327,10 +327,42 @@ local function Find(link, frame)
     end
   end
 end
+-- A community's line: its message can be protected in the chat (a Battle.net string, which no addon can read nor a text
+-- box show: "?" in the copy box). Read instead from the community's own record of it, which the line's link names (its
+-- club, stream and message: the game's own way to that message, as its menu for the line does).
+local function CommunityText(msg)
+  if not (C_Club and C_Club.GetMessageInfo) then return nil end
+  local club, stream, epoch, position = msg:match("|HplayerCommunity:[^:|]*:([^:|]+):([^:|]+):([^:|]+):([^:|]+)|h")
+  if not club then
+    club, stream, epoch, position = msg:match("|HBNplayerCommunity:[^:|]*:[^:|]*:([^:|]+):([^:|]+):([^:|]+):([^:|]+)|h")
+  end
+  if not club then return nil end
+  local ok, info = pcall(C_Club.GetMessageInfo, club, stream, { epoch = tonumber(epoch), position = tonumber(position) })
+  local text = ok and type(info) == "table" and info.content or nil
+  if type(text) ~= "string" or issecret(text) or text == "" or text:find("|K", 1, true) then return nil end
+  return text
+end
+
+-- The line, its protected message (after the sender's name) given its text from the community, when it can be read
+local function Readable(msg)
+  if not msg:find("|K", 1, true) then return msg, nil end
+  local text = CommunityText(msg)
+  if not text then return msg, "protected" end
+  local _, e = msg:find("|H[Bb]?[Nn]?player[^|]*|h.-|h")
+  if not e then return msg, "protected" end
+  local before, after = msg:sub(1, e), msg:sub(e + 1)
+  local n
+  after, n = after:gsub("|K.-|k", function() return text end, 1)
+  return before .. after, n > 0 and "from the community" or "protected"
+end
+
 local function Clicked(_, link, _, _, frame)
   if type(link) ~= "string" or link:sub(1, #LINK) ~= LINK then return end
   local msg = Find(link, frame)
-  if msg and ns.ShowCopyBox then ns.ShowCopyBox(PlainLine(msg), msg) end
+  if not msg or not ns.ShowCopyBox then return end
+  local line, how = Readable(msg)
+  ns.ShowCopyBox(PlainLine(line), msg)
+  if how and ns.lastCopy then ns.lastCopy.message = how end
 end
 ns.ChatLookClicked = Clicked -- (for the tests)
 if EventRegistry and EventRegistry.RegisterCallback then
